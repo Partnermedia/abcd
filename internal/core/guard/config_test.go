@@ -260,6 +260,53 @@ func TestLoadRejectsBadConfig(t *testing.T) {
 	}
 }
 
+// TestLoadFallsBackToBundledDefaultsOnBrokenRepoLayer pins iss-2608261551087492:
+// a malformed/oversized repo guard.json must NOT drop the bundled hazards. When
+// only the repo override layer is broken, Load falls back to the bundled defaults
+// (fail-SAFE) — the built-in hazards stay armed and keep blocking — rather than
+// returning an empty registry that would disable the whole guard (fail-open). The
+// error is still returned so the broken repo layer can be announced.
+func TestLoadFallsBackToBundledDefaultsOnBrokenRepoLayer(t *testing.T) {
+	broken := []struct {
+		name string
+		body string
+	}{
+		{"malformed json", `{"schema_version":1,`},
+		{"unknown tier", `{"schema_version":1,"entries":{"git-clean":{"tier":"fatal"}}}`},
+		{"absent schema version", `{"entries":{}}`},
+		{"unrecognised key", `{"schema_version":1,"entrys":{"git-clean":{"tier":"blocker"}}}`},
+		{"oversize", `{"schema_version":1,"entries":{}}` + strings.Repeat(" ", maxGuardFileBytes)},
+	}
+	for _, tc := range broken {
+		t.Run(tc.name, func(t *testing.T) {
+			r, err := Load(writeOverride(t, tc.body))
+			// The repo layer failing is still reported (so it can be announced),
+			// but the returned registry must be the armed bundled defaults, never
+			// an empty one.
+			if err == nil {
+				t.Fatal("a broken repo layer must still be reported as an error")
+			}
+			if len(r.Entries) != len(Defaults().Entries) {
+				t.Fatalf("Entries = %d, want the %d bundled entries kept armed on a broken repo layer",
+					len(r.Entries), len(Defaults().Entries))
+			}
+			if _, ok := r.Entries["git-commit-no-verify"]; !ok {
+				t.Fatal("the bundled git-commit-no-verify hazard was dropped by a broken repo layer")
+			}
+			if r.Disabled {
+				t.Fatal("a broken repo layer must not disable the guard")
+			}
+			d, cerr := r.Check(`git commit --no-verify -m "wip"`)
+			if cerr != nil {
+				t.Fatal(cerr)
+			}
+			if d.Verdict != VerdictBlock {
+				t.Fatalf("verdict = %q, want the bundled hazard to still BLOCK when the repo config is broken", d.Verdict)
+			}
+		})
+	}
+}
+
 // TestLoadAcceptsWellFormedOperandConstraints is the other half of the two
 // operand checks above: the shapes they reject are the ones that could never
 // match, and the ordinary shapes must still load. A validator that rejected

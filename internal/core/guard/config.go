@@ -21,15 +21,21 @@ const RepoRelPath = ".abcd/guard.json"
 const maxGuardFileBytes = 256 * 1024
 
 // Load returns the bundled defaults merged with <repoRoot>/.abcd/guard.json when
-// that file exists. An absent file yields the defaults unchanged. A file that
-// cannot be read, parsed, or validated is an ERROR, never a silent fallback to
-// the defaults or to no guard at all — core names the failure and the caller
-// (the hook shim) decides what it means for the session.
+// that file exists. An absent file yields the defaults unchanged.
+//
+// A repo override that cannot be read, parsed, or validated is a fail-SAFE
+// fallback, not a fail-open one: Load returns the bundled defaults ALONGSIDE the
+// error (never an empty registry), so a broken repo layer drops only the repo's
+// own overrides while the built-in hazards stay armed. Returning empty here would
+// disable the whole guard on one broken committed file — the fail-open the
+// bundled hazards never depended on (iss-2608261551087492). The error is still
+// returned so the caller (the hook shim) can announce the dropped repo layer
+// loudly while continuing to check against the bundled registry.
 func Load(repoRoot string) (Registry, error) {
 	// Refuse a symlinked .abcd directory component before touching the leaf, so a
 	// swapped .abcd cannot redirect the read (trust boundary).
 	if di, err := os.Lstat(filepath.Join(repoRoot, ".abcd")); err == nil && di.Mode()&os.ModeSymlink != 0 {
-		return Registry{}, fmt.Errorf("%w: .abcd is a symlink (refusing to follow)", ErrMalformedConfig)
+		return Defaults(), fmt.Errorf("%w: .abcd is a symlink (refusing to follow)", ErrMalformedConfig)
 	}
 	data, err := fsutil.ReadGuarded(filepath.Join(repoRoot, ".abcd", "guard.json"), maxGuardFileBytes)
 	if err != nil {
@@ -37,28 +43,28 @@ func Load(repoRoot string) (Registry, error) {
 		case os.IsNotExist(err):
 			return Defaults(), nil
 		case errors.Is(err, syscall.ELOOP):
-			return Registry{}, fmt.Errorf("%w: %s is a symlink (refusing to follow)", ErrMalformedConfig, RepoRelPath)
+			return Defaults(), fmt.Errorf("%w: %s is a symlink (refusing to follow)", ErrMalformedConfig, RepoRelPath)
 		case errors.Is(err, fsutil.ErrNotRegular):
-			return Registry{}, fmt.Errorf("%w: %s is not a regular file", ErrMalformedConfig, RepoRelPath)
+			return Defaults(), fmt.Errorf("%w: %s is not a regular file", ErrMalformedConfig, RepoRelPath)
 		case errors.Is(err, fsutil.ErrTooBig):
-			return Registry{}, fmt.Errorf("%w: %s exceeds the %d-byte cap", ErrMalformedConfig, RepoRelPath, maxGuardFileBytes)
+			return Defaults(), fmt.Errorf("%w: %s exceeds the %d-byte cap", ErrMalformedConfig, RepoRelPath, maxGuardFileBytes)
 		default:
-			return Registry{}, fmt.Errorf("%w: reading %s failed", ErrMalformedConfig, RepoRelPath)
+			return Defaults(), fmt.Errorf("%w: reading %s failed", ErrMalformedConfig, RepoRelPath)
 		}
 	}
 	over, err := parse(data)
 	if err != nil {
-		return Registry{}, fmt.Errorf("%s: %w", RepoRelPath, err)
+		return Defaults(), fmt.Errorf("%s: %w", RepoRelPath, err)
 	}
 	// The override declares its schema version explicitly: an absent version is a
 	// truncated or hand-mangled file, not an invitation to guess (a safety config
 	// fails closed on unrecognised input).
 	if over.SchemaVersion != SchemaVersion {
-		return Registry{}, fmt.Errorf("%w: %s must declare schema_version %d, got %d", ErrSchemaVersion, RepoRelPath, SchemaVersion, over.SchemaVersion)
+		return Defaults(), fmt.Errorf("%w: %s must declare schema_version %d, got %d", ErrSchemaVersion, RepoRelPath, SchemaVersion, over.SchemaVersion)
 	}
 	merged := Merge(Defaults(), over)
 	if err := Validate(merged); err != nil {
-		return Registry{}, fmt.Errorf("%s: %w", RepoRelPath, err)
+		return Defaults(), fmt.Errorf("%s: %w", RepoRelPath, err)
 	}
 	return merged, nil
 }
