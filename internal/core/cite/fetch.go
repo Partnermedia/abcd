@@ -23,14 +23,11 @@ package cite
 
 import (
 	"errors"
-	"fmt"
 	"net"
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/intentdriven/abcd/internal/urlguard"
 
@@ -212,7 +209,7 @@ func (c *HTTPChecker) Check(rawURL string) CheckOutcome {
 		// surface and the committed baseline verbatim (iss-359).
 		// Percent-encoding is lossless where the terminal sanitizer's masking
 		// would corrupt a record that must round-trip.
-		out.FinalURL = encodeHiddenRunes(resp.Request.URL.String())
+		out.FinalURL = termsafe.EncodeHiddenRunes(resp.Request.URL.String())
 	}
 	out.Status, out.Detail = classify(resp.StatusCode)
 	return out
@@ -258,39 +255,4 @@ func transportDetail(err error) string {
 		return ue.Err.Error()
 	}
 	return err.Error()
-}
-
-// encodeHiddenRunes percent-encodes every rune the terminal sanitizer would
-// mask — C0/DEL, the 2-byte-encoded C1 range, bidi overrides and zero-width
-// runes — so a redirect-supplied address is recorded losslessly but can no
-// longer smuggle terminal escapes or Trojan-Source reordering into a JSON
-// surface or the committed baseline. A canonical address never carries these
-// runes (net/url rejects C0 outright and percent-encodes the path itself), so
-// encoding them cannot break a legitimate final URL.
-func encodeHiddenRunes(s string) string {
-	if termsafe.Sanitize(s) == s && utf8.ValidString(s) {
-		return s
-	}
-	var b strings.Builder
-	for i := 0; i < len(s); {
-		r, width := utf8.DecodeRuneInString(s[i:])
-		if r == utf8.RuneError && width == 1 {
-			// An invalid byte, which strings.Map would silently rewrite to
-			// U+FFFD — percent-encode the RAW byte so the record stays
-			// lossless on non-UTF-8 input too.
-			fmt.Fprintf(&b, "%%%02X", s[i])
-			i++
-			continue
-		}
-		rs := s[i : i+width]
-		if termsafe.Sanitize(rs) != rs {
-			for j := 0; j < width; j++ {
-				fmt.Fprintf(&b, "%%%02X", rs[j])
-			}
-		} else {
-			b.WriteString(rs)
-		}
-		i += width
-	}
-	return b.String()
 }

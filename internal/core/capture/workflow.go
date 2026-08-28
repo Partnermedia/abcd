@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/changelog"
-	"github.com/intentdriven/abcd/internal/core/recordid"
 	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
@@ -593,7 +592,7 @@ func scanLedger(issuesRoot string, state State) ([]Issue, []SkipRecord) {
 		sort.Strings(names)
 		for _, name := range names {
 			path := filepath.Join(dir, name)
-			_, _, wellFormed := recordid.SplitRecordFilename(issFamily, name)
+			wellFormed := issFileNumRe.MatchString(name)
 			if !wellFormed {
 				// A file that claims to be a record (family prefix + ordinal) and is
 				// not well-formed is REPORTED, not dropped: it sits in the ledger,
@@ -601,20 +600,21 @@ func scanLedger(issuesRoot string, state State) ([]Issue, []SkipRecord) {
 				// gets silently lost. A file claiming nothing — README.md, a stray
 				// note, the allocator lock — is silently ignored, as before.
 				//
-				// The gap this covers is real because the record-lint store rule is
-				// looser than this splitter (its pattern accepts an arbitrary tail),
-				// so a non-kebab name clears the committed gate and then fails here.
-				// That grammar divergence is iss-2608270908346617; making the drop
-				// VISIBLE is the reader's half of it, and the lint-side grammar and
-				// the citation path remain open on that record.
+				// Detection uses recordid.FilenameNumRe, the SAME grammar the resolver
+				// and record-lint's per-store rule read, so a filename the gate and
+				// the resolver treat as a record reaches the reader too rather than
+				// being dropped by a stricter local grammar (iss-2608280739112123).
+				// The stricter slug shape is still enforced — as a filename<->
+				// frontmatter agreement, below in validateInvariants — but that is a
+				// judgement on a record, not the question of whether one exists.
 				if filepath.Ext(name) == ".md" && reIssNameClaim.MatchString(name) {
 					skipped = append(skipped, SkipRecord{Path: path, Error: fmt.Errorf(
-						"%w: filename %q is not a well-formed record name (iss-N[-slug].md, slug kebab-case)",
+						"%w: filename %q is not a well-formed record name (iss-N[-slug].md)",
 						ErrInvariantViolation, name).Error()})
 				}
 				continue
 			}
-			// A well-formed name always ends .md — the splitter's pattern requires
+			// A well-formed name always ends .md — the grammar's pattern requires
 			// it — so no separate extension check is needed on this path.
 			data, err := os.ReadFile(path)
 			if err != nil {
