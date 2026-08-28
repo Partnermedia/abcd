@@ -12,33 +12,10 @@ import (
 )
 
 // knownFields is the additionalProperties:false allow-list from
-// issue.schema.json.
-var knownFields = map[string]bool{
-	"schema_version": true, "id": true, "slug": true, "severity": true,
-	"category": true, "source": true, "found_during": true, "found_at": true,
-	"details": true, "suggested_fix": true, "related_intents": true,
-	"promoted_to": true, "related_specs": true, "related_issues": true,
-	"synthesis_clusters": true, "wontfix_reason": true, "resolution": true,
-	"resolved_by": true, "blocked_by": true,
-	// shipped_in names the release that already carried this record's work, so the
-	// derivation can leave it out of a later cut (iss-2608241612087533). Optional
-	// and rare — only a ledger-hygiene close, for a fix released long ago, has
-	// anything to say here. It must be a KNOWN property or every write carrying
-	// one is refused, which is exactly how the first draft of this feature shipped
-	// a flag that could never execute.
-	"shipped_in": true,
-	// impact is the product judgement the derived version and the generated
-	// changelog are computed from (spc-10). It is optional here — an open issue
-	// has not been judged yet, and the record-lint blocker issue_impact_valid is
-	// what gates the move into resolved/ — but it must be a KNOWN property, or
-	// the reader drops every judged record as malformed.
-	"impact": true,
-	// created/updated are no longer written, but legacy ledgers still carry
-	// them. Tolerate (accept, then drop) them on read so an existing committed
-	// ledger is not rejected as an unknown property; the reader ignores their
-	// values entirely.
-	"created": true, "updated": true,
-}
+// issue.schema.json — the ONE copy in core/issueschema, the same set the record
+// lint reads, so the reader and the committed-ledger gate cannot disagree about
+// which keys a well-formed record may carry.
+var knownFields = issueschema.Known
 
 // uniqueItemsFields are the array properties issue.schema.json flags
 // uniqueItems:true.

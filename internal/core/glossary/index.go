@@ -168,7 +168,11 @@ func readTerm(fileAbs, rel string) (Term, error) {
 		{"definition", &t.Definition},
 	} {
 		f, ok := fields[spec.key]
-		if !ok || strings.TrimSpace(f.Value) == "" {
+		// A YAML null (`term: NULL`, `status: ~`, `definition: null`) is a MISSING
+		// field, not a literal value: without this gate `term: NULL` passed the
+		// TrimSpace-empty presence check and minted a phantom term named "NULL"
+		// (iss-2608270908339164). frontmatter.IsNull is the one canonical predicate.
+		if !ok || frontmatter.IsNull(strings.TrimSpace(f.Value)) {
 			return Term{}, fmt.Errorf("%s: term file has no %s field", rel, spec.key)
 		}
 		*spec.dst = strings.TrimSpace(f.Value)

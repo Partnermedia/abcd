@@ -174,3 +174,12 @@ func gitDirPresent(repoRoot string) bool {
 func idRe(prefix string) *regexp.Regexp {
 	return regexp.MustCompile(`^` + regexp.QuoteMeta(prefix) + `-([0-9]+)(?:-[a-z0-9-]+)?\.md$`)
 }
+
+// FilenameNumRe is the canonical record-filename grammar for a prose-handle
+// family (iss/itd/spc): <prefix>-<N>[-<slug>].md, capturing N. It is the ONE
+// grammar the read-side resolver matches, so a second copy in another package
+// would drift and let a gate accept a filename the resolver later refuses when
+// the record is cited. It is exported so record-lint validates each store's
+// filenames against exactly this pattern rather than a looser local copy that
+// accepted an arbitrary tail (iss-2608270908346617).
+func FilenameNumRe(prefix string) *regexp.Regexp { return idRe(prefix) }

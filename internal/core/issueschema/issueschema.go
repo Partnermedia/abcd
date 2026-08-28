@@ -1,15 +1,18 @@
-// Package issueschema is the issue record's frontmatter schema as DATA: the one
-// list of properties issue.schema.json marks required, held where every gate that
-// asks the question can read it.
+// Package issueschema is the issue record's frontmatter schema as DATA: the
+// property allow-list, the required set, and the closed enum value sets that
+// issue.schema.json declares, held where every gate that asks the question can
+// read them.
 //
 // It exists for the same reason core/changelog holds the impact enum: the writer
 // and reader of the ledger (core/capture) and the lint that GATES the committed
 // ledger (core/lint) must agree about what a well-formed record carries, and two
-// hand-kept copies of a required-property list drift the moment one side gains a
-// field. It is a leaf — no imports, no filesystem, no transport — because
-// core/capture's own tests import core/lint, so a lint that imported capture back
-// would be an import cycle in test.
+// hand-kept copies of a schema fact drift the moment one side gains a field. It
+// is a leaf — it imports only the standard library, no filesystem, no transport —
+// because core/capture's own tests import core/lint, so a lint that imported
+// capture back would be an import cycle in test.
 package issueschema
+
+import "regexp"
 
 // Required is every property the issue schema marks required, in the order a
 // record writes them. A record missing one is not a lax record: the ledger reader
@@ -25,3 +28,61 @@ var Required = []string{
 // own before the string-typed properties are walked. It is a slice OF Required
 // rather than a second literal, so the two can never disagree about the set.
 var RequiredStrings = Required[1:]
+
+// Known is issue.schema.json's additionalProperties:false allow-list: every
+// property a well-formed issue record may carry. capture's reader refuses a
+// record with any key outside this set (skipping it, so it goes invisible to
+// every capture surface), and record_schema reports the same key so the
+// committed-ledger gate refuses what the reader refuses (iss-2608261447039180).
+// It is the ONE copy both read.
+var Known = map[string]bool{
+	"schema_version": true, "id": true, "slug": true, "severity": true,
+	"category": true, "source": true, "found_during": true, "found_at": true,
+	"details": true, "suggested_fix": true, "related_intents": true,
+	"promoted_to": true, "related_specs": true, "related_issues": true,
+	"synthesis_clusters": true, "wontfix_reason": true, "resolution": true,
+	"resolved_by": true, "blocked_by": true,
+	// shipped_in names the release that already carried this record's work, so the
+	// derivation can leave it out of a later cut (iss-2608241612087533). Optional
+	// and rare — only a ledger-hygiene close, for a fix released long ago, has
+	// anything to say here. It must be a KNOWN property or every write carrying
+	// one is refused, which is exactly how the first draft of this feature shipped
+	// a flag that could never execute.
+	"shipped_in": true,
+	// impact is the product judgement the derived version and the generated
+	// changelog are computed from (spc-10). It is optional here — an open issue
+	// has not been judged yet, and the record-lint blocker issue_impact_valid is
+	// what gates the move into resolved/ — but it must be a KNOWN property, or
+	// the reader drops every judged record as malformed.
+	"impact": true,
+	// created/updated are no longer written, but legacy ledgers still carry
+	// them. Tolerate (accept, then drop) them on read so an existing committed
+	// ledger is not rejected as an unknown property; the reader ignores their
+	// values entirely.
+	"created": true, "updated": true,
+}
+
+// The closed enum value sets from issue.schema.json. capture validates a record's
+// severity/category/source against these, and record_schema mirrors the same
+// membership check for the committed-ledger gate (iss-2608270908342889). Held
+// once here so the two gates cannot disagree about what a legal value is.
+var (
+	// Severities is the capture-time severity enum.
+	Severities = []string{"nitpick", "minor", "major", "critical"}
+	// Categories is the loose issue taxonomy.
+	Categories = []string{
+		"bug", "documentation", "drift", "inconsistency", "tech-debt", "security",
+		"ux", "process", "architectural-insight", "future-work-seed", "observation",
+	}
+	// Sources is the surfacing channel enum.
+	Sources = []string{
+		"plan-review", "impl-review", "manual-test", "review-followup",
+		"agent-finding", "agent-observation", "user-observation",
+		"drift-detection", "memory-curation",
+	}
+)
+
+// SlugRe is the kebab-case slug pattern (lower-case alphanumerics joined by
+// single hyphens). A slug becomes a filename, so both the ledger writer and the
+// record-lint gate hold it to exactly this shape.
+var SlugRe = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
