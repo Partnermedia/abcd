@@ -8,7 +8,7 @@ from these three lines; a surface that says something else is drift (iss-143's
 finding), fixed by re-rendering from here or by deliberately changing this block.
 
 - **Title:** abcd — Agent-Based Configuration for Development
-- **Tagline:** A host-agnostic configuration layer for intent-driven development.
+- **Tagline:** For people who know what they want to build and need help shipping it.
 - **Pitch:** A single Go binary that carries the why from idea to shipped
   reality, usable as a plugin in compatible agent harnesses.
 

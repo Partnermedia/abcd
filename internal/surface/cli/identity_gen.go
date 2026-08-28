@@ -7,5 +7,5 @@ package cli
 
 const (
 	bakedTitle   = "abcd — Agent-Based Configuration for Development"
-	bakedTagline = "A host-agnostic configuration layer for intent-driven development."
+	bakedTagline = "For people who know what they want to build and need help shipping it."
 )
