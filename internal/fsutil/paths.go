@@ -15,14 +15,25 @@ import (
 )
 
 // ValidRelPath reports whether p is a safe repo-relative slash path: non-empty,
-// not absolute, already clean, and free of empty, ".", ".." or control-character
-// segments. It is the canonical lexical guard for a path that arrives as data —
-// a committed configuration value, a packed lifeboat's manifest entry — before
-// it is joined onto a trusted root. Lexical only: it says nothing about
-// symlinks, so a caller that then follows the path still needs the guarded
-// read/write primitives.
+// not absolute, already clean, free of empty, ".", ".." or control-character
+// segments, and containing no backslash. It is the canonical lexical guard for a
+// path that arrives as data — a committed configuration value, a packed
+// lifeboat's manifest entry — before it is joined onto a trusted root. Lexical
+// only: it says nothing about symlinks, so a caller that then follows the path
+// still needs the guarded read/write primitives.
+//
+// A backslash is refused outright, on every host. path.Clean is slash-only, so
+// it leaves a backslash untouched: `..\..\x` is "clean" and slash-traversal-free,
+// yet on a Windows target (abcd cross-compiles Windows binaries) filepath.FromSlash
+// turns those backslashes into separators and the join walks out of the intended
+// root. A legitimate committed repo-relative path is always a forward-slash path
+// and never contains a backslash, so refusing it everywhere closes the Windows
+// escape while keeping the gate identical across platforms (iss-2608280807166510).
 func ValidRelPath(p string) bool {
 	if p == "" || path.IsAbs(p) || strings.HasPrefix(p, "/") {
+		return false
+	}
+	if strings.ContainsRune(p, '\\') {
 		return false
 	}
 	if p != path.Clean(p) {

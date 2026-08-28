@@ -17,6 +17,12 @@ func TestValidRelPath(t *testing.T) {
 	for _, p := range []string{
 		"", "/etc/passwd", "../outside", "a/../../b", "./a", "a//b", "a/", "a/./b",
 		"a\x00b", "a\nb",
+		// A backslash is never legitimate in a committed repo-relative path, and on
+		// a Windows target it acts as a separator: path.Clean leaves it untouched,
+		// so a backslash-bearing traversal would slip a slash-only guard and, after
+		// filepath.FromSlash on GOOS=windows, walk out of the intended root. Refuse
+		// any backslash outright, target-independently (iss-2608280807166510).
+		`..\..\x`, `a\b`, `\x`, `a/..\..\b`,
 	} {
 		if fsutil.ValidRelPath(p) {
 			t.Errorf("ValidRelPath(%q) = true, want false", p)
