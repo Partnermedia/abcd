@@ -102,7 +102,19 @@ func buildIssueText(fields []kv, body string) (string, error) {
 		}
 	}
 	lines = append(lines, "---")
-	return strings.Join(lines, "\n") + "\n\n" + body, nil
+	// The record ends with EXACTLY one trailing newline. The body arrives with an
+	// inconsistent tail — some callers newline-terminate it, some do not — which is
+	// how 170 of 174 ledger files came to lack an EOF newline (iss-175): the writer
+	// appended the body verbatim. Normalise here so a freshly written record and one
+	// the rewrite serialiser (setScalarField/setMapField, which preserve the body
+	// byte-for-byte) later touches agree on the trailing newline. An empty body
+	// keeps only the blank-line separator after the closing delimiter.
+	body = strings.TrimRight(body, "\n")
+	out := strings.Join(lines, "\n") + "\n\n" + body
+	if body != "" {
+		out += "\n"
+	}
+	return out, nil
 }
 
 func allAbcdIDs(items []string) bool {

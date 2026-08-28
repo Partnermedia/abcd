@@ -660,7 +660,7 @@ func (a *applyCtx) registerRepo(sha string) {
 
 	wrote := false
 	lineageConflict := false
-	_ = withHistoryLock(func() error {
+	lockErr := withHistoryLock(func() error {
 		// Re-load inside the lock: the pre-lock read may be stale after a concurrent
 		// install's write, and the mutation must build on the current index.
 		locked, lerr := loadHistoryIndex()
@@ -671,6 +671,23 @@ func (a *applyCtx) registerRepo(sha string) {
 			e.Name, e.Github, e.Path = id.Name, id.Github, a.cwd // refresh mutable labels
 			if e.Status == "" {
 				e.Status = "active"
+			}
+			// A concurrent install of the same NEW repo may have registered this sha
+			// first, landing THIS session — which asked the re-founding question and
+			// got a yes — on the refresh branch with a human-approved lineage link
+			// still pending. Apply it here too, or the register-race loser silently
+			// drops it (iss-128). Re-check the candidate under the lock exactly as the
+			// new-entry branch does, and never overwrite a link the winner recorded.
+			if linkLineage && e.Supersedes == "" {
+				cand := indexEntry(locked, candSHA)
+				if cand == nil || cand.SupersededBy != "" {
+					linkLineage = false
+					lineageConflict = true
+				} else {
+					e.Supersedes = candSHA
+					cand.SupersededBy = sha
+					cand.Status = "superseded"
+				}
 			}
 			if werr := writeHistoryIndex(locked); werr != nil {
 				return werr
@@ -702,6 +719,15 @@ func (a *applyCtx) registerRepo(sha string) {
 		wrote = true
 		return nil
 	})
+	if lockErr != nil {
+		// A history-lock failure (a contention timeout, or an unreadable lock path)
+		// skipped registration entirely. Surface it as a change-note rather than
+		// discarding the signal — a silently unregistered repo leaves no marker to
+		// find it by (iss-128).
+		a.changes = append(a.changes,
+			"history registration for "+shortSHA(sha)+" skipped ("+lockErr.Error()+")")
+		return
+	}
 	if lineageConflict {
 		// Surface the refused link rather than silently proceed: the re-founding
 		// candidate the user confirmed changed under the lock, so the repo is

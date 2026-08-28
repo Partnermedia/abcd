@@ -204,14 +204,16 @@ func TestCaptureListOpenRendersIssueFields(t *testing.T) {
 		t.Fatalf("list --open returned %d issues, want %d", len(res.Issues), len(captures))
 	}
 	// Map by the one-line summary (body) so the assertion is order-independent
-	// (list emits derived-priority order, not capture order).
+	// (list emits derived-priority order, not capture order). The stored body now
+	// carries exactly one trailing newline (iss-175: the writer terminates every
+	// record), which the raw body field reflects — so key on the trimmed summary.
 	bySummary := make(map[string]struct{ id, slug, sev string })
 	for _, iss := range res.Issues {
 		if iss.ID == "" || iss.Slug == "" || iss.Severity == "" || iss.Body == "" {
 			t.Fatalf("issue missing an AC5 field: id=%q slug=%q severity=%q body=%q",
 				iss.ID, iss.Slug, iss.Severity, iss.Body)
 		}
-		bySummary[iss.Body] = struct{ id, slug, sev string }{iss.ID, iss.Slug, iss.Severity}
+		bySummary[strings.TrimRight(iss.Body, "\n")] = struct{ id, slug, sev string }{iss.ID, iss.Slug, iss.Severity}
 	}
 	for _, c := range captures {
 		got, ok := bySummary[c.text]

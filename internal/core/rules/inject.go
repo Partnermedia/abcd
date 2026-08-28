@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/intentdriven/abcd/internal/fsutil"
@@ -23,6 +24,24 @@ const maxPromptBytes = 64 * 1024
 
 // maxStateFileBytes caps a session-state ledger file on read.
 const maxStateFileBytes = 256 * 1024
+
+// injectionBudgetBytes caps the TOTAL rendered rule text injected per turn,
+// summed across every matched domain (iss-2608261551077971). The 256 KiB
+// per-file read cap bounds one rules.json on disk, not the injected total — and
+// the payload re-lands at least every DefaultRefreshBackstop prompts and after
+// each compaction, so an unbounded set is a recurring context-flood vector.
+//
+// 64 KiB is a quarter of the per-file read cap and equal to maxPromptBytes (the
+// per-turn prompt ceiling the loader already scans against), so it is a
+// consistent per-turn text budget. The entire bundled default set renders to a
+// few KiB, so a legitimate multi-domain match sits an order of magnitude under
+// this; only a bloated or hostile rules.json can reach it.
+const injectionBudgetBytes = 64 * 1024
+
+// injectionTruncatedMarker is the unmistakable substring the loud truncation
+// notice carries when the budget bites — searchable in the injected output and
+// in host logs.
+const injectionTruncatedMarker = "INJECTION TRUNCATED"
 
 // DefaultRefreshBackstop is the fixed-N full-refresh backstop (D1): the primary
 // refresh is event-driven (a SessionStart/PreCompact reset clears the ledger),
@@ -73,23 +92,68 @@ func Inject(rs RuleSet, prompt string, prev SessionState, backstop int) InjectRe
 	}
 
 	var fresh []ResolvedDomain
-	var injected []string
 	for _, d := range rs.Match(prompt) {
-		sig := Signature(d)
-		if ledger[d.Name] == sig {
+		if ledger[d.Name] == Signature(d) {
 			continue // already injected this session, unchanged
 		}
-		ledger[d.Name] = sig
 		fresh = append(fresh, d)
+	}
+
+	// Enforce the per-repo injection budget across ALL matched domains, not just
+	// the per-file read cap (iss-2608261551077971). A domain that is truncated
+	// away is deliberately NOT recorded in the ledger, so it is retried next turn
+	// rather than silently dropped for the session.
+	text, kept := renderWithinBudget(fresh)
+	var injected []string
+	for _, d := range kept {
+		ledger[d.Name] = Signature(d)
 		injected = append(injected, d.Name)
 	}
 	sort.Strings(injected)
 
 	return InjectResult{
-		Text:     Render(fresh),
+		Text:     text,
 		Injected: injected,
 		State:    SessionState{Count: count, Ledger: ledger},
 	}
+}
+
+// renderWithinBudget renders fresh under the per-repo injection budget. When the
+// full render fits it is returned byte-identical to Render (the common path is
+// untouched). When it overflows, whole domain blocks are kept greedily in order
+// until the next would exceed the budget, and a loud, unmistakable truncation
+// notice is appended — whole-block granularity keeps the "## NAME" injection
+// contract intact (never a half-rendered rule). It returns the text and the
+// domains actually kept, so the caller records only those in the dedup ledger.
+func renderWithinBudget(fresh []ResolvedDomain) (string, []ResolvedDomain) {
+	full := Render(fresh)
+	if len(full) <= injectionBudgetBytes {
+		return full, fresh
+	}
+
+	var kept []ResolvedDomain
+	size := 0
+	// Reserve room for the header line and the truncation notice so the composed
+	// output is provably within the budget regardless of how many blocks fit.
+	const reserve = 512
+	for _, d := range fresh {
+		block := renderDomain(d)
+		if size+len(block) > injectionBudgetBytes-reserve {
+			break
+		}
+		kept = append(kept, d)
+		size += len(block)
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "# abcd rules — %d domain(s) active\n", len(kept))
+	for _, d := range kept {
+		b.WriteString(renderDomain(d))
+	}
+	fmt.Fprintf(&b,
+		"\n# abcd rules — %s: rendered rule set exceeds the %d-byte per-repo budget; %d of %d matched domain(s) omitted this turn. A bloated or hostile .abcd/rules.json is the likely cause — inspect it with `abcd rules`.\n",
+		injectionTruncatedMarker, injectionBudgetBytes, len(fresh)-len(kept), len(fresh))
+	return b.String(), kept
 }
 
 // stateDir is the machine-local directory holding per-session ledgers. It is

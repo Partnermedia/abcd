@@ -18,6 +18,7 @@
 package rules
 
 import (
+	"bytes"
 	_ "embed"
 	"encoding/json"
 	"errors"
@@ -170,6 +171,14 @@ func Load(repoRoot string) (RuleSet, error) {
 			return RuleSet{}, fmt.Errorf("rules: reading %s: %w", RepoRelPath, err)
 		}
 	}
+	// encoding/json silently resolves a duplicate object key last-wins, so two
+	// blocks for the same domain in rules.json would drop the first with no
+	// diagnostic — an easy state to reach after a merge (iss-2608261550498779).
+	// A token-level scan before the unmarshal refuses it loudly, mirroring
+	// capture/parse.go's duplicate-key refusal (adapted to JSON's token stream).
+	if err := checkNoDuplicateKeys(data); err != nil {
+		return RuleSet{}, fmt.Errorf("rules: %s: %w", RepoRelPath, err)
+	}
 	var over RuleSet
 	if err := json.Unmarshal(data, &over); err != nil {
 		return RuleSet{}, fmt.Errorf("rules: %s is not valid JSON: %w", RepoRelPath, err)
@@ -179,6 +188,74 @@ func Load(repoRoot string) (RuleSet, error) {
 		return RuleSet{}, fmt.Errorf("rules: %s: %w", RepoRelPath, err)
 	}
 	return merged, nil
+}
+
+// checkNoDuplicateKeys walks the JSON token stream and refuses any object that
+// carries a repeated key at any nesting level (the domains map and the domain
+// objects alike). It runs before the unmarshal precisely because encoding/json
+// would otherwise collapse the duplicate silently. The stdlib decoder enforces a
+// max nesting depth, so no separate depth guard is needed.
+func checkNoDuplicateKeys(data []byte) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	tok, err := dec.Token()
+	if err != nil {
+		// A malformed or empty document is left for the unmarshal to report.
+		return nil
+	}
+	return checkDupValue(dec, tok)
+}
+
+// checkDupValue recursively verifies the value whose opening token is tok. For an
+// object it tracks the keys seen at that level; for an array it descends into each
+// element. Scalars terminate. Any read error is swallowed as nil so the richer
+// json.Unmarshal error remains the one the caller surfaces.
+func checkDupValue(dec *json.Decoder, tok json.Token) error {
+	delim, ok := tok.(json.Delim)
+	if !ok {
+		return nil // scalar
+	}
+	switch delim {
+	case '{':
+		seen := map[string]bool{}
+		for dec.More() {
+			kt, err := dec.Token()
+			if err != nil {
+				return nil
+			}
+			key, ok := kt.(string)
+			if !ok {
+				return nil
+			}
+			if seen[key] {
+				return fmt.Errorf("duplicate key %q (last-wins is silent — refusing)", key)
+			}
+			seen[key] = true
+			vt, err := dec.Token()
+			if err != nil {
+				return nil
+			}
+			if err := checkDupValue(dec, vt); err != nil {
+				return err
+			}
+		}
+		if _, err := dec.Token(); err != nil { // closing '}'
+			return nil
+		}
+	case '[':
+		for dec.More() {
+			vt, err := dec.Token()
+			if err != nil {
+				return nil
+			}
+			if err := checkDupValue(dec, vt); err != nil {
+				return err
+			}
+		}
+		if _, err := dec.Token(); err != nil { // closing ']'
+			return nil
+		}
+	}
+	return nil
 }
 
 // Merge overlays over onto base. Domain fields are per-field: a field set on the
@@ -218,7 +295,10 @@ func mergeDomain(base, over Domain) Domain {
 }
 
 // Validate checks structural invariants: schema_version == 1, every domain name
-// matches [A-Z][A-Z0-9_]*, and every state is active/dormant (or empty).
+// matches [A-Z][A-Z0-9_]*, every state is active/dormant (or empty), and no rule
+// body is empty or whitespace-only. An empty rule body otherwise passes here and
+// renders as a bare contentless "- " bullet in the injected block
+// (iss-2608261550497978) — a loud refusal at load beats a silent empty bullet.
 func Validate(rs RuleSet) error {
 	if rs.SchemaVersion != 1 {
 		return fmt.Errorf("schema_version must be 1, got %d", rs.SchemaVersion)
@@ -231,6 +311,11 @@ func Validate(rs RuleSet) error {
 		case "", StateActive, StateDormant:
 		default:
 			return fmt.Errorf("domain %q: unknown state %q", name, d.State)
+		}
+		for i, r := range d.Rules {
+			if strings.TrimSpace(r) == "" {
+				return fmt.Errorf("domain %q: rule %d is empty or whitespace-only", name, i)
+			}
 		}
 	}
 	return nil
@@ -510,7 +595,14 @@ func renderDomain(d ResolvedDomain) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## %s\n", d.Name)
 	for _, r := range d.Rules {
-		fmt.Fprintf(&b, "- %s\n", sanitizeRuleBody(r))
+		body := sanitizeRuleBody(r)
+		// Defence behind Validate's loud refusal: a body that sanitises to
+		// nothing (empty or whitespace-only) never becomes a contentless "- "
+		// bullet, even on an unvalidated render path (iss-2608261550497978).
+		if body == "" {
+			continue
+		}
+		fmt.Fprintf(&b, "- %s\n", body)
 	}
 	return b.String()
 }

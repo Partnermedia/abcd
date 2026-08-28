@@ -62,10 +62,13 @@ func SynthesizePrinciples(lifeboatDir string, raw []byte) (PrinciplesResult, err
 		// byte-stable, so it is NOT re-sorted by id (which would misorder adr-2 vs
 		// adr-10).
 		mode = ModeDeterministic
-		principles, err = deterministicPrinciples(abs)
+		var drops []PrincipleDrop
+		principles, drops, err = deterministicPrinciples(abs)
 		if err != nil {
 			return PrinciplesResult{}, err
 		}
+		res.Dropped = len(drops)
+		res.Drops = drops
 	} else {
 		mode = ModeDelegated
 		var drops []PrincipleDrop
@@ -123,21 +126,22 @@ func SynthesizePrinciples(lifeboatDir string, raw []byte) (PrinciplesResult, err
 // it quotes the record and never invents. An ADR with no Decision/Consequences
 // section, or an empty first bullet, contributes nothing — an empty result is a
 // first-class "principles": []. Order is gvEachADR order (home then sorted name).
-func deterministicPrinciples(abs string) ([]Principle, error) {
+func deterministicPrinciples(abs string) ([]Principle, []PrincipleDrop, error) {
 	ctx, err := newSourceContext(abs)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer ctx.Close()
 
 	var out []Principle
+	var drops []PrincipleDrop
 	seen := map[string]bool{}
 	gvEachADR(ctx, func(name, p string, fields map[string]frontmatter.Field) {
 		if len(out) >= maxPrinciples {
 			return
 		}
 		adrID := gvADRID(fields, name)
-		if adrID == "" || seen[adrID] {
+		if adrID == "" {
 			return
 		}
 		data, ok := ctx.ReadFile(p)
@@ -165,6 +169,19 @@ func deterministicPrinciples(abs string) ([]Principle, error) {
 		if !prnIDRe.MatchString(prnID) {
 			return
 		}
+		// The dedup is tested only once the ADR has a principle to contribute: a
+		// same-numbered ADR that yields no bullet is not a lost principle and must
+		// not inflate the drop count. When a genuine ADR-number collision DOES drop a
+		// distilled principle, the drop is announced — matching the delegated / review
+		// / lessons ingests rather than the silent first-wins map this replaced
+		// (iss-2608270908344367).
+		if seen[adrID] {
+			drops = append(drops, PrincipleDrop{
+				ID:     prnID,
+				Reason: "duplicate ADR id (shadowed by an earlier ADR of the same number)",
+			})
+			return
+		}
 		seen[adrID] = true
 		out = append(out, Principle{
 			ID:         prnID,
@@ -173,7 +190,7 @@ func deterministicPrinciples(abs string) ([]Principle, error) {
 			Evidence:   []string{adrID, p},
 		})
 	})
-	return out, nil
+	return out, drops, nil
 }
 
 // validateDelegatedPrinciples reads the untrusted payload behind the lessons-ingest

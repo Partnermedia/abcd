@@ -10,6 +10,8 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 // ValidRelPath reports whether p is a safe repo-relative slash path: non-empty,
@@ -54,10 +56,19 @@ func CaseFoldingFS() bool {
 // false, that a case-sensitive host keeps exact-match semantics.
 var caseFoldingFS = CaseFoldingFS
 
-// FoldPath returns p in the spelling a path comparison uses: lower-cased when
-// fold is set, unchanged otherwise. It is the single place a case-folding
-// comparison key is minted, so a containment gate and a duplicate-target map
-// fold identically rather than drifting apart.
+// FoldPath returns p in the spelling a path comparison uses: lower-cased AND
+// Unicode-normalised (NFC) when fold is set, unchanged otherwise. It is the single
+// place a case-folding comparison key is minted, so a containment gate and a
+// duplicate-target map fold identically rather than drifting apart.
+//
+// A case-folding filesystem (APFS/HFS+, Windows) is ALSO normalisation-
+// insensitive: the NFC and NFD spellings of one name address the same file, so a
+// key that folds only case leaves the NFC/NFD half of the equivalence class open —
+// the payload-destination gate, the pack overlap gate and embark's claimed key all
+// then read two spellings of one directory as distinct (iss-2608270926030978). NFC
+// is applied AFTER the lower-casing so the key is always in composed form. When
+// fold is false the host is case-sensitive and normalisation-sensitive (Linux), so
+// the key stays byte-exact and two distinct spellings remain distinct.
 //
 // fold is a parameter rather than a call to CaseFoldingFS because a fail-closed
 // gate's case-folding branch cannot be provoked on a case-sensitive host: the
@@ -65,7 +76,7 @@ var caseFoldingFS = CaseFoldingFS
 // prove.
 func FoldPath(p string, fold bool) string {
 	if fold {
-		return strings.ToLower(p)
+		return norm.NFC.String(strings.ToLower(p))
 	}
 	return p
 }

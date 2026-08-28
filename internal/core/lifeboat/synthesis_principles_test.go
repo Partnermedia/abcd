@@ -331,6 +331,51 @@ func TestSynthPrinciplesProseDecisionBulletedConsequences(t *testing.T) {
 	}
 }
 
+// TestSynthPrinciplesDeterministicDuplicateADRIDAnnouncesDrop: two ADRs resolving
+// to one canonical adr-id (a genuine ADR-number collision — adr-tools branches, or
+// log4brains' same-day YYYYMMDD- filenames) each carry a distilled principle, but
+// only the first can hold prn-adr-N. The second was dropped by a silent seen[] map
+// while the neighbouring delegated/review/lessons ingests announce their drops; the
+// deterministic path must record the drop too (iss-2608270908344367).
+func TestSynthPrinciplesDeterministicDuplicateADRIDAnnouncesDrop(t *testing.T) {
+	body := "# adr\n\n## Consequences\n\n- %s\n"
+	dir := synthLifeboat(t, map[string]string{
+		"docs/adr/20200926-first.md":  fmt.Sprintf(body, "the first durable lesson"),
+		"docs/adr/20200926-second.md": fmt.Sprintf(body, "the second durable lesson"),
+	})
+	res, err := SynthesizePrinciples(dir, nil)
+	if err != nil {
+		t.Fatalf("SynthesizePrinciples: %v", err)
+	}
+	if res.Written != 1 {
+		t.Fatalf("two ADRs sharing one number must yield one principle, written=%d", res.Written)
+	}
+	if res.Dropped != 1 {
+		t.Fatalf("the shadowed duplicate ADR must be recorded as a drop, dropped=%d (drops=%+v)", res.Dropped, res.Drops)
+	}
+	if len(res.Drops) != 1 || res.Drops[0].ID != "prn-adr-20200926" {
+		t.Errorf("drop should name prn-adr-20200926: %+v", res.Drops)
+	}
+}
+
+// TestSynthPrinciplesDeterministicDuplicateIDNoBulletsNotDropped: a same-numbered
+// ADR that contributes nothing (no Decision/Consequences bullet) is not a lost
+// principle, so it must NOT inflate the drop count — the drop is recorded only when
+// there was a principle to drop, mirroring the alternatives-considered shadow rule.
+func TestSynthPrinciplesDeterministicDuplicateIDNoBulletsNotDropped(t *testing.T) {
+	dir := synthLifeboat(t, map[string]string{
+		"docs/adr/20200926-first.md":  "# adr\n\n## Consequences\n\n- the only durable lesson\n",
+		"docs/adr/20200926-second.md": "# adr\n\n## Context\n\nNo decision section here.\n",
+	})
+	res, err := SynthesizePrinciples(dir, nil)
+	if err != nil {
+		t.Fatalf("SynthesizePrinciples: %v", err)
+	}
+	if res.Written != 1 || res.Dropped != 0 {
+		t.Fatalf("a bullet-free same-numbered ADR must not be a drop: written=%d dropped=%d (drops=%+v)", res.Written, res.Dropped, res.Drops)
+	}
+}
+
 // TestSynthCitationSetExcludesOwnArtifacts: the delegated citation path set is
 // the SEALED pack — a payload citing only the verb's own post-pack output is
 // dropped on every run, so re-runs stay byte-identical (no self-referential

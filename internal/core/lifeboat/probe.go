@@ -158,6 +158,12 @@ type SourceContext struct {
 	ignoredOnce    sync.Once
 	notIgnored     map[string]struct{} // nil when unknown or not applicable
 
+	// listCap bounds a single directory listing (ListDir / listDirNoted). It is a
+	// field defaulting to maxDirEntries — not the const directly — so a test can
+	// force the cap-truncation path on a small tree, the way ignoredListCapBytes is
+	// a var for the same reason (iss-2608270908348796).
+	listCap int
+
 	mu       sync.Mutex
 	gitCache map[string]gitResult
 }
@@ -174,7 +180,7 @@ func newSourceContext(repoRoot string) (*SourceContext, error) {
 	if err != nil {
 		return nil, err
 	}
-	c := &SourceContext{RepoRoot: abs, gitCache: map[string]gitResult{}}
+	c := &SourceContext{RepoRoot: abs, gitCache: map[string]gitResult{}, listCap: maxDirEntries}
 	// os.OpenRoot refuses any later path component that escapes the root,
 	// symlinked intermediates included — the same containment the privacy audit
 	// adopted. A root that cannot be opened leaves reads returning "absent".
@@ -310,25 +316,39 @@ func (c *SourceContext) FindFirst(candidates ...string) string {
 // non-blocking (matching ReadFile): a probed tree is untrusted, so a FIFO planted
 // where a directory is expected must return promptly instead of blocking open().
 func (c *SourceContext) ListDir(rel string) []string {
+	names, _ := c.listDirNoted(rel)
+	return names
+}
+
+// listDirNoted is ListDir plus a truncation flag: it reports whether the directory
+// held more entries than the per-directory cap, so a caller scanning a record home
+// can SAY its scan saw only a prefix rather than dropping the tail in silence. It
+// reads one past the cap so "more remain" is detectable in a single bounded call,
+// exactly as readDirBounded does for the recursive walk.
+func (c *SourceContext) listDirNoted(rel string) (names []string, truncated bool) {
 	if c.root == nil {
-		return nil
+		return nil, false
 	}
 	f, err := c.root.OpenFile(filepath.FromSlash(rel), os.O_RDONLY|nonBlock, 0)
 	if err != nil {
-		return nil
+		return nil, false
 	}
 	defer f.Close()
 	// Bounded: a directory with millions of entries cannot balloon memory here.
-	entries, err := f.ReadDir(maxDirEntries)
+	entries, err := f.ReadDir(c.listCap + 1)
 	if err != nil && len(entries) == 0 {
-		return nil
+		return nil, false
 	}
-	names := make([]string, 0, len(entries))
+	if len(entries) > c.listCap {
+		truncated = true
+		entries = entries[:c.listCap]
+	}
+	names = make([]string, 0, len(entries))
 	for _, e := range entries {
 		names = append(names, e.Name())
 	}
 	sort.Strings(names)
-	return names
+	return names, truncated
 }
 
 // WalkFiles returns the repo-relative POSIX paths of every regular file beneath

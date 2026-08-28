@@ -116,7 +116,7 @@ func TestCaptureAppendAndReadBack(t *testing.T) {
 				Severity: SeverityMajor, Category: "drift", Source: "agent-finding",
 				FoundDuring: "fn-3 review", FoundAt: "internal/x.go",
 				RelatedIntents: []string{"itd-4"},
-				RelatedSpecs:   []string{"spc-12"}, Status: StateOpen, Body: "b",
+				RelatedSpecs:   []string{"spc-12"}, Status: StateOpen, Body: "b\n",
 			},
 		},
 	}

@@ -563,6 +563,176 @@ func TestGvCanonADRIDStripsPadding(t *testing.T) {
 	}
 }
 
+// gvHasTruncationNotice reports whether fs carries a per-scan listing-truncation
+// notice for signal sig.
+func gvHasTruncationNotice(fs []Finding, sig Signal) bool {
+	for _, f := range fs {
+		if f.Signal == sig && strings.Contains(f.Summary, "truncated") {
+			return true
+		}
+	}
+	return false
+}
+
+// --- 11. filename-ordinal identity (iss-2608270945469978) -------------------
+
+// TestAbandonedSupersededADRHugeFilenameOrdinalKeepsIdentity: an ADR whose id is
+// DERIVED from a filename ordinal wider than any integer type must keep an
+// identity. gvADRIDFromFilename parsed the digit run with strconv.Atoi and returned
+// "" on overflow, so gvADRID yielded "" and the record was skipped in silence — the
+// filename-fallback twin of the resolved textual-canonicalisation fix.
+func TestAbandonedSupersededADRHugeFilenameOrdinalKeepsIdentity(t *testing.T) {
+	dir, write := abandonedWriter(t)
+	huge := "99999999999999999999" // 20 digits: beyond int64
+	// No frontmatter id, so the id must be derived from the filename ordinal.
+	write("docs/adr/"+huge+"-thing.md", "---\nstatus: superseded\n---\n\n# huge\n")
+	fs := gvSupersededADRs(abandonedCtx(t, dir))
+	if _, ok := gvFindingByID(fs, "adr-"+huge); !ok {
+		t.Fatalf("want adr-%s derived from a huge filename ordinal, got %v", huge, fs)
+	}
+}
+
+// TestAbandonedSupersededADRHugeFilenamePaddedDedupes: a padded and a bare huge
+// filename ordinal are one handle — the textual canonicaliser trims the padding, so
+// the two homes dedupe to one finding rather than minting two.
+func TestAbandonedSupersededADRHugeFilenamePaddedDedupes(t *testing.T) {
+	dir, write := abandonedWriter(t)
+	huge := "99999999999999999999"
+	write("docs/adr/"+huge+"-a.md", "---\nstatus: superseded\n---\n\n# a\n")
+	write("docs/adrs/00"+huge+"-b.md", "---\nstatus: superseded\n---\n\n# b\n")
+	fs := gvSupersededADRs(abandonedCtx(t, dir))
+	if gvCountSignal(fs, SignalSupersededADR) != 1 {
+		t.Fatalf("padded and bare huge filename ordinals must dedupe to one finding, got %d (%v)", len(fs), fs)
+	}
+	if _, ok := gvFindingByID(fs, "adr-"+huge); !ok {
+		t.Errorf("want the canonical id adr-%s, got %v", huge, fs)
+	}
+}
+
+// --- 12. intent + issue canonicalisation and shadows (iss-2608270908349721) --
+
+func TestGvCanonIntentAndIssueIDStripPadding(t *testing.T) {
+	for in, want := range map[string]string{
+		"itd-7": "itd-7", "itd-007": "itd-7", "itd-0": "itd-0", "itd-000": "itd-0",
+		"itd-x": "", "iss-9": "", "": "",
+	} {
+		if got := gvCanonIntentID(in); got != want {
+			t.Errorf("gvCanonIntentID(%q) = %q, want %q", in, got, want)
+		}
+	}
+	for in, want := range map[string]string{
+		"iss-9": "iss-9", "iss-009": "iss-9", "iss-0": "iss-0", "iss-000": "iss-0",
+		"iss-x": "", "itd-9": "", "": "",
+	} {
+		if got := gvCanonIssueID(in); got != want {
+			t.Errorf("gvCanonIssueID(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// TestAbandonedSupersededIntentPaddedIDDedupes: itd-7 and itd-007 are one intent
+// everywhere the record is read, but the intent signal deduped on the raw
+// frontmatter id with no canonicaliser and no shadow, so the two spellings keyed
+// two findings and neither drop was announced.
+func TestAbandonedSupersededIntentPaddedIDDedupes(t *testing.T) {
+	dir, write := abandonedWriter(t)
+	write(".abcd/development/intents/superseded/itd-7-bare.md", "---\nid: itd-7\n---\n")
+	write(".abcd/development/intents/superseded/itd-007-padded.md", "---\nid: itd-007\n---\n")
+	fs := gvSupersededIntents(abandonedCtx(t, dir))
+	if gvCountSignal(fs, SignalSupersededIntent) != 1 {
+		t.Fatalf("itd-7 and itd-007 are one intent and must dedupe to one finding, got %d (%v)", len(fs), fs)
+	}
+	f, ok := gvFindingByID(fs, "itd-7")
+	if !ok {
+		t.Fatalf("want the canonical id itd-7, got %v", fs)
+	}
+	if !gvEvidenceContains(f, "shadowed") {
+		t.Errorf("the dropped duplicate must be announced as a shadow: evidence = %v", f.Evidence)
+	}
+}
+
+// TestAbandonedWontfixIssuePaddedIDDedupes: the issue analogue of the above.
+func TestAbandonedWontfixIssuePaddedIDDedupes(t *testing.T) {
+	dir, write := abandonedWriter(t)
+	write(".abcd/work/issues/wontfix/iss-7-bare.md", "---\nid: \"iss-7\"\n---\n")
+	write(".abcd/work/issues/wontfix/iss-007-padded.md", "---\nid: \"iss-007\"\n---\n")
+	fs := gvWontfixIssues(abandonedCtx(t, dir))
+	if gvCountSignal(fs, SignalWontfixIssue) != 1 {
+		t.Fatalf("iss-7 and iss-007 are one issue and must dedupe to one finding, got %d (%v)", len(fs), fs)
+	}
+	f, ok := gvFindingByID(fs, "iss-7")
+	if !ok {
+		t.Fatalf("want the canonical id iss-7, got %v", fs)
+	}
+	if !gvEvidenceContains(f, "shadowed") {
+		t.Errorf("the dropped duplicate must be announced as a shadow: evidence = %v", f.Evidence)
+	}
+}
+
+// --- 13. per-scan listing-truncation notice (iss-2608270908348796) -----------
+
+// TestAbandonedSupersededIntentListingTruncationNoticed: a superseded/ home holding
+// more entries than the per-directory listing cap is read only up to the cap, so the
+// scan is INCOMPLETE and must say so with a per-scan notice rather than present a
+// truncated input as a complete graveyard.
+func TestAbandonedSupersededIntentListingTruncationNoticed(t *testing.T) {
+	dir, write := abandonedWriter(t)
+	for i := 1; i <= 3; i++ {
+		write(fmt.Sprintf(".abcd/development/intents/superseded/itd-%d-x.md", i),
+			fmt.Sprintf("---\nid: itd-%d\n---\n", i))
+	}
+	ctx := abandonedCtx(t, dir)
+	ctx.listCap = 2 // force truncation on a small tree
+	fs := gvSupersededIntents(ctx)
+	if !gvHasTruncationNotice(fs, SignalSupersededIntent) {
+		t.Fatalf("a truncated superseded/ listing must emit a per-scan notice, got %v", fs)
+	}
+}
+
+// TestAbandonedWontfixIssueListingTruncationNoticed: the wontfix/ ledger analogue.
+func TestAbandonedWontfixIssueListingTruncationNoticed(t *testing.T) {
+	dir, write := abandonedWriter(t)
+	for i := 1; i <= 3; i++ {
+		write(fmt.Sprintf(".abcd/work/issues/wontfix/iss-%d-x.md", i),
+			fmt.Sprintf("---\nid: \"iss-%d\"\n---\n", i))
+	}
+	ctx := abandonedCtx(t, dir)
+	ctx.listCap = 2
+	fs := gvWontfixIssues(ctx)
+	if !gvHasTruncationNotice(fs, SignalWontfixIssue) {
+		t.Fatalf("a truncated wontfix/ listing must emit a per-scan notice, got %v", fs)
+	}
+}
+
+// TestAbandonedSupersededADRListingTruncationNoticed: an ADR home past the cap must
+// note its truncation on the signals gvEachADR feeds.
+func TestAbandonedSupersededADRListingTruncationNoticed(t *testing.T) {
+	dir, write := abandonedWriter(t)
+	for i := 1; i <= 3; i++ {
+		write(fmt.Sprintf("docs/adr/%04d-x.md", i),
+			fmt.Sprintf("---\nid: adr-%d\nstatus: superseded\n---\n\n# %d\n", i, i))
+	}
+	ctx := abandonedCtx(t, dir)
+	ctx.listCap = 2
+	fs := gvSupersededADRs(ctx)
+	if !gvHasTruncationNotice(fs, SignalSupersededADR) {
+		t.Fatalf("a truncated ADR home must emit a per-scan notice, got %v", fs)
+	}
+}
+
+// TestAbandonedListingUnderCapEmitsNoNotice: the notice fires ONLY on truncation —
+// a home within the cap yields exactly its records and no spurious notice.
+func TestAbandonedListingUnderCapEmitsNoNotice(t *testing.T) {
+	dir, write := abandonedWriter(t)
+	write(".abcd/development/intents/superseded/itd-1-x.md", "---\nid: itd-1\n---\n")
+	ctx := abandonedCtx(t, dir)
+	ctx.listCap = 50
+	fs := gvSupersededIntents(ctx)
+	if gvHasTruncationNotice(fs, SignalSupersededIntent) {
+		t.Fatalf("a listing within the cap must not emit a truncation notice, got %v", fs)
+	}
+}
+
 // TestAbandonedSupersededADROversizeOrdinalKeepsIdentity: an ADR ordinal wider
 // than any integer type is still a well-formed adr-N and must keep an identity.
 // Canonicalising through an integer parse would fail on it and return "", and a
