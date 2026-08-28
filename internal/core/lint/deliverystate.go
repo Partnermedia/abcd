@@ -5,7 +5,16 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
+
+// maxChangelogBytes caps the delivery changelog read. It is deliberately looser
+// than maxAgentPromptBytes: a repository's root changelog is its largest prose
+// file and grows with every release, so the cap has to sit far above any real
+// one while still bounding a hostile tree — the same reasoning maxLintConfigBytes
+// applies to the config.
+const maxChangelogBytes = 4 << 20
 
 const ruleDeliveryState = "delivery_state"
 
@@ -68,7 +77,24 @@ func checkDeliveryState(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 		sections[strings.ToLower(strings.TrimSpace(s))] = true
 	}
 
-	data, err := os.ReadFile(filepath.Join(repoRoot, filepath.FromSlash(changelog)))
+	// Contained and capped, exactly as the agent_contract changelog read beside
+	// it. The path is repo-controlled (it comes out of the in-tree lint config)
+	// and so is the file it names, so a fork pull request supplies both and CI's
+	// `go run ./cmd/record-lint` is what reads them. Unguarded, CHANGELOG.md as a
+	// symlink to /dev/zero was read until the runner ran out of memory, and a
+	// configured path could resolve outside the checkout — where the rule's
+	// existing fail-closed behaviour hid it, because a readable outside file
+	// simply passed.
+	if err := containedRepoPath(changelog); err != nil {
+		return nil, &configError{ruleDeliveryState + ": changelog " + quote(changelog) + " " + err.Error() +
+			"; the lint reads only inside the repository"}
+	}
+	realPath, err := containedRealPath(repoRoot, filepath.Join(repoRoot, filepath.FromSlash(changelog)))
+	if err != nil {
+		return nil, &configError{ruleDeliveryState + ": changelog " + quote(changelog) + " " + err.Error() +
+			"; the lint reads only inside the repository"}
+	}
+	data, err := fsutil.ReadGuarded(realPath, maxChangelogBytes)
 	if err != nil {
 		return nil, &configError{ruleDeliveryState + ": reading " + changelog + ": " + err.Error()}
 	}

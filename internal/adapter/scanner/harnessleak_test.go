@@ -1,29 +1,80 @@
 package scanner
 
-// The positive fixtures below carry `abcd-lint:allow`, the line-scoped escape
-// this class's own findings teach. They cannot use a reserved documentation host
-// instead: hasReservedDocHost would then suppress the very detection each case
-// asserts. The hosts and ids are synthetic — no real session is named — and the
-// waiver is the honest way to say a line is deliberately illustrative.
+// Every session-identifier-shaped fixture below is GENERATED AT RUNTIME, seeded
+// per case, so no source line in this repository carries one.
+//
+// That is the same principle the secret fixtures already keep
+// (internal/testsecret, secret-shaped-fixtures-at-runtime), and it is
+// load-bearing here for the reason the class exists: this repository scans FULL
+// history (gitleaks git, fetch-depth 0) and main cannot be force-pushed, so an
+// identifier committed as a literal — even a fabricated one — is in the history
+// for good. iss-178 said this detector would be built with "leak shape only, no
+// session ids reproduced here", and a literal is also what forces the three
+// escapes that would hide it from this class's OWN detector: a line-scoped lint
+// waiver, a split literal, and a reserved-documentation host standing in for a
+// specimen. Generated, none of the three is needed: the detector can read these
+// files and find nothing, because there is nothing here to find.
+//
+// The positive cases still need a NON-reserved host: hasReservedDocHost would
+// otherwise suppress the very detection each one asserts. The host is a generic
+// placeholder naming no service; the id is what carried the risk, and the id is
+// no longer written down.
 
 import (
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/intentdriven/abcd/internal/testsecret"
 )
+
+// synthSessionID builds a base62 session-id-shaped token at runtime. It asserts
+// the token is actually OPAQUE by the detector's own test, so a fixture that
+// silently stopped exercising the pattern fails loudly instead of passing a
+// weakened assertion. The seed, never the value, is what a failure names.
+func synthSessionID(t *testing.T, seed uint64) string {
+	t.Helper()
+	id := testsecret.Synthetic(seed, 22)
+	if !hasOpaqueSessionID("session_" + id) {
+		t.Fatalf("generated base62 fixture (seed %d) is not opaque, so it would not exercise the detector", seed)
+	}
+	return id
+}
+
+// synthHexSessionID builds the lower-case-hex spelling a harness also mints.
+func synthHexSessionID(t *testing.T, seed uint64) string {
+	t.Helper()
+	id := testsecret.SyntheticHex(seed, 20)
+	if !hasOpaqueSessionID("session_" + id) {
+		t.Fatalf("generated hex fixture (seed %d) is not opaque, so it would not exercise the detector", seed)
+	}
+	return id
+}
+
+// synthSessionUUID builds the UUID spelling out of one generated hex run.
+func synthSessionUUID(t *testing.T, seed uint64) string {
+	t.Helper()
+	h := testsecret.SyntheticHex(seed, 32)
+	id := h[0:8] + "-" + h[8:12] + "-" + h[12:16] + "-" + h[16:20] + "-" + h[20:32]
+	if !hasOpaqueSessionID("session/" + id) {
+		t.Fatalf("generated UUID fixture (seed %d) is not opaque, so it would not exercise the detector", seed)
+	}
+	return id
+}
 
 // TestHarnessSessionURLDetected: a live session URL is caught wherever it sits,
 // which is the point — the harness appends it outside the model's own text, so
 // origin cannot be a condition of detection.
 func TestHarnessSessionURLDetected(t *testing.T) {
+	id := synthSessionID(t, 17)
 	for _, line := range []string{
-		"https://agent-host.dev/code/session_01Gy4Zo93PdMmggA8sfGyb",                  // abcd-lint:allow
-		"See https://agent-host.dev/code/session_01Gy4Zo93PdMmggA8sfGyb for the run.", // abcd-lint:allow
-		"- Session: https://agent-host.dev/s/session-01Gy4Zo93PdMmggA8sfGyb",          // abcd-lint:allow
+		"https://agent-host.dev/code/session_" + id,
+		"See https://agent-host.dev/code/session_" + id + " for the run.",
+		"- Session: https://agent-host.dev/s/session-" + id,
 		// The UUID and lower-case-hex spellings a harness also mints.
-		"https://agent-host.dev/code/session/8f14e45f-ceea-167a-5a36-dedd4bea2543", // abcd-lint:allow
-		"https://agent-host.dev/code/session_a3f9c2d1e0b8f7a64c5d",                 // abcd-lint:allow
+		"https://agent-host.dev/code/session/" + synthSessionUUID(t, 23),
+		"https://agent-host.dev/code/session_" + synthHexSessionID(t, 29),
 	} {
 		if !hasKind(scanLine(line), kindHarnessSessionURL) {
 			t.Errorf("session URL not detected in %q", line)
@@ -38,7 +89,7 @@ func TestHarnessSessionURLDetected(t *testing.T) {
 func TestHarnessSessionURLSpares(t *testing.T) {
 	for _, line := range []string{
 		"The plugin installs from https://agent-host.dev/agent-cli today.",
-		"A session URL looks like https://example.invalid/code/session_01Gy4Zo93PdMmggA8sfGyb",
+		"A session URL looks like https://example.invalid/code/session_" + synthSessionID(t, 31),
 		"Sessions are stored under .abcd/history/sessions/ per root_commit.",
 		// A documentation URL whose slug follows the word "session" with ordinary
 		// hyphenated English. Structurally identical to a session link; not one.
@@ -138,13 +189,14 @@ func TestScrubOutboundStripsFooterKeepsTrailer(t *testing.T) {
 // TestScrubOutboundCatchesSessionURL: an issue comment carrying a live session
 // URL is caught and the URL does not survive.
 func TestScrubOutboundCatchesSessionURL(t *testing.T) {
-	comment := "Done — see https://agent-host.dev/code/session_01Gy4Zo93PdMmggA8sfGyb\n" // abcd-lint:allow
+	id := synthSessionID(t, 41)
+	comment := "Done — see https://agent-host.dev/code/session_" + id + "\n"
 
 	got, findings, err := ScrubOutbound(t.TempDir(), comment, "issue-comment")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(got, "session_01Gy4Zo93PdMmggA8sfGyb") {
+	if strings.Contains(got, id) {
 		t.Errorf("session URL survived the scrub: %q", got)
 	}
 	if len(findings) == 0 {
@@ -214,7 +266,7 @@ func TestHarnessFooterDocHostIsScopedToItsOwnLink(t *testing.T) {
 // definition with.
 func TestHarnessSessionURLSecondMatchOnALine(t *testing.T) {
 	line := "docs https://agent-host.dev/blog/using-agent-session-management-and-1m " +
-		"and run https://agent-host.dev/code/session_01Gy4Zo93PdMmggA8sfGyb" // abcd-lint:allow
+		"and run https://agent-host.dev/code/session_" + synthSessionID(t, 53)
 	if !hasKind(scanLine(line), kindHarnessSessionURL) {
 		t.Errorf("a skipped leftmost candidate hid a real session URL: %q", line)
 	}
@@ -223,9 +275,10 @@ func TestHarnessSessionURLSecondMatchOnALine(t *testing.T) {
 // The query-parameter and host:port spellings leak exactly as much as the path
 // spelling.
 func TestHarnessSessionURLQueryAndPortSpellings(t *testing.T) {
+	id := synthSessionID(t, 61)
 	for _, line := range []string{
-		"https://agent-host.dev/code?session_id=01Gy4Zo93PdMmggA8sfGyb",   // abcd-lint:allow
-		"https://agent-host.dev:8443/code/session_01Gy4Zo93PdMmggA8sfGyb", // abcd-lint:allow
+		"https://agent-host.dev/code?session_id=" + id,
+		"https://agent-host.dev:8443/code/session_" + id,
 	} {
 		if !hasKind(scanLine(line), kindHarnessSessionURL) {
 			t.Errorf("session URL not detected in %q", line)
@@ -258,7 +311,8 @@ func TestScrubOutboundRefusesADegradedScanner(t *testing.T) {
 // the line returned an EMPTY artefact for a one-line comment, which the routine
 // would then post.
 func TestScrubOutboundKeepsTheSentenceAroundASessionURL(t *testing.T) {
-	body := "Fixes the walk. Session: https://agent-host.dev/code/session_01Gy4Zo93PdMmggA8sfGyb — see notes.\n" // abcd-lint:allow
+	id := synthSessionID(t, 71)
+	body := "Fixes the walk. Session: https://agent-host.dev/code/session_" + id + " — see notes.\n"
 
 	got, findings, err := ScrubOutbound(t.TempDir(), body, "issue-comment")
 	if err != nil {
@@ -267,7 +321,7 @@ func TestScrubOutboundKeepsTheSentenceAroundASessionURL(t *testing.T) {
 	if len(findings) == 0 {
 		t.Fatal("expected the session URL to be reported")
 	}
-	if strings.Contains(got, "session_01Gy4Zo93PdMmggA8sfGyb") {
+	if strings.Contains(got, id) {
 		t.Errorf("session URL survived: %q", got)
 	}
 	if !strings.Contains(got, "Fixes the walk.") || !strings.Contains(got, "see notes.") {

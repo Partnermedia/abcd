@@ -1,9 +1,11 @@
 package lint
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/intentdriven/abcd/internal/gittest"
 )
@@ -320,5 +322,98 @@ func TestAgentContractRefusesAnEmptyCanary(t *testing.T) {
 	}
 	if !messageContains(fs, "is empty") {
 		t.Errorf("expected an empty canary to be reported; got %+v", fs)
+	}
+}
+
+// The changelog read is the one read in this rule that reached the filesystem
+// unguarded, while every sibling around it — the agents_dir containment check and
+// the prompt read's containedRealPath + fsutil.ReadGuarded — was already
+// contained and capped. Both halves of that gap are pinned below. They are not
+// hypothetical: the path and the file it names are BOTH repo-controlled, so a
+// fork pull request supplies them, and `go run ./cmd/record-lint` in the CI check
+// job is what reads them.
+
+// A changelog that is a symlink to a character device must be refused, not read.
+// An uncapped os.ReadFile through agents/CHANGELOG.md -> /dev/zero never returns:
+// it allocates until the CI runner is out of memory. The read is guarded the way
+// the prompt read beside it is, so the refusal is prompt and the finding is an
+// error rather than a hang.
+func TestAgentContractRefusesADeviceChangelog(t *testing.T) {
+	if _, err := os.Stat("/dev/zero"); err != nil {
+		t.Skip("no /dev/zero on this platform")
+	}
+	root := t.TempDir()
+	writeAgent(t, root, "security-reviewer", conformingAgent)
+	writeCanary(t, root, "security-reviewer")
+	if err := os.Symlink("/dev/zero", filepath.Join(root, "agents", "CHANGELOG.md")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := Lint(agentCfg(), root)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("the lint read a character device as the agent changelog")
+		}
+	case <-time.After(20 * time.Second):
+		t.Fatal("the lint hung reading a character device as the agent changelog")
+	}
+}
+
+// A configured changelog path that leaves the repository must be refused before
+// it is read. Unguarded, `"changelog": "../../../../etc/hosts"` read a file
+// outside the checkout AND echoed the traversed path into the finding's File
+// field, which is the same read-outside-the-repo shape containedRepoPath already
+// refuses for agents_dir.
+func TestAgentContractRefusesAnEscapingChangelogPath(t *testing.T) {
+	root := t.TempDir()
+	writeAgent(t, root, "security-reviewer", conformingAgent)
+	writeCanary(t, root, "security-reviewer")
+
+	cfg := agentCfg()
+	rc := cfg.Rules[ruleAgentContract]
+	rc.Changelog = "../../../../etc/hosts"
+	cfg.Rules[ruleAgentContract] = rc
+
+	fs, err := Lint(cfg, root)
+	if err == nil {
+		t.Fatalf("a changelog path escaping the repository was read; got %+v", fs)
+	}
+	if !strings.Contains(err.Error(), "the lint reads only inside the repository") {
+		t.Errorf("expected the containment refusal the sibling reads give; got %v", err)
+	}
+	for _, f := range fs {
+		if strings.Contains(f.File, "..") {
+			t.Errorf("the traversed path was echoed into a finding: %+v", f)
+		}
+	}
+}
+
+// A changelog that resolves inside the repository through a symlink is still a
+// legitimate read: containment refuses the ESCAPE, not the indirection, which is
+// exactly what containedRealPath already gives the prompt read beside it. Pinned
+// so the guard cannot be tightened into a refusal of ordinary in-tree layout.
+func TestAgentContractFollowsAnInRepoSymlinkedChangelog(t *testing.T) {
+	root := t.TempDir()
+	writeAgent(t, root, "security-reviewer", conformingAgent)
+	writeCanary(t, root, "security-reviewer")
+	// Kept outside agents/ so it is not itself walked as a prompt.
+	writeFile(t, root, filepath.Join("docs", "agent-changelog.md"),
+		"# Agent prompt changelog\n\n### security-reviewer 0.2.0\n\nEntry.\n")
+	if err := os.Symlink(filepath.Join(root, "docs", "agent-changelog.md"),
+		filepath.Join(root, "agents", "CHANGELOG.md")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	fs, err := Lint(agentCfg(), root)
+	if err != nil {
+		t.Fatalf("an in-repo symlinked changelog was refused: %v", err)
+	}
+	if n := countRule(fs, ruleAgentContract); n != 0 {
+		t.Errorf("expected the entry to be found through the symlink; got %d: %+v", n, fs)
 	}
 }
