@@ -686,9 +686,9 @@ func TestEmbarkRefusesSymlinkedLifeboatFile(t *testing.T) {
 	}
 }
 
-func TestReadCoverageHandoff(t *testing.T) {
+func TestReadPackedCoverage(t *testing.T) {
 	t.Run("absent -> not present", func(t *testing.T) {
-		h := readCoverageHandoff(t.TempDir())
+		h := readPackedCoverage(t.TempDir())
 		if h.Present || h.Degraded {
 			t.Errorf("absent coverage: %+v, want Present:false", h)
 		}
@@ -697,7 +697,7 @@ func TestReadCoverageHandoff(t *testing.T) {
 	t.Run("garbage -> degraded", func(t *testing.T) {
 		dir := t.TempDir()
 		mustWrite(t, filepath.Join(dir, "coverage.json"), []byte("{not json"))
-		h := readCoverageHandoff(dir)
+		h := readPackedCoverage(dir)
 		if !h.Present || !h.Degraded {
 			t.Errorf("garbage coverage: %+v, want Present+Degraded", h)
 		}
@@ -717,7 +717,7 @@ func TestReadCoverageHandoff(t *testing.T) {
 		}
 		data, _ := json.Marshal(cov)
 		mustWrite(t, filepath.Join(dir, "coverage.json"), data)
-		h := readCoverageHandoff(dir)
+		h := readPackedCoverage(dir)
 		if !h.Present || h.Degraded {
 			t.Fatalf("valid coverage: %+v", h)
 		}
@@ -1112,4 +1112,96 @@ func TestEmbarkCaseVariantTargetIsConflict(t *testing.T) {
 			t.Fatalf("two case-variant targets are distinct files on a case-sensitive filesystem; conflicts=%+v", plan.Conflicts)
 		}
 	})
+}
+
+// stripPassBExemption rewrites a packed lifeboat's provenance without the
+// exemption marker — the shape every lifeboat packed before the field existed
+// has — and returns the rewritten bytes.
+func stripPassBExemption(t *testing.T, lifeboat string) {
+	t.Helper()
+	provPath := filepath.Join(lifeboat, ProvenanceName)
+	raw, err := os.ReadFile(provPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var prov map[string]any
+	if err := json.Unmarshal(raw, &prov); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := prov["pass_b_exemption"]; !ok {
+		t.Fatal("the packed lifeboat carries no exemption to strip; the test is not testing what it says")
+	}
+	delete(prov, "pass_b_exemption")
+	out, err := json.Marshal(prov)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, provPath, out)
+}
+
+// TestEmbarkReportsADeclaredPassBExemption is the consumer half of the promise.
+// A lifeboat that declares Pass B exempt must be READ as exempt: the reader is
+// told the pass did not run and why, in the same blanks-first handoff that lists
+// what they have to answer.
+func TestEmbarkReportsADeclaredPassBExemption(t *testing.T) {
+	source := embarkableSourceFixture(t)
+	lifeboat := packSource(t, source)
+
+	plan, err := EmbarkProbe(lifeboat, t.TempDir())
+	if err != nil {
+		t.Fatalf("EmbarkProbe: %v", err)
+	}
+	if plan.Coverage == nil || plan.Coverage.PassBExemption == nil {
+		t.Fatal("the handoff does not carry the declared exemption")
+	}
+	out := plan.Render()
+	if !strings.Contains(out, "pass B") || !strings.Contains(out, plan.Coverage.PassBExemption.Reason) {
+		t.Errorf("the report does not name the declared exemption:\n%s", out)
+	}
+}
+
+// TestEmbarkUnmarkedProvenanceReadsAsBefore is the compatibility half: a lifeboat
+// with no marker is a lifeboat with no exemption, and every other line of the
+// report is what it always was. The two renders are compared directly, so the
+// only difference the marker may make is the line that declares it.
+func TestEmbarkUnmarkedProvenanceReadsAsBefore(t *testing.T) {
+	source := embarkableSourceFixture(t)
+	target := t.TempDir()
+
+	marked := packSource(t, source)
+	markedPlan, err := EmbarkProbe(marked, target)
+	if err != nil {
+		t.Fatalf("EmbarkProbe (marked): %v", err)
+	}
+
+	unmarked := packSource(t, source)
+	stripPassBExemption(t, unmarked)
+	plan, err := EmbarkProbe(unmarked, target)
+	if err != nil {
+		t.Fatalf("EmbarkProbe (unmarked): %v", err)
+	}
+	if plan.Coverage != nil && plan.Coverage.PassBExemption != nil {
+		t.Fatalf("an unmarked lifeboat read as exempt: %+v", plan.Coverage.PassBExemption)
+	}
+	out := plan.Render()
+	if strings.Contains(out, "pass B") {
+		t.Errorf("an unmarked lifeboat's report claims an exemption:\n%s", out)
+	}
+
+	// Every other line is unchanged. The lifeboat directory differs between the
+	// two packs, so the paths are normalised before the comparison.
+	want := strings.ReplaceAll(markedPlan.Render(), marked, "<lifeboat>")
+	got := strings.ReplaceAll(out, unmarked, "<lifeboat>")
+	var kept []string
+	for _, line := range strings.Split(want, "\n") {
+		if strings.Contains(line, "pass B") {
+			// The declaration takes its separator blank line with it.
+			kept = kept[:len(kept)-1]
+			continue
+		}
+		kept = append(kept, line)
+	}
+	if strings.Join(kept, "\n") != got {
+		t.Errorf("the marker changed more than the line that declares it:\ngot:\n%s\nwant:\n%s", got, strings.Join(kept, "\n"))
+	}
 }

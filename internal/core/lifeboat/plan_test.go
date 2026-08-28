@@ -767,3 +767,57 @@ func TestRenderManifestSanitisesFilePaths(t *testing.T) {
 		t.Error("sanitised render lost the legible part of the path")
 	}
 }
+
+// TestPlanDeclaresThePassBExemption is the roadmap's own promise, kept: Pass B —
+// the pass that mines chat transcripts for the rationale nobody wrote down —
+// "ships as a declared exemption in _provenance.json, never a silent gap"
+// (phase-6-lifeboat.md). No source this build registers reads a transcript, so
+// every lifeboat it packs carries the declaration, and the sections Pass B would
+// have grounded are absent rather than quietly omitted.
+func TestPlanDeclaresThePassBExemption(t *testing.T) {
+	repo := nativeTierFixture(t)
+	lb, err := Plan(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var prov Provenance
+	if err := json.Unmarshal(planFile(t, lb, ProvenanceName).Content, &prov); err != nil {
+		t.Fatalf("provenance is not valid JSON: %v", err)
+	}
+	if prov.PassBExemption == nil {
+		t.Fatal("no Pass-B exemption declared; the gap the press release promised to name is silent again")
+	}
+	if strings.TrimSpace(prov.PassBExemption.Reason) == "" {
+		t.Error("the exemption carries no reason; a declaration that says nothing is a gap with a field on it")
+	}
+}
+
+// TestProvenanceWithoutTheExemptionIsUnchanged is the compatibility half. A
+// lifeboat packed before the marker existed, or one a transcript pass did run
+// for, carries no marker — and must round-trip byte-identically, so the marker
+// costs nothing to every package that does not need it.
+func TestProvenanceWithoutTheExemptionIsUnchanged(t *testing.T) {
+	const unmarked = `{
+  "schema_version": 1,
+  "generator": "abcd disembark",
+  "source_name": "demo",
+  "tiers_present": [
+    "git"
+  ],
+  "manifest_sha256": "deadbeef"
+}`
+	var prov Provenance
+	if err := json.Unmarshal([]byte(unmarked), &prov); err != nil {
+		t.Fatal(err)
+	}
+	if prov.PassBExemption != nil {
+		t.Fatalf("an unmarked record read as exempt: %+v", prov.PassBExemption)
+	}
+	out, err := json.MarshalIndent(prov, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != unmarked {
+		t.Errorf("an unmarked record no longer round-trips:\n got %s\nwant %s", out, unmarked)
+	}
+}
