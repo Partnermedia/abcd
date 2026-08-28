@@ -9,9 +9,10 @@ intent: itd-152
 
 Adds a shared privacy-pattern class for two harness-leak shapes — a live session
 URL and a harness-appended "Generated with …" attribution footer — and enforces
-it on the two surfaces the leak reached: outbound artefacts (PR bodies, issue
-comments) before they are posted, and committed/posted text via `abcd audit` and
-docs-lint. It also carries the operational half into the routine-prompt policy:
+it on committed and stored text via `abcd audit` and docs-lint, and exposes it
+for outbound artefacts (PR bodies, issue comments) as a primitive the posting
+routine calls: abcd owns no forge client, so the outbound half gains no front
+door of its own here. It also carries the operational half into the routine-prompt policy:
 every autonomous routine prompt bans session URLs and harness footers in public
 text and mandates a post-create re-read-and-strip of every PR, issue and comment
 the loop creates, because the append happens outside the model's own text.
@@ -77,7 +78,10 @@ created PR bodies".
 text)`) runs `ScanText` + `Redact` and returns the scrubbed text plus a
 fail-closed error if any target pattern survives — the same
 `ScanText → Redact → blockingResidual` shape capture/memory/history use. The
-routine calls it on every PR body and comment before posting.
+routine that holds the forge credentials calls it on every PR body and comment
+before posting; abcd itself exposes no verb onto it, by the scope decision above,
+so the primitive ships without a front door and the posting-time control stays
+the re-read-and-strip policy below.
 
 **Routine-prompt policy.** The autonomous-run prompt assembly gains a fixed
 policy block: (a) never emit session URLs or harness footers in public text; (b)

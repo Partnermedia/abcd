@@ -225,10 +225,17 @@ irreversible; guessing downward costs nothing.**
   or comment, re-read what was actually created and strip either shape from it**
   — the harness appends them outside the model's own output, so text that left
   clean can arrive dirty. The policy is a value, not just this paragraph
-  (`scanner.OutboundPolicy`): `scanner.ScrubOutbound` is the primitive an
-  autonomous routine calls before posting, `abcd lint`'s privacy rule refuses
-  either shape in any committed file, and the `harness_leak` lint rule refuses it
-  in the record and the docs. One definition, four surfaces (itd-152).
+  (`scanner.OutboundPolicy`): the scanner's canonical pattern set carries the
+  class into every store-before-commit redactor, `abcd lint`'s privacy rule
+  refuses either shape in any committed file, and the `harness_leak` lint rule
+  refuses it in the record and the docs. One definition, three wired surfaces
+  (itd-152). A fourth exists as a primitive with no front door:
+  `scanner.ScrubOutbound` sanitises one outbound artefact and is covered by
+  tests, but no command or plugin verb calls it, because `spc-45` deliberately
+  scopes a forge client out. The three wired surfaces judge text that is already
+  committed or already stored, so none of them reaches a forge artefact: until
+  the primitive is wired, the protection at posting time is the re-read-and-strip
+  step above, performed by whoever posts.
 - **`ACKNOWLEDGEMENTS.md`** credits ideas, tools, and writing in three parts —
   development, inspirations, references. Add an entry in the same change that lands
   it (adopts a pattern, cites a source in an ADR, integrates a tool), never later.
