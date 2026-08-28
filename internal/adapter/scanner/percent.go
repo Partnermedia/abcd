@@ -31,7 +31,16 @@ const maxPercentDecodePasses = 3
 // raw-line findings, so every consumer of the one canonical scanner — the
 // history transcript store, the issue-ledger redactor, the lifeboat packer and
 // the launch bundler — inherits the coverage from a single definition.
-func decodedLineFindings(patterns []Pattern, probes []*regexp.Regexp, junctions *regexp.Regexp, rawLine string, lineno int, file string) []Finding {
+//
+// BOTH detector families run over the decoded copy: the token matchers
+// (scanAllPatterns) AND the identity matchers (matchers.findings — home path,
+// $HOME backstop, email, name, username). A percent-encoded home path or email
+// (`%2Fhome%2Falice`, `%61lice%40host`) never appears literally on the raw line,
+// so it defeats every identity matcher there too; running them on the decoded
+// copy and mapping each hit back to its raw span is what stops such an identity
+// leak surviving into a committed memory/intent/capture artifact
+// (iss-2608270720336165).
+func decodedLineFindings(patterns []Pattern, probes []*regexp.Regexp, junctions *regexp.Regexp, matchers identityMatchers, id2sev map[string]Severity, rawLine string, lineno int, file string) []Finding {
 	decoded, posMap := percentDecodeBounded(rawLine)
 	if posMap == nil {
 		return nil // nothing was percent-encoded; the raw scan already covers it
@@ -46,9 +55,8 @@ func decodedLineFindings(patterns []Pattern, probes []*regexp.Regexp, junctions 
 		if cp.SkipAt != nil && cp.SkipAt(decoded, m.start, m.end) {
 			continue
 		}
-		rawStart := posMap[m.start]
-		rawEnd := posMap[m.end]
-		if rawStart < 0 || rawEnd > len(rawLine) || rawStart >= rawEnd {
+		rawStart, rawEnd, ok := mapDecodedSpan(posMap, m.start, m.end, len(rawLine))
+		if !ok {
 			continue
 		}
 		out = append(out, Finding{
@@ -57,7 +65,47 @@ func decodedLineFindings(patterns []Pattern, probes []*regexp.Regexp, junctions 
 			Suggested: cp.Suggestion, line: rawLine,
 		})
 	}
+	// Identity matchers over the decoded copy. matchers.findings runs its whole
+	// suppression discipline (URL spans, home/email suppression of a username,
+	// docs allowlists) self-consistently on the DECODED line; each surviving
+	// finding is then re-homed onto the raw line by mapping its decoded byte span
+	// (Column-1 .. +len(Matched)) back through posMap, exactly as the token path
+	// above maps its match. The remapped Matched is the LIVE encoded bytes on
+	// disk, so Redact masks the token where it actually sits and the delimiter
+	// bytes around it are left intact.
+	for _, f := range matchers.findings(decoded, lineno, id2sev, file) {
+		dStart := f.Column - 1
+		dEnd := dStart + len(f.Matched)
+		if dStart < 0 || dEnd > len(decoded) {
+			continue
+		}
+		rawStart, rawEnd, ok := mapDecodedSpan(posMap, dStart, dEnd, len(rawLine))
+		if !ok {
+			continue
+		}
+		f.Column = rawStart + 1
+		f.Matched = rawLine[rawStart:rawEnd]
+		f.Snippet = snippet(rawLine)
+		f.line = rawLine
+		out = append(out, f)
+	}
 	return out
+}
+
+// mapDecodedSpan translates a half-open [start,end) byte span on the decoded
+// copy back to the corresponding span on the original raw line via posMap,
+// returning ok=false when the mapped span is degenerate or out of range (so a
+// caller drops the finding rather than slicing rawLine out of bounds). posMap
+// carries a sentinel at len(decoded), so a match's half-open end maps cleanly.
+func mapDecodedSpan(posMap []int, start, end, rawLen int) (int, int, bool) {
+	if start < 0 || end >= len(posMap) {
+		return 0, 0, false
+	}
+	rawStart, rawEnd := posMap[start], posMap[end]
+	if rawStart < 0 || rawEnd > rawLen || rawStart >= rawEnd {
+		return 0, 0, false
+	}
+	return rawStart, rawEnd, true
 }
 
 // percentDecodeBounded percent-decodes s up to maxPercentDecodePasses times and
