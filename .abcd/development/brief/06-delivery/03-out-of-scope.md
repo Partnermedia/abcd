@@ -98,6 +98,15 @@ gate. That is what keeps "not hand-counted" true after the day it was written.
 - `itd-151` — the agent-prompt trust contract (itd-5) is enforced by a detector, so a prompt reading attacker-influenceable input without its declared handling fails a gate rather than passing silently (graduated from iss-278)
 - `itd-152` — autonomous runs keep harness attribution and session identifiers out of public artefacts, closing the sibling-repo leak of internal footers and URLs (graduated from iss-178)
 - `itd-153` — abcd's remote config-apply verb enables the platform's native secret-scanning and push-protection by default for a managed repo (graduated from iss-2608270636272755)
+- `itd-154` — fresh-machine plugin provisioning is reliable: a plugin-first install on a Go-less, cloud-synced checkout provisions a working binary and the SessionStart chain, or fails loudly (graduated from iss-253)
+- `itd-155` — the secret scanner uses a galloping/exponential-doubling match probe in place of the fixed adjacency window, so a match past the window is not silently truncated (graduated from iss-229)
+- `itd-156` — the shell guard expands brace lists before matching, so `{--force,}` cannot smuggle a Tier-1 blocker past tokenisation (graduated from iss-2608221457227161)
+- `itd-157` — the site's by-links layout settles without overlapping positions, measured by a collision gate that spans both layouts (graduated from iss-2608231350127745)
+- `itd-158` — provenance carries a Pass-B exemption marker so an exempt record is recognised rather than silently treated as unmarked (graduated from iss-136)
+- `itd-159` — the repo visibility model has a committed-record mode between private and public, with the matching fence-suppression (graduated from iss-223)
+- `itd-160` — a detector refuses a dangling supersedes/spec target so a record cannot cite a record that does not exist (graduated from iss-2608220150157498)
+- `itd-161` — record-lint sees a decision-shaped document filed outside the record stores, closing the general form of the outside-store blind spot (graduated from iss-2608230752354926)
+- `itd-162` — the prepare-this-repo flow is self-contained: its templates ride the record or binary rather than a machine-local path (graduated from iss-87)
 <!-- /index -->
 
 **Later-phase items with no intent id.** These four were written into the brief

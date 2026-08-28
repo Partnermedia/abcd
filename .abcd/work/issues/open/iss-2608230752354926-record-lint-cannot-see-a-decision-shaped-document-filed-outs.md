@@ -10,6 +10,7 @@ found_at: "internal/core/lint/schema.go"
 details: "A markdown file anywhere under .abcd/development/ can title itself '# ADR-NN:', declare 'Status: Accepted', carry no frontmatter, and reuse an id that already belongs to a real ADR, and record-lint reports nothing. record_schema enumerates the configured record stores (decisions/adrs, intents, specs); a file outside them is not a record it can see. Confirmed by probe on 2026-08-23: a note claiming the taken id ADR-23 with status 'Accepted (locked)' passed record-lint clean, exit 0, zero findings."
 suggested_fix: "Add a rule that flags a record-id claim made outside that id's store: a heading or status block asserting adr-/itd-/spc-/iss-N in a file the corresponding record store does not contain. The id-collision half is the sharp edge and the cheap win; the looser 'reads as a decision but is not one' half can follow. Weigh against the grandfathered undated Phase 0 notes so the rule does not fire on filenames alone."
 related_issues: ["iss-2608221457227162"]
+promoted_to: itd-161
 ---
 
 record-lint cannot see a decision-shaped document filed outside the record stores
