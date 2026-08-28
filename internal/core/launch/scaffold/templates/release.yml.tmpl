@@ -158,6 +158,40 @@ jobs:
       - name: <% .Name %>
         run: <% .Run %>
 <%- end %>
+<%- if .SemanticGates %>
+
+      # --- Semantic release gate, armed BEFORE the tag (adr-52, Alternative 1) ---
+      # The semantic gate (the LLM passes CI cannot run) refuses HERE, in verify,
+      # alongside the deterministic gates — not in the `release` publish job below.
+      # verify gates the release before it is built or published, so a semantic
+      # refusal blocks the release the way a deterministic failure already does,
+      # WITHOUT consuming a version — the fix for iss-2608231226347380, where a
+      # gate that sat in the publish job wedged the immutable tag. The tag itself is
+      # untouched: only the GATE moved to the safe side of it.
+      #
+      # Skipped on the rehearsal path: verify runs on workflow_dispatch too, where
+      # no real receipts exist, and a missing receipt there is not a refusal
+      # (rehearsal is not a real release — the `rehearsal` job proves the arming
+      # separately). Dormant on a private repo, exactly like the attestation in the
+      # publish job; it activates on the public flip.
+      #
+      # The content commit is derived from the RECEIPTS DIRECTORY of the released
+      # tree, not HEAD^2^/HEAD^ ancestry: a batched merge-queue push makes
+      # github.sha the batch tip, so HEAD^2^ can resolve an unrelated PR's commit
+      # (iss-355). record-lint --derive-content-sha reads
+      # .abcd/work/reviews/<sha>/, which names the content commit and rides in the
+      # released tree regardless of batch position, and fails closed on a wrong or
+      # absent directory. No ${{ }} interpolation in the script (injection-safe).
+      - name: Semantic-gate receipts (fail-closed, before tag)
+        if: ${{ !github.event.repository.private && github.event_name != 'workflow_dispatch' }}
+        run: |
+          set -euo pipefail
+          content="$(go run ./cmd/record-lint --derive-content-sha)"
+          test -n "$content"   # never arm-nothing on an empty sha (fail closed)
+          echo "reviewed content commit: $content"
+          go run ./cmd/record-lint --release-gate "$content"<% range .SemanticGates %> \
+            --require-gate <% . %><% end %>
+<%- end %>
 
   # Build and publish ONLY after verify is green. Binaries are cross-compiled from
   # the same pushed commit (github.sha) that verify just gated, so the shipped
@@ -194,9 +228,9 @@ jobs:
           # workflow_call re-release path, exactly as in verify.
           ref: ${{ inputs.ref || github.sha }}
 <%- if .Abcd %>
-          # Full history: the semantic-gate resolve step below walks HEAD^2^/HEAD^
-          # to find the reviewed content commit, which a shallow (depth-1) clone
-          # cannot reach — it would abort and fail-close every release.
+          # Full history: the content-commit derivation below checks commit
+          # ancestry (git merge-base / rev-list) over the receipts directory, which
+          # a shallow (depth-1) clone cannot answer — it would fail-close.
 <%- else %>
           # Full history, so any history-walking gate has the commits it needs.
 <%- end %>
@@ -226,64 +260,33 @@ jobs:
           cache: false
 <%- if .SemanticGates %>
 
-      # --- Semantic release gate (iss-35; dormant until the public flip) --------
-      # The LLM semantic passes (docs-currency-reviewer, the brief↔surface
-      # cross-check) cannot run in CI — no model. The maintainer runs them
-      # host-side and commits a sha-keyed PROMOTE receipt under
-      # .abcd/work/reviews/<sha>/ (see .abcd/development/release-gate/README.md).
-      # These steps fail-close the release unless those receipts exist and are
-      # PROMOTE, then sign them for auditable release provenance. Gated on repo
-      # visibility exactly like the binary attestation below: artifact attestation
-      # is a public-repo feature, so this gate is dormant on a private repo and
-      # activates on the public flip. Signing here is provenance/tamper-evidence,
-      # not committer-forgery-proof (a forged committed receipt would be signed
-      # too) — that residual is bounded by the identity gate + branch protection.
+      # --- Semantic-gate provenance (iss-35; dormant until the public flip) ------
+      # The gate that can REFUSE the release now runs in `verify`, before the tag
+      # (adr-52). What remains here is provenance: re-derive the reviewed content
+      # commit and SIGN its receipts for an auditable release attestation. By the
+      # time this job runs, verify has already proved the receipts exist and are
+      # PROMOTE, so these steps record what passed rather than deciding it. Gated on
+      # repo visibility exactly like the binary attestation below — dormant on a
+      # private repo, active on the public flip. Signing is provenance/tamper-
+      # evidence, not committer-forgery-proof (a forged committed receipt would be
+      # signed too); that residual is bounded by the identity gate + branch
+      # protection.
       - name: Resolve the reviewed content commit (the receipt subject)
         if: ${{ !github.event.repository.private }}
-        # A semantic-pass receipt names the commit its reviewer READ, and lives in
-        # a LATER commit — a receipt can never sit in the tree of the commit it
-        # names (adding it would change that commit's sha). So the receipts are the
-        # final commit on the release branch and name the immediately-preceding
-        # release-content commit; the gate is armed with THAT content commit, whose
-        # receipts are present in the released tree. Derivation, fail-closed:
-        #   - merge (workflow_call / auto-release): the receipts commit is the
-        #     merged branch tip (github.sha^2); the content it names is its parent
-        #     (github.sha^2^).
-        #   - direct tag push (manual escape hatch): the tag is placed on the
-        #     receipts commit, so the content is its parent (github.sha^).
-        # No ${{ }} interpolation in the script (injection-safe): it reads github
-        # refs via git and writes only $GITHUB_ENV.
+        # Re-derive CONTENT_SHA in this job (a $GITHUB_ENV export does not cross
+        # jobs). The receipts name the commit they gate, so the content commit is
+        # read from the RECEIPTS DIRECTORY of the released tree
+        # (record-lint --derive-content-sha), not HEAD^2^/HEAD^ ancestry: a batched
+        # merge-queue push makes github.sha the batch tip, and HEAD^2^ can then
+        # resolve an unrelated PR's commit (iss-355). The derivation reads HEAD —
+        # the exact commit this job checked out (inputs.ref on the re-release heal
+        # path, else github.sha) — and fails closed on a wrong or absent directory.
         run: |
           set -euo pipefail
-          # Resolve against HEAD — the exact commit this job checked out
-          # (inputs.ref on the re-release heal path, else github.sha). Deriving
-          # from GITHUB_SHA would diverge from the checked-out tree on the heal
-          # path (GITHUB_SHA is then the moved-on main tip) and arm the gate with
-          # a commit whose receipts are not in the released tree.
-          released="$(git rev-parse --verify HEAD)"
-          if git rev-parse -q --verify "HEAD^2" >/dev/null 2>&1; then
-            content="$(git rev-parse --verify "HEAD^2^")"
-          else
-            content="$(git rev-parse --verify "HEAD^")"
-          fi
+          content="$(go run ./cmd/record-lint --derive-content-sha)"
           test -n "$content"
-          # The named content commit must be an ancestor of the released commit —
-          # a receipt for anything off the release lineage is refused.
-          git merge-base --is-ancestor "$content" "$released"
           echo "CONTENT_SHA=$content" >> "$GITHUB_ENV"
           echo "reviewed content commit: $content"
-
-      - name: Semantic-gate receipts (fail-closed)
-        if: ${{ !github.event.repository.private }}
-        # Arms receipt_gate from the CLI (the workflow, not the in-tree config, is
-        # the trust root for the decision to gate and the required-gates list).
-        # CONTENT_SHA reaches this step's environment via $GITHUB_ENV (exported by
-        # the resolve step above) — no per-step env: passthrough needed.
-        run: |
-          set -euo pipefail
-          test -n "${CONTENT_SHA:-}"   # never arm-nothing on an empty sha (fail closed)
-          go run ./cmd/record-lint --release-gate "$CONTENT_SHA"<% range .SemanticGates %> \
-            --require-gate <% . %><% end %>
 
       - name: Attest the semantic-gate receipts (signed release provenance)
         if: ${{ !github.event.repository.private }}
@@ -523,6 +526,72 @@ jobs:
         with:
           go-version: '<% .GoVersion %>'
           cache: false
+<%- if .SemanticGates %>
+
+      - name: Simulate a changelog roll and a BATCHED merge-queue push
+        # No ${{ }} interpolation (injection-safe): the script writes only the
+        # runner's throwaway checkout and $GITHUB_ENV. Nothing here is pushed.
+        # Reproduces the iss-355 hazard: the release roll is merged, then an
+        # UNRELATED PR is merged on top in the same batch, so the released tip is
+        # the unrelated merge and HEAD^2^ no longer points at the content commit.
+        run: |
+          set -euo pipefail
+          git config user.name 'rehearsal[bot]'
+          git config user.email 'rehearsal@localhost'
+          base="$(git rev-parse --verify HEAD)"
+          date="$(date -u +%Y-%m-%d)"
+          # Content commit on a scratch branch: simulate rolling [Unreleased] into a
+          # dated heading — the reviewed content commit a real release names.
+          git switch -q -c rehearsal-sim
+          if grep -q '^## \[Unreleased\]' CHANGELOG.md 2>/dev/null; then
+            awk -v d="$date" '1; /^## \[Unreleased\]/ && !done {print ""; print "## [0.0.0-rehearsal] - " d; done=1}' CHANGELOG.md > CHANGELOG.rehearsal
+            mv CHANGELOG.rehearsal CHANGELOG.md
+          else
+            printf '\n## [0.0.0-rehearsal] - %s\n' "$date" >> CHANGELOG.md
+          fi
+          git add -A
+          git commit -q -m 'rehearsal: simulated changelog roll (content commit)'
+          content="$(git rev-parse --verify HEAD)"
+          # Receipts commit: names the content commit and sits one commit later —
+          # the two-commit shape that keeps the receipt-vs-tag self-reference from
+          # ever blocking the release.
+          mkdir -p ".abcd/work/reviews/$content"
+          printf '{"rehearsal":true,"content":"%s"}\n' "$content" > ".abcd/work/reviews/$content/rehearsal.json"
+          git add -A
+          git commit -q -m 'rehearsal: simulated receipts commit'
+          # Merge the release into base, then merge an UNRELATED PR on top of it —
+          # the batched-queue shape where github.sha is the batch tip, not the
+          # release merge. HEAD^2^ of this tip resolves the unrelated PR's parent,
+          # NOT the content commit; the receipts-directory derivation must still
+          # find the content commit.
+          git switch -q -c rehearsal-merge "$base"
+          git merge -q --no-ff -m 'rehearsal: merge simulated release' rehearsal-sim
+          git switch -q -c rehearsal-unrelated
+          printf 'unrelated batch-mate\n' > .rehearsal-unrelated
+          git add -A
+          git commit -q -m 'rehearsal: unrelated batch-mate PR'
+          git switch -q rehearsal-merge
+          git merge -q --no-ff -m 'rehearsal: merge unrelated batch-mate' rehearsal-unrelated
+          echo "REHEARSAL_CONTENT_SHA=$content" >> "$GITHUB_ENV"
+
+      - name: Resolve the reviewed content commit (release.yml's derivation)
+        # Mirrors release.yml's derivation exactly: the content commit is read from
+        # the RECEIPTS DIRECTORY of the released tree, not HEAD^2^/HEAD^ ancestry.
+        # Asserts it lands on the simulated content commit AND that the old HEAD^2^
+        # derivation would NOT — the iss-355 regression the batched shape above
+        # exercises.
+        run: |
+          set -euo pipefail
+          content="$(go run ./cmd/record-lint --derive-content-sha)"
+          test -n "$content"
+          test "$content" = "${REHEARSAL_CONTENT_SHA}"
+          old="$(git rev-parse --verify 'HEAD^2^')"
+          if [ "$old" = "$content" ]; then
+            echo "rehearsal: BUG — the batched simulation did not diverge HEAD^2^ from the content commit" >&2
+            exit 1
+          fi
+          echo "rehearsal: the gate arms against content commit $content (present in the released tree); HEAD^2^ ($old) would have misresolved under batching"
+<%- else %>
 
       - name: Simulate a changelog roll and the two-commit release branch
         # No ${{ }} interpolation (injection-safe): the script writes only the
@@ -574,6 +643,7 @@ jobs:
           git merge-base --is-ancestor "$content" "$released"
           test "$content" = "${REHEARSAL_CONTENT_SHA}"
           echo "rehearsal: the gate would arm against content commit $content (present in the released tree)"
+<%- end %>
 <%- if .Abcd %>
 
       - name: Arm the deterministic record gate against the simulated tree

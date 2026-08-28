@@ -65,11 +65,14 @@ it can never sit in the tree of the commit it names, because adding it would
 change that commit's sha. Under changelog-driven auto-release (adr-37) the
 release branch is therefore exactly two commits: the CHANGELOG roll (the
 release-content commit the reviewers read), then the semantic receipts naming
-it. On merge, the released tree carries the receipts, and `release.yml` arms the
-gate with the *content* commit (`<merge>^2^` for an auto-release merge, `<tag>^`
-for a manual tag on the receipts commit) — not the merge commit — so
-`subject.digest.gitCommit` still matches the armed commit exactly and the gate
-stays strict. (Before this, the gate armed with the tagged merge commit, whose
+it. On merge, the released tree carries the receipts, and `release.yml` derives
+the *content* commit from the **receipts directory** it carries — the receipts
+name the commit they gate, so `record-lint --derive-content-sha` reads the
+`.abcd/work/reviews/<sha>/` entry on the released lineage and returns that `<sha>`
+— not the merge commit, and not `<merge>^2^` ancestry, which a batched
+merge-queue push can point at an unrelated PR's commit (`github.sha` is the batch
+tip, iss-355). `subject.digest.gitCommit` therefore still matches the armed
+commit exactly and the gate stays strict. (Before this, the gate armed with the tagged merge commit, whose
 tree can never hold a receipt naming itself — an unsatisfiable self-reference.
 Dormant while the repo was private, it surfaced at the first public release and
 fail-closed it, v0.3.0, iss-108.)
@@ -146,10 +149,16 @@ receipts committed under `.abcd/work/reviews/` for earlier releases — stay val
 for their own commits, judged by the checks that predate the manifest.
 
 The `receipt_gate` rule is **disabled by default** — it must never fire on
-ordinary PRs/pushes, only at release time — and is armed by `release.yml`, which
-supplies the tagged commit and the required-gate list from the workflow (the
-trust root), not the in-tree config: `record-lint --release-gate <sha>
---require-gate <name>…`. `release.yml` then signs the receipts with
+ordinary PRs/pushes, only at release time — and is armed by `release.yml`'s
+**`verify` job, before the tag** (adr-52): the semantic gate joins the
+deterministic gates that refuse before anything is built or published, so a
+semantic refusal blocks the release without the version-consuming wedge of a gate
+that sat in the publish path (iss-2608231226347380). `verify` supplies the
+content commit and the required-gate list from the workflow (the trust root), not
+the in-tree config: `record-lint --release-gate <sha> --require-gate <name>…`,
+where `<sha>` is `record-lint --derive-content-sha`. The rule is skipped on the
+rehearsal path (`workflow_dispatch`), where no real receipts exist. Once `verify`
+has admitted the release, `release.yml`'s publish job signs the receipts with
 `actions/attest` (predicate `.../semantic-release-gate/v1`) and verifies the
 attestation with `gh attestation verify` — no new dependency (the same attest
 family + `gh` the binary provenance already uses).
@@ -176,7 +185,11 @@ family + `gh` the binary provenance already uses).
 2. On the merged commit, run the two semantic gates above in the harness.
 3. Record each verdict as a receipt keyed to that commit's sha.
 4. Tag `vX.Y.Z` on the commit. `receipt_gate` is armed fail-closed in
-   `release.yml`'s publish job: the release is refused unless every semantic
-   receipt is present and PROMOTE. The refusal does not remove the tag
-   (anti-tag-move), so a tag pushed without receipts is permanently
-   unpublishable and costs a version number to recover (iss-326).
+   `release.yml`'s **`verify` job, before the binaries are built or published**
+   (adr-52): the release is refused unless every semantic receipt is present and
+   PROMOTE, alongside the deterministic gates. The tag itself is never moved
+   (anti-tag-move); moving the gate to the safe side of the tag is what stops a
+   semantic refusal from wedging a version the way a gate in the publish path did
+   (iss-2608231226347380, iss-326). On the auto-release path the `tag` job still
+   mints the tag before it invokes `release.yml`, so closing that residual for the
+   automated path is tracked separately.
