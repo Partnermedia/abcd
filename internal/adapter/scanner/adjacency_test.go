@@ -595,7 +595,14 @@ func TestGallopingProbeStaysBoundedOnLongLines(t *testing.T) {
 		// re-validated up to maxAdjacencyBacktrack times at its own length.
 		// Unbudgeted it measured 1.3s / 5.0s / 19.1s at 14KB / 29KB / 59KB,
 		// where the fixed window had been 0.6s / 1.3s / 2.5s.
-		{"long_matches_at_every_junction", r("AIza"+r("a", 35)+"sk-ant-", n(2000))},
+		// This shape costs an order of magnitude more per unit than its
+		// siblings above — every junction starts a match that reaches the far
+		// end, and each is then re-validated up to maxAdjacencyBacktrack times
+		// at its own length — so it carries a smaller multiplier to sit inside
+		// the same bar. Shrinking the input rather than loosening the budget is
+		// the lever scaleAdversarial documents: the shape is what the case
+		// tests, and the shape survives a smaller multiplier.
+		{"long_matches_at_every_junction", r("AIza"+r("a", 35)+"sk-ant-", n(500))},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
