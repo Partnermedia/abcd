@@ -204,3 +204,142 @@ func TestPrimaryWorktreeRootRefusesABareRepoWorktree(t *testing.T) {
 		t.Errorf("a neighbouring repository's private store was reported as inherited: %+v", inh)
 	}
 }
+
+// hermeticGit returns a git driver for tests that must build repository SHAPES
+// rather than reuse worktreePair's single repo. Every command runs under
+// gittest.Env, so an ambient GIT_DIR cannot redirect the fixture onto a real
+// checkout.
+func hermeticGit(t *testing.T) func(dir string, args ...string) (string, error) {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git unavailable")
+	}
+	env := gittest.Env(t)
+	return func(dir string, args ...string) (string, error) {
+		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		cmd.Env = env
+		out, err := cmd.CombinedOutput()
+		return string(out), err
+	}
+}
+
+// seedCheckout makes dir a REAL working tree with one commit — the thing the
+// resolver is supposed to require, and the thing a `.git` existence test cannot
+// distinguish from a directory that merely holds somebody's git dir.
+func seedCheckout(t *testing.T, git func(string, ...string) (string, error), dir string) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"init"},
+		{"config", "user.name", "Alice Example"},
+		{"config", "user.email", "alice@example.com"},
+		{"-c", "core.hooksPath=/dev/null", "commit", "--allow-empty", "-m", "seed"},
+	} {
+		if out, err := git(dir, args...); err != nil {
+			t.Fatalf("git %v in %s: %v\n%s", args, dir, err, out)
+		}
+	}
+}
+
+// writeNeighbourStore plants a private store in a checkout that has nothing to do
+// with the repository under test. Reading it is the whole finding.
+func writeNeighbourStore(t *testing.T, root string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(PrivateDirRelPath)), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, filepath.FromSlash(PrivateRelPath)),
+		[]byte("# abcd-banlist: keyed\nneighbour-secret  somethingelse\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestPrimaryWorktreeRootRefusesAMirrorInsideAnotherCheckout is the escalation the
+// `.git` existence test does not survive. Clone a repository BARE into a directory
+// that sits inside somebody else's working tree, then `git worktree add` from it:
+// the common dir is <victim>/mirror.git, its parent is <victim>, and <victim>/.git
+// exists — so a guard that asks only "does this directory carry a .git entry?"
+// accepts an unrelated repository as this worktree's primary checkout and reads its
+// private store. That store's whole contract is that its pattern values never reach
+// output; inheriting it hands over a match/no-match oracle on another repository's
+// private names, discloses their KEYS into this repo's hook output, and lets one
+// malformed line over there refuse every commit here.
+func TestPrimaryWorktreeRootRefusesAMirrorInsideAnotherCheckout(t *testing.T) {
+	git := hermeticGit(t)
+	root := t.TempDir()
+
+	victim := filepath.Join(root, "victim")
+	seedCheckout(t, git, victim)
+	writeNeighbourStore(t, victim)
+
+	src := filepath.Join(root, "src")
+	seedCheckout(t, git, src)
+
+	mirror := filepath.Join(victim, "mirror.git")
+	if out, err := git(root, "clone", "--bare", src, mirror); err != nil {
+		t.Skipf("bare clone unavailable: %v\n%s", err, out)
+	}
+	linked := filepath.Join(t.TempDir(), "linked")
+	if out, err := git(mirror, "worktree", "add", linked, "HEAD"); err != nil {
+		t.Skipf("git worktree add unavailable: %v\n%s", err, out)
+	}
+
+	if got, ok := PrimaryWorktreeRoot(linked); ok {
+		t.Errorf("a worktree of a bare mirror resolved %q as its primary checkout; that checkout belongs to a DIFFERENT repository", got)
+	}
+	inh, err := InheritedPrivate(linked)
+	if err != nil {
+		t.Fatalf("resolution must degrade to nothing, never to an error: %v", err)
+	}
+	if inh != nil {
+		t.Errorf("an unrelated checkout's private store was reported as inherited: %+v", inh)
+	}
+}
+
+// TestPrimaryWorktreeRootRefusesASeparateGitDirInsideAnotherCheckout is the same
+// finding reached by the second documented route. `git init --separate-git-dir`
+// puts the git dir wherever it is told, so the common dir's parent is again a
+// directory that merely HOLDS a git dir — and when that directory is somebody's
+// checkout it carries a `.git` of its own, which is all the old test asked for.
+func TestPrimaryWorktreeRootRefusesASeparateGitDirInsideAnotherCheckout(t *testing.T) {
+	git := hermeticGit(t)
+	root := t.TempDir()
+
+	victim := filepath.Join(root, "victim")
+	seedCheckout(t, git, victim)
+	writeNeighbourStore(t, victim)
+
+	work := filepath.Join(root, "work")
+	if err := os.MkdirAll(work, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := git(work, "init", "--separate-git-dir="+filepath.Join(victim, "gitdir")); err != nil {
+		t.Skipf("git init --separate-git-dir unavailable: %v\n%s", err, out)
+	}
+	for _, args := range [][]string{
+		{"config", "user.name", "Alice Example"},
+		{"config", "user.email", "alice@example.com"},
+		{"-c", "core.hooksPath=/dev/null", "commit", "--allow-empty", "-m", "seed"},
+	} {
+		if out, err := git(work, args...); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	linked := filepath.Join(t.TempDir(), "sgd-linked")
+	if out, err := git(work, "worktree", "add", "-b", "linked", linked); err != nil {
+		t.Skipf("git worktree add unavailable: %v\n%s", err, out)
+	}
+
+	if got, ok := PrimaryWorktreeRoot(linked); ok && resolve(t, got) != resolve(t, work) {
+		t.Errorf("a --separate-git-dir worktree resolved %q as its primary checkout; that is not this repository's working tree", got)
+	}
+	inh, err := InheritedPrivate(linked)
+	if err != nil {
+		t.Fatalf("resolution must degrade to nothing, never to an error: %v", err)
+	}
+	if inh != nil {
+		t.Errorf("an unrelated checkout's private store was reported as inherited: %+v", inh)
+	}
+}

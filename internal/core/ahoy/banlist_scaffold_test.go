@@ -1033,3 +1033,128 @@ func TestScaffoldedGuardHookInheritsThePrimaryStoreInAWorktree(t *testing.T) {
 		t.Errorf("the refusal does not say the entry was inherited from the primary checkout:\n%s", out)
 	}
 }
+
+// TestScaffoldedGuardHookRefusesAMirrorInsideAnotherCheckout is the worktree
+// resolution's confinement, pinned on the SCAFFOLDED template rather than on this
+// repo's dogfood copy — the two halves must stay in lockstep, and a fix applied to
+// one alone leaves every repo abcd configures carrying the hole.
+//
+// The layout: a VICTIM checkout that is a real working tree with a private store of
+// its own, and a linked worktree of an UNRELATED repository whose git dir was
+// placed inside that checkout (by a bare clone, or by --separate-git-dir). The
+// common dir's parent is then the victim, and the victim carries a `.git` — so a
+// guard that resolves its primary checkout by path arithmetic plus a `.git`
+// existence test enforces a stranger's private list on this repository's commits.
+func TestScaffoldedGuardHookRefusesAMirrorInsideAnotherCheckout(t *testing.T) {
+	if _, err := exec.LookPath("bash"); err != nil {
+		t.Skip("bash unavailable")
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git unavailable")
+	}
+	for _, shape := range []string{"bare", "separate-git-dir"} {
+		t.Run(shape, func(t *testing.T) {
+			setupHermetic(t)
+			env := gittest.Env(t)
+			git := func(dir string, args ...string) (string, error) {
+				cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+				cmd.Env = env
+				out, err := cmd.CombinedOutput()
+				return string(out), err
+			}
+			seed := func(dir string) {
+				t.Helper()
+				if err := os.MkdirAll(dir, 0o755); err != nil {
+					t.Fatal(err)
+				}
+				for _, args := range [][]string{
+					{"init"},
+					{"config", "user.name", "Alice Example"},
+					{"config", "user.email", "alice@example.com"},
+					{"-c", "core.hooksPath=/dev/null", "commit", "--allow-empty", "-m", "seed"},
+				} {
+					if out, err := git(dir, args...); err != nil {
+						t.Fatalf("git %v in %s: %v\n%s", args, dir, err, out)
+					}
+				}
+			}
+
+			root := t.TempDir()
+			victim := filepath.Join(root, "victim")
+			seed(victim)
+			if err := os.MkdirAll(filepath.Join(victim, filepath.FromSlash(banlist.PrivateDirRelPath)), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(victim, filepath.FromSlash(banlist.PrivateRelPath)),
+				[]byte("# abcd-banlist: keyed\nlab-host carol-server\\.example\\.net\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			var commonDir string
+			switch shape {
+			case "bare":
+				src := filepath.Join(root, "src")
+				seed(src)
+				commonDir = filepath.Join(victim, "mirror.git")
+				if out, err := git(root, "clone", "--bare", src, commonDir); err != nil {
+					t.Skipf("bare clone unavailable: %v\n%s", err, out)
+				}
+			default:
+				work := filepath.Join(root, "work")
+				if err := os.MkdirAll(work, 0o755); err != nil {
+					t.Fatal(err)
+				}
+				commonDir = filepath.Join(victim, "gitdir")
+				if out, err := git(work, "init", "--separate-git-dir="+commonDir); err != nil {
+					t.Skipf("git init --separate-git-dir unavailable: %v\n%s", err, out)
+				}
+				for _, args := range [][]string{
+					{"config", "user.name", "Alice Example"},
+					{"config", "user.email", "alice@example.com"},
+					{"-c", "core.hooksPath=/dev/null", "commit", "--allow-empty", "-m", "seed"},
+				} {
+					if out, err := git(work, args...); err != nil {
+						t.Fatalf("git %v: %v\n%s", args, err, out)
+					}
+				}
+			}
+
+			linked := filepath.Join(t.TempDir(), "linked")
+			if out, err := git(commonDir, "worktree", "add", linked, "HEAD"); err != nil {
+				t.Skipf("git worktree add unavailable: %v\n%s", err, out)
+			}
+			// The SCAFFOLDED template is what is under test, installed where a linked
+			// worktree resolves its hooks: the common git dir.
+			hooksDir := filepath.Join(commonDir, "hooks")
+			if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(hooksDir, "pre-commit"), guardHookTemplate, 0o755); err != nil {
+				t.Fatal(err)
+			}
+
+			if out, err := git(linked, "config", "user.name", "Alice Example"); err != nil {
+				t.Fatalf("git config: %v\n%s", err, out)
+			}
+			if out, err := git(linked, "config", "user.email", "alice@example.com"); err != nil {
+				t.Fatalf("git config: %v\n%s", err, out)
+			}
+			if err := os.WriteFile(filepath.Join(linked, "notes.md"), []byte("ssh carol-server.example.net\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if out, err := git(linked, "add", "notes.md"); err != nil {
+				t.Fatalf("git add: %v\n%s", err, out)
+			}
+			out, err := git(linked, "commit", "-m", "t")
+			if err != nil {
+				t.Fatalf("the scaffolded guard enforced the private store of a checkout that merely holds this repository's git dir:\n%s", out)
+			}
+			if strings.Contains(out, "lab-host") {
+				t.Errorf("the hook disclosed a key from an unrelated repository's private store:\n%s", out)
+			}
+			if strings.Contains(out, "primary checkout") {
+				t.Errorf("the guard claimed to inherit a store from a directory that is not this repository's working tree:\n%s", out)
+			}
+		})
+	}
+}

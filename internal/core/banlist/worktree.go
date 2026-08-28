@@ -2,8 +2,7 @@ package banlist
 
 import (
 	"errors"
-	"os"
-	"path/filepath"
+	"strings"
 
 	"github.com/intentdriven/abcd/internal/gitutil"
 )
@@ -34,8 +33,34 @@ type InheritedReport struct {
 //
 // git tells the two shapes apart: in a linked worktree `--git-dir` resolves to
 // <primary>/.git/worktrees/<name> while `--git-common-dir` resolves to
-// <primary>/.git, and in a standalone checkout the two are the same path. The
-// primary working tree is the common dir's parent.
+// <primary>/.git, and in a standalone checkout the two are the same path.
+//
+// WHICH working tree is the primary one is then ASKED OF GIT, never computed from
+// the common dir's path. The arithmetic ("the common dir's parent") is wrong
+// wherever the git dir is not inside its own working tree — a bare repository, or
+// one made with `--separate-git-dir` — because there the parent is merely the
+// directory that happens to HOLD the git dir. Guarding that with a `.git` existence
+// test does not close it: clone bare into a directory that sits inside somebody
+// else's checkout (or point `--separate-git-dir` there) and the parent is a real
+// working tree carrying a real `.git`, so the test passes and this resolver hands
+// back an UNRELATED repository — whose private store the caller then reads and the
+// committed guard then enforces. That is a match/no-match oracle over another
+// repository's private patterns, disclosure of its keys, and a cross-repo denial of
+// service from one malformed line over there.
+//
+// So: `git worktree list --porcelain` names the main working tree in its first
+// record, and the candidate is then required to CONFIRM the relationship from its
+// own side, with git rediscovering the repository from that directory
+// (gitutil.Run scrubs GIT_DIR and friends, so discovery is not short-circuited by
+// an inherited environment):
+//
+//   - its `--show-toplevel` must be the candidate itself, which no directory that
+//     merely holds a git dir can satisfy — git answers "must be run in a work tree"
+//     for a bare repo and for a `--separate-git-dir` git dir alike; and
+//   - its `--git-common-dir` must be OUR common dir, which is what makes the
+//     answer unspoofable by layout. A neighbour checkout discovers its own
+//     `.git`, never the mirror planted inside it, so the two common dirs differ and
+//     the candidate is refused.
 //
 // It is the Go half of the resolution the committed pre-commit guard makes, and it
 // is deliberately the same three-way answer: resolution failure is ok=false, never
@@ -50,28 +75,45 @@ func PrimaryWorktreeRoot(repoRoot string) (string, bool) {
 	if err != nil || commonDir == "" || gitDir == commonDir {
 		return "", false
 	}
-	primary := filepath.Dir(commonDir)
-	// A common dir with no parent left to take names no directory, and a primary
-	// that resolves back to THIS working tree is not a second store to inherit.
-	if primary == "" || primary == commonDir || primary == repoRoot {
+	list, err := gitutil.Run(repoRoot, "worktree", "list", "--porcelain")
+	if err != nil {
 		return "", false
 	}
-	// The arithmetic alone is WRONG for a bare repository, and for one made with
-	// `--separate-git-dir`: there the common dir's parent is not a working tree at
-	// all, it is whatever directory happens to hold the git dir — so this would
-	// resolve, read and RENDER the private store of an unrelated repository that
-	// merely lives next door. Worse, the committed guard applies this same test, so
-	// without it here the board would list entries as "enforced here too" that the
-	// guard does not enforce: a status surface announcing protection that is not
-	// running is the one failure this layer's whole design forbids.
-	//
-	// A real primary working tree always carries a `.git` entry. Lstat, not Stat: a
-	// dangling symlink there is not a working tree either, and following it is how a
-	// crafted layout would answer the question for us.
-	if _, err := os.Lstat(filepath.Join(primary, ".git")); err != nil {
+	primary := mainWorktreePath(list)
+	// A primary that resolves back to THIS working tree is not a second store to
+	// inherit.
+	if primary == "" || primary == repoRoot {
+		return "", false
+	}
+	// The candidate's own answers, from the candidate's own directory.
+	top, err := gitutil.Run(primary, "rev-parse", "--path-format=absolute", "--show-toplevel")
+	if err != nil || top != primary {
+		return "", false
+	}
+	common, err := gitutil.Run(primary, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	if err != nil || common != commonDir {
 		return "", false
 	}
 	return primary, true
+}
+
+// mainWorktreePath reads the working-tree path out of the FIRST record of
+// `git worktree list --porcelain`, which git documents as the main working tree.
+// Anything else — no output, a first line that is not a `worktree ` record — yields
+// "", and the caller treats that as "git cannot answer", which is the fallback's
+// designed failure mode.
+//
+// A `bare` marker on the second line needs no special case: the caller's
+// `--show-toplevel` confirmation refuses a bare repository on its own, and the one
+// authority on whether a directory is a working tree should be git, not a marker
+// this function reinterprets.
+func mainWorktreePath(porcelain string) string {
+	first, _, _ := strings.Cut(porcelain, "\n")
+	path, ok := strings.CutPrefix(strings.TrimSuffix(first, "\r"), "worktree ")
+	if !ok {
+		return ""
+	}
+	return path
 }
 
 // InheritedPrivate reports the private layer repoRoot inherits from its primary

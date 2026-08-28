@@ -1124,3 +1124,136 @@ func TestPreCommitHook_UnreadableStoreRefusesLoudly(t *testing.T) {
 		t.Errorf("the refusal does not name the cause; a check that could not run must say so\n%s", out)
 	}
 }
+
+// mirrorAttackCase builds the layout the `.git` existence test does not survive: a
+// VICTIM checkout that is a real working tree carrying a private store, and a
+// linked worktree of an unrelated repository whose git dir was placed INSIDE that
+// checkout. shape selects the route — "bare" clones a mirror into the victim,
+// "separate-git-dir" points a fresh repo's git dir there. Both leave the common
+// dir's parent equal to the victim, and the victim carries a `.git`.
+//
+// It returns the victim's root and a hookRepo bound to the linked worktree, with
+// the committed hook installed where that worktree resolves it.
+func mirrorAttackCase(t *testing.T, shape string) (victim string, linked *hookRepo) {
+	t.Helper()
+	hook := locateHook(t)
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git unavailable")
+	}
+	env := gittest.Env(t)
+	git := func(dir string, args ...string) (string, error) {
+		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		cmd.Env = env
+		out, err := cmd.CombinedOutput()
+		return string(out), err
+	}
+	seed := func(dir string) {
+		t.Helper()
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		for _, args := range [][]string{
+			{"init"},
+			{"config", "user.name", "Alice Example"},
+			{"config", "user.email", "alice@example.com"},
+			{"-c", "core.hooksPath=/dev/null", "commit", "--allow-empty", "-m", "seed"},
+		} {
+			if out, err := git(dir, args...); err != nil {
+				t.Fatalf("git %v in %s: %v\n%s", args, dir, err, out)
+			}
+		}
+	}
+
+	root := t.TempDir()
+	victim = filepath.Join(root, "victim")
+	seed(victim)
+	// The victim's private store. Its key is what a leak would print.
+	local := filepath.Join(victim, ".abcd", ".work.local")
+	if err := os.MkdirAll(local, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(local, "private-names.txt"), []byte(keyedBanlist), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var commonDir string
+	switch shape {
+	case "bare":
+		src := filepath.Join(root, "src")
+		seed(src)
+		commonDir = filepath.Join(victim, "mirror.git")
+		if out, err := git(root, "clone", "--bare", src, commonDir); err != nil {
+			t.Skipf("bare clone unavailable: %v\n%s", err, out)
+		}
+	case "separate-git-dir":
+		work := filepath.Join(root, "work")
+		if err := os.MkdirAll(work, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		commonDir = filepath.Join(victim, "gitdir")
+		if out, err := git(work, "init", "--separate-git-dir="+commonDir); err != nil {
+			t.Skipf("git init --separate-git-dir unavailable: %v\n%s", err, out)
+		}
+		for _, args := range [][]string{
+			{"config", "user.name", "Alice Example"},
+			{"config", "user.email", "alice@example.com"},
+			{"-c", "core.hooksPath=/dev/null", "commit", "--allow-empty", "-m", "seed"},
+		} {
+			if out, err := git(work, args...); err != nil {
+				t.Fatalf("git %v: %v\n%s", args, err, out)
+			}
+		}
+	default:
+		t.Fatalf("unknown shape %q", shape)
+	}
+
+	dir := filepath.Join(t.TempDir(), "linked")
+	if out, err := git(commonDir, "worktree", "add", dir, "HEAD"); err != nil {
+		t.Skipf("git worktree add unavailable: %v\n%s", err, out)
+	}
+	// A linked worktree resolves its hooks through the common git dir, so that is
+	// where the guard has to be installed for it to run at all.
+	hooksDir := filepath.Join(commonDir, "hooks")
+	if err := os.MkdirAll(hooksDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(hook)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(hooksDir, "pre-commit"), body, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	linked = &hookRepo{t: t, dir: dir, env: env}
+	linked.git("config", "user.name", "Alice Example")
+	linked.git("config", "user.email", "alice@example.com")
+	return victim, linked
+}
+
+// TestPreCommitHook_AMirrorInsideAnotherCheckoutDoesNotInheritItsStore is the
+// escalation of TestPreCommitHook_BareRepoWorktreeDoesNotInheritASiblingStore: the
+// `.git` existence test only refuses when the directory holding the git dir is NOT
+// a checkout. Put the bare mirror inside a real working tree and the test passes,
+// and the guard enforces an unrelated repository's private list on this repo's
+// commits — an oracle over its patterns, disclosure of its keys into this repo's
+// hook output, and a cross-repo denial of service from one malformed line over
+// there.
+func TestPreCommitHook_AMirrorInsideAnotherCheckoutDoesNotInheritItsStore(t *testing.T) {
+	for _, shape := range []string{"bare", "separate-git-dir"} {
+		t.Run(shape, func(t *testing.T) {
+			_, linked := mirrorAttackCase(t, shape)
+			linked.write("note.md", "the widgetworks deal closes friday\n")
+			linked.git("add", "note.md")
+			blocked, out := linked.commit()
+			if blocked {
+				t.Fatalf("the guard enforced the private store of a checkout that merely holds this repository's git dir\n%s", out)
+			}
+			if strings.Contains(out, "widget-partner") {
+				t.Errorf("the hook disclosed a key from an unrelated repository's private store\n%s", out)
+			}
+			if strings.Contains(out, "primary checkout") {
+				t.Errorf("the guard claimed to inherit a store from a directory that is not this repository's working tree\n%s", out)
+			}
+		})
+	}
+}
