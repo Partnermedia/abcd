@@ -42,6 +42,19 @@ func TestUnquotedBraceGroupIsRefused(t *testing.T) {
 		// A dollar that is itself escaped is a literal `$`, so `${` after it is
 		// NOT parameter expansion and bash expands the group.
 		`git push \${--force,} origin main`,
+		// A `}` inside the FIRST alternative. bash does not take the first
+		// closing brace as the group's end — it keeps looking for a separator,
+		// so `{msg},--no-verify}` expands to `msg}` and `--no-verify` (checked
+		// against bash 5.3). Stopping at that inner brace read the whole word as
+		// inert text and reopened the reported bypass four characters wider,
+		// this time in a form that RUNS cleanly: `-m` swallows the junk
+		// `msg}` as the message and `--no-verify` skips the hooks.
+		"git commit -m {msg},--no-verify}",
+		"git push {x},--force} origin main",
+		"cd /tmp/x && rm {y},-rf} *",
+		`git push {""},--force} origin main`,
+		"git push {a}},--force} origin main",
+		"git push {{}},--force} origin main",
 	} {
 		t.Run(cmd, func(t *testing.T) {
 			if d := verdictOf(t, cmd); d.Verdict != VerdictBlock {
@@ -108,6 +121,13 @@ func TestBraceHandlingLeavesEveryOtherShapeAlone(t *testing.T) {
 		// group: the substitution is skipped for STRUCTURE, not treated as one.
 		{`echo {$(true)}`, VerdictAllow},
 		{"echo {`true`}", VerdictAllow},
+		// A closing brace with no separator anywhere after it is a literal in
+		// bash too, however many of them there are — looking past the first one
+		// must not turn these into groups.
+		{`echo {a}b`, VerdictAllow},
+		{`echo {a},x`, VerdictAllow},
+		{`echo {a} b,c}`, VerdictAllow},
+		{`echo {}`, VerdictAllow},
 		{`awk {print}`, VerdictAllow},
 		// Ordinary commands, unaffected.
 		{`git status`, VerdictAllow},

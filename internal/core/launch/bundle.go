@@ -266,9 +266,11 @@ func (r *resolver) classifyRegular(rel, abs string, info os.FileInfo, deref bool
 	// so a bundled copy would be an unverified, permanently stale second source
 	// for the very binary that then runs as the shell guard (itd-154). Today the
 	// artefacts are also gitignored and reached by no include — but that is a
-	// config an edit can undo, so the deny sits ABOVE the include list, and it
-	// rejects rather than excluding: naming one is a mistake worth failing on,
-	// not a candidate to drop in silence.
+	// config an edit can undo, so the deny binds any candidate an include DOES
+	// reach, and it rejects rather than excluding: naming one is a mistake worth
+	// failing on, not a candidate to drop in silence. It sits after the include
+	// match rather than before it so an artefact nobody asked for stays an
+	// ordinary default-deny miss instead of a reported violation.
 	if isPlatformBinaryName(path.Base(rel)) {
 		r.result.Rejected = append(r.result.Rejected, RejectedFile{LogicalPath: rel, Reason: RejectedPlatformBinary})
 		return

@@ -441,8 +441,21 @@ func braceExpansionAt(line string, i int, budget *int) (group bool) {
 			depth++
 			j++
 		case c == '}':
-			if depth--; depth == 0 {
-				return expands
+			// A `}` ends the group only once a separator has been seen at this
+			// level. bash does not stop at the first one either: it keeps
+			// looking, so `{msg},--no-verify}` is a real group whose
+			// alternatives are `msg}` and `--no-verify` (checked against bash
+			// 5.3). Stopping at that inner brace read the whole word as inert
+			// text and reopened the very bypass this scan closes, four
+			// characters wider — and in a form that runs cleanly, since `-m`
+			// swallows the junk alternative as the commit message. An
+			// unseparated `}` is therefore an ordinary byte inside a group that
+			// is still open, which is exactly how bash reads it.
+			switch {
+			case depth > 1:
+				depth--
+			case expands:
+				return true
 			}
 			j++
 		case c == ',':
