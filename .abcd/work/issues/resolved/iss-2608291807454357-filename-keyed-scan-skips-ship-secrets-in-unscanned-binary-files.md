@@ -7,7 +7,7 @@ category: "security"
 source: "agent-finding"
 found_during: "v0.6.9-security-pass"
 found_at: "internal/adapter/scanner/scanner.go"
-resolution: "Skip-listed bundle files are now read through the guarded, capped primitive and their bytes scanned with the secret, harness-leak and long-literal identity rules — the verdict is extension-independent for home path, email, session URL and multi-word names — reported as ScannedBinary (or ContentUnverified for a compressed format) instead of an unverified Skipped allow; an unreadable or oversized one is an Unscanned refusal that says why."
+resolution: "Skip-listed bundle files are now read through the guarded, capped primitive and their bytes scanned with the secret, harness-leak and long-literal identity rules — the verdict is extension-independent for home path, email, session URL, and a real name that is multi-word or at least 8 bytes — reported as ScannedBinary (a plaintext allow-listed name) or ContentUnverified (the default for the byte branch) instead of an unverified Skipped allow; an unreadable or oversized one is an Unscanned refusal that says why."
 impact: fix
 ---
 

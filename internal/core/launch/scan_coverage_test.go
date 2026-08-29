@@ -151,11 +151,6 @@ func TestRepoPayloadBinariesScanClean(t *testing.T) {
 	for _, p := range append(append([]string{}, scan.ScannedBinary...), scan.ContentUnverified...) {
 		binary[p] = true
 	}
-	for _, p := range scan.ContentUnverified {
-		if !strings.HasSuffix(p, ".png") {
-			t.Errorf("only the image assets are expected as ContentUnverified, got %s", p)
-		}
-	}
 	for _, f := range scan.Findings {
 		if binary[f.File] {
 			t.Errorf("byte rule %s tripped on a genuine binary asset %s (line %d)", f.Kind, f.File, f.Line)

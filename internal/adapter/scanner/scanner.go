@@ -43,26 +43,29 @@ type ScanResult struct {
 	// covered, so an asset over the cap is distinguishable from an I/O error.
 	UnscannedWhy map[string]string `json:"unscanned_why,omitempty"`
 	// ScannedBinary lists bundle files that matched the reviewed skip sets (a
-	// binary media extension, a skip filename, or a skip fragment) whose
-	// format has no compressed region, and were byte-scanned: the raw bytes
-	// run through the byte rules — every secret rule, the harness-leak rules,
-	// and the long-literal identity rules — with no format decoded, so only
-	// the plaintext regions of the file are covered. A skip exempts a file
-	// from the short/generic identity rules that are noise on bytes; it is
-	// never an unverified allow, because a file that enters the payload
-	// enters it with its bytes, whatever its name says (GHSA-9wv7-88w3-f77m).
+	// binary media extension, a skip filename, or a skip fragment) AND whose
+	// name is on the plaintext allow-list (plaintextNames): a skip-listed file
+	// known to carry no compressed region, so the byte scan covers all of it.
+	// The raw bytes run through the byte rules — every secret rule, the
+	// harness-leak rules, and the long-literal identity rules — with no
+	// format decoded. A skip exempts a file from the short/generic identity
+	// rules that are noise on bytes; it is never an unverified allow, because
+	// a file that enters the payload enters it with its bytes, whatever its
+	// name says (GHSA-9wv7-88w3-f77m).
 	ScannedBinary []string `json:"scanned_binary,omitempty"`
-	// ContentUnverified lists skip-listed bundle files whose extension names a
-	// compressed or container format — an archive, but equally a PNG (deflate
-	// IDAT and zTXt), a JPEG entropy stream, a PDF FlateDecode stream or an
-	// mp4 box. They get the same byte scan as ScannedBinary (cheap, and it
-	// still catches plaintext such as an uncompressed tar's entries or PNG
-	// tEXt metadata), but a compressed region is invisible to it, so they are
-	// NOT counted as content-verified and the report says so rather than
-	// claiming coverage it does not have. The label keys on the extension,
-	// so a zip renamed .png is labelled by its name; whether the gate should
-	// refuse them, and on what evidence, is iss-2608291832160371 — today they
-	// do not refuse on their own.
+	// ContentUnverified lists every other skip-listed bundle file — the
+	// DEFAULT for the byte branch, because a closed list of compressed
+	// formats would label whatever it missed as verified. An archive, but
+	// equally a PNG (deflate IDAT and zTXt), a JPEG entropy stream, a PDF
+	// FlateDecode stream, an mp4 box, a database blob, a packed executable,
+	// or any extension a repo's pii.json adds to skip_extensions. They get
+	// the same byte scan as ScannedBinary (cheap, and it still catches
+	// plaintext such as an uncompressed tar's entries or PNG tEXt metadata),
+	// but a compressed region is invisible to it, so they are NOT counted as
+	// content-verified and the report says so rather than claiming coverage
+	// it does not have. The label keys on the name, so a zip renamed .png is
+	// labelled by its name; whether the gate should refuse them, and on what
+	// evidence, is iss-2608291832160371 — today they do not refuse on their own.
 	ContentUnverified []string `json:"content_unverified,omitempty"`
 }
 
@@ -77,16 +80,18 @@ type ScanResult struct {
 // coverage stays honest.
 const maxBinaryScanBytes = 4 << 20
 
-// compressedExtensions are the skip-listed extensions naming a compressed or
-// container format, whose bytes cannot be content-verified by a byte scan
-// (see ScanResult.ContentUnverified). Every entry is on defaultSkipExtensions:
-// .jar is deliberately absent because it is not skip-listed, so it never
-// reaches the byte branch — it is sniffed as binary and refused as Unscanned.
-var compressedExtensions = toSet([]string{
-	".zip", ".gz", ".tgz", ".tar", ".bz2", ".xz", ".7z",
-	".png", ".jpg", ".jpeg", ".gif", ".pdf", ".webp",
-	".mp4", ".mov", ".webm", ".mp3",
-})
+// plaintextNames is the allow-list of skip-listed names known to carry no
+// compressed region, so a byte scan covers all of their content and they may
+// be reported as ScannedBinary. The polarity is deliberate: the byte branch
+// defaults to ContentUnverified, and only a name listed here is promoted.
+// Keyed on the final path element's extension as filepath.Ext reports it, so a
+// skip FILENAME such as .gitignore (a dotfile, whose Ext is the whole name)
+// qualifies. Nothing on defaultSkipExtensions qualifies: .ico can embed PNG,
+// .wav can carry a compressed codec, .tar holds compressed entries, .pyc is
+// marshalled bytecode, and .so/.dylib/.dll/.exe/.sqlite/.db can all hold
+// packed sections or blobs. A config-added skip extension (.jar, say) reaches
+// this branch like any other and lands in ContentUnverified by default.
+var plaintextNames = toSet([]string{".gitignore"})
 
 // Config is the on-disk scanner configuration (the per-repo pii.json override
 // shape). Only the consumed fields are modelled.
@@ -890,7 +895,7 @@ func fingerprintSpan(out, src []byte, start, end int, whole bool) {
 // ResolvedPath and reporting under LogicalPath. A file on the reviewed skip
 // sets (extension, filename, fragment) is read through the guarded, capped
 // primitive and its bytes scanned with the byte rules (scanBytes), reported
-// under ScannedBinary or, for a compressed format, ContentUnverified; any
+// under ScannedBinary (a plaintext allow-listed name) or ContentUnverified; any
 // other file is sniffed (null byte + UTF-8) and scanned with the full rule
 // set, or surfaced in Unscanned (with UnscannedWhy) when it cannot be. If the
 // scanner is unavailable (config unreadable), it returns Unavailable=true and
@@ -921,10 +926,10 @@ func (s *Scanner) ScanBundle(files []BundleFile) (ScanResult, error) {
 				unscanned(f.LogicalPath, guardedReadWhy(err))
 				continue
 			}
-			if _, ok := compressedExtensions[strings.ToLower(filepath.Ext(f.LogicalPath))]; ok {
-				res.ContentUnverified = append(res.ContentUnverified, f.LogicalPath)
-			} else {
+			if _, ok := plaintextNames[strings.ToLower(filepath.Ext(f.LogicalPath))]; ok {
 				res.ScannedBinary = append(res.ScannedBinary, f.LogicalPath)
+			} else {
+				res.ContentUnverified = append(res.ContentUnverified, f.LogicalPath)
 			}
 			res.Findings = append(res.Findings, s.scanBytes(data, secrets, f.LogicalPath)...)
 			continue
@@ -997,7 +1002,14 @@ func guardedReadWhy(err error) string {
 // unless the repo's pii.json raised that kind above its built-in default,
 // which is a judgement the byte scan honours.
 func (s *Scanner) scanBytes(data []byte, secrets []Pattern, logical string) []Finding {
-	long := Identity{HomePath: s.identity.HomePath, GitUserEmail: s.identity.GitUserEmail, GitUserName: s.identity.GitUserName}
+	// GitRemoteUsername travels with the name so the matcher derives
+	// nameEqGithub exactly as it does on text: a user.name equal to the public
+	// handle is reported as github_username (dropped here), never promoted to
+	// a hard-fail real_name by the file's extension (iss-283).
+	long := Identity{
+		HomePath: s.identity.HomePath, GitUserEmail: s.identity.GitUserEmail,
+		GitUserName: s.identity.GitUserName, GitRemoteUsername: s.identity.GitRemoteUsername,
+	}
 	all := ScanText(string(data), long, secrets, s.identSev, logical)
 	out := all[:0]
 	for _, f := range all {
@@ -1073,8 +1085,10 @@ func (s *Scanner) byteScanDrops(f Finding) bool {
 // private-key rules, the harness-leak rules, and a hard-fail override of the
 // same shape. A session URL is a long literal with no chance collision, and
 // AGENTS.md declares the harness-leak class as one definition reaching launch,
-// so it runs on bytes; the attribution-footer rule self-suppresses there (it
-// requires its own line). IsIdentityKind already covers the network kinds, so
+// so both its rules run on bytes: the session URL is caught anywhere on a
+// line, and the attribution footer fires on bytes exactly as it does on text
+// when a line holds it on its own (PDF and PNG metadata are line-shaped), which
+// is the wanted behaviour. IsIdentityKind already covers the network kinds, so
 // no separate network clause is needed. A username, an address or a hostname
 // inside binary bytes is noise, not a leak, and the identity rules a byte
 // scan does keep are added by scanBytes through the identity value, not here.

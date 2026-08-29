@@ -89,21 +89,52 @@ func TestSkipListedBinaryPEMKeyIsCaught(t *testing.T) {
 	}
 }
 
-// TestScannedBinaryIsPlainByteScan: a skip-listed format with no compressed
-// region (.ico) is byte-scanned and reported as ScannedBinary.
+// TestScannedBinaryIsPlainByteScan: a skip-listed name on the plaintext
+// allow-list (.gitignore, a skip FILENAME) is byte-scanned and reported as
+// ScannedBinary; every other skip-listed format defaults to ContentUnverified.
 func TestScannedBinaryIsPlainByteScan(t *testing.T) {
 	root := t.TempDir()
-	abs := writeFile(t, root, "favicon.ico", "\x00\x00\x01\x00 token="+fakeToken()+"\n")
+	abs := writeFile(t, root, "sub/.gitignore", "# token="+fakeToken()+"\n")
 	sc, err := New(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	res := scanOne(t, sc, "favicon.ico", abs)
-	if !contains(res.ScannedBinary, "favicon.ico") || contains(res.ContentUnverified, "favicon.ico") {
-		t.Errorf("an uncompressed skip-listed format is ScannedBinary: %+v", res)
+	res := scanOne(t, sc, "sub/.gitignore", abs)
+	if !contains(res.ScannedBinary, "sub/.gitignore") || contains(res.ContentUnverified, "sub/.gitignore") {
+		t.Errorf("a plaintext skip-listed name is ScannedBinary: %+v", res)
 	}
 	if res.HardFails == 0 {
 		t.Errorf("its plaintext secret must still be caught: %+v", res)
+	}
+}
+
+// TestUnlistedSkipFormatsDefaultToContentUnverified: the classification is
+// closed on the PLAINTEXT side, not the compressed side. A database, an
+// executable, a bytecode file or a config-added skip extension (.jar reaches
+// the byte branch once a repo lists it) can all carry compressed payloads, so
+// none of them may be labelled content-verified by default.
+func TestUnlistedSkipFormatsDefaultToContentUnverified(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, ".abcd/config/pii.json", `{"skip_extensions":[".jar"]}`)
+	sc, err := New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bad, why := sc.Unavailable(); bad {
+		t.Fatalf("override must load: %s", why)
+	}
+	var files []BundleFile
+	for _, name := range []string{"a.sqlite", "a.wav", "a.exe", "a.pyc", "a.so", "a.ico", "a.jar"} {
+		files = append(files, BundleFile{LogicalPath: name, ResolvedPath: writeFile(t, root, name, "\x00opaque\n")})
+	}
+	res, _ := sc.ScanBundle(files)
+	for _, f := range files {
+		if !contains(res.ContentUnverified, f.LogicalPath) || contains(res.ScannedBinary, f.LogicalPath) {
+			t.Errorf("%s must default to ContentUnverified: binary=%v unverified=%v", f.LogicalPath, res.ScannedBinary, res.ContentUnverified)
+		}
+	}
+	if contains(res.Unscanned, "a.jar") {
+		t.Errorf("a config-added skip extension takes the byte branch, not Unscanned: %+v", res)
 	}
 }
 
@@ -232,6 +263,30 @@ func TestBinaryHomePathHardFailsLikeText(t *testing.T) {
 	}
 	if bin.HardFails != text.HardFails {
 		t.Errorf("deck.pdf hardfails=%d, deck.md hardfails=%d — the extension must not change the verdict", bin.HardFails, text.HardFails)
+	}
+}
+
+// TestBinaryRealNameEqualToHandleMatchesText: when user.name equals the
+// public GitHub handle, the text scan suppresses real_name (iss-283) and
+// reports the handle as github_username. The byte scan must reach the same
+// verdict, so deck.pdf cannot hard-fail on a name deck.md only warns on.
+func TestBinaryRealNameEqualToHandleMatchesText(t *testing.T) {
+	root := t.TempDir()
+	sc, err := New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc.identity = Identity{GitUserName: "zq8handle", GitRemoteUsername: "zq8handle"}
+	body := "%PDF-1.4\n/Author (zq8handle)\n"
+	md := writeFile(t, root, "deck.md", body)
+	pdf := writeFile(t, root, "deck.pdf", body)
+	text := scanOne(t, sc, "deck.md", md)
+	bin := scanOne(t, sc, "deck.pdf", pdf)
+	if hasKind(text.Findings, kindRealName) {
+		t.Fatalf("control: text suppresses real_name when it equals the handle: %+v", text.Findings)
+	}
+	if hasKind(bin.Findings, kindRealName) || bin.HardFails != text.HardFails {
+		t.Errorf("deck.pdf hardfails=%d, deck.md hardfails=%d — the handle rule must hold on bytes: %+v", bin.HardFails, text.HardFails, bin.Findings)
 	}
 }
 
