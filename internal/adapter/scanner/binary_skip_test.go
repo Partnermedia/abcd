@@ -322,6 +322,9 @@ func TestGenericHomePathInBinaryIsNotAFinding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Pin a synthetic identity: on a hosted Linux runner HOME is
+	// /home/runner, and the third-party path would be the caller's own.
+	sc.identity = synthIdentity()
 	res := scanOne(t, sc, "b.png", abs)
 	if len(res.Findings) != 0 {
 		t.Fatalf("a third-party path in binary bytes is noise, not a finding: %+v", res.Findings)
@@ -342,6 +345,7 @@ func TestRepoRaisedSeverityIsHonouredOnBytes(t *testing.T) {
 	if bad, why := sc.Unavailable(); bad {
 		t.Fatalf("override must load: %s", why)
 	}
+	sc.identity = synthIdentity() // not the runner's own /home/runner
 	res := scanOne(t, sc, "b.png", abs)
 	if !hasKind(res.Findings, kindHomeOther) || res.HardFails != 1 {
 		t.Fatalf("a repo-raised home_path_other must hard-fail on bytes like it does on text: %+v", res)
