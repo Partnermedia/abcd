@@ -157,6 +157,31 @@ type RegistryMerge func(current map[string]any) (map[string]any, error)
 // under the lock and must return the COMPLETE new mapping. A zero now is sampled
 // as time.Now().UTC() AFTER the lock is held.
 func WritePages(repoRoot string, writes []PageWrite, merge RegistryMerge, now time.Time) (WriteReport, error) {
+	// Redact every page body HERE, in the one primitive every verb writes
+	// through, so no PageWrite reaches the committed store unscanned whichever
+	// verb built it (GHSA-j5f5-phgm-9m73). A redactor that stood at one call
+	// site left the next verb's bodies — a host-delegated distiller's file-back
+	// page — landing raw. index.md and log.md are derived from these bodies
+	// (reconcile reads the written files; the log event is derived from the
+	// PageWrite body), so redacting here covers those derived surfaces too. It
+	// fails closed on a degraded scanner: a heal-only pass writes no acquired
+	// text and needs no scanner, so the check is skipped only then.
+	if len(writes) > 0 {
+		redactor, err := newStoreRedactor(repoRoot)
+		if err != nil {
+			return WriteReport{}, err
+		}
+		redacted := make([]PageWrite, 0, len(writes))
+		for _, w := range writes {
+			body, _, rerr := redactor.redactText(w.Body, w.Filename)
+			if rerr != nil {
+				return WriteReport{}, rerr
+			}
+			w.Body = body
+			redacted = append(redacted, w)
+		}
+		writes = redacted
+	}
 	rendered, err := renderWrites(writes)
 	if err != nil {
 		return WriteReport{}, err
