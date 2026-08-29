@@ -13,6 +13,28 @@ earlier were rolled by hand and some carry a **Breaking** heading.
 
 ## [Unreleased]
 
+## [0.6.9] - 2026-08-29
+
+### Fixed
+
+- **`abcd ahoy install --attribution` no longer fails silently when the opt-in was not persisted.** A read or write failure on `config.json` appends a change-note to the receipt, so a hook written to disk without its recorded opt-in is visible instead of silently making every later plain install a no-op for that hook. (iss-2608291814553362)
+- **The check job fetches full history, so the record lint's agent-diff arm actually runs.** The unbumped-edit check on agent prompts has a present base commit to diff against, and the unarmed fallback prints a warning naming the missing base rather than reporting green. (iss-2608291814568191)
+- **Linting an agent prompt whose frontmatter carries only `name:` reports every applicable finding.** The missing trust declaration is recorded and the check falls through to the `prompt_version` and changelog checks, rather than stopping at the first. (iss-2608291814563353)
+- **The installer names the environment it ignores when a fetch fails.** The failure message lists the proxy, `CURL_HOME` and CA-bundle variables the installer deliberately ignores and says how to install by hand, so a host that reaches the download through a proxy or a custom CA bundle is diagnosed rather than guessed at. (iss-2608291941067275)
+- **A blank licence is refused on both source shapes.** One shared check trims the value before testing it, so a licence of only whitespace is refused on a `sources[]` entry exactly as it is on a single-source page. (iss-2608291814563403)
+
+### Security
+
+- **GHSA-fg9r-3f8g-89m6: a hostile checkout can no longer make the gitleaks adapter execute a binary it committed.** A configured or PATH-located gitleaks binary runs only when it is absolute, resolved outside the repository both lexically and after symlink resolution, regular, executable and named `gitleaks` — a wrapper or renamed binary is refused; a refusal is loud and never falls back to PATH. (iss-2608291807456485)
+- **GHSA-9wv7-88w3-f77m: a release payload can no longer ship a secret inside a skip-listed file.** Skip-listed bundle files are read through the guarded, capped primitive and their bytes scanned with the secret, harness-leak and long-literal identity rules, so the verdict for a home path, an email address, a session URL, and a real name that is multi-word or at least 8 bytes does not depend on the file's extension; a file that cannot be read or is oversized is an `Unscanned` refusal that says why, rather than an unverified allow. (iss-2608291807454357)
+- **GHSA-fpf2-pg82-72rj: `abcd site build` and `abcd site check` refuse a symlink in the output path** — at the leaf, at any ancestor inside the repository, at the repository root and at any `.git` holder — and a purge additionally requires a marker naming this repository's root commit and a directory git tracks nothing in. A repository that commits its built site directory is refused by `abcd site build` and must be pointed at an untracked output directory. (iss-2608291807455620)
+- **`abcd launch ship` no longer publishes the operator's absolute home path inside a binary file.** The byte scan waives both halves of the home anchor — a raw blob carries no path syntax on either side of the literal — so the operator's home is reported wherever it sits in a blob, and bytes are judged at least as strictly as text. (iss-2608292034215745)
+- **A page written back by `abcd memory ask --file-back` is redacted before it reaches the store.** Redaction now happens inside the single page-write primitive, so no page body lands in the committed memory store unscanned and a file-back write is scanned exactly as an ingest is. (iss-2608291814566067)
+- **A home path is replaced only where it stands as a path.** The sweep, the `home_path_self` detector and the placeholder rewrite share one anchor: a name may continue only with an alphanumeric byte, so a longer name such as `/rootfs` is another name and left intact, while a punctuation suffix such as `/root-cause` or `/root.old` is swept to the safe side. The survivor gate that refuses a home path surviving redaction is boundary-aware and can actually fire. (iss-2608291814568971)
+- **A caller's own home nested under a longer root is swept.** A home of two or more segments — a temporary or CI home such as one under `/var/folders` or `/workspaces` — is taken by the sweep and by the detector wherever it sits, closing the gap that left it reported by nothing when `HOME` is not under `/Users` or `/home`. (iss-2608292036125100)
+- **An install receipt no longer names your home directory or username.** Every change-note that embeds an error — the history-registration lock note and the attribution opt-in notes — renders through the receipt's path scrub, in the printed receipt and in `--json` alike. (iss-2608291941060605)
+- **Every occurrence of a secret on one line is redacted, not just the first.** The gitleaks adapter's findings advance a cursor past each match and key one finding per line, column and value, so a retry log or a request-and-response echo carrying the same secret twice no longer leaves the second copy verbatim. (iss-2608291814551110)
+
 ## [0.6.8] - 2026-08-29
 
 ### Added

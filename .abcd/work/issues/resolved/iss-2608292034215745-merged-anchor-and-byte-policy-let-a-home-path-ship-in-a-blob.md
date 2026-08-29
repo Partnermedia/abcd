@@ -7,7 +7,7 @@ category: "security"
 source: "impl-review"
 found_during: "v0.6.9-security-pass"
 found_at: "internal/adapter/scanner/scanner.go"
-resolution: "scanBytes scans with the home anchor's leading half waived (identityMatchers.bytes), so the operator's home is reported in a raw blob wherever the literal sits; a DryRun test drives identical bytes as .md and .png with the home preceded by an alphanumeric byte, for /root and a two-segment home, and asserts both hard-fail"
+resolution: "scanBytes scans with both halves of the home anchor waived (identityMatchers.bytes) — a raw blob carries no path syntax on either side of the literal — so the operator's home is reported in a raw blob wherever the literal sits, and bytes are judged at least as strictly as text; a DryRun test drives identical bytes as .md and .png with the home preceded by an alphanumeric byte, for /root and a two-segment home, and asserts both hard-fail"
 impact: fix
 ---
 
