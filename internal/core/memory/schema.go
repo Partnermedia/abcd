@@ -172,6 +172,18 @@ func requireDate(value any, where string) error {
 	return nil
 }
 
+// requireLicence is the one licence gate both source shapes judge through. It
+// trims, as hasLicence in lint.go does: the YAML reader keeps interior
+// whitespace in a quoted scalar, so `licence: " "` arrives as a string of one
+// space and is no more a licence than the empty string is.
+func requireLicence(value any, where string) error {
+	s, ok := value.(string)
+	if !ok || strings.TrimSpace(s) == "" {
+		return newSchemaError("%s: licence must be a non-empty string (explicit 'unknown' is acceptable)", where)
+	}
+	return nil
+}
+
 var sourceEntryKeys = []string{"class", "citation", "licence", "source_hash", "ingested_at"}
 
 func validateSourceEntry(entry any, where string) (string, error) {
@@ -194,9 +206,8 @@ func validateSourceEntry(entry any, where string) (string, error) {
 	if err := requireDate(em["ingested_at"], where); err != nil {
 		return "", err
 	}
-	lic, ok := em["licence"].(string)
-	if !ok || lic == "" {
-		return "", newSchemaError("%s: licence must be a non-empty string (explicit 'unknown' is acceptable)", where)
+	if err := requireLicence(em["licence"], where); err != nil {
+		return "", err
 	}
 	sh, ok := em["source_hash"].(string)
 	if !ok || !hex64Re.MatchString(sh) {
@@ -242,9 +253,8 @@ func validateSourceBlock(source any) error {
 			if _, ok := sm["citation"]; !ok {
 				return newSchemaError("source: citation is required for class %s", cls)
 			}
-			lic, ok := sm["licence"].(string)
-			if !ok || strings.TrimSpace(lic) == "" {
-				return newSchemaError("source: licence must be a non-empty string for class %s (explicit 'unknown' is acceptable)", cls)
+			if err := requireLicence(sm["licence"], "source"); err != nil {
+				return err
 			}
 		}
 		if isExternalClass(cls) || cls == dredgeSynthesisClass {
