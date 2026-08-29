@@ -411,9 +411,9 @@ func TestAttributionOptInFailureNoteCarriesNoAbsolutePath(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root ignores file modes")
 	}
-	setupHermetic(t)
-	repo := t.TempDir()
-	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+	home, _ := setupHermetic(t)
+	repo := filepath.Join(home, "proj")
+	if err := os.MkdirAll(filepath.Join(repo, ".git"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Install(repo, installOpts(), RefusingPrompter{}); err != nil {
@@ -439,5 +439,8 @@ func TestAttributionOptInFailureNoteCarriesNoAbsolutePath(t *testing.T) {
 	}
 	if strings.Contains(note, repo) {
 		t.Errorf("the note names the repo's absolute path: %q", note)
+	}
+	if strings.Contains(note, home) {
+		t.Errorf("the note names the home directory: %q", note)
 	}
 }
