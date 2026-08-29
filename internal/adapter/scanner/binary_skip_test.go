@@ -489,3 +489,22 @@ func TestUnscannedWhyDistinguishesShapes(t *testing.T) {
 		t.Errorf("a NUL text file must say it read as binary, got %q", why)
 	}
 }
+
+// TestBinaryHomeFollowedByAnAlnumByteStillHardFails: a raw blob has no path
+// syntax on either side of a literal, so the trailing half of the home anchor
+// is waived on bytes exactly as the leading half is. A packed record whose
+// next field starts with an alphanumeric byte must not hide the caller's home.
+func TestBinaryHomeFollowedByAnAlnumByteStillHardFails(t *testing.T) {
+	root := t.TempDir()
+	sc, err := New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc.identity = synthIdentity()
+	body := "\x89PNG\r\n\x1a\n\x00\x00\x00\x0dtEXtCreator\x00" + sc.identity.HomePath + "Q\x00\x00"
+	png := writeFile(t, root, "bare.png", body)
+	bin := scanOne(t, sc, "bare.png", png)
+	if bin.HardFails == 0 || !hasKind(bin.Findings, kindHomeSelf) {
+		t.Errorf("the caller's home followed by an alnum byte in a blob was not reported: %+v", bin)
+	}
+}

@@ -248,7 +248,10 @@ func (m identityMatchers) findings(line string, lineno int, id2sev map[string]Se
 		for _, loc := range m.homeSelf.FindAllStringIndex(line, -1) {
 			stands := homeSweepable(line, loc[0], loc[1], urls)
 			if m.bytes {
-				stands = !nameContinues(line, loc[1])
+				// A raw blob has no path syntax on either side of the
+				// literal, so neither half of the anchor applies: the
+				// long home literal is its own evidence there.
+				stands = true
 			}
 			if !stands {
 				continue
