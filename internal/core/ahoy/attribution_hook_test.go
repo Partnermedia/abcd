@@ -365,3 +365,39 @@ func TestAttributionHookHoldsItsContract(t *testing.T) {
 		}
 	})
 }
+
+// TestAttributionOptInPersistFailureIsLoud pins the loud-staging half of the
+// PERSISTED contract: when the opt-in cannot be recorded — here a config.json
+// the read-modify-write refuses to parse — the hook may still land, but the
+// receipt must say the opt-in did not, exactly as registerRepo reports a
+// skipped history registration. A silent miss leaves attributionOptedIn false,
+// raises no gap, and makes every later plain install drop the hook.
+func TestAttributionOptInPersistFailureIsLoud(t *testing.T) {
+	setupHermetic(t)
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Install(repo, installOpts(), RefusingPrompter{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".abcd", "config.json"), []byte("{not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := Install(repo, attributionOpts(), RefusingPrompter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if attributionOptedIn(repo) {
+		t.Fatal("the malformed config was rewritten; the failure under test did not occur")
+	}
+	found := false
+	for _, c := range res.Changes {
+		if strings.Contains(c, "attribution opt-in not persisted") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("the opt-in was not persisted and nothing said so (status=%q changes=%v)", res.Status, res.Changes)
+	}
+}

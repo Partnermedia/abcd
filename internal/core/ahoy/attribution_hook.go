@@ -162,9 +162,16 @@ func (a *applyCtx) stepAttributionHook() {
 // a read-modify-write that REFUSES a file it cannot parse, exactly as
 // stepConfigValues does: rebuilding a malformed config from scratch would destroy
 // whatever the maintainer had in it.
+//
+// A failure on either side is surfaced as a change-note rather than dropped, the
+// way registerRepo reports a skipped history registration: the hook is on disk
+// but the opt-in is not, so attributionOptedIn stays false, no gap is raised,
+// and a later plain install would drop the hook — the silent degradation the
+// PERSISTED contract exists to remove.
 func (a *applyCtx) recordAttributionOptIn() {
 	cfgMap, err := readConfig(a.cwd)
 	if err != nil {
+		a.changes = append(a.changes, "attribution opt-in not persisted ("+err.Error()+")")
 		return
 	}
 	if cfgMap == nil {
@@ -175,6 +182,7 @@ func (a *applyCtx) recordAttributionOptIn() {
 	}
 	setSub(cfgMap, "attribution", "hook", true)
 	if err := writeConfig(a.cwd, cfgMap); err != nil {
+		a.changes = append(a.changes, "attribution opt-in not persisted ("+err.Error()+")")
 		return
 	}
 	a.note(configPath(a.cwd))
