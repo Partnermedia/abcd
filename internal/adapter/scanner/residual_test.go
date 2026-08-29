@@ -84,14 +84,14 @@ func TestSweepCallerHomeIsAnchoredOnAPathBoundary(t *testing.T) {
 // refuse a write the sweep correctly left alone, while a home that stands as a
 // path is still reported.
 func TestSurvivingCallerHomeIgnoresAPrefixMatch(t *testing.T) {
-	if got := SurvivingCallerHome("/rootfs/etc/hosts and the /root-cause", "/root"); len(got) != 0 {
+	if _, got := SurvivingCallerHome("/rootfs/etc/hosts and the /root-cause", "/root"); len(got) != 0 {
 		t.Errorf("a prefix match was reported as the surviving home: %+v", got)
 	}
-	if got := SurvivingCallerHome("cd /root/x", "/root"); len(got) == 0 {
+	if _, got := SurvivingCallerHome("cd /root/x", "/root"); len(got) == 0 {
 		t.Error("the literal home standing as a path was not reported")
 	}
-	if got := SurvivingCallerHome("saved under /Users/zzhomeuser42.", "/base/zzhomeuser42"); len(got) == 0 { // abcd-audit:allow
-		t.Error("the caller's username segment followed by sentence punctuation was not reported")
+	if out, _ := SurvivingCallerHome("saved under /Users/zzhomeuser42.", "/base/zzhomeuser42"); strings.Contains(out, "zzhomeuser42") { // abcd-audit:allow
+		t.Errorf("the caller's username segment followed by sentence punctuation was not rewritten: %q", out)
 	}
 }
 
@@ -174,5 +174,44 @@ func TestALongerNameThanTheHomeIsStillAnotherUsersPath(t *testing.T) {
 		if strings.Contains(redacted, "zzhomeuser42") {
 			t.Errorf("the longer name survived redaction:\n%s", redacted)
 		}
+	}
+}
+
+// TestHomeBehindAURLHostIsSweptNotRefused is the differential case both
+// reviews found from opposite sides. Behind a URL host the byte before the
+// caller's home is the host's last letter — a path-segment byte — so the
+// anchored detector declined it, home_path_other declined it at its leading
+// boundary, and local_username is URL-suppressed: nothing reported it, where
+// the unanchored detector had. On the store side the backstop then either
+// refused the whole write (a /Users or /home home) or knew nothing (any other
+// root). A home inside a URL must be swept like any other, and the backstop
+// must rewrite a surviving user segment rather than refuse the write.
+func TestHomeBehindAURLHostIsSweptNotRefused(t *testing.T) {
+	for _, home := range []string{"/Users/zzhomeuser42", "/home/zzhomeuser42", "/workspaces/zzhomeuser42", "/var/root"} { // abcd-audit:allow
+		t.Run(home, func(t *testing.T) {
+			t.Setenv("HOME", home)
+			sc, err := New(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			text := "artifact at https://ci.example.com" + home + "/build.log and it failed\n"
+			findings := sc.ScanText(text, "t")
+			redacted, _ := Redact(text, findings)
+			redacted = SweepCallerHome(redacted, home)
+			redacted, resid := SurvivingCallerHome(redacted, home)
+			if len(resid) > 0 {
+				t.Errorf("the write was refused instead of rewritten: %+v", resid)
+			}
+			if strings.Contains(redacted, home) {
+				t.Errorf("the literal home behind the URL host reached the output:\n%s", redacted)
+			}
+			if !strings.Contains(redacted, "and it failed") {
+				t.Errorf("the rest of the line was lost:\n%s", redacted)
+			}
+		})
+	}
+	// The anchor still holds outside a URL: a longer name is not the home.
+	if got := SweepCallerHome("/rootfs/etc/hosts", "/root"); got != "/rootfs/etc/hosts" {
+		t.Errorf("a longer name outside a URL was swept: %q", got)
 	}
 }

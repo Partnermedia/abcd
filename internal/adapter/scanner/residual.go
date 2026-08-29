@@ -60,6 +60,7 @@ func SweepCallerHome(text, home string) string {
 	if home == "" {
 		return text
 	}
+	urls := urlSpans(text)
 	var b strings.Builder
 	from := 0
 	for {
@@ -69,7 +70,7 @@ func SweepCallerHome(text, home string) string {
 		}
 		at := from + i
 		end := at + len(home)
-		if homeStandsAsPath(text, at, end) {
+		if homeSweepable(text, at, end, urls) {
 			b.WriteString(text[from:at])
 			b.WriteByte('~')
 			from = end
@@ -99,6 +100,18 @@ func homeStandsAsPath(text string, at, end int) bool {
 	return !nameContinues(text, end)
 }
 
+// homeSweepable is homeStandsAsPath with the leading half of the anchor
+// waived inside a URL span: behind a URL host the byte before the home is the
+// host's last letter, which is a path-segment byte, yet the path IS the
+// caller's home ("https://ci.example.com/Users/me/build.log"). The trailing abcd-audit:allow
+// half still holds there, so a longer name behind a host is not swept either.
+func homeSweepable(text string, at, end int, urls []span) bool {
+	if inAnySpan(at, urls) {
+		return !nameContinues(text, end)
+	}
+	return homeStandsAsPath(text, at, end)
+}
+
 // nameContinues reports whether the name ending at text[:end] goes on: a
 // letter or digit continues it outright, and a '.' or '-' continues it only
 // when a letter or digit follows ("/root.old", "/root-cause"), so the
@@ -125,20 +138,23 @@ func isAlnumByte(b byte) bool {
 	return (b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9')
 }
 
-// SurvivingCallerHome reports any absolute path in text that still reveals the
-// caller's OWN home after SweepCallerHome: the $HOME literal standing as a path
-// (defensive — the sweep removes exactly those, so this fires only if the two
-// ever disagree), or a "/Users/<user>" / "/home/<user>" segment for the
-// caller's local username (basename of $HOME), whatever punctuation follows
-// it — only a name that goes on ("/Users/me" inside "/Users/metoo") is not a abcd-audit:allow
-// match. It is a deterministic substring check with no dependency on the
-// pattern heuristic.
-// Returned findings carry only the kind (masked Matched), enough for a refusal
-// to report without exposing raw material.
-func SurvivingCallerHome(text, home string) []Finding {
+// SurvivingCallerHome is the deterministic backstop after SweepCallerHome,
+// with no dependency on the pattern heuristic. It REWRITES what it can and
+// reports what it cannot: a "/Users/<user>" / "/home/<user>" segment for the
+// caller's local username (basename of $HOME) is rewritten to the
+// local_username placeholder wherever the name does not go on — whatever
+// punctuation follows it, and whatever precedes it, since "/Users/me" behind a abcd-audit:allow
+// URL host or under a longer root is still the caller's name — and the $HOME
+// literal standing as a path is reported (defensive: the sweep removes exactly
+// those, so this fires only if the two ever disagree). A backstop that refused
+// the write on a segment it could rewrite stopped every page that quoted the
+// caller's own path; one that rewrites keeps the write and drops the name.
+// Returned findings carry only the kind (masked Matched), enough for a
+// refusal to report without exposing raw material.
+func SurvivingCallerHome(text, home string) (string, []Finding) {
 	var out []Finding
-	if home != "" && SweepCallerHome(text, home) != text {
-		out = append(out, Finding{Kind: kindHomeSelf, Matched: "~"})
+	if home == "" {
+		return text, nil
 	}
 	user := home
 	if i := strings.LastIndex(home, "/"); i >= 0 {
@@ -146,28 +162,44 @@ func SurvivingCallerHome(text, home string) []Finding {
 	}
 	if user != "" {
 		for _, prefix := range []string{"/Users/", "/home/"} {
-			if containsUserSegment(text, prefix+user) {
-				out = append(out, Finding{Kind: kindHomeSelf, Matched: "~"})
-			}
+			text = sweepUserSegment(text, prefix+user, prefix+redactionReplacement(Finding{Kind: kindLocalUser}))
 		}
 	}
-	return out
+	if SweepCallerHome(text, home) != text {
+		out = append(out, Finding{Kind: kindHomeSelf, Matched: "~"})
+	}
+	return text, out
 }
 
-// containsUserSegment reports whether needle ("/Users/<user>" or "/home/<user>")
-// appears in text as a complete path segment, by the same rule the sweep
-// anchors on (nameContinues): "/Users/me" does not falsely match "/Users/metoo" abcd-audit:allow
-// (a different, longer username), while "/Users/me." at a sentence end does. abcd-audit:allow
-func containsUserSegment(text, needle string) bool {
+// sweepUserSegment rewrites every occurrence of needle ("/Users/<user>" or
+// "/home/<user>") that stands as a complete path segment, by the trailing
+// half of the sweep's anchor (nameContinues): "/Users/me" does not falsely abcd-audit:allow
+// match "/Users/metoo" (a different, longer username), while "/Users/me." at abcd-audit:allow
+// a sentence end does. Only the trailing half — a leading anchor here would
+// trade the old refusal for a leak, since a name behind a host or under a
+// longer root is still the caller's name.
+func sweepUserSegment(text, needle, repl string) string {
+	var b strings.Builder
 	from := 0
 	for {
 		i := strings.Index(text[from:], needle)
 		if i < 0 {
-			return false
+			break
 		}
-		if !nameContinues(text, from+i+len(needle)) {
-			return true
+		at := from + i
+		end := at + len(needle)
+		if !nameContinues(text, end) {
+			b.WriteString(text[from:at])
+			b.WriteString(repl)
+			from = end
+			continue
 		}
-		from = from + i + 1
+		b.WriteString(text[from : at+1])
+		from = at + 1
 	}
+	if from == 0 {
+		return text
+	}
+	b.WriteString(text[from:])
+	return b.String()
 }

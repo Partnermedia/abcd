@@ -228,30 +228,40 @@ func TestCaptureRedactsHomePathFollowedByPunctuation(t *testing.T) {
 }
 
 // TestSurvivingCallerHomeBackstop proves the deterministic, scanner-independent
-// backstop (Finding A part 2): it recognises a "/Users/<user>" or "/home/<user>"
+// backstop (Finding A part 2): it rewrites a "/Users/<user>" or "/home/<user>"
 // segment for the caller's own username regardless of the trailing character,
-// while rejecting a longer, different username. This is the fail-closed guard
+// leaves a longer, different username alone, and reports only the literal
+// home standing as a path — the one shape it cannot rewrite. This is the guard
 // that stands even if the scanner heuristic ever regresses.
 func TestSurvivingCallerHomeBackstop(t *testing.T) {
 	home := "/base/zzhomeuser42"
 	cases := []struct {
-		name string
-		text string
-		want bool
+		name      string
+		text      string
+		rewritten bool // the username segment is gone from the output
+		refused   bool // a finding is reported
 	}{
-		{"clean-redacted", "wrote ~/notes and /Users/[redacted-user]/x", false},
-		{"literal-home-survives", "path " + home + "/x", true},
-		{"users-user-hash", "root=/Users/zzhomeuser42#frag", true},      // abcd-audit:allow
-		{"home-user-amp", "root=/home/zzhomeuser42&x", true},            // abcd-audit:allow
-		{"users-user-eq", "cfg=/Users/zzhomeuser42=v", true},            // abcd-audit:allow
-		{"different-longer-user", "path /Users/zzhomeuser42x/y", false}, // abcd-audit:allow
-		{"different-user", "path /Users/someoneelse/y", false},          // abcd-audit:allow
+		{"clean-redacted", "wrote ~/notes and /Users/[redacted-user]/x", false, false},
+		{"literal-home-survives", "path " + home + "/x", false, true},
+		{"users-user-hash", "root=/Users/zzhomeuser42#frag", true, false},                   // abcd-audit:allow
+		{"home-user-amp", "root=/home/zzhomeuser42&x", true, false},                         // abcd-audit:allow
+		{"users-user-eq", "cfg=/Users/zzhomeuser42=v", true, false},                         // abcd-audit:allow
+		{"behind-url-host", "see https://ci.example.com/Users/zzhomeuser42/x", true, false}, // abcd-audit:allow
+		{"different-longer-user", "path /Users/zzhomeuser42x/y", false, false},              // abcd-audit:allow
+		{"different-user", "path /Users/someoneelse/y", false, false},                       // abcd-audit:allow
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := len(scanner.SurvivingCallerHome(c.text, home)) > 0
-			if got != c.want {
-				t.Errorf("SurvivingCallerHome(%q) = %v, want %v", c.text, got, c.want)
+			out, resid := scanner.SurvivingCallerHome(c.text, home)
+			if got := len(resid) > 0; got != c.refused {
+				t.Errorf("SurvivingCallerHome(%q) refused = %v, want %v", c.text, got, c.refused)
+			}
+			if c.rewritten {
+				if strings.Contains(out, "zzhomeuser42") {
+					t.Errorf("SurvivingCallerHome(%q) left the username in place: %q", c.text, out)
+				}
+			} else if out != c.text {
+				t.Errorf("SurvivingCallerHome(%q) rewrote text it should leave alone: %q", c.text, out)
 			}
 		})
 	}

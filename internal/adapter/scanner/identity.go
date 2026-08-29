@@ -232,10 +232,14 @@ func (m identityMatchers) findings(line string, lineno int, id2sev map[string]Se
 	// under HOME=/root, "/home/abc" under HOME=/home/a — so a match must stand
 	// as a path of its own, by the same anchor SweepCallerHome applies; the
 	// suppression spans below are filtered by it too, so a dropped span does
-	// not go on hiding the local_username underneath it.
+	// not go on hiding the local_username underneath it. Inside a URL the
+	// byte before the home is the host's last letter, so the leading half of
+	// the anchor is waived there (homeSweepable): a home behind a URL host is
+	// still the caller's home, and no other detector reaches it — local_username
+	// is URL-suppressed and home_path_other stops at the same byte.
 	if m.homeSelf != nil {
 		for _, loc := range m.homeSelf.FindAllStringIndex(line, -1) {
-			if !homeStandsAsPath(line, loc[0], loc[1]) {
+			if !homeSweepable(line, loc[0], loc[1], urls) {
 				continue
 			}
 			add(kindHomeSelf, loc[0]+1, line[loc[0]:loc[1]], "~")
@@ -404,7 +408,7 @@ func (m identityMatchers) localSuppressionSpans(line string, urls []span) []span
 	spans := append([]span(nil), urls...)
 	if m.homeSelf != nil {
 		for _, loc := range m.homeSelf.FindAllStringIndex(line, -1) {
-			if !homeStandsAsPath(line, loc[0], loc[1]) {
+			if !homeSweepable(line, loc[0], loc[1], urls) {
 				continue // not reported as the home, so it must not suppress the username either
 			}
 			spans = append(spans, span{loc[0], loc[1]})
