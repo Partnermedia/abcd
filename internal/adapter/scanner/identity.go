@@ -247,7 +247,7 @@ func (m identityMatchers) findings(line string, lineno int, id2sev map[string]Se
 			continue
 		}
 		matched := line[loc[0]:loc[1]]
-		if m.homeSelf != nil && m.homeSelf.MatchString(matched) {
+		if m.homeSelf != nil && homeSelfStandsIn(m.homeSelf, matched) {
 			continue
 		}
 		// /Users/Shared and friends are macOS system directories, not users
@@ -376,6 +376,21 @@ func nextPathSegmentEnd(line string, pos int) (int, bool) {
 func isHomeSegmentByte(b byte) bool {
 	return b == '.' || b == '_' || b == '-' ||
 		(b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9')
+}
+
+// homeSelfStandsIn reports whether the caller's home occurs in matched as a
+// path of its own, by the anchor the home_path_self detector applies. A
+// generic-home match whose name merely starts with the home basename
+// ("/Users/alexandra" under HOME=/Users/alex) is a DIFFERENT user's path: the abcd-audit:allow
+// anchored detector declines it as the caller's own, so the home_path_other
+// skip must decline it too, or nothing reports it at all.
+func homeSelfStandsIn(homeSelf *regexp.Regexp, matched string) bool {
+	for _, loc := range homeSelf.FindAllStringIndex(matched, -1) {
+		if homeStandsAsPath(matched, loc[0], loc[1]) {
+			return true
+		}
+	}
+	return false
 }
 
 // localSuppressionSpans returns spans where a local-username match is not a

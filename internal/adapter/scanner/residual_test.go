@@ -148,3 +148,31 @@ func TestHomePathSelfDetectionIsAnchored(t *testing.T) {
 		t.Errorf("the caller's home survived:\n%s", redacted)
 	}
 }
+
+// TestALongerNameThanTheHomeIsStillAnotherUsersPath pins the third consumer of
+// the home regex: the home_path_other skip. A /Users/<name> path whose name
+// merely starts with the caller's home basename is not the caller's home (the
+// anchored detector declines it), so it must fall through to home_path_other
+// rather than be skipped as "the caller's own" — or nothing reports it at all
+// and it is committed verbatim.
+func TestALongerNameThanTheHomeIsStillAnotherUsersPath(t *testing.T) {
+	t.Setenv("HOME", "/Users/zzhomeuser42") // abcd-audit:allow
+	sc, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, text := range []string{
+		"see /Users/zzhomeuser42andra/reports/q3.md\n", // abcd-audit:allow
+		"see /Users/zzhomeuser42_old/notes\n",          // abcd-audit:allow
+	} {
+		findings := sc.ScanText(text, "t")
+		if len(findings) == 0 {
+			t.Errorf("no detector reported %q", text)
+			continue
+		}
+		redacted, _ := Redact(text, findings)
+		if strings.Contains(redacted, "zzhomeuser42") {
+			t.Errorf("the longer name survived redaction:\n%s", redacted)
+		}
+	}
+}

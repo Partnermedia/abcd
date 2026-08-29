@@ -669,8 +669,6 @@ type parsedPage struct {
 	fm map[string]any
 	// body is the text after the frontmatter when the file split, else text.
 	body string
-	// split reports whether the file split into a frontmatter region and body.
-	split bool
 }
 
 // parsePage splits text once and parses its frontmatter once.
@@ -680,7 +678,6 @@ func parsePage(text string) parsedPage {
 	if err != nil {
 		return p
 	}
-	p.split = true
 	p.body = body
 	if fm, err := parseFrontmatter("---\n" + region + "---\n"); err == nil {
 		p.fm = fm
