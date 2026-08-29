@@ -82,60 +82,59 @@ func WithStoreLock(repoRoot string, fn func() error) error {
 	return fn()
 }
 
-// validatedMemoryDir returns <repoRoot>/.abcd/memory, creating it if absent.
-// Each owned segment is lstat-refused as a symlink/non-dir.
-func validatedMemoryDir(repoRoot string) (string, error) {
+// memoryDir is the ONE walk that resolves <repoRoot>/.abcd/memory for every
+// entry point, read or write. Each owned segment is lstat-refused as a symlink
+// or non-directory, so a committed `.abcd/memory` DIRECTORY symlink (git mode
+// 120000 pointing at an out-of-repo tree) can neither be walked, read, nor
+// written into (GHSA-72rp-qxm2-r8vq). The leaf-guarded reads (fsutil.ReadGuarded,
+// O_NOFOLLOW) only bind the LEAF; they do NOT contain a symlinked ANCESTOR
+// directory, which is exactly the shape this guards. Callers resolve the store
+// through this once, up front, and refuse on error before any
+// WalkDir/ReadDir/ReadFile/MkdirAll touches the path.
+//
+// create says what a missing segment means: the write side materialises it,
+// the read/lint side must not (a read or a health-check never creates the
+// store) and reports present=false instead. The returned path is ALWAYS the
+// canonical Dir(repoRoot), present or not, so a caller never re-derives it.
+// One walker rather than a read copy and a write copy, because this is the
+// guard: two copies means a hardening fix to one leaves the other open.
+func memoryDir(repoRoot string, create bool) (string, bool, error) {
 	current := repoRoot
 	for _, segment := range []string{".abcd", "memory"} {
 		current = filepath.Join(current, segment)
 		fi, err := os.Lstat(current)
 		if err != nil {
 			if os.IsNotExist(err) {
+				if !create {
+					return Dir(repoRoot), false, nil
+				}
 				if err := os.Mkdir(current, 0o755); err != nil {
-					return "", err
+					return Dir(repoRoot), false, err
 				}
 				continue
 			}
-			return "", err
+			return Dir(repoRoot), false, err
 		}
 		if fi.Mode()&os.ModeSymlink != 0 || !fi.IsDir() {
-			return "", &UnsafeStorePathError{Msg: "memory store segment is a symlink or non-directory: " + current}
+			return Dir(repoRoot), false, &UnsafeStorePathError{Msg: "memory store segment is a symlink or non-directory: " + current}
 		}
 	}
-	return current, nil
+	return Dir(repoRoot), true, nil
 }
 
-// safeMemoryDir is the read/lint counterpart of validatedMemoryDir: it resolves
-// <repoRoot>/.abcd/memory while refusing any owned segment that is a symlink or
-// a non-directory, so a committed `.abcd/memory` DIRECTORY symlink (git mode
-// 120000 pointing at an out-of-repo tree) can neither be walked, read, nor
-// written into. Unlike validatedMemoryDir it NEVER creates a missing segment —
-// a read or a health-check must not materialise the store — so it returns
-// (path, present, err): present=false when the store (or an ancestor) is simply
-// absent, and a typed *UnsafeStorePathError when a segment is a symlink or
-// non-directory.
-//
-// The leaf-guarded reads (fsutil.ReadGuarded, O_NOFOLLOW) only bind the LEAF;
-// they do NOT contain a symlinked ANCESTOR directory, which is exactly the shape
-// this guards. Callers resolve the store through this once, up front, and refuse
-// on error before any WalkDir/ReadDir/ReadFile/MkdirAll touches the path
-// (GHSA-72rp-qxm2-r8vq).
+// validatedMemoryDir is the write side of memoryDir: it returns the store,
+// creating a missing segment.
+func validatedMemoryDir(repoRoot string) (string, error) {
+	mem, _, err := memoryDir(repoRoot, true)
+	return mem, err
+}
+
+// safeMemoryDir is the read/lint side of memoryDir: it never creates, and
+// reports present=false when the store (or an ancestor) is simply absent — the
+// path it returns is still the canonical one, so a caller's downstream joins
+// stay absolute and fail cleanly as absent.
 func safeMemoryDir(repoRoot string) (string, bool, error) {
-	current := repoRoot
-	for _, segment := range []string{".abcd", "memory"} {
-		current = filepath.Join(current, segment)
-		fi, err := os.Lstat(current)
-		if err != nil {
-			if os.IsNotExist(err) {
-				return "", false, nil
-			}
-			return "", false, err
-		}
-		if fi.Mode()&os.ModeSymlink != 0 || !fi.IsDir() {
-			return "", false, &UnsafeStorePathError{Msg: "memory store segment is a symlink or non-directory: " + current}
-		}
-	}
-	return current, true, nil
+	return memoryDir(repoRoot, false)
 }
 
 // RegistryMerge recomputes the COMPLETE new registry from the registry as
