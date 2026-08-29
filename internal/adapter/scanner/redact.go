@@ -100,12 +100,22 @@ func redactLine(line string, fs []Finding) (string, int) {
 // a MAC's vendor bytes and final octet, and a hostname's head and suffix, which
 // is enough to re-identify the machine the redaction was meant to hide.
 func IsIdentityKind(kind string) bool {
-	switch kind {
-	case kindHomeSelf, kindHomeOther, kindRealEmail, kindRealName, kindGithubUser, kindLocalUser,
-		kindNetIPv4, kindNetIPv6, kindNetMAC, kindNetLANHost, kindNetDeviceHost:
-		return true
+	for _, k := range identityKinds() {
+		if k == kind {
+			return true
+		}
 	}
 	return false
+}
+
+// identityKinds enumerates every identity kind IsIdentityKind accepts. It is a
+// function rather than a var so the byte-scan policy table can be checked
+// against it in full (TestEveryIdentityKindIsClassifiedForBytes).
+func identityKinds() []string {
+	return []string{
+		kindHomeSelf, kindHomeOther, kindRealEmail, kindRealName, kindGithubUser, kindLocalUser,
+		kindNetIPv4, kindNetIPv6, kindNetMAC, kindNetLANHost, kindNetDeviceHost,
+	}
 }
 
 // redactionReplacement maps a finding to the text that replaces its raw span.

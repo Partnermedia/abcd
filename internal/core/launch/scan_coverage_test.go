@@ -108,13 +108,13 @@ func TestBinaryPayloadSecretRefuses(t *testing.T) {
 		t.Fatalf("secret in the skip-listed .png was not caught by the scan: %+v", report.Scan)
 	}
 	var sawBinary bool
-	for _, p := range report.Scan.ScannedBinary {
+	for _, p := range report.Scan.ContentUnverified {
 		if p == "docs/assets/notes.png" {
 			sawBinary = true
 		}
 	}
 	if !sawBinary {
-		t.Errorf("the .png must be reported as ScannedBinary, got %+v", report.Scan)
+		t.Errorf("the .png must be reported as ContentUnverified, got %+v", report.Scan)
 	}
 	if len(report.WouldRefuseOn) == 0 || report.WouldPublish {
 		t.Errorf("a secret in a payload binary must refuse: refuse=%v publish=%v", report.WouldRefuseOn, report.WouldPublish)
@@ -144,32 +144,51 @@ func TestRepoPayloadBinariesScanClean(t *testing.T) {
 	if scan.Unavailable {
 		t.Fatalf("scanner unavailable on the repo's own payload: %s", scan.UnavailableReason)
 	}
-	if len(scan.ScannedBinary) == 0 {
-		t.Fatalf("the repo payload is expected to carry at least one binary asset; none was scanned: %+v", scan)
+	if len(scan.ContentUnverified) == 0 {
+		t.Fatalf("the repo payload is expected to carry at least one image asset; none was reported: %+v", scan)
 	}
 	binary := map[string]bool{}
-	for _, p := range scan.ScannedBinary {
+	for _, p := range append(append([]string{}, scan.ScannedBinary...), scan.ContentUnverified...) {
 		binary[p] = true
+	}
+	for _, p := range scan.ContentUnverified {
+		if !strings.HasSuffix(p, ".png") {
+			t.Errorf("only the image assets are expected as ContentUnverified, got %s", p)
+		}
 	}
 	for _, f := range scan.Findings {
 		if binary[f.File] {
-			t.Errorf("secret rule %s tripped on a genuine binary asset %s (line %d)", f.Kind, f.File, f.Line)
+			t.Errorf("byte rule %s tripped on a genuine binary asset %s (line %d)", f.Kind, f.File, f.Line)
 		}
 	}
 	if len(scan.Unscanned) != 0 {
-		t.Errorf("the repo payload must leave no coverage gap: %v", scan.Unscanned)
+		t.Errorf("the repo payload must leave no coverage gap: %v (%v)", scan.Unscanned, scan.UnscannedWhy)
 	}
 }
 
-// TestScanDetailNamesUnverifiedContainers: the gate row must say out loud
-// which files the byte scan could not content-verify.
-func TestScanDetailNamesUnverifiedContainers(t *testing.T) {
+// TestScanDetailSeparatesCoverageTiers: the gate row must not fold the
+// byte-scanned files into the full-rule-set count, and must say out loud which
+// files the byte scan could not content-verify.
+func TestScanDetailSeparatesCoverageTiers(t *testing.T) {
 	detail := scanDetail(scanner.ScanResult{
-		FilesScanned:        3,
-		ScannedBinary:       []string{"a.png"},
-		ContainerUnverified: []string{"p.tgz", "q.zip"},
+		FilesScanned:      3,
+		ScannedBinary:     []string{"a.ico"},
+		ContentUnverified: []string{"p.tgz", "q.png"},
 	})
-	if !strings.Contains(detail, "2 container(s) not content-verified") {
-		t.Fatalf("scanDetail must name unverified containers, got %q", detail)
+	want := "scanned 3 files with the full rule set, 1 binary (byte rules only), 2 compressed (not content-verified), 0 hard-fails"
+	if detail != want {
+		t.Fatalf("scanDetail = %q, want %q", detail, want)
+	}
+}
+
+// TestUnscannedRefusalCarriesWhy: the refusal line names the reason, so an
+// asset over the cap is distinguishable from an I/O error.
+func TestUnscannedRefusalCarriesWhy(t *testing.T) {
+	reasons := scanRefusals(scanner.ScanResult{
+		Unscanned:    []string{"big.pdf"},
+		UnscannedWhy: map[string]string{"big.pdf": "over the 4 MiB scan cap"},
+	})
+	if len(reasons) != 1 || !strings.Contains(reasons[0], "big.pdf (over the 4 MiB scan cap)") {
+		t.Fatalf("refusal must carry the why, got %v", reasons)
 	}
 }
