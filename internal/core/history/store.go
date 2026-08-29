@@ -11,7 +11,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/intentdriven/abcd/internal/adapter/scanner"
 	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
@@ -106,71 +105,6 @@ func repoLock(tdir string) (func(), error) {
 // with nanosecond precision, does not collide within a session.
 func recordFilename(capturedAt time.Time, sessionID string) string {
 	return capturedAt.UTC().Format("20060102T150405.000000000Z") + "-" + sessionID + ".md"
-}
-
-// callerHome resolves the caller's home directory exactly as the scanner's
-// ProbeIdentity does — the HOME env first (so tests and redirected runs agree),
-// then os.UserHomeDir — trimmed of any trailing slash. Empty when neither
-// resolves.
-func callerHome() string {
-	home := os.Getenv("HOME")
-	if home == "" {
-		if h, err := os.UserHomeDir(); err == nil {
-			home = h
-		}
-	}
-	return strings.TrimRight(home, "/")
-}
-
-// survivingCallerHome reports any absolute path in text that still reveals the
-// caller's OWN home after the literal $HOME sweep: the $HOME literal itself
-// (defensive — the sweep should have removed it), or a "/Users/<user>" /
-// "/home/<user>" segment for the caller's local username (basename of $HOME),
-// regardless of the character that follows it (trailing punctuation must never
-// excuse a leak). It is a deterministic substring check with no dependency on
-// the scanner heuristic. Returned findings carry only the kind (masked Matched),
-// enough for RedactionResidualError to report without exposing raw material.
-func survivingCallerHome(text, home string) []scanner.Finding {
-	var out []scanner.Finding
-	if home != "" && strings.Contains(text, home) {
-		out = append(out, scanner.Finding{Kind: "home_path_self", Matched: "~"})
-	}
-	user := home
-	if i := strings.LastIndex(home, "/"); i >= 0 {
-		user = home[i+1:]
-	}
-	if user != "" {
-		for _, prefix := range []string{"/Users/", "/home/"} {
-			if containsUserSegment(text, prefix+user) {
-				out = append(out, scanner.Finding{Kind: "home_path_self", Matched: "~"})
-			}
-		}
-	}
-	return out
-}
-
-// containsUserSegment reports whether needle ("/Users/<user>" or "/home/<user>")
-// appears in text as a complete path segment: the rune following it must not be
-// a username-continuation rune ([A-Za-z0-9._-]), so "/Users/me" does not falsely abcd-audit:allow
-// match "/Users/metoo" (a different, longer username). abcd-audit:allow
-func containsUserSegment(text, needle string) bool {
-	from := 0
-	for {
-		i := strings.Index(text[from:], needle)
-		if i < 0 {
-			return false
-		}
-		end := from + i + len(needle)
-		if end >= len(text) || !isPathUserByte(text[end]) {
-			return true
-		}
-		from = from + i + 1
-	}
-}
-
-func isPathUserByte(b byte) bool {
-	return b == '.' || b == '_' || b == '-' ||
-		(b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9')
 }
 
 // frontmatter fields (flat, one scalar per line) — a small fixed schema parsed

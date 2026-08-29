@@ -1,7 +1,6 @@
 package memory
 
 import (
-	"os"
 	"strings"
 	"unicode/utf8"
 
@@ -50,7 +49,7 @@ func newStoreRedactor(repoRoot string) (*storeRedactor, error) {
 	if unavail, reason := sc.Unavailable(); unavail {
 		return nil, newIngestError("refusing to ingest with a degraded scanner: %s", reason)
 	}
-	return &storeRedactor{sc: sc, home: memoryCallerHome()}, nil
+	return &storeRedactor{sc: sc, home: scanner.CallerHome()}, nil
 }
 
 // redactText sanitises one free-text blob bound for the store. label is the
@@ -72,7 +71,7 @@ func (r *storeRedactor) redactText(text, label string) (string, int, error) {
 			return "", 0, newIngestError("refusing to write: the caller's home path survived redaction")
 		}
 	}
-	if resid := memoryBlockingResidual(r.sc.ScanText(redacted, label)); len(resid) > 0 {
+	if resid := scanner.BlockingResidual(r.sc.ScanText(redacted, label)); len(resid) > 0 {
 		kinds := make([]string, 0, len(resid))
 		for _, f := range resid {
 			kinds = append(kinds, f.Kind)
@@ -112,31 +111,4 @@ func isRedactableText(data []byte) bool {
 		}
 	}
 	return utf8.Valid(data)
-}
-
-// memoryBlockingResidual mirrors history.blockingResidual: a stage-two rescan
-// finding blocks the write when it is a hard_fail secret OR any identity/network
-// span (those are shape heuristics that warn by design, so a surviving one would
-// otherwise be committed in silence).
-func memoryBlockingResidual(findings []scanner.Finding) []scanner.Finding {
-	var out []scanner.Finding
-	for _, f := range findings {
-		if f.Severity == scanner.SeverityHardFail || scanner.IsIdentityKind(f.Kind) {
-			out = append(out, f)
-		}
-	}
-	return out
-}
-
-// memoryCallerHome resolves the caller's home directory as the scanner's
-// ProbeIdentity does — $HOME first (so tests and redirected runs agree), then
-// os.UserHomeDir — trimmed of a trailing slash. Empty when neither resolves.
-func memoryCallerHome() string {
-	home := os.Getenv("HOME")
-	if home == "" {
-		if h, err := os.UserHomeDir(); err == nil {
-			home = h
-		}
-	}
-	return strings.TrimRight(home, "/")
 }

@@ -66,7 +66,7 @@ type CaptureResult struct {
 
 // RedactionResidualError is returned by Capture when the stage-two re-scan finds
 // a BLOCKING span that survived redaction — any identity or network span
-// whatever its severity, plus every hard_fail one (blockingResidual). NO file is
+// whatever its severity, plus every hard_fail one (scanner.BlockingResidual). NO file is
 // written. It carries the surviving findings' kinds/locations only — the scanner
 // has already masked their Matched fields, so no raw secret material is exposed.
 type RedactionResidualError struct {
@@ -174,16 +174,16 @@ func Capture(repoRoot, rootSHA, sessionID string, raw []byte, kind string) (Capt
 	// heuristic dropped would slip through both stages. This literal sweep
 	// collapses every remaining occurrence of the resolved $HOME to "~", then
 	// fails closed if any absolute path still reveals the caller's own home.
-	if home := callerHome(); home != "" {
+	if home := scanner.CallerHome(); home != "" {
 		redacted = strings.ReplaceAll(redacted, home, "~")
-		if resid := survivingCallerHome(redacted, home); len(resid) > 0 {
+		if resid := scanner.SurvivingCallerHome(redacted, home); len(resid) > 0 {
 			return CaptureResult{Residual: resid}, &RedactionResidualError{Residual: resid}
 		}
 	}
 
 	// Stage two — verify. Re-scan the redacted text; a surviving finding that
 	// carries a leak blocks the write (fail-closed).
-	residual := blockingResidual(sc.ScanText(redacted, "transcript"))
+	residual := scanner.BlockingResidual(sc.ScanText(redacted, "transcript"))
 	if len(residual) > 0 {
 		return CaptureResult{Residual: residual}, &RedactionResidualError{Residual: residual}
 	}
@@ -266,24 +266,6 @@ func Read(rootSHA, sessionOrFile string) (Record, []byte, error) {
 	}
 	rec.Path = match.Path
 	return rec, []byte(body), nil
-}
-
-// blockingResidual filters a stage-two rescan to the findings that must refuse
-// the write. Severity alone is the wrong gate here: the two hostname patterns
-// are shape heuristics and therefore warn by design, so a LAN host or device
-// name that survived Stage-1 redaction was written to disk in silence — the very
-// class of leak this store exists to stop. Any surviving IDENTITY or NETWORK
-// span fails the write whatever its severity; everything else still gates on
-// hard_fail. After the Stage-1 detector fixes this path is rarely reachable,
-// which is what a backstop is for.
-func blockingResidual(findings []scanner.Finding) []scanner.Finding {
-	var out []scanner.Finding
-	for _, f := range findings {
-		if f.Severity == scanner.SeverityHardFail || scanner.IsIdentityKind(f.Kind) {
-			out = append(out, f)
-		}
-	}
-	return out
 }
 
 // countBuckets rolls the redacted findings into the two audit counters stamped

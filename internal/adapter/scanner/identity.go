@@ -1,7 +1,6 @@
 package scanner
 
 import (
-	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -74,14 +73,8 @@ func ProbeIdentity(repoRoot string) Identity {
 			id.GitRemoteUsername = m[1]
 		}
 	}
-	home := os.Getenv("HOME")
-	if home == "" {
-		if h, err := os.UserHomeDir(); err == nil {
-			home = h
-		}
-	}
-	if home != "" {
-		id.HomePath = strings.TrimRight(home, "/")
+	if home := CallerHome(); home != "" {
+		id.HomePath = home
 		if i := strings.LastIndex(id.HomePath, "/"); i >= 0 {
 			id.HomeUser = id.HomePath[i+1:]
 		}

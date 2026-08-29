@@ -246,9 +246,9 @@ func TestSurvivingCallerHomeBackstop(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := len(survivingCallerHome(c.text, home)) > 0
+			got := len(scanner.SurvivingCallerHome(c.text, home)) > 0
 			if got != c.want {
-				t.Errorf("survivingCallerHome(%q) = %v, want %v", c.text, got, c.want)
+				t.Errorf("SurvivingCallerHome(%q) = %v, want %v", c.text, got, c.want)
 			}
 		})
 	}
@@ -566,11 +566,11 @@ func TestStageTwoGateBlocksSurvivingWarnIdentifier(t *testing.T) {
 	if hostname.Severity != scanner.SeverityWarn {
 		t.Fatalf("fixture must be warn-severity to exercise the gate, got %q", hostname.Severity)
 	}
-	if len(blockingResidual(findings)) == 0 {
+	if len(scanner.BlockingResidual(findings)) == 0 {
 		t.Errorf("a surviving warn-severity hostname must refuse the write: %+v", findings)
 	}
 	// A clean rescan still writes.
-	if got := blockingResidual(nil); len(got) != 0 {
+	if got := scanner.BlockingResidual(nil); len(got) != 0 {
 		t.Errorf("a clean rescan must not block: %+v", got)
 	}
 }
