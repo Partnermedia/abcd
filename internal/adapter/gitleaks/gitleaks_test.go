@@ -243,9 +243,9 @@ func TestAugmentReportsEveryOccurrenceOnALine(t *testing.T) {
 	text := "sent " + secret + " got back " + secret + "\n"
 	report := `[{"RuleID":"generic-api-key","Secret":"` + secret + `","StartColumn":6},` +
 		`{"RuleID":"generic-api-key","Secret":"` + secret + `","StartColumn":56}]`
-	a := &Adapter{LookPath: foundLookPath, Runner: &fakeRunner{report: report}}
+	a := &Adapter{LookPath: foundLookPath(t), Runner: &fakeRunner{report: report}}
 
-	findings, err := a.Augment(context.Background(), Config{Enabled: true}, text, "transcript")
+	findings, err := a.Augment(context.Background(), t.TempDir(), Config{Enabled: true}, text, "transcript")
 	if err != nil {
 		t.Fatalf("Augment: %v", err)
 	}
