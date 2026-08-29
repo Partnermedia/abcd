@@ -571,8 +571,9 @@ func TestBuildMarksItsOutput(t *testing.T) {
 	if !containsString(res.Files, siteMarkerName) {
 		t.Errorf("the build did not report writing %s: %v", siteMarkerName, res.Files)
 	}
-	if body := outFile(t, out, siteMarkerName); body != siteMarkerBody {
-		t.Errorf("the marker reads %q, want %q", body, siteMarkerBody)
+	want := string(siteMarker(f.gitOut("rev-list", "--max-parents=0", "HEAD")))
+	if body := outFile(t, out, siteMarkerName); body != want {
+		t.Errorf("the marker reads %q, want %q", body, want)
 	}
 }
 
@@ -588,7 +589,8 @@ func TestBuildClearsTheWreckageOfAFailedBuild(t *testing.T) {
 	out := t.TempDir()
 
 	// The wreckage a killed build leaves: the marker, and some of the tree.
-	if err := os.WriteFile(filepath.Join(out, siteMarkerName), []byte(siteMarkerBody), 0o644); err != nil {
+	marker := siteMarker(f.gitOut("rev-list", "--max-parents=0", "HEAD"))
+	if err := os.WriteFile(filepath.Join(out, siteMarkerName), marker, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(out, "index.html"), []byte("<!-- half a page"), 0o644); err != nil {
@@ -618,7 +620,10 @@ func TestBuildClearsTheWreckageOfAFailedBuild(t *testing.T) {
 // bytes. It is present at every instant.
 func TestPurgeKeepsTheMarker(t *testing.T) {
 	out := t.TempDir()
-	for _, name := range []string{siteMarkerName, "index.html", "site.css"} {
+	if err := os.WriteFile(filepath.Join(out, siteMarkerName), siteMarker(""), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"index.html", "site.css"} {
 		if err := os.WriteFile(filepath.Join(out, name), []byte("x"), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -644,7 +649,7 @@ func TestPurgeKeepsTheMarker(t *testing.T) {
 	}
 
 	// And the directory still reads as ours, at every point in between.
-	state, err := inspectOutDir(out)
+	state, err := inspectOutDir(out, "")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -21,10 +21,12 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"syscall"
 
 	"github.com/intentdriven/abcd/internal/core/changelog"
 	"github.com/intentdriven/abcd/internal/core/lint"
 	"github.com/intentdriven/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/gitutil"
 )
 
 // DefaultOutDir is where the build writes when the caller names no directory.
@@ -43,27 +45,6 @@ var copiedSources = []struct{ src, dst string }{
 	{"site-src/record.js", "record.js"},
 }
 
-// The marker that makes the output directory identifiable as this build's own.
-//
-// The build REWRITES its output tree rather than adding to it, so it has to
-// empty the directory first — and emptying a directory that a person named on a
-// command line is not something to do on a guess. The marker is the proof: the
-// build clears a directory only when it finds its own marker there, and refuses
-// a non-empty directory without one. That makes deleting somebody else's files
-// structurally impossible rather than merely unlikely.
-//
-// The name begins with a dot so it reads as tooling metadata rather than
-// content. Static-asset hosts conventionally skip dotfiles, but this build does
-// not depend on that and does not assert it: the marker names no path, carries
-// no secret and describes only itself, so a host that did serve it would leak
-// nothing. It is excluded from the header-coverage walk as build metadata, on
-// the same footing as `_headers` and `_redirects`.
-const (
-	siteMarkerName = ".abcd-site-build"
-	siteMarkerBody = "Output of `abcd site build`. This directory is rewritten on every build;" +
-		" the presence of this file is what permits that instead of a refusal.\n"
-)
-
 // outDirState is what the build found where it is about to write.
 type outDirState int
 
@@ -75,7 +56,12 @@ const (
 )
 
 // inspectOutDir reports what is in the output directory, without changing it.
-func inspectOutDir(outDir string) (outDirState, error) {
+// outDir has passed resolveOutDir; rootCommit is the repository's identity the
+// marker must name for the directory to read as ours. A marker that is present
+// but says something else — another repository's, a symlink, an oversize or
+// non-regular file — makes the directory foreign, not an error: the build
+// cannot tell it apart from one it did not write, which is the refusal.
+func inspectOutDir(outDir, rootCommit string) (outDirState, error) {
 	entries, err := os.ReadDir(outDir)
 	switch {
 	case os.IsNotExist(err):
@@ -85,10 +71,14 @@ func inspectOutDir(outDir string) (outDirState, error) {
 	case len(entries) == 0:
 		return outDirEmpty, nil
 	}
-	switch _, err := os.Stat(filepath.Join(outDir, siteMarkerName)); {
+	data, err := fsutil.ReadGuarded(filepath.Join(outDir, siteMarkerName), maxSiteMarkerBytes)
+	switch {
 	case err == nil:
-		return outDirOurs, nil
-	case os.IsNotExist(err):
+		if markerIdentifies(data, rootCommit) {
+			return outDirOurs, nil
+		}
+		return outDirForeign, nil
+	case os.IsNotExist(err), errors.Is(err, fsutil.ErrNotRegular), errors.Is(err, fsutil.ErrTooBig), errors.Is(err, syscall.ELOOP):
 		return outDirForeign, nil
 	default:
 		return 0, err
@@ -104,14 +94,16 @@ func inspectOutDir(outDir string) (outDirState, error) {
 // empty directory" nor "use one an earlier build wrote" tells that reader
 // anything they can act on. Emptying it themselves does.
 func errForeignOutDir(outDir string) error {
-	return fmt.Errorf("site: %s is not empty and holds no %s, so this build cannot tell it apart from a directory it did not write; refusing to remove it — point --out at an empty directory, or empty this one yourself if it is an old build's output",
+	return fmt.Errorf("site: %s is not empty and holds no %s naming this repository's build, so this build cannot tell it apart from a directory it did not write; refusing to remove it — point --out at an empty directory, or empty this one yourself if it is an old build's output",
 		outDir, siteMarkerName)
 }
 
 // purgeOutDir clears a directory a previous build wrote, keeping the marker.
 //
 // The ENTRIES go, not the directory: a caller may be sitting in it, it may be a
-// symlink or a mount point, and re-creating it would change what it is.
+// mount point, and re-creating it would change what it is. outDir has passed
+// resolveOutDir and refuseTrackedOutDir — this is the mechanism, not the
+// decision.
 //
 // The marker STAYS, and that is the whole subtlety here. `os.ReadDir` returns
 // names in order and `.abcd-site-build` sorts ahead of everything, so removing
@@ -310,16 +302,9 @@ var ErrNoManifest = errors.New("site: this repo declares no site composition (" 
 // Build renders the site into req.OutDir.
 func Build(req Request) (Result, error) {
 	repoRoot := req.RepoRoot
-	outDir := req.OutDir
-	if outDir == "" {
-		outDir = DefaultOutDir
-	}
-	if !filepath.IsAbs(outDir) {
-		abs, err := filepath.Abs(outDir)
-		if err != nil {
-			return Result{}, err
-		}
-		outDir = abs
+	outDir, err := resolveOutDir(repoRoot, req.OutDir)
+	if err != nil {
+		return Result{}, err
 	}
 
 	// The two version instructions are opposites — "stamp exactly this" and
@@ -334,12 +319,18 @@ func Build(req Request) (Result, error) {
 	// for nothing. The PURGE waits, though: it happens at the first write, so a
 	// failure anywhere in between leaves the previous output standing rather than
 	// clearing a good tree in exchange for one that never arrived.
-	outState, err := inspectOutDir(outDir)
+	rootCommit := gitutil.RootCommit(repoRoot)
+	outState, err := inspectOutDir(outDir, rootCommit)
 	if err != nil {
 		return Result{}, err
 	}
 	if outState == outDirForeign {
 		return Result{}, errForeignOutDir(outDir)
+	}
+	if outState == outDirOurs {
+		if err := refuseTrackedOutDir(outDir); err != nil {
+			return Result{}, err
+		}
 	}
 
 	manifest, err := LoadManifest(repoRoot)
@@ -471,6 +462,13 @@ func Build(req Request) (Result, error) {
 	// build that ever ran here. A file left by an earlier one is stale the moment
 	// this build does not rewrite it, and it is stale INVISIBLY — it is served,
 	// and it looks exactly like a file that built.
+	//
+	// The gate runs again here, at the instant of the first write: the render
+	// between the early refusal and this point takes real time, and the path is
+	// judged as it is now, not as it was.
+	if _, err := resolveOutDir(repoRoot, outDir); err != nil {
+		return Result{}, err
+	}
 	if outState == outDirOurs {
 		if err := purgeOutDir(outDir); err != nil {
 			return Result{}, err
@@ -478,6 +476,11 @@ func Build(req Request) (Result, error) {
 	}
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return Result{}, err
+	}
+	// The containment root opens what is at the path NOW; a leaf that became a
+	// link since the gate ran would be opened at its target.
+	if !fsutil.IsRealDir(outDir) {
+		return Result{}, fmt.Errorf("site: %s is not a real directory; refusing to write", outDir)
 	}
 	root, err := os.OpenRoot(outDir)
 	if err != nil {
@@ -502,7 +505,7 @@ func Build(req Request) (Result, error) {
 	// written last, the wreckage of a failed build would carry none, and every
 	// later build would refuse it — the tool jammed on its own debris, freed only
 	// by hand.
-	if err := write(siteMarkerName, []byte(siteMarkerBody)); err != nil {
+	if err := write(siteMarkerName, siteMarker(rootCommit)); err != nil {
 		return Result{}, err
 	}
 	if err := write("index.html", []byte(html)); err != nil {

@@ -58,8 +58,12 @@ abcd site check --out DIR    # gate an already-rendered tree; exit 1 on findings
 `ui.json` word `unreleased` with the commit in place of a version,
 `record.json` carries `"preview": true`, and pinning `--version` alongside it
 refuses. A build into a non-empty directory purges it only when the tree
-carries the `.abcd-site-build` marker a previous build wrote, and refuses
-loudly otherwise: the build cannot remove a directory it did not write.
+carries the `.abcd-site-build` marker a previous build of this repository
+wrote and git tracks nothing in it, and refuses loudly otherwise: the build
+cannot remove a directory it did not write. An output path with a symlink at
+its leaf or at an ancestor inside the repository, the repository root or a
+directory containing it, and any directory holding `.git` are refused before
+anything is read.
 
 `build` reads, and reads nothing else:
 
