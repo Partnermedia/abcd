@@ -654,8 +654,9 @@ func Describe(repoRoot, outDir string) (Status, error) {
 	}
 	gated, gerr := resolveOutDir(repoRoot, abs)
 	if gerr != nil {
-		// Redacted at the source, so the text board and --json agree: machine
-		// output never carries an absolute developer-identity path (iss-81).
+		// Redacted at the source, so the text board and --json agree on this
+		// field: OutRefused never carries an absolute developer-identity path
+		// (iss-81; OutDir itself is captured as iss-2608291957114882).
 		st.OutRefused = fsutil.RedactHome(fsutil.RedactRoot(gerr.Error(), repoRoot, "."))
 		return st, nil
 	}

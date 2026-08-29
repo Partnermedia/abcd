@@ -170,7 +170,14 @@ func resolveOutDir(repoRoot, outDir string) (string, error) {
 // lacks answers with the flag's text and the path on two lines, and a boundary
 // made of that matches no real path — every refusal keyed on it would vanish.
 // `--show-toplevel` is always absolute, so nothing but a single absolute line
-// is a toplevel. Where there is no usable answer the outcome depends on what
+// is a toplevel — and shape is not enough: a repo-local `core.worktree` (which
+// the isolated runner does not neutralise, and an archive-shipped checkout can
+// carry) makes the answer name a decoy elsewhere, and the runner's trimming
+// makes a checkout whose name ends in a space answer with a path naming
+// nothing. So the answer must also CONTAIN repoRoot, compared as real
+// locations under the case rule every other containment check uses; a
+// boundary that does not contain the invoking directory is no boundary. Where
+// there is no usable answer the outcome depends on what
 // repoRoot is: outside anything repo-shaped there is no checkout above it to
 // defend and repoRoot itself is the boundary; inside something repo-shaped a
 // git that cannot answer is a refusal, the same fail-closed branch
@@ -178,11 +185,12 @@ func resolveOutDir(repoRoot, outDir string) (string, error) {
 // to is the one the rule exists to widen past.
 func checkoutRoot(repoRoot string) (string, error) {
 	top, err := gitutil.Run(repoRoot, "rev-parse", "--show-toplevel")
-	if err == nil && filepath.IsAbs(top) && !strings.ContainsRune(top, '\n') {
+	if err == nil && filepath.IsAbs(top) && !strings.ContainsRune(top, '\n') &&
+		fsutil.PathWithin(fsutil.RealExistingPath(repoRoot), fsutil.RealExistingPath(top), fsutil.CaseFoldingFS()) {
 		return top, nil
 	}
 	if gitutil.RepoShaped(repoRoot) {
-		reason := "an answer that is not one absolute path"
+		reason := "an answer that is not one absolute path containing this directory"
 		if err != nil {
 			reason = err.Error()
 		}
@@ -194,6 +202,8 @@ func checkoutRoot(repoRoot string) (string, error) {
 // beforeOutDirPurge runs between the write-instant decision and the first
 // removal. It is a test seam: a test swaps the directory here to prove the
 // purge goes through the handle and not the path. Production leaves it empty.
+// The var is unsynchronised and this package's tests run sequentially: do not
+// add t.Parallel() to a test in this package.
 var beforeOutDirPurge = func(outDir string) {}
 
 // regateOutDir is the write-instant gate: every rule the early refusal

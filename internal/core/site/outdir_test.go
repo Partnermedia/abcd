@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/intentdriven/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/gittest"
 )
 
 func fsutilCaseFolds() bool { return fsutil.CaseFoldingFS() }
@@ -444,5 +445,46 @@ func TestDescribeJSONCarriesNoAbsolutePath(t *testing.T) {
 	}
 	if strings.Contains(string(js), f.Root()) {
 		t.Errorf("the JSON board carries the absolute repository path: %s", js)
+	}
+}
+
+// TestCheckoutRootRefusesADecoyWorktree: a repo-local `core.worktree` (an
+// archive-shipped checkout can carry one) makes `rev-parse --show-toplevel`
+// answer somewhere else — one absolute line, no error. A boundary that does
+// not contain the invoking directory is no boundary; the internal link must
+// still be refused.
+func TestCheckoutRootRefusesADecoyWorktree(t *testing.T) {
+	f := newFixture(t)
+	decoy := t.TempDir()
+	f.git("2026-02-12T09:00:00+00:00", "config", "core.worktree", decoy)
+	outside := t.TempDir()
+	symlinkOrSkip(t, outside, filepath.Join(f.Root(), "linkdir"))
+
+	if top, err := checkoutRoot(f.Root()); err == nil && !strings.HasPrefix(fsutil.RealExistingPath(f.Root()), top) {
+		t.Errorf("checkoutRoot took the decoy %q as the boundary of %q", top, f.Root())
+	}
+	if _, err := resolveOutDir(f.Root(), filepath.Join(f.Root(), "linkdir", DefaultOutDir)); err == nil {
+		t.Fatal("a decoy core.worktree widened the checkout boundary past an internal link")
+	}
+}
+
+// TestCheckoutRootRefusesATrimmedAnswer: the git runner trims stdout, so a
+// checkout whose directory name ends in a space answers with a path naming
+// nothing real. That answer does not contain the checkout and is refused.
+func TestCheckoutRootRefusesATrimmedAnswer(t *testing.T) {
+	base := t.TempDir()
+	repo := filepath.Join(base, "repo ")
+	if err := os.Mkdir(repo, 0o755); err != nil {
+		t.Skipf("the filesystem refuses a trailing space: %v", err)
+	}
+	init := exec.Command("git", "init", "-q", repo)
+	init.Env = gittest.Env(t)
+	if out, err := init.CombinedOutput(); err != nil {
+		t.Skipf("git init: %v (%s)", err, out)
+	}
+	symlinkOrSkip(t, t.TempDir(), filepath.Join(repo, "linkdir"))
+
+	if _, err := resolveOutDir(repo, filepath.Join(repo, "linkdir", DefaultOutDir)); err == nil {
+		t.Fatal("a trimmed toplevel widened the checkout boundary past an internal link")
 	}
 }
