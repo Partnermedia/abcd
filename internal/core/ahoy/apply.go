@@ -729,9 +729,10 @@ func (a *applyCtx) registerRepo(sha string) {
 		// A history-lock failure (a contention timeout, or an unreadable lock path)
 		// skipped registration entirely. Surface it as a change-note rather than
 		// discarding the signal — a silently unregistered repo leaves no marker to
-		// find it by (iss-128).
+		// find it by (iss-128). The lock error names the store's absolute path
+		// under the home directory, so the note renders through receiptPath.
 		a.changes = append(a.changes,
-			"history registration for "+shortSHA(sha)+" skipped ("+lockErr.Error()+")")
+			receiptPath(a.cwd, "history registration for "+shortSHA(sha)+" skipped ("+lockErr.Error()+")"))
 		return
 	}
 	if lineageConflict {

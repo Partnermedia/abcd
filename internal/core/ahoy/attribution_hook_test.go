@@ -401,3 +401,43 @@ func TestAttributionOptInPersistFailureIsLoud(t *testing.T) {
 		t.Errorf("the opt-in was not persisted and nothing said so (status=%q changes=%v)", res.Status, res.Changes)
 	}
 }
+
+// TestAttributionOptInFailureNoteCarriesNoAbsolutePath pins the note to the
+// receipt scrub: a config the guarded read cannot open yields an os.PathError
+// naming the repo's absolute path, and the note that reports it must render
+// through the same seam every written path does, so the receipt and --json
+// output name neither the repo nor the home directory.
+func TestAttributionOptInFailureNoteCarriesNoAbsolutePath(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores file modes")
+	}
+	setupHermetic(t)
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Install(repo, installOpts(), RefusingPrompter{}); err != nil {
+		t.Fatal(err)
+	}
+	cfg := filepath.Join(repo, ".abcd", "config.json")
+	if err := os.Chmod(cfg, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(cfg, 0o644) })
+	res, err := Install(repo, attributionOpts(), RefusingPrompter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var note string
+	for _, c := range res.Changes {
+		if strings.Contains(c, "attribution opt-in not persisted") {
+			note = c
+		}
+	}
+	if note == "" {
+		t.Fatalf("the failed opt-in was not reported (changes=%v)", res.Changes)
+	}
+	if strings.Contains(note, repo) {
+		t.Errorf("the note names the repo's absolute path: %q", note)
+	}
+}
