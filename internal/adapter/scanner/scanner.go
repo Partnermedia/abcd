@@ -37,13 +37,22 @@ type ScanResult struct {
 	// binary cannot smuggle unscanned content into a source bundle
 	// (GHSA-5mmm-3whv-3rqp).
 	Unscanned []string `json:"unscanned,omitempty"`
-	// Skipped lists bundle files intentionally not scanned because they matched
-	// the reviewed skip sets (a binary media extension, a skip filename, or a
-	// skip fragment). Unlike Unscanned they are an accepted allow, not a refusal
-	// — but they are surfaced rather than silently dropped, so what the skip
-	// list actually excluded is visible.
-	Skipped []string `json:"skipped,omitempty"`
+	// ScannedBinary lists bundle files that matched the reviewed skip sets (a
+	// binary media extension, a skip filename, or a skip fragment) and were
+	// therefore scanned with the SECRET rules only — every rule that is
+	// meaningful on raw bytes (tokens, private keys), none of the prose and
+	// identity rules that are not. A skip exempts a file from the rules that
+	// cannot apply to it; it is never an unverified allow, because a file that
+	// enters the payload enters it with its bytes, whatever its name says
+	// (GHSA-9wv7-88w3-f77m). A skip-listed file that cannot be read within
+	// maxBinaryScanBytes lands in Unscanned, not here.
+	ScannedBinary []string `json:"scanned_binary,omitempty"`
 }
+
+// maxBinaryScanBytes caps how much of a skip-listed (binary) bundle file the
+// secret-rule scan reads. A file over the cap is a loud Unscanned refusal
+// rather than a quiet skip: memory stays bounded and coverage stays honest.
+const maxBinaryScanBytes = 32 << 20
 
 // Config is the on-disk scanner configuration (the per-repo pii.json override
 // shape). Only the consumed fields are modelled.
@@ -844,21 +853,33 @@ func fingerprintSpan(out, src []byte, start, end int, whole bool) {
 }
 
 // ScanBundle scans the resolved content of every bundle file, reading
-// ResolvedPath and reporting under LogicalPath. Binary/oversized/skip-listed
-// files are skipped via the extension/filename sets and a null-byte + UTF-8
-// sniff. If the scanner is unavailable (config unreadable), it returns
-// Unavailable=true and scans nothing (fail-closed).
+// ResolvedPath and reporting under LogicalPath. A file on the reviewed skip
+// sets (extension, filename, fragment) is read through the guarded, capped
+// primitive and its bytes scanned with the secret rules alone, reported under
+// ScannedBinary; any other file is sniffed (null byte + UTF-8) and scanned
+// with the full rule set, or surfaced in Unscanned when it cannot be. If the
+// scanner is unavailable (config unreadable), it returns Unavailable=true and
+// scans nothing (fail-closed).
 func (s *Scanner) ScanBundle(files []BundleFile) (ScanResult, error) {
 	if s.unavailable {
 		return ScanResult{Unavailable: true, UnavailableReason: s.unavailReason}, nil
 	}
 	var res ScanResult
+	secrets := secretPatterns(s.patterns)
 	for _, f := range files {
 		if s.skipByName(f.LogicalPath) || s.skipByFragment(f.LogicalPath) {
-			// A reviewed skip (binary media extension, skip filename, skip
-			// fragment) is an accepted allow — but recorded so the skip is
-			// VISIBLE rather than an invisible `continue` (GHSA-5mmm-3whv-3rqp).
-			res.Skipped = append(res.Skipped, f.LogicalPath)
+			// A reviewed skip exempts the file from the prose/identity rules,
+			// never from the secret rules: its bytes still ship, so its bytes
+			// are still scanned (GHSA-9wv7-88w3-f77m). The read is guarded and
+			// capped — a symlinked, non-regular or oversized leaf is a loud
+			// coverage gap, not a quiet skip.
+			data, err := fsutil.ReadGuarded(f.ResolvedPath, maxBinaryScanBytes)
+			if err != nil {
+				res.Unscanned = append(res.Unscanned, f.LogicalPath)
+				continue
+			}
+			res.ScannedBinary = append(res.ScannedBinary, f.LogicalPath)
+			res.Findings = append(res.Findings, ScanText(string(data), Identity{}, secrets, s.identSev, f.LogicalPath)...)
 			continue
 		}
 		data, err := os.ReadFile(f.ResolvedPath)
@@ -882,17 +903,38 @@ func (s *Scanner) ScanBundle(files []BundleFile) (ScanResult, error) {
 		}
 	}
 	sortFindings(res.Findings)
-	// Zero-coverage sentinel: a bundle with files but nothing scanned (every
-	// file skip-listed or unscannable, however that came about — an over-broad
-	// skip config, an all-binary tree) means the scanner effectively did not
-	// run. Fail closed so the launch path refuses rather than publishing an
-	// unscanned bundle while reporting "would publish".
+	// Zero-coverage sentinel: a bundle with files but none scanned with the
+	// FULL rule set (every file skip-listed or unscannable, however that came
+	// about — an over-broad skip config, an all-binary tree) means the prose
+	// and identity rules effectively did not run, whatever the secret-only
+	// pass over the skip-listed bytes found. Fail closed so the launch path
+	// refuses rather than publishing while reporting "would publish"; the
+	// reason says how many files got the secret-only pass so the count is
+	// honest.
 	if len(files) > 0 && res.FilesScanned == 0 && !res.Unavailable {
 		res.Unavailable = true
 		res.UnavailableReason = "scanner covered zero of " + strconv.Itoa(len(files)) +
-			" bundle files (all skip-listed or unscannable)"
+			" bundle files with the full rule set (" + strconv.Itoa(len(res.ScannedBinary)) +
+			" skip-listed and scanned with secret rules only, the rest unscannable)"
 	}
 	return res, nil
+}
+
+// secretPatterns returns the subset of patterns that is meaningful on raw
+// bytes: every hard-fail rule that is not an identity, network or harness-leak
+// kind — the token and private-key rules, and a hard-fail override of the same
+// shape. Those are the rules a skip-listed file is scanned with, because a
+// secret is a secret whatever container it sits in, while a username, an
+// address or a hostname inside binary bytes is noise, not a leak.
+func secretPatterns(patterns []Pattern) []Pattern {
+	out := make([]Pattern, 0, len(patterns))
+	for _, p := range patterns {
+		if p.Severity != SeverityHardFail || IsIdentityKind(p.Kind) || isNetworkKind(p.Kind) || IsHarnessLeakKind(p.Kind) {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
 }
 
 func (s *Scanner) skipByName(logical string) bool {

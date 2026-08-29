@@ -152,11 +152,13 @@ func scanRefusals(scan scanner.ScanResult) []string {
 		reasons = append(reasons, hardFailReason(scan))
 	}
 	// Fail closed on the coverage gap: any include-selected file the scanner
-	// could not cover (unreadable, or binary without a reviewed skip) is refused
-	// rather than shipped raw. "Some other file scanned" is not coverage of the
-	// unscanned one, so a single scanned README cannot disarm this
-	// (GHSA-5mmm-3whv-3rqp). Reviewed skips (scan.Skipped) are an accepted allow
-	// and do NOT refuse.
+	// could not cover (unreadable, oversized, or binary without a reviewed skip)
+	// is refused rather than shipped raw. "Some other file scanned" is not
+	// coverage of the unscanned one, so a single scanned README cannot disarm
+	// this (GHSA-5mmm-3whv-3rqp). Skip-listed files (scan.ScannedBinary) were
+	// scanned with the secret rules, so they are verified rather than allowed;
+	// their findings arrive through HardFails like any other
+	// (GHSA-9wv7-88w3-f77m).
 	for _, p := range scan.Unscanned {
 		reasons = append(reasons, "unscanned payload file (fail-closed coverage gap): "+p)
 	}
@@ -198,7 +200,8 @@ func scanDetail(scan scanner.ScanResult) string {
 	if scan.Unavailable {
 		return "unavailable: " + scan.UnavailableReason
 	}
-	return "scanned " + itoa(scan.FilesScanned) + " files, " + itoa(scan.HardFails) + " hard-fails"
+	return "scanned " + itoa(scan.FilesScanned) + " files (" + itoa(len(scan.ScannedBinary)) +
+		" binary, secret rules only), " + itoa(scan.HardFails) + " hard-fails"
 }
 
 func itoa(n int) string {

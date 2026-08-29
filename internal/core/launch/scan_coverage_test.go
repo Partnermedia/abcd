@@ -83,3 +83,78 @@ func TestUnscannedPayloadRefuses(t *testing.T) {
 		t.Errorf("ship must not would-publish with an unscanned payload file: %+v", ship)
 	}
 }
+
+// TestBinaryPayloadSecretRefuses is the GHSA-9wv7-88w3-f77m axis
+// (iss-2608291807454357): a secret inside an included file whose EXTENSION is
+// on the binary skip list (docs/assets/notes.png, no image data needed) must
+// have its bytes scanned by the secret rules, hard-fail, be reported as
+// ScannedBinary rather than a skip, drive WouldRefuseOn, and block Ship. The
+// filename-keyed skip shipped the raw bytes with zero findings.
+func TestBinaryPayloadSecretRefuses(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, ".abcd/config/launch-payload.json", `{"includes": ["docs"]}`)
+	writeFile(t, root, "docs/README.md", "clean documentation\n")
+	// FAKE token shape only, built at runtime: ghp_ + 36 chars.
+	token := "ghp_" + strings.Repeat("b", 36)
+	writeFile(t, root, "docs/assets/notes.png", "not an image; token="+token+"\n")
+
+	report, err := DryRun(DryRunRequest{RepoRoot: root, Version: "1.0.0"})
+	if err != nil {
+		t.Fatalf("dry-run must return nil error on a finding, got %v", err)
+	}
+	if report.Scan.HardFails == 0 {
+		t.Fatalf("secret in the skip-listed .png was not caught by the scan: %+v", report.Scan)
+	}
+	var sawBinary bool
+	for _, p := range report.Scan.ScannedBinary {
+		if p == "docs/assets/notes.png" {
+			sawBinary = true
+		}
+	}
+	if !sawBinary {
+		t.Errorf("the .png must be reported as ScannedBinary, got %+v", report.Scan)
+	}
+	if len(report.WouldRefuseOn) == 0 || report.WouldPublish {
+		t.Errorf("a secret in a payload binary must refuse: refuse=%v publish=%v", report.WouldRefuseOn, report.WouldPublish)
+	}
+
+	ship, err := Ship(ShipRequest{RepoRoot: root, Version: "1.0.0"})
+	if !errors.Is(err, ErrShipBlocked) {
+		t.Fatalf("ship must return ErrShipBlocked for a secret in a payload binary, got %v", err)
+	}
+	if !ship.Blocked || ship.WouldPublish {
+		t.Errorf("ship must be blocked and not would-publish: %+v", ship)
+	}
+}
+
+// TestRepoPayloadBinariesScanClean is the false-positive guard for the same
+// fix: this repository's own payload carries genuine binary assets, and the
+// secret rules run over their bytes must find nothing. Text-file findings are
+// deliberately not asserted here — an environmental identity match on a text
+// file (iss-2608291444328326) is a different rule and a different file class.
+func TestRepoPayloadBinariesScanClean(t *testing.T) {
+	root := repoRootForTest(t)
+	bundle, err := ResolveBundle(root, nil)
+	if err != nil {
+		t.Fatalf("resolve the payload bundle: %v", err)
+	}
+	scan := scanBundle(root, bundle)
+	if scan.Unavailable {
+		t.Fatalf("scanner unavailable on the repo's own payload: %s", scan.UnavailableReason)
+	}
+	if len(scan.ScannedBinary) == 0 {
+		t.Fatalf("the repo payload is expected to carry at least one binary asset; none was scanned: %+v", scan)
+	}
+	binary := map[string]bool{}
+	for _, p := range scan.ScannedBinary {
+		binary[p] = true
+	}
+	for _, f := range scan.Findings {
+		if binary[f.File] {
+			t.Errorf("secret rule %s tripped on a genuine binary asset %s (line %d)", f.Kind, f.File, f.Line)
+		}
+	}
+	if len(scan.Unscanned) != 0 {
+		t.Errorf("the repo payload must leave no coverage gap: %v", scan.Unscanned)
+	}
+}
