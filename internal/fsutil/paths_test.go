@@ -248,3 +248,30 @@ func TestFoldPathMintsOneComparisonKey(t *testing.T) {
 		t.Errorf("FoldPath(%q, false) = %q, want it unchanged", a, got)
 	}
 }
+
+// TestRealExistingPath pins the existing-prefix resolver: a symlinked ancestor
+// that exists is resolved, the absent remainder is rejoined lexically, and an
+// empty path stays empty rather than resolving to the working directory.
+func TestRealExistingPath(t *testing.T) {
+	base := t.TempDir()
+	real := filepath.Join(base, "real")
+	if err := os.MkdirAll(real, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	realBase, err := filepath.EvalSymlinks(real)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got := fsutil.RealExistingPath(filepath.Join(link, "absent", "leaf"))
+	if want := filepath.Join(realBase, "absent", "leaf"); got != want {
+		t.Errorf("RealExistingPath(link/absent/leaf) = %q, want %q", got, want)
+	}
+	if got := fsutil.RealExistingPath(""); got != "" {
+		t.Errorf("RealExistingPath(\"\") = %q, want empty", got)
+	}
+}

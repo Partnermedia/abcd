@@ -122,6 +122,44 @@ func PathsOverlap(a, b string, fold bool) bool {
 	return PathWithin(a, b, fold) || PathWithin(b, a, fold)
 }
 
+// RealExistingPath returns p made absolute with its longest EXISTING prefix
+// symlink-resolved and the absent remainder rejoined lexically. A destination
+// that does not exist yet still resolves through its real parent, so a
+// containment gate compares real locations rather than lexical strings a
+// symlinked ancestor could disguise — and on a platform whose temp root is
+// itself a symlink (/var -> /private/var on macOS) an unresolved comparison
+// would silently miss an overlap. An empty p is returned empty rather than
+// resolved to the working directory.
+//
+// It is the canonical existing-prefix resolver: the launch payload-destination
+// gate, the lifeboat pack destination gate and the site output-directory gate
+// all route through it rather than keeping divergent copies. It does not
+// case-canonicalise (Go's darwin EvalSymlinks keeps the caller's spelling for
+// every non-symlink component), so compare its results with PathWithin under
+// CaseFoldingFS.
+func RealExistingPath(p string) string {
+	if p == "" {
+		return ""
+	}
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return filepath.Clean(p)
+	}
+	rest := ""
+	cur := abs
+	for {
+		if real, err := filepath.EvalSymlinks(cur); err == nil {
+			return filepath.Join(real, rest)
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return abs
+		}
+		rest = filepath.Join(filepath.Base(cur), rest)
+		cur = parent
+	}
+}
+
 // RepoRel renders target as a path relative to base — the repo root, or the
 // working directory — so machine output never carries an absolute
 // developer-identity path (iss-81). A target outside base yields a "../…" form,
