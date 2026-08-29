@@ -655,13 +655,54 @@ type PageInfo struct {
 }
 
 func pageInfoFrom(filename, text string) PageInfo {
-	var fm map[string]any
-	body := text
-	if region, b, err := splitFileFrontmatter(text); err == nil {
-		if parsed, err := parseFrontmatter("---\n" + region + "---\n"); err == nil {
-			fm = parsed
-			body = b
-		}
+	return pageInfoOf(filename, parsePage(text))
+}
+
+// parsedPage is one page's frontmatter and body, split and parsed ONCE. The
+// per-page consumers (PageInfo, the ask body, the source block) each used to
+// split the file — a full normaliseNewlines plus strings.Split of up to
+// maxMemoryPageBytes — and two of them re-parsed the same region, so a query
+// over the store paid that three times per page.
+type parsedPage struct {
+	text string
+	// fm is the parsed frontmatter, or nil when the page has none that parses.
+	fm map[string]any
+	// body is the text after the frontmatter when the file split, else text.
+	body string
+	// split reports whether the file split into a frontmatter region and body.
+	split bool
+}
+
+// parsePage splits text once and parses its frontmatter once.
+func parsePage(text string) parsedPage {
+	p := parsedPage{text: text, body: text}
+	region, body, err := splitFileFrontmatter(text)
+	if err != nil {
+		return p
+	}
+	p.split = true
+	p.body = body
+	if fm, err := parseFrontmatter("---\n" + region + "---\n"); err == nil {
+		p.fm = fm
+	}
+	return p
+}
+
+// source is the page's source: block, or an empty mapping when it has none.
+func (p parsedPage) source() map[string]any {
+	if src, ok := p.fm["source"].(map[string]any); ok {
+		return src
+	}
+	return map[string]any{}
+}
+
+// pageInfoOf derives the PageInfo from a page parsed once. A page whose
+// frontmatter does not parse is summarised from its whole text, as before.
+func pageInfoOf(filename string, p parsedPage) PageInfo {
+	fm := p.fm
+	body := p.text
+	if fm != nil {
+		body = p.body
 	}
 	var classes []string
 	if fm != nil {

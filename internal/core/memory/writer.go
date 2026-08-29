@@ -528,18 +528,7 @@ func pruneOrphans(repoRoot, mem string) ([]string, error) {
 }
 
 func pageSourceBlock(text string) map[string]any {
-	region, _, err := splitFileFrontmatter(text)
-	if err != nil {
-		return map[string]any{}
-	}
-	fm, err := parseFrontmatter("---\n" + region + "---\n")
-	if err != nil {
-		return map[string]any{}
-	}
-	if src, ok := fm["source"].(map[string]any); ok {
-		return src
-	}
-	return map[string]any{}
+	return parsePage(text).source()
 }
 
 func reconcile(mem string) ([]string, error) {
