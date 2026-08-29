@@ -214,6 +214,14 @@ func parseReport(raw []byte) ([]report, error) {
 func toFindings(text, logical string, reports []report) []scanner.Finding {
 	lines := strings.Split(text, "\n")
 	var out []scanner.Finding
+	// One Finding per (line, column, value) span: two reports of the same
+	// value each locate every occurrence, so the same span must not be
+	// reported once per report.
+	type span struct {
+		line, col int
+		value     string
+	}
+	seen := map[span]bool{}
 	for _, r := range reports {
 		needle := r.Secret
 		if needle == "" {
@@ -227,19 +235,32 @@ func toFindings(text, logical string, reports []report) []scanner.Finding {
 			kind = "gitleaks:generic"
 		}
 		for i, ln := range lines {
-			col := strings.Index(ln, needle)
-			if col < 0 {
-				continue
+			// Every occurrence on the line, not the first: gitleaks reports a
+			// secret echoed twice on one line (a request with its response, a
+			// retry log) as two reports, and a search that never advances past
+			// its first hit positions both on the first occurrence, leaving the
+			// second one verbatim after redaction.
+			for start := 0; start < len(ln); {
+				idx := strings.Index(ln[start:], needle)
+				if idx < 0 {
+					break
+				}
+				col := start + idx
+				start = col + len(needle)
+				if seen[span{i, col, needle}] {
+					continue
+				}
+				seen[span{i, col, needle}] = true
+				out = append(out, scanner.Finding{
+					File:     logical,
+					Line:     i + 1,
+					Column:   col + 1, // 1-based byte column, matching sealLine
+					Kind:     kind,
+					Severity: scanner.SeverityHardFail,
+					Matched:  needle,
+					Snippet:  ln,
+				})
 			}
-			out = append(out, scanner.Finding{
-				File:     logical,
-				Line:     i + 1,
-				Column:   col + 1, // 1-based byte column, matching sealLine
-				Kind:     kind,
-				Severity: scanner.SeverityHardFail,
-				Matched:  needle,
-				Snippet:  ln,
-			})
 		}
 	}
 	return out
