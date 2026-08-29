@@ -537,11 +537,11 @@ func itoa(n int64) string {
 	return string(b)
 }
 
-// TestFirstRootSHAOctopusMerge pins the canonical root over a history with more
+// TestRootCommitOctopusMerge pins the canonical root over a history with more
 // than one root commit: an octopus merge joins three unrelated roots, and
-// firstRootSHA must report the same one git's own `rev-list -n 1` does — the
+// RootCommit must report the same one git's own `rev-list -n 1` does — the
 // identity every cross-repo mapping keys on.
-func TestFirstRootSHAOctopusMerge(t *testing.T) {
+func TestRootCommitOctopusMerge(t *testing.T) {
 	r := gvNewRepo(t)
 	r.write("a.txt", "a\n")
 	r.addCommit("root one")
