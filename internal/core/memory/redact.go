@@ -23,11 +23,12 @@ import (
 // history.Capture's fail-closed, two-stage discipline: refuse on a degraded
 // scanner, redact-and-report through scanner.Redact, apply a literal $HOME
 // backstop, then re-scan and refuse if a blocking span survived. Every
-// acquired-text write passes through here before it is written: page bodies
+// acquired-text write passes through here before it is written: page BODIES
 // inside WritePages, the one primitive every verb (ingest, ask --file-back)
-// writes through, so no PageWrite lands unscanned whichever verb built it; the
+// writes through, so no body lands unscanned whichever verb built it; the
 // --keep-original copy in Ingest; and, transitively, since they are derived
-// from the redacted bodies, index.md and log.md.
+// from the redacted bodies, index.md and log.md. Page frontmatter is the one
+// acquired text this does not yet cover (iss-2608291941064448).
 
 // storeRedactor holds a per-repo scanner plus the caller's resolved $HOME for
 // the deterministic literal backstop. Construct it with newStoreRedactor, which
