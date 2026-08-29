@@ -63,7 +63,11 @@ func TestSweepCallerHomeIsAnchoredOnAPathBoundary(t *testing.T) {
 		{"/root", "saved under /root. Then", "saved under ~. Then"},
 		{"/root", "was /root, then", "was ~, then"},
 		{"/root", "/root.old", "/root.old"},
-		{"/root", "/root_2", "/root_2"},
+		// '_' is a word rune to the local_username rule, so a home followed by
+		// '_' is one nothing else would catch: the sweep takes it, over-redacting
+		// "/root_2" rather than committing the home in "/root_backup/x".
+		{"/root", "/root_2", "~_2"},
+		{"/root", "/root_backup/x", "~_backup/x"},
 		// An empty segment before the home (file:///, a doubled slash) is not a parent.
 		{"/root", "open file:///root/x", "open file://~/x"},
 		{"/root", "//root/x", "/~/x"},
@@ -102,10 +106,14 @@ func TestLocalUsernameIsNotSuppressedUnderADroppedHomeSpan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := "config lives at /Users/zzhomeuser42-backup/notes.md\n" // abcd-audit:allow
-	redacted, _ := Redact(text, sc.ScanText(text, "t"))
-	if strings.Contains(redacted, "zzhomeuser42") {
-		t.Errorf("the caller's username survived under a dropped home span:\n%s", redacted)
+	for _, text := range []string{
+		"config lives at /Users/zzhomeuser42-backup/notes.md\n", // abcd-audit:allow
+		"config lives at /Users/zzhomeuser42_backup/notes.md\n", // abcd-audit:allow
+	} {
+		redacted, _ := Redact(text, sc.ScanText(text, "t"))
+		if strings.Contains(redacted, "zzhomeuser42") {
+			t.Errorf("the caller's username survived under a dropped home span:\n%s", redacted)
+		}
 	}
 }
 

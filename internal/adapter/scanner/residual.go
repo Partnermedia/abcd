@@ -100,10 +100,13 @@ func homeStandsAsPath(text string, at, end int) bool {
 }
 
 // nameContinues reports whether the name ending at text[:end] goes on: a
-// letter or digit continues it outright, and a '.', '_' or '-' continues it
-// only when a letter or digit follows ("/root.old", "/root-cause"), so the
+// letter or digit continues it outright, and a '.' or '-' continues it only
+// when a letter or digit follows ("/root.old", "/root-cause"), so the
 // sentence punctuation after "/root." or "/root," is a boundary and never an
-// excuse to leave the home in place.
+// excuse to leave the home in place. '_' is a boundary outright: it is a word
+// rune to the local_username rule, so a home followed by '_' is one that rule
+// would not catch either, and over-sweeping "/root_2" is the safe side of
+// committing the home in "/root_backup/x".
 func nameContinues(text string, end int) bool {
 	if end >= len(text) {
 		return false
@@ -112,7 +115,7 @@ func nameContinues(text string, end int) bool {
 	if isAlnumByte(b) {
 		return true
 	}
-	if b == '.' || b == '_' || b == '-' {
+	if b == '.' || b == '-' {
 		return end+1 < len(text) && isAlnumByte(text[end+1])
 	}
 	return false

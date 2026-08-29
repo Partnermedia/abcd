@@ -188,6 +188,7 @@ func TestCaptureRedactsHomePathFollowedByPunctuation(t *testing.T) {
 		{"eq-after-users-user", "see /Users/" + user + "=cfg"},
 		{"dot-after-self-home", "saved under " + home + "."},
 		{"file-url-self-home", "open file://" + home + "/x"},
+		{"underscore-after-self-home", "notes in " + home + "_2/x"},
 	}
 	var lines []string
 	for _, c := range cases {

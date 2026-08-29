@@ -18,7 +18,7 @@ func TestStoreRedactorSweepsHomeOnAPathBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	body := "Mount table copied from /rootfs/etc/hosts on this box.\n" +
-		"Scratch lives at /root/scratch on this box.\n"
+		"Scratch lives at /root/scratch on this box; notes in /root_2/x.\n"
 	got, _, err := r.redactText(body, "page")
 	if err != nil {
 		t.Fatalf("redactText: %v", err)
@@ -28,5 +28,8 @@ func TestStoreRedactorSweepsHomeOnAPathBoundary(t *testing.T) {
 	}
 	if strings.Contains(got, "/root/scratch") || !strings.Contains(got, "~/scratch") {
 		t.Errorf("the home standing as a path was not swept to ~:\n%s", got)
+	}
+	if strings.Contains(got, "/root_2") {
+		t.Errorf("the home followed by '_' survived:\n%s", got)
 	}
 }
