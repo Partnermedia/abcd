@@ -7,7 +7,7 @@ category: "security"
 source: "agent-finding"
 found_during: "v0.6.9-security-pass"
 found_at: "internal/adapter/gitleaks/gitleaks.go"
-resolution: "Binary admission rule: a configured or PATH-located gitleaks binary runs only when absolute, resolved outside the repository (lexically and after symlink resolution), regular and executable; refusals are loud and never fall back to PATH."
+resolution: "Binary admission rule: a configured or PATH-located gitleaks binary runs only when absolute, resolved outside the repository (lexically and after symlink resolution), regular, executable and named gitleaks (a wrapper or renamed binary is refused); refusals are loud and never fall back to PATH."
 impact: fix
 ---
 

@@ -61,7 +61,8 @@ refuses. A build into a non-empty directory purges it only when the tree
 carries the `.abcd-site-build` marker a previous build of this repository
 wrote and git tracks nothing in it, and refuses loudly otherwise: the build
 cannot remove a directory it did not write — so a repository that commits
-its built site directory renders into an untracked one instead, and a tree
+its built site directory is refused and must be pointed at an untracked
+output directory, and a tree
 with no root commit has no identity a marker could name, so its non-empty
 output is emptied by hand. An output path with a symlink at its leaf or at
 an ancestor inside the checkout (the git toplevel, not the invoking
