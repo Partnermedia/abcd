@@ -15,21 +15,30 @@ import (
 // fakeRunner is an injected Runner that records whether it was invoked and
 // returns a canned JSON report. No real gitleaks binary is spawned.
 type fakeRunner struct {
-	called bool
-	report string
-	err    error
+	called  bool
+	binPath string // the path the adapter asked it to execute
+	report  string
+	err     error
 }
 
-func (f *fakeRunner) Run(_ context.Context, _ /*binPath*/, _ /*text*/ string) ([]byte, error) {
+func (f *fakeRunner) Run(_ context.Context, binPath, _ /*text*/ string) ([]byte, error) {
 	f.called = true
+	f.binPath = binPath
 	if f.err != nil {
 		return nil, f.err
 	}
 	return []byte(f.report), nil
 }
 
-// foundLookPath is a LookPath that resolves gitleaks to a fixed fake path.
-func foundLookPath(string) (string, error) { return "/fake/bin/gitleaks", nil }
+// foundLookPath returns a LookPath that resolves gitleaks to a real, executable
+// regular file outside the test's repo root — the shape admitBinary admits —
+// so the augmentation path is exercised without a real gitleaks binary (the
+// injected fakeRunner never executes it).
+func foundLookPath(t *testing.T) func(string) (string, error) {
+	t.Helper()
+	bin := writeExecutable(t, filepath.Join(t.TempDir(), "gitleaks"))
+	return func(string) (string, error) { return bin, nil }
+}
 
 // missingLookPath is a LookPath that never finds the binary.
 func missingLookPath(name string) (string, error) {
@@ -48,7 +57,7 @@ func TestGateOffInvokesNothing(t *testing.T) {
 		Runner:   runner,
 	}
 
-	findings, err := a.Augment(context.Background(), Config{Enabled: false}, "api_key = abcdef\n", "transcript")
+	findings, err := a.Augment(context.Background(), t.TempDir(), Config{Enabled: false}, "api_key = abcdef\n", "transcript")
 	if err != nil {
 		t.Fatalf("gate-off returned error: %v", err)
 	}
@@ -70,7 +79,7 @@ func TestConfiguredButAbsentLoudStages(t *testing.T) {
 	runner := &fakeRunner{}
 	a := &Adapter{LookPath: missingLookPath, Runner: runner}
 
-	_, err := a.Augment(context.Background(), Config{Enabled: true}, "secret\n", "transcript")
+	_, err := a.Augment(context.Background(), t.TempDir(), Config{Enabled: true}, "secret\n", "transcript")
 	if err == nil {
 		t.Fatal("configured-but-absent returned nil error; want a loud-stage error")
 	}
@@ -93,7 +102,7 @@ func TestConfiguredPathMissingLoudStages(t *testing.T) {
 		LookPath: func(s string) (string, error) { looked = true; return "/somewhere/gitleaks", nil },
 		Runner:   &fakeRunner{},
 	}
-	_, err := a.Augment(context.Background(), Config{Enabled: true, Path: "/no/such/gitleaks"}, "x\n", "transcript")
+	_, err := a.Augment(context.Background(), t.TempDir(), Config{Enabled: true, Path: "/no/such/gitleaks"}, "x\n", "transcript")
 	if !errors.Is(err, ErrConfiguredNotFound) {
 		t.Fatalf("configured-missing-path did not loud-stage: %v", err)
 	}
@@ -117,9 +126,9 @@ func TestAugmentConvertsFindings(t *testing.T) {
 
 	// Canonical gitleaks JSON report shape (subset).
 	runner := &fakeRunner{report: `[{"RuleID":"generic-api-key","Secret":"` + secret + `","Match":"api_key = ` + secret + `"}]`}
-	a := &Adapter{LookPath: foundLookPath, Runner: runner}
+	a := &Adapter{LookPath: foundLookPath(t), Runner: runner}
 
-	findings, err := a.Augment(context.Background(), Config{Enabled: true}, text, "transcript")
+	findings, err := a.Augment(context.Background(), t.TempDir(), Config{Enabled: true}, text, "transcript")
 	if err != nil {
 		t.Fatalf("Augment: %v", err)
 	}
@@ -162,8 +171,8 @@ func TestAugmentConvertsFindings(t *testing.T) {
 // findings and no error — the common opted-in case.
 func TestAugmentEmptyReportNoFindings(t *testing.T) {
 	for _, rep := range []string{"", "[]", "null"} {
-		a := &Adapter{LookPath: foundLookPath, Runner: &fakeRunner{report: rep}}
-		findings, err := a.Augment(context.Background(), Config{Enabled: true}, "nothing here\n", "transcript")
+		a := &Adapter{LookPath: foundLookPath(t), Runner: &fakeRunner{report: rep}}
+		findings, err := a.Augment(context.Background(), t.TempDir(), Config{Enabled: true}, "nothing here\n", "transcript")
 		if err != nil {
 			t.Fatalf("empty report %q: %v", rep, err)
 		}
