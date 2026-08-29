@@ -180,6 +180,25 @@ func IsAncestor(root, ancestor, descendant string) (bool, error) {
 	return false, fmt.Errorf("%w (stderr: %q)", err, strings.TrimSpace(string(e.buf)))
 }
 
+// RootCommit returns the repository's canonical (first) root-commit SHA, or ""
+// when it cannot be derived — git absent, not a repository, no commits. It is
+// total: a caller keying a store or a marker on the repository's identity gets
+// "" rather than an error, and decides for itself what an unidentified
+// repository means. A repository can have several root commits (an octopus of
+// unrelated histories); the first `rev-list` reports is the canonical one, the
+// same choice the history registry and the lifeboat probe make.
+func RootCommit(root string) string {
+	out, err := Run(root, "rev-list", "-n", "1", "--max-parents=0", "HEAD")
+	if err != nil {
+		return ""
+	}
+	fields := strings.Fields(out)
+	if len(fields) == 0 {
+		return ""
+	}
+	return fields[0]
+}
+
 // RepoShaped reports whether root sits anywhere inside a tree carrying a .git
 // entry — a directory, or the file a worktree or submodule leaves. It is
 // deliberately cruder than InRepo: its job is to tell "not a repository" apart

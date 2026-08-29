@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/intentdriven/abcd/internal/gitutil"
 )
 
 // gitFixture builds an isolated git repo with the given commits applied in
@@ -562,8 +564,8 @@ func TestFirstRootSHAOctopusMerge(t *testing.T) {
 	r.git("reset", "-q", "--hard", "main")
 
 	want := strings.TrimSpace(r.git("rev-list", "-n", "1", "--max-parents=0", "HEAD"))
-	if got := firstRootSHA(r.dir); got != want {
-		t.Errorf("firstRootSHA = %q, want %q", got, want)
+	if got := gitutil.RootCommit(r.dir); got != want {
+		t.Errorf("RootCommit = %q, want %q", got, want)
 	}
 }
 
