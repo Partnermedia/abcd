@@ -26,10 +26,12 @@
 // Binary admission (GHSA-fg9r-3f8g-89m6). The config that names the binary is
 // COMMITTED content, so it is trusted for nothing: a candidate binary — a
 // configured path or a PATH lookup result alike — runs only when it is an
-// absolute path to a regular executable that lies outside the repository both
-// lexically and after symlink resolution (admitBinary). A refusal is
-// ErrConfiguredPathRefused, as loud as the not-found case and never a fallback
-// to PATH.
+// absolute path to a regular executable named gitleaks that lies outside the
+// repository both lexically and after symlink resolution (admitBinary). A
+// refusal is ErrConfiguredPathRefused, as loud as the not-found case and never a
+// fallback to PATH, and it names the remedy: a repository rooted at $HOME (a
+// dotfiles checkout) contains ~/.local/bin and ~/go/bin, so an install there is
+// "inside the repository" and must move outside it, or the path must be unset.
 //
 // Testability. The binary lookup and the process execution are both injected
 // (Adapter.LookPath, Adapter.Runner), so the gate, the loud-stage and the
@@ -59,6 +61,11 @@ var configRelPath = filepath.Join(".abcd", "config", "gitleaks.json")
 // maxConfigBytes caps the per-repo opt-in config (trust boundary), matching the
 // native scanner's own override cap.
 const maxConfigBytes = 256 * 1024
+
+// binaryName is the only file name a candidate binary may carry (its
+// configured spelling, not its symlink target): the name looked up on PATH and
+// the name admitBinary requires of a configured path.
+const binaryName = "gitleaks"
 
 // runTimeout bounds a single gitleaks invocation so an opted-in repo cannot be
 // wedged by a hung binary (the SessionEnd hook holds the history repo lock
@@ -198,7 +205,7 @@ func (a *Adapter) resolveBinary(repoRoot string, cfg Config) (string, error) {
 	if p := strings.TrimSpace(cfg.Path); p != "" {
 		return admitBinary(repoRoot, p, "configured path")
 	}
-	bin, err := a.LookPath("gitleaks")
+	bin, err := a.LookPath(binaryName)
 	if err != nil {
 		return "", fmt.Errorf("%w: not on PATH and no path configured", ErrConfiguredNotFound)
 	}
@@ -230,6 +237,13 @@ var caseFoldingFS = fsutil.CaseFoldingFS
 // candidate IS the repository root (os.SameFile), which holds for every
 // spelling a volume folds, whatever a string compare misses.
 //
+// The last check is the NAME: the location rule says where a binary may be,
+// not what it is, and a committed {"path":"/usr/bin/env"} fits every other
+// shape — abcd would spawn a program of the attacker's choosing (argv fixed,
+// cwd private, output discarded, so program selection only). The CONFIGURED
+// spelling must be named gitleaks; the resolved name is not judged, so a
+// Homebrew Cellar symlink keeps working.
+//
 // The executable check is POSIX-only: a non-executable file handed to exec
 // fails anyway, but later, with a message that reads like a broken install
 // rather than a refused config. On Windows os.Stat synthesises a mode with no
@@ -260,11 +274,13 @@ func admitBinary(repoRoot, candidate, origin string) (string, error) {
 		}
 		return refuse("does not resolve")
 	}
+	const inside = "lies inside the repository; move the binary outside the repository " +
+		"(a repository rooted at $HOME contains ~/.local/bin and ~/go/bin), or unset path to use PATH"
 	fold := caseFoldingFS()
 	for _, root := range []string{rootLexical, rootResolved} {
 		for _, cand := range []string{candLexical, candResolved} {
 			if fsutil.PathWithin(cand, root, fold) {
-				return refuse("lies inside the repository")
+				return refuse(inside)
 			}
 		}
 	}
@@ -273,7 +289,7 @@ func admitBinary(repoRoot, candidate, origin string) (string, error) {
 		return refuse("cannot be judged: repository root cannot be stat'ed")
 	}
 	if hasAncestor(candResolved, rootInfo) {
-		return refuse("lies inside the repository")
+		return refuse(inside)
 	}
 	fi, err := os.Stat(candResolved)
 	if err != nil {
@@ -284,6 +300,9 @@ func admitBinary(repoRoot, candidate, origin string) (string, error) {
 	}
 	if fi.Mode().Perm()&0o111 == 0 {
 		return refuse("is not executable")
+	}
+	if filepath.Base(candLexical) != binaryName {
+		return refuse("is not a gitleaks binary (a file named " + binaryName + " is required)")
 	}
 	return candResolved, nil
 }

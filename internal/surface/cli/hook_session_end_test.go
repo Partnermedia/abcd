@@ -512,3 +512,48 @@ func TestHookSessionEndRefusesSymlinkedTranscript(t *testing.T) {
 		t.Errorf("a symlinked transcript must write nothing, got %d record(s)", len(recs))
 	}
 }
+
+// TestHookSessionStartDrainNoticeRedactsHomeInError holds the drain notice's
+// error text to the same home redaction as its path: a gitleaks binary refusal
+// quotes the configured path, and a $HOME-rooted one (a PATH-lookup result, a
+// ~/.local/bin install) would otherwise print the developer's home directory.
+func TestHookSessionStartDrainNoticeRedactsHomeInError(t *testing.T) {
+	repo, _ := sessionEndRepo(t)
+	home := os.Getenv("HOME")
+	// Present, outside the repo, correctly named, but NOT executable: refused,
+	// with its $HOME-rooted spelling quoted in the error.
+	bin := filepath.Join(home, ".local", "bin", "gitleaks")
+	if err := os.MkdirAll(filepath.Dir(bin), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(bin, []byte("not executable"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfgDir := filepath.Join(repo, ".abcd", "config")
+	if err := os.MkdirAll(cfgDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := `{"schema_version":1,"enabled":true,"path":"` + bin + `"}`
+	if err := os.WriteFile(filepath.Join(cfgDir, "gitleaks.json"), []byte(cfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tp := filepath.Join(t.TempDir(), "sess.jsonl")
+	if err := os.WriteFile(tp, []byte(`{"text":"hello"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	errlog := endThenStart(t, "homeleak", repo, tp)
+
+	if !strings.Contains(errlog, "could not be stored") {
+		t.Fatalf("the refused binary must be reported by the drain, got: %s", errlog)
+	}
+	if !strings.Contains(errlog, "gitleaks configured path refused") {
+		t.Errorf("the notice must carry the refusal, got: %s", errlog)
+	}
+	if strings.Contains(errlog, home) {
+		t.Errorf("the notice leaks the home directory %q:\n%s", home, errlog)
+	}
+	if !strings.Contains(errlog, "~/.local/bin/gitleaks") {
+		t.Errorf("the notice must show the home-redacted path, got: %s", errlog)
+	}
+}

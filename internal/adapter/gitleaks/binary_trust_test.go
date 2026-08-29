@@ -5,7 +5,10 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // The tests in this file pin the binary-admission rule that closes
@@ -196,25 +199,40 @@ func TestRefusesRelativeRepoRoot(t *testing.T) {
 	assertRefused(t, newTrustProbe("/fake/bin/gitleaks"), ".", Config{Enabled: true, Path: bin})
 }
 
-// TestCaseFoldingRefusesCaseVariantAndNFDSpellings: on a case-folding
-// filesystem (APFS/HFS+, Windows) a respelt path — a component in another
-// case, or the NFD form of a non-ASCII name — addresses the SAME in-repo file,
-// so a byte-exact containment check would judge it "outside" and execute
-// repository content. The predicate is forced so the branch is proved on any
-// host (the seam ahoy, launch and lifeboat use for the same reason).
+// TestCaseFoldingRefusesCaseVariantAndNFDSpellings pins the LEXICAL folded
+// containment layer as the decisive check. The candidate is an in-repo
+// SYMLINK whose target is OUTSIDE the repo, addressed by a respelt repo path
+// (a component in another case, or the NFD form of a non-ASCII name). On a
+// case-folding filesystem (APFS/HFS+, Windows) that spelling addresses the
+// same in-repo link; its resolved path is outside, so the identity walk
+// (hasAncestor) cannot refuse it and the byte-exact compare would not either —
+// only fsutil.PathWithin with the fold set does. The predicate is forced so the
+// branch is proved wherever the host folds (the seam ahoy, launch and lifeboat
+// use for the same reason); a host that does not fold skips.
 func TestCaseFoldingRefusesCaseVariantAndNFDSpellings(t *testing.T) {
 	restore := caseFoldingFS
 	t.Cleanup(func() { caseFoldingFS = restore })
 	caseFoldingFS = func() bool { return true }
 
-	// The repo root's last component is mixed-case and non-ASCII so both
-	// respellings are meaningful.
 	parent := t.TempDir()
-	repo := filepath.Join(parent, "MyRépo") // NFC é
-	bin := writeExecutable(t, filepath.Join(repo, ".abcd", "tools", "g"))
+	// Spellings are built from escapes, never pasted literals: an editor or a
+	// shell composes a pasted NFD sequence to NFC silently, and the subtest
+	// then pins nothing (which is how the first version of this test shipped).
+	repo := filepath.Join(parent, "MyR\u00e9po") // NFC: precomposed é
+	outside := writeExecutable(t, filepath.Join(t.TempDir(), "gitleaks"))
+	link := filepath.Join(repo, ".abcd", "tools", "gitleaks")
+	if err := os.MkdirAll(filepath.Dir(link), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, link); err != nil {
+		t.Fatal(err)
+	}
 
-	upper := filepath.Join(parent, "MYRÉPO", ".abcd", "tools", "g") // upper-cased, NFC É
-	nfd := filepath.Join(parent, "MyRépo", ".abcd", "tools", "g")  // NFD: e + combining acute
+	upper := filepath.Join(parent, "MYR\u00c9PO", ".abcd", "tools", "gitleaks") // upper-cased, NFC É
+	nfd := filepath.Join(parent, "MyRe\u0301po", ".abcd", "tools", "gitleaks")  // NFD: e + combining acute
+	if nfd == filepath.Join(repo, ".abcd", "tools", "gitleaks") {
+		t.Fatal("test premise broken: the NFD spelling equals the NFC one")
+	}
 
 	for name, path := range map[string]string{"case-variant": upper, "nfd": nfd} {
 		t.Run(name, func(t *testing.T) {
@@ -225,7 +243,72 @@ func TestCaseFoldingRefusesCaseVariantAndNFDSpellings(t *testing.T) {
 		})
 	}
 	// The exact spelling is refused too, independent of the fold.
-	assertRefused(t, newTrustProbe("/fake/bin/gitleaks"), repo, Config{Enabled: true, Path: bin})
+	assertRefused(t, newTrustProbe("/fake/bin/gitleaks"), repo, Config{Enabled: true, Path: link})
+}
+
+// TestFirmlinkSpellingRefusedByIdentity pins the IDENTITY layer (hasAncestor)
+// as the decisive check. macOS mounts the data volume at /System/Volumes/Data
+// as a firmlink, which filepath.EvalSymlinks does not resolve: the spelling
+// /System/Volumes/Data/<repo>/... names the same in-repo file, but every
+// lexical compare — exact or folded, against the lexical or resolved root —
+// reads it as outside. Only asking the filesystem whether an ancestor IS the
+// repo root (os.SameFile) refuses it. Skips where the firmlink is absent.
+func TestFirmlinkSpellingRefusedByIdentity(t *testing.T) {
+	repo := t.TempDir()
+	bin := writeExecutable(t, filepath.Join(repo, "tools", "gitleaks"))
+	resolved, err := filepath.EvalSymlinks(bin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	firmlinked := filepath.Join("/System/Volumes/Data", resolved)
+	if _, err := os.Stat(firmlinked); err != nil {
+		t.Skipf("no firmlink spelling on this host: %v", err)
+	}
+	if fsutil.PathWithin(firmlinked, repo, true) {
+		t.Fatalf("test premise broken: %q compares lexically inside %q", firmlinked, repo)
+	}
+	assertRefused(t, newTrustProbe("/fake/bin/gitleaks"), repo, Config{Enabled: true, Path: firmlinked})
+}
+
+// TestRefusesForeignBinaryName: the location rule says where a binary may be,
+// not what it is — a committed {"path":"/usr/bin/env"} fits every shape and
+// would make abcd spawn a program of the attacker's choosing (argv fixed, cwd
+// private, so program selection only). The configured spelling must be named
+// gitleaks; the RESOLVED name is not judged, so a Homebrew Cellar symlink
+// (/usr/local/bin/gitleaks -> .../Cellar/gitleaks/8.x/bin/gitleaks) still works.
+func TestRefusesForeignBinaryName(t *testing.T) {
+	repo := t.TempDir()
+	foreign := writeExecutable(t, filepath.Join(t.TempDir(), "env"))
+	p := newTrustProbe("/fake/bin/gitleaks")
+	_, err := p.Augment(context.Background(), repo, Config{Enabled: true, Path: foreign}, "x\n", "transcript")
+	if !errors.Is(err, ErrConfiguredPathRefused) {
+		t.Fatalf("a foreign executable was not refused: %v", err)
+	}
+	if !strings.Contains(err.Error(), "not a gitleaks binary") {
+		t.Errorf("refusal does not say the file is not a gitleaks binary: %q", err.Error())
+	}
+	if p.runner.called {
+		t.Error("runner was invoked for a foreign binary")
+	}
+}
+
+// TestRefusalNamesRemedy: an inside-the-repository refusal tells the operator
+// what to do — a dotfiles repository rooted at $HOME makes every ~/.local/bin
+// or ~/go/bin install "inside the repository", and a loud but unexplained
+// refusal there reads as a broken install.
+func TestRefusalNamesRemedy(t *testing.T) {
+	repo := t.TempDir()
+	bin := writeExecutable(t, filepath.Join(repo, ".local", "bin", "gitleaks"))
+	p := newTrustProbe("/fake/bin/gitleaks")
+	_, err := p.Augment(context.Background(), repo, Config{Enabled: true, Path: bin}, "x\n", "transcript")
+	if !errors.Is(err, ErrConfiguredPathRefused) {
+		t.Fatalf("in-repo binary was not refused: %v", err)
+	}
+	for _, want := range []string{"move the binary outside the repository", "unset"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("refusal lacks the remedy %q: %q", want, err.Error())
+		}
+	}
 }
 
 // TestCaseSensitiveKeepsExactMatch: with the fold off (Linux), a sibling that
