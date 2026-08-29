@@ -9,7 +9,7 @@ builds_on: []
 severity: minor
 ---
 
-# An intent that fails its own fidelity audit leaves a tracked issue, not a paragraph. Today the audit ingest counts a NOT_MET verdict into a rollup, renders it into the shipped intent's Audit Notes, and stops: no capture, no exit code, no gate reads it, so an intent can ship with every acceptance criterion failed and the only consequence is prose nobody queries. This intent gives the verdict teeth without making the audit a blocker: on ingest, each NOT_MET auto-captures one ledger issue stamped with the receipt id and deduped on it, so a re-ingest cannot mint a second issue for the same failure, and the issue id is written back into the Audit Notes so the edge is two-sided like every other record link. An INCONCLUSIVE verdict deliberately does NOT capture, because it means the auditor was under-fed, which is an input bug rather than a product defect, and auto-capturing it at volume would fill the ledger with noise and train a reader to ignore captures. A baseline ratchet then converts the verdict from advisory to binding the way the dangling-reference gate already does: today's failures are baselined, a NEW failure fails the gate, and a fixed one invites a baseline shrink.
+# A failed fidelity verdict becomes work somebody can see
 
 ## Press Release
 
@@ -17,7 +17,13 @@ severity: minor
 
 ## Why This Matters
 
-An intent that fails its own fidelity audit leaves a tracked issue, not a paragraph. Today the audit ingest counts a NOT_MET verdict into a rollup, renders it into the shipped intent's Audit Notes, and stops: no capture, no exit code, no gate reads it, so an intent can ship with every acceptance criterion failed and the only consequence is prose nobody queries. This intent gives the verdict teeth without making the audit a blocker: on ingest, each NOT_MET auto-captures one ledger issue stamped with the receipt id and deduped on it, so a re-ingest cannot mint a second issue for the same failure, and the issue id is written back into the Audit Notes so the edge is two-sided like every other record link. An INCONCLUSIVE verdict deliberately does NOT capture, because it means the auditor was under-fed, which is an input bug rather than a product defect, and auto-capturing it at volume would fill the ledger with noise and train a reader to ignore captures. A baseline ratchet then converts the verdict from advisory to binding the way the dangling-reference gate already does: today's failures are baselined, a NEW failure fails the gate, and a fixed one invites a baseline shrink.
+When an audit judges an acceptance criterion not met, the ingest counts it into a rollup, renders it into the shipped intent's audit notes, and stops. No record is created, no exit code changes, and no gate reads it. An intent can ship with every criterion failed and the only consequence is prose nobody queries.
+
+The verdict's consumer is the facilitator, which is a machine by default, so turning a failure into a tracked item is the loop's own bookkeeping rather than an automation somebody has to be persuaded to accept. Each not-met criterion becomes one ledger record stamped with the receipt identifier and deduplicated on it, so a re-ingest cannot mint a second record for the same failure, and the record identifier is written back into the audit notes so the edge is two-sided like every other link in the record.
+
+An inconclusive verdict deliberately does not create a record. It means the auditor was under-fed, which is an input fault rather than a product defect, and minting records for it at volume would fill the ledger with noise and teach a reader to ignore it. It must still leave the receipt visibly outstanding, or a verdict that decided nothing becomes indistinguishable from one that passed.
+
+What blocks depends on the facilitator's mode ([adr-55](../../decisions/adrs/0055-roles-addressee-and-when-the-loop-stops.md)): a machine facilitator works the queue, and an activated human facilitator is what the queue waits for. The ratchet that would make a new failure fail a gate is deliberately not part of this: it is sequenced behind a corpus of real verdicts, because there are none yet and a ratchet baselines whatever number it finds.
 
 ## Acceptance Criteria
 
@@ -25,7 +31,7 @@ An intent that fails its own fidelity audit leaves a tracked issue, not a paragr
 
 ## Open Questions
 
-_None recorded yet._
+**Decided 2026-08-29 (product thinker).** An unmet criterion goes on the facilitator's list. The product thinker hears about it only when the shortfall changes what they asked for.
 
 ## Audit Notes
 
