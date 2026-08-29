@@ -1,6 +1,9 @@
 package scanner
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // TestCallerHomeTrimsTheTrailingSlash pins the one normalisation every store
 // relies on when it sweeps the literal home: a HOME exported with a trailing
@@ -32,5 +35,76 @@ func TestBlockingResidualGatesOnKindNotSeverityAlone(t *testing.T) {
 	}
 	if len(BlockingResidual(nil)) != 0 {
 		t.Error("a clean rescan must not block")
+	}
+}
+
+// TestSweepCallerHomeIsAnchoredOnAPathBoundary pins the literal $HOME sweep:
+// the home is replaced where it stands as a path — at the start of a token and
+// followed by a separator or the end — and left alone where it is merely a
+// prefix of something else. An unanchored replace turned "/rootfs/etc/hosts"
+// into "~fs/etc/hosts" and "the /root-cause" into "the ~-cause" under
+// HOME=/root, and "/home/abc/x" into "~bc/x" under HOME=/home/a, silently
+// corrupting the committed page.
+func TestSweepCallerHomeIsAnchoredOnAPathBoundary(t *testing.T) {
+	cases := []struct{ home, in, want string }{
+		{"/root", "/root/x", "~/x"},
+		{"/root", "HOME=/root", "HOME=~"},
+		{"/root", "cd /root", "cd ~"},
+		{"/root", "(/root)", "(~)"},
+		{"/root", "/rootfs/etc/hosts", "/rootfs/etc/hosts"},
+		{"/root", "the /root-cause analysis", "the /root-cause analysis"},
+		{"/root", "/var/root/x", "/var/root/x"},
+		{"/root", "~/root/x", "~/root/x"},
+		{"/home/a", "/home/abc/x", "/home/abc/x"},
+		{"/home/a", "HOME=/home/a /home/a/x", "HOME=~ ~/x"},
+		{"", "/root/x", "/root/x"},
+	}
+	for _, c := range cases {
+		if got := SweepCallerHome(c.in, c.home); got != c.want {
+			t.Errorf("SweepCallerHome(%q, home=%q) = %q, want %q", c.in, c.home, got, c.want)
+		}
+	}
+}
+
+// TestSurvivingCallerHomeIgnoresAPrefixMatch pins the survivor check to the
+// same boundary as the sweep: "/rootfs" is not the home "/root" and must not
+// refuse a write the sweep correctly left alone, while a home that stands as a
+// path is still reported.
+func TestSurvivingCallerHomeIgnoresAPrefixMatch(t *testing.T) {
+	if got := SurvivingCallerHome("/rootfs/etc/hosts and the /root-cause", "/root"); len(got) != 0 {
+		t.Errorf("a prefix match was reported as the surviving home: %+v", got)
+	}
+	if got := SurvivingCallerHome("cd /root/x", "/root"); len(got) == 0 {
+		t.Error("the literal home standing as a path was not reported")
+	}
+}
+
+// TestHomePathSelfDetectionIsAnchored pins the stage-one detector to the same
+// anchor as the sweep: under HOME=/root the caller's home is "/root/x", not
+// "/rootfs/etc/hosts", so the first is a home_path_self finding and the second
+// is left alone rather than redacted to "~fs/etc/hosts".
+func TestHomePathSelfDetectionIsAnchored(t *testing.T) {
+	t.Setenv("HOME", "/root")
+	sc, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := "copied /rootfs/etc/hosts and the /root-cause note to /root/x\n"
+	findings := sc.ScanText(text, "t")
+	var self int
+	for _, f := range findings {
+		if f.Kind == kindHomeSelf {
+			self++
+		}
+	}
+	if self != 1 {
+		t.Fatalf("want exactly one home_path_self finding (the /root/x path), got %d: %+v", self, findings)
+	}
+	redacted, _ := Redact(text, findings)
+	if !strings.Contains(redacted, "/rootfs/etc/hosts") || !strings.Contains(redacted, "/root-cause") {
+		t.Errorf("a path that merely starts with the home was redacted:\n%s", redacted)
+	}
+	if strings.Contains(redacted, "/root/x") {
+		t.Errorf("the caller's home survived:\n%s", redacted)
 	}
 }

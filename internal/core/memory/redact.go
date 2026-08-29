@@ -63,11 +63,13 @@ func (r *storeRedactor) redactText(text, label string) (string, int, error) {
 
 	// Deterministic literal $HOME backstop, independent of the scanner
 	// heuristic (defence in depth on this trust boundary): collapse every
-	// remaining occurrence of the resolved home to "~", then fail closed if a
-	// blocking span still stands.
+	// remaining occurrence of the resolved home that stands as a path to "~",
+	// then fail closed if the caller's home still shows — the literal, or a
+	// /Users/<user> or /home/<user> segment for the caller's own username,
+	// which the literal sweep cannot see. The same gate history.Capture holds.
 	if r.home != "" {
-		redacted = strings.ReplaceAll(redacted, r.home, "~")
-		if strings.Contains(redacted, r.home) {
+		redacted = scanner.SweepCallerHome(redacted, r.home)
+		if resid := scanner.SurvivingCallerHome(redacted, r.home); len(resid) > 0 {
 			return "", 0, newIngestError("refusing to write: the caller's home path survived redaction")
 		}
 	}

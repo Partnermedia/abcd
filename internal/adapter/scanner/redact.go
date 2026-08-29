@@ -83,7 +83,15 @@ func redactLine(line string, fs []Finding) (string, int) {
 	sortByMatchedLenDesc(identity)
 	for _, f := range identity {
 		repl := redactionReplacement(f)
-		if next := strings.ReplaceAll(line, f.Matched, repl); next != line {
+		next := strings.ReplaceAll(line, f.Matched, repl)
+		if f.Kind == kindHomeSelf {
+			// The caller's home is a path, and a longer path that merely
+			// starts with it ("/rootfs" under HOME=/root) is not the home: the
+			// substring rewrite collapsed both to "~", so the home is swept
+			// where it stands as a path, by the anchor the detector applies.
+			next = SweepCallerHome(line, f.Matched)
+		}
+		if next != line {
 			changed++
 			line = next
 		}

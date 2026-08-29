@@ -227,9 +227,15 @@ func (m identityMatchers) findings(line string, lineno int, id2sev map[string]Se
 	// only to avoid over-flagging a DIFFERENT user's path (home_path_other),
 	// never to license leaving the caller's own home path unredacted. A home
 	// path followed by punctuation (e.g. "/Users/me#draft", "$HOME/dir&") is abcd-audit:allow
-	// still the caller's home and must be redacted.
+	// still the caller's home and must be redacted. What is NOT the caller's
+	// home is a longer path that merely starts with it — "/rootfs/etc/hosts"
+	// under HOME=/root, "/home/abc" under HOME=/home/a — so a match must stand
+	// as a path of its own, by the same anchor SweepCallerHome applies.
 	if m.homeSelf != nil {
 		for _, loc := range m.homeSelf.FindAllStringIndex(line, -1) {
+			if !homeStandsAsPath(line, loc[0], loc[1]) {
+				continue
+			}
 			add(kindHomeSelf, loc[0]+1, line[loc[0]:loc[1]], "~")
 		}
 	}

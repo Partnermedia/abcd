@@ -46,17 +46,69 @@ func BlockingResidual(findings []Finding) []Finding {
 	return out
 }
 
+// SweepCallerHome is the deterministic literal $HOME backstop, independent of
+// the pattern heuristic: every occurrence of home that stands as a path is
+// collapsed to "~". An occurrence stands as a path when nothing path-like
+// precedes it (the start of the text, or a byte that cannot continue a path
+// segment) and nothing name-like follows it (the end, a separator, or any
+// byte outside the username-continuation set). An unanchored replace turned
+// "/rootfs/etc/hosts" into "~fs/etc/hosts" under HOME=/root and "/home/abc/x"
+// into "~bc/x" under HOME=/home/a, silently corrupting the committed text; the
+// anchor is what lets a short home coexist with the paths that merely share
+// its prefix. An empty home sweeps nothing.
+func SweepCallerHome(text, home string) string {
+	if home == "" {
+		return text
+	}
+	var b strings.Builder
+	from := 0
+	for {
+		i := strings.Index(text[from:], home)
+		if i < 0 {
+			break
+		}
+		at := from + i
+		end := at + len(home)
+		if homeStandsAsPath(text, at, end) {
+			b.WriteString(text[from:at])
+			b.WriteByte('~')
+			from = end
+			continue
+		}
+		b.WriteString(text[from : at+1])
+		from = at + 1
+	}
+	if from == 0 {
+		return text
+	}
+	b.WriteString(text[from:])
+	return b.String()
+}
+
+// homeStandsAsPath reports whether text[at:end] — an occurrence of the home —
+// is a path of its own rather than the prefix of another: the byte before it
+// cannot continue a path segment (so "/var/root" and "~/root" are not "/root")
+// and the byte after it cannot continue a name (so "/rootfs" and "/root-cause"
+// are not "/root" either, while "/root/x" and "/root" at the end are).
+func homeStandsAsPath(text string, at, end int) bool {
+	if at > 0 && (isPathSegmentByte(text[at-1]) || text[at-1] == '~') {
+		return false
+	}
+	return end >= len(text) || !isPathUserByte(text[end])
+}
+
 // SurvivingCallerHome reports any absolute path in text that still reveals the
-// caller's OWN home after the literal $HOME sweep: the $HOME literal itself
-// (defensive — the sweep should have removed it), or a "/Users/<user>" /
-// "/home/<user>" segment for the caller's local username (basename of $HOME),
-// regardless of the character that follows it (trailing punctuation must never
-// excuse a leak). It is a deterministic substring check with no dependency on
-// the pattern heuristic. Returned findings carry only the kind (masked
-// Matched), enough for a refusal to report without exposing raw material.
+// caller's OWN home after SweepCallerHome: the $HOME literal standing as a path
+// (defensive — the sweep removes exactly those, so this fires only if the two
+// ever disagree), or a "/Users/<user>" / "/home/<user>" segment for the
+// caller's local username (basename of $HOME), regardless of the character
+// that follows it (trailing punctuation must never excuse a leak). It is a
+// deterministic substring check with no dependency on the pattern heuristic.
+// Returned findings carry only the kind (masked Matched), enough for a refusal
+// to report without exposing raw material.
 func SurvivingCallerHome(text, home string) []Finding {
 	var out []Finding
-	if home != "" && strings.Contains(text, home) {
+	if home != "" && SweepCallerHome(text, home) != text {
 		out = append(out, Finding{Kind: kindHomeSelf, Matched: "~"})
 	}
 	user := home

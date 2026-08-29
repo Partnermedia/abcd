@@ -175,7 +175,7 @@ func Capture(repoRoot, rootSHA, sessionID string, raw []byte, kind string) (Capt
 	// collapses every remaining occurrence of the resolved $HOME to "~", then
 	// fails closed if any absolute path still reveals the caller's own home.
 	if home := scanner.CallerHome(); home != "" {
-		redacted = strings.ReplaceAll(redacted, home, "~")
+		redacted = scanner.SweepCallerHome(redacted, home)
 		if resid := scanner.SurvivingCallerHome(redacted, home); len(resid) > 0 {
 			return CaptureResult{Residual: resid}, &RedactionResidualError{Residual: resid}
 		}

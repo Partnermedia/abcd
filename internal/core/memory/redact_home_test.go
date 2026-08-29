@@ -1,0 +1,34 @@
+package memory
+
+import (
+	"strings"
+	"testing"
+)
+
+// TestStoreRedactorSweepsHomeOnAPathBoundary drives the memory store's literal
+// $HOME backstop under a short home: the home is collapsed to "~" where it
+// stands as a path and a body that merely shares its prefix survives intact.
+// The unanchored sweep rewrote "/rootfs/etc/hosts" to "~fs/etc/hosts" before
+// the page was committed, and the fail-closed check that followed it could
+// never fire.
+func TestStoreRedactorSweepsHomeOnAPathBoundary(t *testing.T) {
+	t.Setenv("HOME", "/root")
+	r, err := newStoreRedactor(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := "Mount table copied from /rootfs/etc/hosts; see the /root-cause note.\n" +
+		"Scratch lives at /root/scratch on this box.\n"
+	got, _, err := r.redactText(body, "page")
+	if err != nil {
+		t.Fatalf("redactText: %v", err)
+	}
+	for _, keep := range []string{"/rootfs/etc/hosts", "the /root-cause note"} {
+		if !strings.Contains(got, keep) {
+			t.Errorf("a body sharing the home's prefix was corrupted; %q is gone:\n%s", keep, got)
+		}
+	}
+	if strings.Contains(got, "/root/scratch") || !strings.Contains(got, "~/scratch") {
+		t.Errorf("the home standing as a path was not swept to ~:\n%s", got)
+	}
+}
