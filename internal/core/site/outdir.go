@@ -218,7 +218,8 @@ var beforeOutDirPurge = func(outDir string) {}
 // after the ownership rule is asked again. The returned root is open; the
 // caller closes it.
 func regateOutDir(repoRoot, outDir, rootCommit string) (*os.Root, error) {
-	if _, err := resolveOutDir(repoRoot, outDir); err != nil {
+	outDir, err := resolveOutDir(repoRoot, outDir)
+	if err != nil {
 		return nil, err
 	}
 	state, err := inspectOutDir(outDir, rootCommit)
