@@ -620,7 +620,8 @@ func TestBuildClearsTheWreckageOfAFailedBuild(t *testing.T) {
 // bytes. It is present at every instant.
 func TestPurgeKeepsTheMarker(t *testing.T) {
 	out := t.TempDir()
-	if err := os.WriteFile(filepath.Join(out, siteMarkerName), siteMarker(""), 0o644); err != nil {
+	const identity = "0123456789abcdef0123456789abcdef01234567"
+	if err := os.WriteFile(filepath.Join(out, siteMarkerName), siteMarker(identity), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"index.html", "site.css"} {
@@ -632,7 +633,12 @@ func TestPurgeKeepsTheMarker(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := purgeOutDir(out); err != nil {
+	root, err := openOutDir(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer root.Close()
+	if err := purgeOutDir(root); err != nil {
 		t.Fatal(err)
 	}
 
@@ -649,7 +655,7 @@ func TestPurgeKeepsTheMarker(t *testing.T) {
 	}
 
 	// And the directory still reads as ours, at every point in between.
-	state, err := inspectOutDir(out, "")
+	state, err := inspectOutDir(out, identity)
 	if err != nil {
 		t.Fatal(err)
 	}

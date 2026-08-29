@@ -16,7 +16,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
+
+func fsutilCaseFolds() bool { return fsutil.CaseFoldingFS() }
 
 // symlinkOrSkip plants a symlink, skipping on a filesystem that cannot hold
 // one: the subject is abcd's refusal, not the platform's symlink support.
@@ -50,6 +54,10 @@ func TestBuildRefusesASymlinkedOutputLeaf(t *testing.T) {
 	link := filepath.Join(f.Root(), DefaultOutDir)
 	symlinkOrSkip(t, outside, link)
 
+	// The gate itself, not merely the handle behind it, refuses the leaf.
+	if _, gerr := resolveOutDir(f.Root(), link); gerr == nil || !strings.Contains(gerr.Error(), "symlink") {
+		t.Errorf("resolveOutDir accepted a symlinked leaf: %v", gerr)
+	}
 	_, err := Build(Request{RepoRoot: f.Root(), OutDir: link, Stamp: fixtureStamp})
 	if err == nil {
 		t.Fatal("the build wrote through a symlinked output directory")
@@ -170,4 +178,134 @@ func TestCheckRefusesASymlinkedOutputDir(t *testing.T) {
 	if !strings.Contains(err.Error(), "symlink") {
 		t.Errorf("the refusal does not say why: %v", err)
 	}
+}
+
+// TestBuildRefusesAnIdentitylessOutputSharedByAnotherTree: a source tree with
+// no root commit (no git, or none yet) has no identity a marker could name, so
+// two such trees would otherwise write the same marker and purge each other.
+// The rule fails closed: with no identity, a non-empty directory is foreign.
+func TestBuildRefusesAnIdentitylessOutputSharedByAnotherTree(t *testing.T) {
+	gitless := func() *fixture {
+		f := newFixture(t)
+		if err := os.RemoveAll(filepath.Join(f.Root(), ".git")); err != nil {
+			t.Fatal(err)
+		}
+		return f
+	}
+	a, b := gitless(), gitless()
+	out := t.TempDir()
+	buildFixture(t, a, out)
+
+	_, err := Build(Request{RepoRoot: b.Root(), OutDir: out, Stamp: fixtureStamp})
+	if err == nil {
+		t.Fatal("a build with no repository identity purged another identity-less tree's output")
+	}
+	if _, serr := os.Stat(filepath.Join(out, "index.html")); serr != nil {
+		t.Errorf("the refused build removed the first tree's page: %v", serr)
+	}
+}
+
+// TestResolveOutDirFoldsTheGitComponent: every other location rule case-folds
+// on a folding filesystem, and `.GIT` names `.git` there.
+func TestResolveOutDirFoldsTheGitComponent(t *testing.T) {
+	if !fsutilCaseFolds() {
+		t.Skip("the filesystem does not fold case")
+	}
+	f := newFixture(t)
+	if _, err := resolveOutDir(f.Root(), filepath.Join(f.Root(), ".GIT", "x")); err == nil {
+		t.Fatal("a case-variant .git component was accepted as an output directory")
+	}
+}
+
+// TestResolveOutDirRefusesAGitFile: a worktree or submodule checkout carries
+// `.git` as a FILE, and is a checkout all the same.
+func TestResolveOutDirRefusesAGitFile(t *testing.T) {
+	f := newFixture(t)
+	wt := filepath.Join(t.TempDir(), "wt")
+	if err := os.MkdirAll(wt, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(wt, ".git"), []byte("gitdir: elsewhere\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := resolveOutDir(f.Root(), wt); err == nil || !strings.Contains(err.Error(), ".git") {
+		t.Fatalf("a directory holding a .git file was accepted: %v", err)
+	}
+}
+
+// TestResolveOutDirFollowsAnAncestorLinkOutsideTheRepository is the deliberate
+// half of the symlink rule: a link the operating system or the operator keeps
+// outside the checkout is followed, because an untrusted commit cannot have
+// planted it.
+func TestResolveOutDirFollowsAnAncestorLinkOutsideTheRepository(t *testing.T) {
+	f := newFixture(t)
+	base := t.TempDir()
+	real := filepath.Join(base, "real")
+	if err := os.MkdirAll(real, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(base, "link")
+	symlinkOrSkip(t, real, link)
+	want := filepath.Join(link, DefaultOutDir)
+	got, err := resolveOutDir(f.Root(), want)
+	if err != nil {
+		t.Fatalf("an ancestor link outside the repository was refused: %v", err)
+	}
+	if got != want {
+		t.Errorf("resolveOutDir = %q, want the lexical %q", got, want)
+	}
+}
+
+// TestResolveOutDirKeysTheBoundaryOnTheCheckout: the repository boundary is the
+// git toplevel, not the directory the build was invoked from, so a committed
+// link ABOVE a subdirectory cwd is still inside the checkout.
+func TestResolveOutDirKeysTheBoundaryOnTheCheckout(t *testing.T) {
+	f := newFixture(t)
+	outside := t.TempDir()
+	symlinkOrSkip(t, outside, filepath.Join(f.Root(), "above-link"))
+	sub := filepath.Join(f.Root(), "docs")
+	_, err := resolveOutDir(sub, filepath.Join(f.Root(), "above-link", DefaultOutDir))
+	if err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("a committed link above the invoking directory was followed: %v", err)
+	}
+}
+
+// TestDescribeReportsARefusedOutputDirectory: the status board reads the
+// output directory through the same gate, and reports a refusal rather than
+// following a committed link to count what lies beyond it.
+func TestDescribeReportsARefusedOutputDirectory(t *testing.T) {
+	f := newFixture(t)
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "index.html"), []byte("<p>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	symlinkOrSkip(t, outside, filepath.Join(f.Root(), DefaultOutDir))
+	st, err := Describe(f.Root(), DefaultOutDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.OutExists || st.OutFiles != 0 {
+		t.Errorf("the board counted entries through a symlinked output directory: %+v", st)
+	}
+	if st.OutRefused == "" {
+		t.Error("the board does not say the output directory was refused")
+	}
+}
+
+// TestOpenOutDirRefusesASymlink pins the handle the purge and the writes go
+// through: it is opened only over a real directory, so a leaf that became a
+// link after the gate ran is never opened at its target.
+func TestOpenOutDirRefusesASymlink(t *testing.T) {
+	real := t.TempDir()
+	link := filepath.Join(t.TempDir(), "link")
+	symlinkOrSkip(t, real, link)
+	if root, err := openOutDir(link); err == nil {
+		root.Close()
+		t.Fatal("the output handle was opened through a symlink")
+	}
+	root, err := openOutDir(real)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root.Close()
 }

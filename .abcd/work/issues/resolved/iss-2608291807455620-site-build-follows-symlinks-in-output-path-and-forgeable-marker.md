@@ -7,7 +7,7 @@ category: "security"
 source: "agent-finding"
 found_during: "v0.6.9-security-pass"
 found_at: "internal/core/site/build.go"
-resolution: "site build and site check pass the output path through one gate that refuses a symlink at the leaf or at any ancestor inside the repository, the repository root and any .git holder, and the purge additionally requires a marker naming this repository's root commit and a directory git tracks nothing in"
+resolution: "site build and site check pass the output path through one gate that refuses a symlink at the leaf or at any ancestor inside the repository, the repository root and any .git holder, and the purge additionally requires a marker naming this repository's root commit and a directory git tracks nothing in; a repository that commits its built site directory is now refused by abcd site build and renders into an untracked one instead"
 impact: fix
 ---
 

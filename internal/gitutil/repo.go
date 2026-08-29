@@ -187,8 +187,12 @@ func IsAncestor(root, ancestor, descendant string) (bool, error) {
 // repository means. A repository can have several root commits (an octopus of
 // unrelated histories); the first `rev-list` reports is the canonical one, the
 // same choice the history registry and the lifeboat probe make.
+//
+// The output is bounded (one object name, so the cap is generous) rather than
+// buffered whole: a hostile repository must not be able to make an identity
+// probe allocate.
 func RootCommit(root string) string {
-	out, err := Run(root, "rev-list", "-n", "1", "--max-parents=0", "HEAD")
+	out, err := RunLimited(root, 4096, "rev-list", "-n", "1", "--max-parents=0", "HEAD")
 	if err != nil {
 		return ""
 	}

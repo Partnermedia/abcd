@@ -14,9 +14,10 @@ package site
 //
 // resolveOutDir is the one gate. Every touch of the output directory — the
 // inspection, the purge, the MkdirAll and the os.Root the writes go through,
-// and the check's reads — takes the path it returns, and the purge additionally
-// requires the ownership rule below. There is exactly one place to get this
-// right, and the callers cannot skip it because they have no other path.
+// the check's reads and the status board's count — takes the path it returns,
+// and the purge additionally requires the ownership rule below. There is
+// exactly one place to get this right, and the callers cannot skip it because
+// they have no other path.
 
 import (
 	"errors"
@@ -73,9 +74,12 @@ func siteMarker(rootCommit string) []byte {
 	return []byte(siteMarkerSchema + "\n" + siteMarkerRepoKey + markerIdentity(rootCommit) + "\n\n" + siteMarkerBody)
 }
 
-// markerIdentity is the repository's name in the marker. A repository with no
-// root commit (no git, no commits) has no identity to write, and says so with a
-// word rather than an empty field two different repositories would both match.
+// markerIdentity is the repository's name in the marker. A source tree with no
+// root commit (no git, none yet) has no identity to write and says so with a
+// word — and that word is never ACCEPTED: two identity-less trees would write
+// the same marker and purge each other's output, so inspectOutDir classifies a
+// non-empty directory as foreign whenever the repository has no root commit,
+// and the operator empties it by hand. The word is documentation, not a key.
 func markerIdentity(rootCommit string) string {
 	if rootCommit == "" {
 		return "unknown"
@@ -87,6 +91,9 @@ func markerIdentity(rootCommit string) string {
 // repository writes: the schema line and the identity line, exactly. The
 // explanation below them is prose and is not compared.
 func markerIdentifies(data []byte, rootCommit string) bool {
+	if rootCommit == "" {
+		return false
+	}
 	lines := strings.SplitN(string(data), "\n", 3)
 	return len(lines) >= 2 && lines[0] == siteMarkerSchema && lines[1] == siteMarkerRepoKey+markerIdentity(rootCommit)
 }
@@ -99,8 +106,10 @@ func markerIdentifies(data []byte, rootCommit string) bool {
 // and `site` does not exist yet, which is precisely the shape MkdirAll then
 // creates on the far side of the link. Every existing component is inspected.
 // A symlink at the leaf is refused outright. A symlink at an ancestor is
-// refused when it sits inside the repository, because the checkout is the one
-// place an untrusted commit can plant one; a link the operating system keeps
+// refused when it sits inside the checkout — the git toplevel, not the
+// directory the build was invoked from, so a committed link above a
+// subdirectory cwd still counts — because the checkout is the one place an
+// untrusted commit can plant one; a link the operating system keeps
 // outside it (/var -> /private/var on macOS, an automounted home) is followed,
 // since refusing it would refuse every temporary directory and protect
 // nothing — under the trusted-worktree model, what is outside the checkout is
@@ -119,7 +128,7 @@ func resolveOutDir(repoRoot, outDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	repoReal := fsutil.RealExistingPath(repoRoot)
+	repoReal := fsutil.RealExistingPath(checkoutRoot(repoRoot))
 	fold := fsutil.CaseFoldingFS()
 
 	if err := refuseSymlinkComponents(abs, repoReal, fold); err != nil {
@@ -130,8 +139,11 @@ func resolveOutDir(repoRoot, outDir string) (string, error) {
 	if fsutil.PathWithin(repoReal, outReal, fold) {
 		return "", fmt.Errorf("site: %s is the repository root or a directory containing it; the build empties its output directory, so it never writes into one that holds the sources", abs)
 	}
+	// Folded like every other location rule: on a case-folding filesystem
+	// `.GIT` names `.git`.
+	dotGit := fsutil.FoldPath(".git", fold)
 	for _, seg := range strings.Split(filepath.ToSlash(outReal), "/") {
-		if seg == ".git" {
+		if fsutil.FoldPath(seg, fold) == dotGit {
 			return "", fmt.Errorf("site: %s is inside a .git directory; refusing", abs)
 		}
 	}
@@ -139,6 +151,30 @@ func resolveOutDir(repoRoot, outDir string) (string, error) {
 		return "", fmt.Errorf("site: %s holds a .git entry, so it is a repository checkout rather than a build output; refusing to empty it", abs)
 	}
 	return abs, nil
+}
+
+// checkoutRoot is the repository boundary the symlink rule is keyed on: the
+// git toplevel of repoRoot, so that a build run from a subdirectory still
+// treats a committed link above it as inside the checkout. Where git cannot
+// answer (absent, not a repository) repoRoot itself is the boundary — there is
+// no checkout above it to defend.
+func checkoutRoot(repoRoot string) string {
+	top, err := gitutil.Run(repoRoot, "rev-parse", "--path-format=absolute", "--show-toplevel")
+	if err != nil || top == "" {
+		return repoRoot
+	}
+	return top
+}
+
+// openOutDir is the handle the purge and every write go through. It opens the
+// path as it is NOW, and only when it is a real directory: a leaf that became
+// a link after the gate ran would otherwise be opened at its target. The
+// caller closes it.
+func openOutDir(outDir string) (*os.Root, error) {
+	if !fsutil.IsRealDir(outDir) {
+		return nil, fmt.Errorf("site: %s is not a real directory; refusing to write", outDir)
+	}
+	return os.OpenRoot(outDir)
 }
 
 // refuseSymlinkComponents walks every existing component of abs, shortest
