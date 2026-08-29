@@ -91,6 +91,10 @@ func markerIdentity(rootCommit string) string {
 // repository writes: the schema line and the identity line, exactly. The
 // explanation below them is prose and is not compared.
 func markerIdentifies(data []byte, rootCommit string) bool {
+	// Belt and braces: the RULE for an empty identity is inspectOutDir's early
+	// return, which classifies the directory as foreign before this is asked.
+	// This guard is unreachable through it and exists so no other caller can
+	// ever accept the shared word.
 	if rootCommit == "" {
 		return false
 	}
@@ -128,7 +132,11 @@ func resolveOutDir(repoRoot, outDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	repoReal := fsutil.RealExistingPath(checkoutRoot(repoRoot))
+	top, err := checkoutRoot(repoRoot)
+	if err != nil {
+		return "", err
+	}
+	repoReal := fsutil.RealExistingPath(top)
 	fold := fsutil.CaseFoldingFS()
 
 	if err := refuseSymlinkComponents(abs, repoReal, fold); err != nil {
@@ -155,15 +163,81 @@ func resolveOutDir(repoRoot, outDir string) (string, error) {
 
 // checkoutRoot is the repository boundary the symlink rule is keyed on: the
 // git toplevel of repoRoot, so that a build run from a subdirectory still
-// treats a committed link above it as inside the checkout. Where git cannot
-// answer (absent, not a repository) repoRoot itself is the boundary — there is
-// no checkout above it to defend.
-func checkoutRoot(repoRoot string) string {
-	top, err := gitutil.Run(repoRoot, "rev-parse", "--path-format=absolute", "--show-toplevel")
-	if err != nil || top == "" {
-		return repoRoot
+// treats a committed link above it as inside the checkout.
+//
+// The answer is validated, not trusted: `git rev-parse` echoes an option it
+// does not recognise to stdout and exits 0, so an older git handed a flag it
+// lacks answers with the flag's text and the path on two lines, and a boundary
+// made of that matches no real path — every refusal keyed on it would vanish.
+// `--show-toplevel` is always absolute, so nothing but a single absolute line
+// is a toplevel. Where there is no usable answer the outcome depends on what
+// repoRoot is: outside anything repo-shaped there is no checkout above it to
+// defend and repoRoot itself is the boundary; inside something repo-shaped a
+// git that cannot answer is a refusal, the same fail-closed branch
+// refuseTrackedOutDir takes, because the boundary it would silently fall back
+// to is the one the rule exists to widen past.
+func checkoutRoot(repoRoot string) (string, error) {
+	top, err := gitutil.Run(repoRoot, "rev-parse", "--show-toplevel")
+	if err == nil && filepath.IsAbs(top) && !strings.ContainsRune(top, '\n') {
+		return top, nil
 	}
-	return top
+	if gitutil.RepoShaped(repoRoot) {
+		reason := "an answer that is not one absolute path"
+		if err != nil {
+			reason = err.Error()
+		}
+		return "", fmt.Errorf("site: %s sits inside a checkout but git cannot name its root (%s); the symlink rule is keyed on that root, so refusing", repoRoot, reason)
+	}
+	return repoRoot, nil
+}
+
+// beforeOutDirPurge runs between the write-instant decision and the first
+// removal. It is a test seam: a test swaps the directory here to prove the
+// purge goes through the handle and not the path. Production leaves it empty.
+var beforeOutDirPurge = func(outDir string) {}
+
+// regateOutDir is the write-instant gate: every rule the early refusal
+// applied, applied again to the directory as it is NOW, and the handle the
+// purge and every write go through, opened over the real directory before
+// anything is removed. The render between the early refusal and the first
+// write takes real time, and a build that judged the path once would act on a
+// stale judgement.
+//
+// The directory is re-inspected rather than remembered: a directory that was
+// empty and is now foreign is refused; one that is now ours is purged only
+// after the ownership rule is asked again. The returned root is open; the
+// caller closes it.
+func regateOutDir(repoRoot, outDir, rootCommit string) (*os.Root, error) {
+	if _, err := resolveOutDir(repoRoot, outDir); err != nil {
+		return nil, err
+	}
+	state, err := inspectOutDir(outDir, rootCommit)
+	if err != nil {
+		return nil, err
+	}
+	if state == outDirForeign {
+		return nil, errForeignOutDir(outDir, rootCommit)
+	}
+	if state == outDirOurs {
+		if err := refuseTrackedOutDir(outDir); err != nil {
+			return nil, err
+		}
+	}
+	beforeOutDirPurge(outDir)
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return nil, err
+	}
+	root, err := openOutDir(outDir)
+	if err != nil {
+		return nil, err
+	}
+	if state == outDirOurs {
+		if err := purgeOutDir(root); err != nil {
+			root.Close()
+			return nil, err
+		}
+	}
+	return root, nil
 }
 
 // openOutDir is the handle the purge and every write go through. It opens the

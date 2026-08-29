@@ -12,7 +12,9 @@ package site
 // build refuses AND that nothing outside the lexical destination was touched.
 
 import (
+	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -308,4 +310,139 @@ func TestOpenOutDirRefusesASymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 	root.Close()
+}
+
+// shimGit puts a `git` on PATH that runs the real one, altered by script (a
+// shell fragment that sees "$@"; it must exec "$REAL_GIT" itself or exit).
+func shimGit(t *testing.T, script string) {
+	t.Helper()
+	real, err := exec.LookPath("git")
+	if err != nil {
+		t.Skip("git unavailable")
+	}
+	dir := t.TempDir()
+	body := "#!/bin/sh\nREAL_GIT=" + real + "\n" + script + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "git"), []byte(body), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+}
+
+// TestCheckoutRootIgnoresAnEchoingGit: `git rev-parse` echoes an option it does
+// not know to stdout and exits 0, so a git too old for a flag answers with the
+// flag's text and the path on two lines. That answer must not become the
+// boundary — a boundary that matches no real path widens the symlink rule to
+// nothing.
+func TestCheckoutRootIgnoresAnEchoingGit(t *testing.T) {
+	f := newFixture(t)
+	shimGit(t, `case "$*" in *rev-parse*--path-format*) echo "--path-format=absolute";; esac
+exec "$REAL_GIT" "$@"`)
+	outside := t.TempDir()
+	symlinkOrSkip(t, outside, filepath.Join(f.Root(), "above-link"))
+	sub := filepath.Join(f.Root(), "docs")
+
+	top, err := checkoutRoot(sub)
+	if err != nil {
+		t.Fatalf("checkoutRoot: %v", err)
+	}
+	if !filepath.IsAbs(top) || strings.Contains(top, "\n") || strings.Contains(top, "--path-format") {
+		t.Errorf("checkoutRoot took an echoed option as the boundary: %q", top)
+	}
+	if _, err := resolveOutDir(sub, filepath.Join(f.Root(), "above-link", DefaultOutDir)); err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("an echoing git widened the checkout boundary: %v", err)
+	}
+}
+
+// TestResolveOutDirRefusesWhenGitCannotNameTheCheckout: inside something
+// repo-shaped, a git that cannot answer is a refusal, not a silent fallback to
+// the invoking directory — the same fail-closed branch refuseTrackedOutDir has.
+func TestResolveOutDirRefusesWhenGitCannotNameTheCheckout(t *testing.T) {
+	f := newFixture(t)
+	shimGit(t, `exit 128`)
+	_, err := resolveOutDir(f.Root(), filepath.Join(f.Root(), DefaultOutDir))
+	if err == nil || !strings.Contains(err.Error(), "git") {
+		t.Fatalf("a checkout git cannot answer for was accepted on the invoking directory alone: %v", err)
+	}
+}
+
+// TestRegateRefusesATrackedDirectoryAtTheWriteInstant pins the write-instant
+// ownership rule on its own: the re-gate, called directly, refuses a directory
+// git tracks a file in even when it carries a genuine marker. Deleting the
+// tracked-files check from the re-gate fails this test.
+func TestRegateRefusesATrackedDirectoryAtTheWriteInstant(t *testing.T) {
+	f := newFixture(t)
+	f.writeBytes("public/"+siteMarkerName, genuineMarker(t, f))
+	f.write("public/precious.txt", "someone else's work")
+	f.commitAt("2026-02-12T09:00:00+00:00", "chore: plant a marker", "None")
+	out := filepath.Join(f.Root(), "public")
+
+	root, err := regateOutDir(f.Root(), out, f.gitOut("rev-list", "--max-parents=0", "HEAD"))
+	if err == nil {
+		root.Close()
+		t.Fatal("the re-gate purged a tracked directory")
+	}
+	if got, rerr := os.ReadFile(filepath.Join(out, "precious.txt")); rerr != nil || string(got) != "someone else's work" {
+		t.Errorf("the re-gate removed the file that was not its own: %q, %v", got, rerr)
+	}
+}
+
+// TestRegatePurgesThroughTheHandleNotThePath: between the decision and the
+// removal the directory is swapped for a link to somewhere precious. A purge
+// through the handle opened over the real directory cannot reach the link's
+// target; a purge by path would empty it. Moving the purge ahead of the handle
+// fails this test.
+func TestRegatePurgesThroughTheHandleNotThePath(t *testing.T) {
+	const identity = "0123456789abcdef0123456789abcdef01234567"
+	base := t.TempDir()
+	out := filepath.Join(base, DefaultOutDir)
+	if err := os.MkdirAll(out, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for name, body := range map[string][]byte{siteMarkerName: siteMarker(identity), "index.html": []byte("<p>")} {
+		if err := os.WriteFile(filepath.Join(out, name), body, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	outside := t.TempDir()
+	precious := filepath.Join(outside, "precious.txt")
+	if err := os.WriteFile(precious, []byte("someone else's work"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	prev := beforeOutDirPurge
+	defer func() { beforeOutDirPurge = prev }()
+	beforeOutDirPurge = func(dir string) {
+		if err := os.Rename(dir, dir+".moved"); err != nil {
+			t.Fatal(err)
+		}
+		symlinkOrSkip(t, outside, dir)
+	}
+
+	if root, err := regateOutDir(t.TempDir(), out, identity); err == nil {
+		root.Close()
+	}
+	if got, rerr := os.ReadFile(precious); rerr != nil || string(got) != "someone else's work" {
+		t.Errorf("the purge reached through the swapped-in link: %q, %v", got, rerr)
+	}
+}
+
+// TestDescribeJSONCarriesNoAbsolutePath: the board's refusal is machine output
+// too, and machine output never carries a developer-identity path (iss-81).
+func TestDescribeJSONCarriesNoAbsolutePath(t *testing.T) {
+	f := newFixture(t)
+	symlinkOrSkip(t, t.TempDir(), filepath.Join(f.Root(), DefaultOutDir))
+	st, err := Describe(f.Root(), DefaultOutDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	js, err := json.Marshal(st)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.OutRefused == "" {
+		t.Fatal("the board did not refuse the symlinked output directory")
+	}
+	if strings.Contains(string(js), f.Root()) {
+		t.Errorf("the JSON board carries the absolute repository path: %s", js)
+	}
 }

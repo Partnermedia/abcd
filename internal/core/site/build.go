@@ -124,6 +124,9 @@ func errForeignOutDir(outDir, rootCommit string) error {
 // The tool would jam on its own wreckage and need a human with `rm` to get it
 // going again. Keeping the marker costs nothing: the build rewrites it with
 // identical bytes, so it is present at every instant and correct at the end.
+// (For a tree with no root commit that jam IS the design: it owns nothing, so
+// its non-empty output is emptied by hand every time; the marker it keeps here
+// is documentation, never a claim it could accept.)
 //
 // A symlink among the entries is removed as a LINK; `Root.RemoveAll` does not
 // follow it, so nothing outside this directory is reachable from here.
@@ -474,31 +477,14 @@ func Build(req Request) (Result, error) {
 	// this build does not rewrite it, and it is stale INVISIBLY — it is served,
 	// and it looks exactly like a file that built.
 	//
-	// Every rule runs again here, at the instant of the first destructive step:
-	// the render between the early refusal and this point takes real time, and
-	// the path is judged as it is now, not as it was. The handle is opened
-	// BEFORE the purge, so the purge removes through it rather than by path.
-	if _, err := resolveOutDir(repoRoot, outDir); err != nil {
-		return Result{}, err
-	}
-	if outState == outDirOurs {
-		if err := refuseTrackedOutDir(outDir); err != nil {
-			return Result{}, err
-		}
-	}
-	if err := os.MkdirAll(outDir, 0o755); err != nil {
-		return Result{}, err
-	}
-	root, err := openOutDir(outDir)
+	// Every rule runs again here, at the instant of the first destructive step
+	// — the path, the marker, the ownership — and the purge goes through the
+	// handle regateOutDir opened over the real directory, never by path.
+	root, err := regateOutDir(repoRoot, outDir, rootCommit)
 	if err != nil {
 		return Result{}, err
 	}
 	defer root.Close()
-	if outState == outDirOurs {
-		if err := purgeOutDir(root); err != nil {
-			return Result{}, err
-		}
-	}
 
 	write := func(rel string, data []byte) error {
 		if !fsutil.ValidRelPath(rel) {
@@ -516,7 +502,9 @@ func Build(req Request) (Result, error) {
 	// leave a directory the next one recognises as its own. With the marker
 	// written last, the wreckage of a failed build would carry none, and every
 	// later build would refuse it — the tool jammed on its own debris, freed only
-	// by hand.
+	// by hand. A tree with no root commit is freed by hand regardless: it has
+	// no identity for the marker to name, and the next build refuses its
+	// non-empty output by design.
 	if err := write(siteMarkerName, siteMarker(rootCommit)); err != nil {
 		return Result{}, err
 	}
@@ -666,7 +654,9 @@ func Describe(repoRoot, outDir string) (Status, error) {
 	}
 	gated, gerr := resolveOutDir(repoRoot, abs)
 	if gerr != nil {
-		st.OutRefused = gerr.Error()
+		// Redacted at the source, so the text board and --json agree: machine
+		// output never carries an absolute developer-identity path (iss-81).
+		st.OutRefused = fsutil.RedactHome(fsutil.RedactRoot(gerr.Error(), repoRoot, "."))
 		return st, nil
 	}
 	entries, err := os.ReadDir(gated)
