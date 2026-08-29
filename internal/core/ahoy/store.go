@@ -24,21 +24,6 @@ func pluginVersion() string { return core.Version }
 // git identity helpers
 // ---------------------------------------------------------------------------
 
-// rootCommitSHA returns the repo's root-commit SHA, or "" when it cannot be
-// derived (no git, no commits). Total: never errors out of band.
-func rootCommitSHA(cwd string) string {
-	out, err := runGit(cwd, "rev-list", "--max-parents=0", "HEAD")
-	if err != nil {
-		return ""
-	}
-	// A repo may have multiple root commits; the first is canonical.
-	fields := strings.Fields(strings.TrimSpace(out))
-	if len(fields) == 0 {
-		return ""
-	}
-	return fields[0]
-}
-
 // originURL returns the trimmed origin remote URL, or "" on any failure.
 func originURL(cwd string) string {
 	out, err := runGit(cwd, "remote", "get-url", "origin")
@@ -70,7 +55,7 @@ func deriveIdentity(cwd string) RepoIdentity {
 	return RepoIdentity{
 		Name:    filepath.Base(cwd),
 		Github:  originURL(cwd),
-		RootSHA: rootCommitSHA(cwd),
+		RootSHA: gitutil.RootCommit(cwd),
 	}
 }
 

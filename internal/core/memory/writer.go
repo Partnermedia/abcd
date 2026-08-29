@@ -82,60 +82,59 @@ func WithStoreLock(repoRoot string, fn func() error) error {
 	return fn()
 }
 
-// validatedMemoryDir returns <repoRoot>/.abcd/memory, creating it if absent.
-// Each owned segment is lstat-refused as a symlink/non-dir.
-func validatedMemoryDir(repoRoot string) (string, error) {
+// memoryDir is the ONE walk that resolves <repoRoot>/.abcd/memory for every
+// entry point, read or write. Each owned segment is lstat-refused as a symlink
+// or non-directory, so a committed `.abcd/memory` DIRECTORY symlink (git mode
+// 120000 pointing at an out-of-repo tree) can neither be walked, read, nor
+// written into (GHSA-72rp-qxm2-r8vq). The leaf-guarded reads (fsutil.ReadGuarded,
+// O_NOFOLLOW) only bind the LEAF; they do NOT contain a symlinked ANCESTOR
+// directory, which is exactly the shape this guards. Callers resolve the store
+// through this once, up front, and refuse on error before any
+// WalkDir/ReadDir/ReadFile/MkdirAll touches the path.
+//
+// create says what a missing segment means: the write side materialises it,
+// the read/lint side must not (a read or a health-check never creates the
+// store) and reports present=false instead. The returned path is ALWAYS the
+// canonical Dir(repoRoot), present or not, so a caller never re-derives it.
+// One walker rather than a read copy and a write copy, because this is the
+// guard: two copies means a hardening fix to one leaves the other open.
+func memoryDir(repoRoot string, create bool) (string, bool, error) {
 	current := repoRoot
 	for _, segment := range []string{".abcd", "memory"} {
 		current = filepath.Join(current, segment)
 		fi, err := os.Lstat(current)
 		if err != nil {
 			if os.IsNotExist(err) {
+				if !create {
+					return Dir(repoRoot), false, nil
+				}
 				if err := os.Mkdir(current, 0o755); err != nil {
-					return "", err
+					return Dir(repoRoot), false, err
 				}
 				continue
 			}
-			return "", err
+			return Dir(repoRoot), false, err
 		}
 		if fi.Mode()&os.ModeSymlink != 0 || !fi.IsDir() {
-			return "", &UnsafeStorePathError{Msg: "memory store segment is a symlink or non-directory: " + current}
+			return Dir(repoRoot), false, &UnsafeStorePathError{Msg: "memory store segment is a symlink or non-directory: " + current}
 		}
 	}
-	return current, nil
+	return Dir(repoRoot), true, nil
 }
 
-// safeMemoryDir is the read/lint counterpart of validatedMemoryDir: it resolves
-// <repoRoot>/.abcd/memory while refusing any owned segment that is a symlink or
-// a non-directory, so a committed `.abcd/memory` DIRECTORY symlink (git mode
-// 120000 pointing at an out-of-repo tree) can neither be walked, read, nor
-// written into. Unlike validatedMemoryDir it NEVER creates a missing segment —
-// a read or a health-check must not materialise the store — so it returns
-// (path, present, err): present=false when the store (or an ancestor) is simply
-// absent, and a typed *UnsafeStorePathError when a segment is a symlink or
-// non-directory.
-//
-// The leaf-guarded reads (fsutil.ReadGuarded, O_NOFOLLOW) only bind the LEAF;
-// they do NOT contain a symlinked ANCESTOR directory, which is exactly the shape
-// this guards. Callers resolve the store through this once, up front, and refuse
-// on error before any WalkDir/ReadDir/ReadFile/MkdirAll touches the path
-// (GHSA-72rp-qxm2-r8vq).
+// validatedMemoryDir is the write side of memoryDir: it returns the store,
+// creating a missing segment.
+func validatedMemoryDir(repoRoot string) (string, error) {
+	mem, _, err := memoryDir(repoRoot, true)
+	return mem, err
+}
+
+// safeMemoryDir is the read/lint side of memoryDir: it never creates, and
+// reports present=false when the store (or an ancestor) is simply absent — the
+// path it returns is still the canonical one, so a caller's downstream joins
+// stay absolute and fail cleanly as absent.
 func safeMemoryDir(repoRoot string) (string, bool, error) {
-	current := repoRoot
-	for _, segment := range []string{".abcd", "memory"} {
-		current = filepath.Join(current, segment)
-		fi, err := os.Lstat(current)
-		if err != nil {
-			if os.IsNotExist(err) {
-				return "", false, nil
-			}
-			return "", false, err
-		}
-		if fi.Mode()&os.ModeSymlink != 0 || !fi.IsDir() {
-			return "", false, &UnsafeStorePathError{Msg: "memory store segment is a symlink or non-directory: " + current}
-		}
-	}
-	return current, true, nil
+	return memoryDir(repoRoot, false)
 }
 
 // RegistryMerge recomputes the COMPLETE new registry from the registry as
@@ -158,6 +157,34 @@ type RegistryMerge func(current map[string]any) (map[string]any, error)
 // under the lock and must return the COMPLETE new mapping. A zero now is sampled
 // as time.Now().UTC() AFTER the lock is held.
 func WritePages(repoRoot string, writes []PageWrite, merge RegistryMerge, now time.Time) (WriteReport, error) {
+	// Redact every page BODY here, in the one primitive every verb writes
+	// through, so no body reaches the committed store unscanned whichever verb
+	// built it (GHSA-j5f5-phgm-9m73). A redactor that stood at one call site
+	// left the next verb's bodies — a host-delegated distiller's file-back
+	// page — landing raw. index.md and log.md are derived from these bodies
+	// (reconcile reads the written files; the log event is derived from the
+	// PageWrite body), so redacting here covers those derived surfaces too. It
+	// fails closed on a degraded scanner: a heal-only pass writes no acquired
+	// text and needs no scanner, so the check is skipped only then. The
+	// FRONTMATTER is not redacted here: a host-supplied citation title or
+	// recall entry is rendered verbatim by renderWrites, which is the open
+	// door iss-2608291941064448 records.
+	if len(writes) > 0 {
+		redactor, err := newStoreRedactor(repoRoot)
+		if err != nil {
+			return WriteReport{}, err
+		}
+		redacted := make([]PageWrite, 0, len(writes))
+		for _, w := range writes {
+			body, _, rerr := redactor.redactText(w.Body, w.Filename)
+			if rerr != nil {
+				return WriteReport{}, rerr
+			}
+			w.Body = body
+			redacted = append(redacted, w)
+		}
+		writes = redacted
+	}
 	rendered, err := renderWrites(writes)
 	if err != nil {
 		return WriteReport{}, err
@@ -504,18 +531,7 @@ func pruneOrphans(repoRoot, mem string) ([]string, error) {
 }
 
 func pageSourceBlock(text string) map[string]any {
-	region, _, err := splitFileFrontmatter(text)
-	if err != nil {
-		return map[string]any{}
-	}
-	fm, err := parseFrontmatter("---\n" + region + "---\n")
-	if err != nil {
-		return map[string]any{}
-	}
-	if src, ok := fm["source"].(map[string]any); ok {
-		return src
-	}
-	return map[string]any{}
+	return parsePage(text).source()
 }
 
 func reconcile(mem string) ([]string, error) {

@@ -146,14 +146,6 @@ func parseQuestion(question string) ([]string, string, string) {
 	return tokens, classFilter, domainFilter
 }
 
-func pageBody(text string) string {
-	_, body, err := splitFileFrontmatter(text)
-	if err != nil {
-		return text
-	}
-	return body
-}
-
 func citationsFromSource(source map[string]any) []AskCitation {
 	one := func(entry map[string]any) AskCitation {
 		cite := AskCitation{}
@@ -228,7 +220,8 @@ func QueryPages(repoRoot, question string, topN int) ([]MatchedPage, error) {
 			continue
 		}
 		text := string(raw)
-		info := pageInfoFrom(e.Name(), text)
+		page := parsePage(text)
+		info := pageInfoOf(e.Name(), page)
 		if classFilter != "" {
 			ok := false
 			for _, c := range info.Classes {
@@ -265,8 +258,8 @@ func QueryPages(repoRoot, question string, topN int) ([]MatchedPage, error) {
 			Classes:   info.Classes,
 			Domain:    info.Domain,
 			Summary:   info.Summary,
-			Body:      pageBody(text),
-			Citations: citationsFromSource(pageSourceBlock(text)),
+			Body:      page.body,
+			Citations: citationsFromSource(page.source()),
 		})
 	}
 	sort.SliceStable(matches, func(i, j int) bool {

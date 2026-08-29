@@ -1259,7 +1259,7 @@ func newHookCommand() *cobra.Command {
 					for _, f := range dr.Failed {
 						notices = append(notices, fmt.Sprintf(
 							"abcd: session %s ended but could not be stored (%s). Its raw transcript is kept at %s — capture it by hand or delete it; it is unredacted.",
-							termsafe.Sanitize(f.SessionID), termsafe.Sanitize(f.Err), termsafe.Sanitize(fsutil.RedactHome(f.Path))))
+							termsafe.Sanitize(f.SessionID), termsafe.Sanitize(fsutil.RedactHome(f.Err)), termsafe.Sanitize(fsutil.RedactHome(f.Path))))
 					}
 					if dr.Remaining > 0 {
 						notices = append(notices, fmt.Sprintf(

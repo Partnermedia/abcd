@@ -82,8 +82,19 @@ func redactLine(line string, fs []Finding) (string, int) {
 	}
 	sortByMatchedLenDesc(identity)
 	for _, f := range identity {
-		repl := redactionReplacement(f)
-		if next := strings.ReplaceAll(line, f.Matched, repl); next != line {
+		var next string
+		if f.Kind == kindHomeSelf {
+			// The caller's home is a path, and a longer path that merely
+			// starts with it ("/rootfs" under HOME=/root) is not the home: the
+			// substring rewrite collapsed both to "~", so the home is swept
+			// where it stands as a path, by the anchor the detector applies
+			// (the sweep's placeholder is the "~" redactionReplacement gives
+			// this kind).
+			next = SweepCallerHome(line, f.Matched)
+		} else {
+			next = strings.ReplaceAll(line, f.Matched, redactionReplacement(f))
+		}
+		if next != line {
 			changed++
 			line = next
 		}
@@ -100,12 +111,22 @@ func redactLine(line string, fs []Finding) (string, int) {
 // a MAC's vendor bytes and final octet, and a hostname's head and suffix, which
 // is enough to re-identify the machine the redaction was meant to hide.
 func IsIdentityKind(kind string) bool {
-	switch kind {
-	case kindHomeSelf, kindHomeOther, kindRealEmail, kindRealName, kindGithubUser, kindLocalUser,
-		kindNetIPv4, kindNetIPv6, kindNetMAC, kindNetLANHost, kindNetDeviceHost:
-		return true
+	for _, k := range identityKinds() {
+		if k == kind {
+			return true
+		}
 	}
 	return false
+}
+
+// identityKinds enumerates every identity kind IsIdentityKind accepts. It is a
+// function rather than a var so the byte-scan policy table can be checked
+// against it in full (TestEveryIdentityKindIsClassifiedForBytes).
+func identityKinds() []string {
+	return []string{
+		kindHomeSelf, kindHomeOther, kindRealEmail, kindRealName, kindGithubUser, kindLocalUser,
+		kindNetIPv4, kindNetIPv6, kindNetMAC, kindNetLANHost, kindNetDeviceHost,
+	}
 }
 
 // redactionReplacement maps a finding to the text that replaces its raw span.

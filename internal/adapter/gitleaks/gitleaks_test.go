@@ -15,21 +15,30 @@ import (
 // fakeRunner is an injected Runner that records whether it was invoked and
 // returns a canned JSON report. No real gitleaks binary is spawned.
 type fakeRunner struct {
-	called bool
-	report string
-	err    error
+	called  bool
+	binPath string // the path the adapter asked it to execute
+	report  string
+	err     error
 }
 
-func (f *fakeRunner) Run(_ context.Context, _ /*binPath*/, _ /*text*/ string) ([]byte, error) {
+func (f *fakeRunner) Run(_ context.Context, binPath, _ /*text*/ string) ([]byte, error) {
 	f.called = true
+	f.binPath = binPath
 	if f.err != nil {
 		return nil, f.err
 	}
 	return []byte(f.report), nil
 }
 
-// foundLookPath is a LookPath that resolves gitleaks to a fixed fake path.
-func foundLookPath(string) (string, error) { return "/fake/bin/gitleaks", nil }
+// foundLookPath returns a LookPath that resolves gitleaks to a real, executable
+// regular file outside the test's repo root — the shape admitBinary admits —
+// so the augmentation path is exercised without a real gitleaks binary (the
+// injected fakeRunner never executes it).
+func foundLookPath(t *testing.T) func(string) (string, error) {
+	t.Helper()
+	bin := writeExecutable(t, filepath.Join(t.TempDir(), "gitleaks"))
+	return func(string) (string, error) { return bin, nil }
+}
 
 // missingLookPath is a LookPath that never finds the binary.
 func missingLookPath(name string) (string, error) {
@@ -48,7 +57,7 @@ func TestGateOffInvokesNothing(t *testing.T) {
 		Runner:   runner,
 	}
 
-	findings, err := a.Augment(context.Background(), Config{Enabled: false}, "api_key = abcdef\n", "transcript")
+	findings, err := a.Augment(context.Background(), t.TempDir(), Config{Enabled: false}, "api_key = abcdef\n", "transcript")
 	if err != nil {
 		t.Fatalf("gate-off returned error: %v", err)
 	}
@@ -70,7 +79,7 @@ func TestConfiguredButAbsentLoudStages(t *testing.T) {
 	runner := &fakeRunner{}
 	a := &Adapter{LookPath: missingLookPath, Runner: runner}
 
-	_, err := a.Augment(context.Background(), Config{Enabled: true}, "secret\n", "transcript")
+	_, err := a.Augment(context.Background(), t.TempDir(), Config{Enabled: true}, "secret\n", "transcript")
 	if err == nil {
 		t.Fatal("configured-but-absent returned nil error; want a loud-stage error")
 	}
@@ -93,7 +102,7 @@ func TestConfiguredPathMissingLoudStages(t *testing.T) {
 		LookPath: func(s string) (string, error) { looked = true; return "/somewhere/gitleaks", nil },
 		Runner:   &fakeRunner{},
 	}
-	_, err := a.Augment(context.Background(), Config{Enabled: true, Path: "/no/such/gitleaks"}, "x\n", "transcript")
+	_, err := a.Augment(context.Background(), t.TempDir(), Config{Enabled: true, Path: "/no/such/gitleaks"}, "x\n", "transcript")
 	if !errors.Is(err, ErrConfiguredNotFound) {
 		t.Fatalf("configured-missing-path did not loud-stage: %v", err)
 	}
@@ -117,9 +126,9 @@ func TestAugmentConvertsFindings(t *testing.T) {
 
 	// Canonical gitleaks JSON report shape (subset).
 	runner := &fakeRunner{report: `[{"RuleID":"generic-api-key","Secret":"` + secret + `","Match":"api_key = ` + secret + `"}]`}
-	a := &Adapter{LookPath: foundLookPath, Runner: runner}
+	a := &Adapter{LookPath: foundLookPath(t), Runner: runner}
 
-	findings, err := a.Augment(context.Background(), Config{Enabled: true}, text, "transcript")
+	findings, err := a.Augment(context.Background(), t.TempDir(), Config{Enabled: true}, text, "transcript")
 	if err != nil {
 		t.Fatalf("Augment: %v", err)
 	}
@@ -162,8 +171,8 @@ func TestAugmentConvertsFindings(t *testing.T) {
 // findings and no error — the common opted-in case.
 func TestAugmentEmptyReportNoFindings(t *testing.T) {
 	for _, rep := range []string{"", "[]", "null"} {
-		a := &Adapter{LookPath: foundLookPath, Runner: &fakeRunner{report: rep}}
-		findings, err := a.Augment(context.Background(), Config{Enabled: true}, "nothing here\n", "transcript")
+		a := &Adapter{LookPath: foundLookPath(t), Runner: &fakeRunner{report: rep}}
+		findings, err := a.Augment(context.Background(), t.TempDir(), Config{Enabled: true}, "nothing here\n", "transcript")
 		if err != nil {
 			t.Fatalf("empty report %q: %v", rep, err)
 		}
@@ -221,5 +230,33 @@ func writeConfig(t *testing.T, repoRoot, body string) {
 	}
 	if err := os.WriteFile(filepath.Join(dir, "gitleaks.json"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestAugmentReportsEveryOccurrenceOnALine pins the intra-line case: gitleaks
+// reports the same secret twice on one line (a request echoed with its response,
+// a retry log), and the adapter must yield one Finding per occurrence. A line
+// search that never advances past its first hit yields two Findings at the same
+// column, dedup collapses them, and the second occurrence survives sealLine.
+func TestAugmentReportsEveryOccurrenceOnALine(t *testing.T) {
+	secret := testsecret.Synthetic(97, 40)
+	text := "sent " + secret + " got back " + secret + "\n"
+	report := `[{"RuleID":"generic-api-key","Secret":"` + secret + `","StartColumn":6},` +
+		`{"RuleID":"generic-api-key","Secret":"` + secret + `","StartColumn":56}]`
+	a := &Adapter{LookPath: foundLookPath(t), Runner: &fakeRunner{report: report}}
+
+	findings, err := a.Augment(context.Background(), t.TempDir(), Config{Enabled: true}, text, "transcript")
+	if err != nil {
+		t.Fatalf("Augment: %v", err)
+	}
+	if len(findings) != 2 {
+		t.Fatalf("want 2 findings (one per occurrence), got %d: %+v", len(findings), findings)
+	}
+	if findings[0].Column == findings[1].Column {
+		t.Errorf("both findings sit at column %d; the second occurrence was never located", findings[0].Column)
+	}
+	redacted, _ := scanner.Redact(text, findings)
+	if strings.Contains(redacted, secret) {
+		t.Errorf("an occurrence survived redaction:\n%s", redacted)
 	}
 }
