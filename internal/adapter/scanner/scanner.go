@@ -720,10 +720,18 @@ func wholeMatch(probe *regexp.Regexp, s string) bool {
 // returning findings sorted deterministically. It is pure: identity, patterns
 // and severities are all passed in.
 func ScanText(text string, id Identity, patterns []Pattern, id2sev map[string]Severity, file string) []Finding {
+	return scanText(text, id, patterns, id2sev, file, false)
+}
+
+// scanText is ScanText with the byte switch: bytes says the text is a raw
+// blob decoded as a string, where the home-path anchor's leading half does
+// not apply (identityMatchers.bytes).
+func scanText(text string, id Identity, patterns []Pattern, id2sev map[string]Severity, file string, bytes bool) []Finding {
 	if id2sev == nil {
 		id2sev = DefaultIdentitySeverities()
 	}
 	matchers := newIdentityMatchers(id)
+	matchers.bytes = bytes
 	probes := make([]*regexp.Regexp, len(patterns))
 	for i, cp := range patterns {
 		probes[i] = adjacencyProbe(cp.Re)
@@ -1010,7 +1018,7 @@ func (s *Scanner) scanBytes(data []byte, secrets []Pattern, logical string) []Fi
 		HomePath: s.identity.HomePath, GitUserEmail: s.identity.GitUserEmail,
 		GitUserName: s.identity.GitUserName, GitRemoteUsername: s.identity.GitRemoteUsername,
 	}
-	all := ScanText(string(data), long, secrets, s.identSev, logical)
+	all := scanText(string(data), long, secrets, s.identSev, logical, true)
 	out := all[:0]
 	for _, f := range all {
 		if s.byteScanDrops(f) {

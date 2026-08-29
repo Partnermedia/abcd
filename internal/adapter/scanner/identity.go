@@ -116,7 +116,14 @@ func homeBoundary(r rune) bool {
 
 // identityMatchers holds the per-scan compiled identity regexes.
 type identityMatchers struct {
-	id           Identity
+	id Identity
+	// bytes says the line comes from a raw blob rather than text. A blob has
+	// no path syntax to anchor on — the byte before the caller's home is
+	// whatever the format put there — so the leading half of the home anchor
+	// is waived on bytes; the literal is long enough that a chance collision
+	// is negligible, and the byte policy drops local_username, which is the
+	// rule that would otherwise have caught the name (iss-2608292034215745).
+	bytes        bool
 	homeSelf     *regexp.Regexp
 	email        *regexp.Regexp
 	name         *regexp.Regexp
@@ -239,7 +246,11 @@ func (m identityMatchers) findings(line string, lineno int, id2sev map[string]Se
 	// is URL-suppressed and home_path_other stops at the same byte.
 	if m.homeSelf != nil {
 		for _, loc := range m.homeSelf.FindAllStringIndex(line, -1) {
-			if !homeSweepable(line, loc[0], loc[1], urls) {
+			stands := homeSweepable(line, loc[0], loc[1], urls)
+			if m.bytes {
+				stands = !nameContinues(line, loc[1])
+			}
+			if !stands {
 				continue
 			}
 			add(kindHomeSelf, loc[0]+1, line[loc[0]:loc[1]], "~")
