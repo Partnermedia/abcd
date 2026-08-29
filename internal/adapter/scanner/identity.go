@@ -1,7 +1,6 @@
 package scanner
 
 import (
-	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -74,14 +73,8 @@ func ProbeIdentity(repoRoot string) Identity {
 			id.GitRemoteUsername = m[1]
 		}
 	}
-	home := os.Getenv("HOME")
-	if home == "" {
-		if h, err := os.UserHomeDir(); err == nil {
-			home = h
-		}
-	}
-	if home != "" {
-		id.HomePath = strings.TrimRight(home, "/")
+	if home := CallerHome(); home != "" {
+		id.HomePath = home
 		if i := strings.LastIndex(id.HomePath, "/"); i >= 0 {
 			id.HomeUser = id.HomePath[i+1:]
 		}
@@ -234,9 +227,21 @@ func (m identityMatchers) findings(line string, lineno int, id2sev map[string]Se
 	// only to avoid over-flagging a DIFFERENT user's path (home_path_other),
 	// never to license leaving the caller's own home path unredacted. A home
 	// path followed by punctuation (e.g. "/Users/me#draft", "$HOME/dir&") is abcd-audit:allow
-	// still the caller's home and must be redacted.
+	// still the caller's home and must be redacted. What is NOT the caller's
+	// home is a longer NAME that merely starts with it — "/rootfs/etc/hosts"
+	// under HOME=/root, "/home/abc" under HOME=/home/a — so a match must stand
+	// as a path of its own, by the same anchor SweepCallerHome applies; the
+	// suppression spans below are filtered by it too, so a dropped span does
+	// not go on hiding the local_username underneath it. Inside a URL the
+	// byte before the home is the host's last letter, so the leading half of
+	// the anchor is waived there (homeSweepable): a home behind a URL host is
+	// still the caller's home, and no other detector reaches it — local_username
+	// is URL-suppressed and home_path_other stops at the same byte.
 	if m.homeSelf != nil {
 		for _, loc := range m.homeSelf.FindAllStringIndex(line, -1) {
+			if !homeSweepable(line, loc[0], loc[1], urls) {
+				continue
+			}
 			add(kindHomeSelf, loc[0]+1, line[loc[0]:loc[1]], "~")
 		}
 	}
@@ -246,7 +251,7 @@ func (m identityMatchers) findings(line string, lineno int, id2sev map[string]Se
 			continue
 		}
 		matched := line[loc[0]:loc[1]]
-		if m.homeSelf != nil && m.homeSelf.MatchString(matched) {
+		if m.homeSelf != nil && homeSelfStandsIn(m.homeSelf, matched) {
 			continue
 		}
 		// /Users/Shared and friends are macOS system directories, not users
@@ -377,6 +382,21 @@ func isHomeSegmentByte(b byte) bool {
 		(b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9')
 }
 
+// homeSelfStandsIn reports whether the caller's home occurs in matched as a
+// path of its own, by the anchor the home_path_self detector applies. A
+// generic-home match whose name merely starts with the home basename
+// ("/Users/alexandra" under HOME=/Users/alex) is a DIFFERENT user's path: the abcd-audit:allow
+// anchored detector declines it as the caller's own, so the home_path_other
+// skip must decline it too, or nothing reports it at all.
+func homeSelfStandsIn(homeSelf *regexp.Regexp, matched string) bool {
+	for _, loc := range homeSelf.FindAllStringIndex(matched, -1) {
+		if homeStandsAsPath(matched, loc[0], loc[1]) {
+			return true
+		}
+	}
+	return false
+}
+
 // localSuppressionSpans returns spans where a local-username match is not a
 // standalone leak: the caller's own home path (home_path_self, always redacted
 // hard_fail), the exact email, and URLs. home_path_other spans are deliberately
@@ -388,6 +408,9 @@ func (m identityMatchers) localSuppressionSpans(line string, urls []span) []span
 	spans := append([]span(nil), urls...)
 	if m.homeSelf != nil {
 		for _, loc := range m.homeSelf.FindAllStringIndex(line, -1) {
+			if !homeSweepable(line, loc[0], loc[1], urls) {
+				continue // not reported as the home, so it must not suppress the username either
+			}
 			spans = append(spans, span{loc[0], loc[1]})
 		}
 	}

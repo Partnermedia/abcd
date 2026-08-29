@@ -444,10 +444,6 @@ func Lint(req LintRequest) (LintResult, error) {
 	if err != nil {
 		return LintResult{}, err
 	}
-	if !present {
-		// Keep the reported store_path canonical when the store is simply absent.
-		mem = Dir(root)
-	}
 
 	var findings []Finding
 	if present {

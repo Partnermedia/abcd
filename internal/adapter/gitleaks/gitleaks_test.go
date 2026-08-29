@@ -232,3 +232,31 @@ func writeConfig(t *testing.T, repoRoot, body string) {
 		t.Fatal(err)
 	}
 }
+
+// TestAugmentReportsEveryOccurrenceOnALine pins the intra-line case: gitleaks
+// reports the same secret twice on one line (a request echoed with its response,
+// a retry log), and the adapter must yield one Finding per occurrence. A line
+// search that never advances past its first hit yields two Findings at the same
+// column, dedup collapses them, and the second occurrence survives sealLine.
+func TestAugmentReportsEveryOccurrenceOnALine(t *testing.T) {
+	secret := testsecret.Synthetic(97, 40)
+	text := "sent " + secret + " got back " + secret + "\n"
+	report := `[{"RuleID":"generic-api-key","Secret":"` + secret + `","StartColumn":6},` +
+		`{"RuleID":"generic-api-key","Secret":"` + secret + `","StartColumn":56}]`
+	a := &Adapter{LookPath: foundLookPath, Runner: &fakeRunner{report: report}}
+
+	findings, err := a.Augment(context.Background(), Config{Enabled: true}, text, "transcript")
+	if err != nil {
+		t.Fatalf("Augment: %v", err)
+	}
+	if len(findings) != 2 {
+		t.Fatalf("want 2 findings (one per occurrence), got %d: %+v", len(findings), findings)
+	}
+	if findings[0].Column == findings[1].Column {
+		t.Errorf("both findings sit at column %d; the second occurrence was never located", findings[0].Column)
+	}
+	redacted, _ := scanner.Redact(text, findings)
+	if strings.Contains(redacted, secret) {
+		t.Errorf("an occurrence survived redaction:\n%s", redacted)
+	}
+}

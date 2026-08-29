@@ -127,10 +127,10 @@ func Ingest(req IngestRequest) (IngestResult, error) {
 	}
 	// Build the write-time sanitiser before any store write. It fails closed on a
 	// degraded scanner, so a broken per-repo pii.json refuses the whole ingest
-	// rather than committing acquired source text with a weakened detector
-	// (GHSA-j5f5-phgm-9m73). Every acquired-text write below — page bodies and the
-	// --keep-original copy — routes through it; index.md/log.md are derived from
-	// the redacted bodies and so are covered transitively.
+	// before anything is acquired rather than committing acquired source text
+	// with a weakened detector (GHSA-j5f5-phgm-9m73). The --keep-original copy
+	// routes through it below; the page bodies are redacted by WritePages
+	// itself, the one primitive every verb writes through.
 	redactor, err := newStoreRedactor(root)
 	if err != nil {
 		return IngestResult{}, err
@@ -326,19 +326,13 @@ func Ingest(req IngestRequest) (IngestResult, error) {
 		return newRegistry, nil
 	}
 
-	// Redact every page body before it is written. The distiller is
-	// host-delegated and may echo a secret or an absolute home path from the
-	// source straight into a page body; this is the core's own fail-closed gate,
-	// not a trust in the host. index.md and log.md are rebuilt from these bodies
-	// (reconcile reads the written files; the log event is derived from the
-	// PageWrite body), so redacting here covers those derived surfaces too.
+	// The distiller is host-delegated and may echo a secret or an absolute home
+	// path from the source straight into a page body; WritePages redacts every
+	// body before it lands — the core's own fail-closed gate, not a trust in
+	// the host.
 	var pageWrites []PageWrite
 	for _, w := range plan.Writes {
-		body, _, rerr := redactor.redactText(w.Body, w.Filename)
-		if rerr != nil {
-			return IngestResult{}, rerr
-		}
-		pageWrites = append(pageWrites, PageWrite{Filename: w.Filename, Frontmatter: w.Frontmatter, Body: body})
+		pageWrites = append(pageWrites, PageWrite{Filename: w.Filename, Frontmatter: w.Frontmatter, Body: w.Body})
 	}
 	report, err := WritePages(root, pageWrites, merge, now)
 	if err != nil {
