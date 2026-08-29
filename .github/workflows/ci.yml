@@ -204,8 +204,13 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
+      # Full history: the record-lint step below arms `-agent-diff` against the
+      # base commit, and a three-dot range needs the base object AND a merge
+      # base, neither of which a depth-1 clone holds — with the default shallow
+      # checkout the arm was unreachable and the step fell back in silence.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
 
       # The ubuntu leg always needs a toolchain, because it always builds and
@@ -257,10 +262,12 @@ jobs:
       # findings surface in the log only.
       #
       # `-agent-diff` additionally arms agent_contract's unbumped-edit check,
-      # which needs a base revision to compare against. The checkout here is
-      # shallow, so the base commit may simply be absent — the guard falls back to
-      # the unarmed run rather than failing, and every tree-shaped rule (the
-      # agent-prompt frontmatter, the canary, the changelog entry) runs either way.
+      # which needs a base revision to compare against. The base may still be
+      # absent (a merge_group event carries none; a force-pushed `before` is
+      # gone) — the guard then falls back to the unarmed run rather than
+      # failing, and every tree-shaped rule (the agent-prompt frontmatter, the
+      # canary, the changelog entry) runs either way. The fallback is loud: a
+      # downgrade nobody can see is a gate nobody knows is off.
       - name: Record-lint (drift gate)
         if: matrix.os == 'ubuntu-latest'
         env:
@@ -272,6 +279,7 @@ jobs:
             git cat-file -e "${BASE_SHA}^{commit}" 2>/dev/null; then
             go run ./cmd/record-lint -agent-diff "${BASE_SHA}...HEAD"
           else
+            echo "::warning::record-lint ran unarmed: no base commit for -agent-diff (BASE_SHA='${BASE_SHA:-}'), so agent_contract's unbumped-edit check did not run"
             go run ./cmd/record-lint
           fi
 
