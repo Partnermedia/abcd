@@ -87,14 +87,19 @@ func SweepCallerHome(text, home string) string {
 }
 
 // homeStandsAsPath reports whether text[at:end] — an occurrence of the home —
-// is a path of its own rather than the prefix of another: the byte before it
-// cannot continue a path segment (so "/var/root" and "~/root" are not "/root";
-// a preceding '/' is an empty segment, as in "file:///root", and does not
-// count) and the name does not continue past it (so "/rootfs" and
-// "/root-cause" are not "/root" either, while "/root/x", "/root" at the end
-// and "/root." before a space are).
+// is a path of its own rather than part of another. The trailing half: the
+// name does not continue past it (so "/rootfs" is not "/root", while
+// "/root/x", "/root" at the end and "/root-cause" are — see nameContinues).
+// The leading half applies to a SINGLE-segment home only: "/var/root" and
+// "~/root" are not "/root" (a preceding '/' is an empty segment, as in
+// "file:///root", and does not count). A home of two or more segments
+// ("/Users/me", "/home/me") carries the caller's name inside it, and a longer abcd-audit:allow
+// root before it — a backup volume, a container mount — does not make that
+// name someone else's, so it is swept wherever it sits; the leading anchor's
+// one purpose, telling "/root" from "/var/root", has no counterpart there.
 func homeStandsAsPath(text string, at, end int) bool {
-	if at > 0 && text[at-1] != '/' && (isPathSegmentByte(text[at-1]) || text[at-1] == '~') {
+	single := strings.IndexByte(text[at+1:end], '/') < 0
+	if single && at > 0 && text[at-1] != '/' && (isPathSegmentByte(text[at-1]) || text[at-1] == '~') {
 		return false
 	}
 	return !nameContinues(text, end)
@@ -112,26 +117,24 @@ func homeSweepable(text string, at, end int, urls []span) bool {
 	return homeStandsAsPath(text, at, end)
 }
 
-// nameContinues reports whether the name ending at text[:end] goes on: a
-// letter or digit continues it outright, and a '.' or '-' continues it only
-// when a letter or digit follows ("/root.old", "/root-cause"), so the
-// sentence punctuation after "/root." or "/root," is a boundary and never an
-// excuse to leave the home in place. '_' is a boundary outright: it is a word
-// rune to the local_username rule, so a home followed by '_' is one that rule
-// would not catch either, and over-sweeping "/root_2" is the safe side of
-// committing the home in "/root_backup/x".
+// nameContinues is the ONE rule the home-path anchor uses for "the name goes
+// on", shared by the detector, SweepCallerHome, the backstop and the
+// home_path_other skip: a letter or digit continues it, and nothing else does.
+// The only false positive the trailing anchor exists for is a longer
+// alphanumeric name that starts with the home ("/Users/alexandra" under abcd-audit:allow
+// HOME=/Users/alex, "/rootfs" under HOME=/root). '.', '-' and '_' are abcd-audit:allow
+// boundaries: "/Users/me.zip", "/Users/me-old" and "/Users/me_snapshot" are abcd-audit:allow
+// the caller's name with a suffix, not another user, and treating the
+// punctuation as a continuation let every one of them through the detector
+// and the backstop alike. Over-sweeping "/root-cause" to "~-cause" is the
+// safe side; the unanchored sweep did the same.
+//
+// This is deliberately NOT wordBounded's rule: local_username matches the
+// bare username as a word, where '_' must continue the word so "me" does not
+// fire inside "me_2"; the home path is a longer literal that carries its own
+// separators, so a suffix after it is a boundary here.
 func nameContinues(text string, end int) bool {
-	if end >= len(text) {
-		return false
-	}
-	b := text[end]
-	if isAlnumByte(b) {
-		return true
-	}
-	if b == '.' || b == '-' {
-		return end+1 < len(text) && isAlnumByte(text[end+1])
-	}
-	return false
+	return end < len(text) && isAlnumByte(text[end])
 }
 
 func isAlnumByte(b byte) bool {

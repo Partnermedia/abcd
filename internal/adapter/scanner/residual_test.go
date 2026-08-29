@@ -52,17 +52,23 @@ func TestSweepCallerHomeIsAnchoredOnAPathBoundary(t *testing.T) {
 		{"/root", "cd /root", "cd ~"},
 		{"/root", "(/root)", "(~)"},
 		{"/root", "/rootfs/etc/hosts", "/rootfs/etc/hosts"},
-		{"/root", "the /root-cause analysis", "the /root-cause analysis"},
+		// A '-' or '.' suffix is the home with a suffix, not another name: over-
+		// sweeping "/root-cause" is the safe side, and the unanchored sweep did it.
+		{"/root", "the /root-cause analysis", "the ~-cause analysis"},
 		{"/root", "/var/root/x", "/var/root/x"},
 		{"/root", "~/root/x", "~/root/x"},
 		{"/home/a", "/home/abc/x", "/home/abc/x"},
+		// A multi-segment home under a longer root is still the caller's home.
+		{"/home/a", "/Volumes/T7/home/a/x", "/Volumes/T7~/x"},
+		{"/home/a", "/Volumes/T7/home/a_snapshot/x", "/Volumes/T7~_snapshot/x"},
 		{"/home/a", "HOME=/home/a /home/a/x", "HOME=~ ~/x"},
 		{"", "/root/x", "/root/x"},
-		// Sentence punctuation after the home is not a longer name.
+		// Punctuation after the home is not a longer name — only a letter or
+		// digit is.
 		{"/root", "saved under /root.", "saved under ~."},
 		{"/root", "saved under /root. Then", "saved under ~. Then"},
 		{"/root", "was /root, then", "was ~, then"},
-		{"/root", "/root.old", "/root.old"},
+		{"/root", "/root.old", "~.old"},
 		// '_' is a word rune to the local_username rule, so a home followed by
 		// '_' is one nothing else would catch: the sweep takes it, over-redacting
 		// "/root_2" rather than committing the home in "/root_backup/x".
@@ -84,7 +90,7 @@ func TestSweepCallerHomeIsAnchoredOnAPathBoundary(t *testing.T) {
 // refuse a write the sweep correctly left alone, while a home that stands as a
 // path is still reported.
 func TestSurvivingCallerHomeIgnoresAPrefixMatch(t *testing.T) {
-	if _, got := SurvivingCallerHome("/rootfs/etc/hosts and the /root-cause", "/root"); len(got) != 0 {
+	if _, got := SurvivingCallerHome("/rootfs/etc/hosts", "/root"); len(got) != 0 {
 		t.Errorf("a prefix match was reported as the surviving home: %+v", got)
 	}
 	if _, got := SurvivingCallerHome("cd /root/x", "/root"); len(got) == 0 {

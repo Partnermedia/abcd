@@ -376,7 +376,10 @@ func nextPathSegmentEnd(line string, pos int) (int, bool) {
 }
 
 // isHomeSegmentByte matches the character class genericHomeRe uses for a
-// username segment.
+// username segment, so nextPathSegmentEnd walks exactly the span the regex
+// would match. It is the regex's class, not the home-path anchor's: the
+// anchor (nameContinues) treats '.', '_' and '-' as boundaries because a
+// suffix after the caller's home is still the caller's name.
 func isHomeSegmentByte(b byte) bool {
 	return b == '.' || b == '_' || b == '-' ||
 		(b >= 'A' && b <= 'Z') || (b >= 'a' && b <= 'z') || (b >= '0' && b <= '9')
@@ -521,7 +524,11 @@ func leadingBoundaryOK(line string, start int) bool {
 }
 
 // isWordRune reports whether r is a Unicode word rune (letter, digit, or '_') —
-// the class RE2's ASCII-only \b cannot see for non-ASCII letters.
+// the class RE2's ASCII-only \b cannot see for non-ASCII letters. It bounds
+// the bare-token matchers (local_username, github_username, real_name), where
+// '_' continues a word so "me" does not fire inside "me_2"; the home-path
+// anchor uses nameContinues instead, where '_' is a boundary, because a
+// suffix after the caller's home is still the caller's home.
 func isWordRune(r rune) bool {
 	return r == '_' || unicode.IsLetter(r) || unicode.IsDigit(r)
 }
