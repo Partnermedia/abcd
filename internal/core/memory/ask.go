@@ -146,10 +146,6 @@ func parseQuestion(question string) ([]string, string, string) {
 	return tokens, classFilter, domainFilter
 }
 
-func pageBody(text string) string {
-	return parsePage(text).body
-}
-
 func citationsFromSource(source map[string]any) []AskCitation {
 	one := func(entry map[string]any) AskCitation {
 		cite := AskCitation{}
