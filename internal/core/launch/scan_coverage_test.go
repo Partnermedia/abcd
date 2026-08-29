@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/intentdriven/abcd/internal/adapter/scanner"
 )
 
 // TestSvgPayloadSecretRefuses is the GHSA-5mmm-3whv-3rqp SVG axis: a secret in
@@ -156,5 +158,18 @@ func TestRepoPayloadBinariesScanClean(t *testing.T) {
 	}
 	if len(scan.Unscanned) != 0 {
 		t.Errorf("the repo payload must leave no coverage gap: %v", scan.Unscanned)
+	}
+}
+
+// TestScanDetailNamesUnverifiedContainers: the gate row must say out loud
+// which files the byte scan could not content-verify.
+func TestScanDetailNamesUnverifiedContainers(t *testing.T) {
+	detail := scanDetail(scanner.ScanResult{
+		FilesScanned:        3,
+		ScannedBinary:       []string{"a.png"},
+		ContainerUnverified: []string{"p.tgz", "q.zip"},
+	})
+	if !strings.Contains(detail, "2 container(s) not content-verified") {
+		t.Fatalf("scanDetail must name unverified containers, got %q", detail)
 	}
 }

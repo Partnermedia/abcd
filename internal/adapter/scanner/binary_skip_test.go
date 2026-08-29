@@ -111,23 +111,123 @@ func TestValidPNGWithoutSecretIsClean(t *testing.T) {
 	}
 }
 
-// TestBinaryScanExemptsIdentityRules: prose/identity rules are meaningless on
-// binary bytes, so the caller's login inside an image is not a finding — only
-// the secret rules run there.
-func TestBinaryScanExemptsIdentityRules(t *testing.T) {
+// synthIdentity is a fabricated caller identity for the binary-branch tests —
+// never the real account (iss-2608291444328326 shows why the literal login is
+// the wrong fixture).
+func synthIdentity() Identity {
+	return Identity{
+		GitUserName:       "Zed Q Eight",
+		GitUserEmail:      "zq8@example.test",
+		GitRemoteUsername: "zq8handle",
+		HomePath:          "/Users/zq8home",
+		HomeUser:          "zq8home",
+	}
+}
+
+// TestBinaryScanKeepsLongIdentityRulesDropsShortOnes pins the rule for the
+// skip-listed branch: the LONG-literal identity rules (home_path_self,
+// real_email) run on raw bytes because their chance collision is negligible
+// and a home path or an address in image or PDF metadata is the same leak it
+// is in prose; the SHORT/GENERIC ones (local_username, real_name,
+// github_username, home_path_other) do not, because on binary bytes they are
+// noise.
+func TestBinaryScanKeepsLongIdentityRulesDropsShortOnes(t *testing.T) {
 	root := t.TempDir()
 	sc, err := New(root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	user := sc.identity.HomeUser
-	if user == "" {
-		t.Skip("no home user probed on this machine")
-	}
-	abs := writeFile(t, root, "a.png", "\x89PNG\r\n\x1a\n"+user+" "+user+"\n")
+	sc.identity = synthIdentity()
+	id := sc.identity
+	body := "\x89PNG\r\n\x1a\ntEXt " + id.HomePath + "/deck " + id.GitUserEmail + " " +
+		id.GitUserName + " " + id.GitRemoteUsername + " " + id.HomeUser + " /home/someone/x\n"
+	abs := writeFile(t, root, "a.png", body)
 	res, _ := sc.ScanBundle([]BundleFile{{LogicalPath: "a.png", ResolvedPath: abs}})
+	for _, kind := range []string{kindHomeSelf, kindRealEmail} {
+		if !hasKind(res.Findings, kind) {
+			t.Errorf("long-literal identity rule %s must fire on binary bytes: %+v", kind, res.Findings)
+		}
+	}
+	for _, kind := range []string{kindLocalUser, kindRealName, kindGithubUser, kindHomeOther} {
+		if hasKind(res.Findings, kind) {
+			t.Errorf("short/generic identity rule %s must not fire on binary bytes: %+v", kind, res.Findings)
+		}
+	}
+}
+
+// TestBinaryHomePathHardFailsLikeText: renaming deck.md to deck.pdf must not
+// turn a release-blocking home path in plaintext metadata into a pass.
+func TestBinaryHomePathHardFailsLikeText(t *testing.T) {
+	root := t.TempDir()
+	sc, err := New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc.identity = synthIdentity()
+	body := "%PDF-1.4\n/Creator (" + sc.identity.HomePath + "/deck.key)\n"
+	md := writeFile(t, root, "deck.md", body)
+	pdf := writeFile(t, root, "deck.pdf", body)
+	text, _ := sc.ScanBundle([]BundleFile{{LogicalPath: "deck.md", ResolvedPath: md}})
+	bin, _ := sc.ScanBundle([]BundleFile{{LogicalPath: "deck.pdf", ResolvedPath: pdf}})
+	if text.HardFails == 0 {
+		t.Fatalf("control: the home path must hard-fail as text: %+v", text)
+	}
+	if bin.HardFails != text.HardFails {
+		t.Errorf("deck.pdf hardfails=%d, deck.md hardfails=%d — the extension must not change the verdict", bin.HardFails, text.HardFails)
+	}
+}
+
+// TestGenericHomePathInBinaryIsNotAFinding: home_path_other runs outside the
+// identity guards, so it must be dropped explicitly on the binary branch.
+func TestGenericHomePathInBinaryIsNotAFinding(t *testing.T) {
+	root := t.TempDir()
+	abs := writeFile(t, root, "b.png", "\x89PNG\r\n\x1a\n/home/runner/work/repo/x\n")
+	sc, err := New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, _ := sc.ScanBundle([]BundleFile{{LogicalPath: "b.png", ResolvedPath: abs}})
 	if len(res.Findings) != 0 {
-		t.Fatalf("identity rules must not run on skip-listed binary bytes: %+v", res.Findings)
+		t.Fatalf("a third-party path in binary bytes is noise, not a finding: %+v", res.Findings)
+	}
+}
+
+// TestContainerIsNotVerified: a compressed container is byte-scanned (an
+// uncompressed tar still yields its secret) but reported as
+// ContainerUnverified, never as ScannedBinary — the deflate stream makes the
+// byte scan vacuous, and the report must not claim otherwise
+// (iss-2608291832160371).
+func TestContainerIsNotVerified(t *testing.T) {
+	root := t.TempDir()
+	plainTar := writeFile(t, root, "docs/plain.tar", ".env\x00\x00TOKEN="+fakeToken()+"\n")
+	gz := writeFile(t, root, "docs/pack.tgz", "\x1f\x8b\x08\x00opaque deflate bytes\n")
+	sc, err := New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, _ := sc.ScanBundle([]BundleFile{
+		{LogicalPath: "docs/plain.tar", ResolvedPath: plainTar},
+		{LogicalPath: "docs/pack.tgz", ResolvedPath: gz},
+	})
+	for _, p := range []string{"docs/plain.tar", "docs/pack.tgz"} {
+		if !contains(res.ContainerUnverified, p) {
+			t.Errorf("%s must be reported as ContainerUnverified: %+v", p, res)
+		}
+		if contains(res.ScannedBinary, p) {
+			t.Errorf("%s must not claim ScannedBinary: %+v", p, res)
+		}
+	}
+	if res.HardFails == 0 {
+		t.Errorf("an uncompressed tar's plaintext secret is still caught by the byte scan: %+v", res)
+	}
+}
+
+// TestBinaryScanCapMatchesPrivacyLint pins the cap to the sibling privacy
+// scan's 4 MiB: ScanText's percent-decode map costs ~20-30x the input, so a
+// larger cap is a memory cliff, not a convenience.
+func TestBinaryScanCapMatchesPrivacyLint(t *testing.T) {
+	if maxBinaryScanBytes != 4<<20 {
+		t.Fatalf("maxBinaryScanBytes = %d, want 4 MiB (rule_privacy.go maxScanBytes)", maxBinaryScanBytes)
 	}
 }
 

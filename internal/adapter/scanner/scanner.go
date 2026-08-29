@@ -39,20 +39,41 @@ type ScanResult struct {
 	Unscanned []string `json:"unscanned,omitempty"`
 	// ScannedBinary lists bundle files that matched the reviewed skip sets (a
 	// binary media extension, a skip filename, or a skip fragment) and were
-	// therefore scanned with the SECRET rules only — every rule that is
-	// meaningful on raw bytes (tokens, private keys), none of the prose and
-	// identity rules that are not. A skip exempts a file from the rules that
-	// cannot apply to it; it is never an unverified allow, because a file that
+	// therefore scanned with the BYTE rules only: every secret rule (tokens,
+	// private keys) plus the long-literal identity rules (the caller's own
+	// home path and email), none of the short/generic identity rules
+	// (username, real name, GitHub handle, third-party home path), which on
+	// raw bytes are noise. A skip exempts a file from the rules that cannot
+	// apply to it; it is never an unverified allow, because a file that
 	// enters the payload enters it with its bytes, whatever its name says
 	// (GHSA-9wv7-88w3-f77m). A skip-listed file that cannot be read within
-	// maxBinaryScanBytes lands in Unscanned, not here.
+	// maxBinaryScanBytes lands in Unscanned, not here; a compressed container
+	// lands in ContainerUnverified.
 	ScannedBinary []string `json:"scanned_binary,omitempty"`
+	// ContainerUnverified lists skip-listed bundle files whose extension names
+	// a compressed or container format. They get the same byte scan (cheap,
+	// and it still catches an uncompressed tar's plaintext), but a deflate
+	// stream makes that scan structurally vacuous, so they are NOT counted as
+	// content-verified and the report says so rather than claiming coverage
+	// it does not have. Whether the gate should refuse them is
+	// iss-2608291832160371; today they do not refuse on their own.
+	ContainerUnverified []string `json:"container_unverified,omitempty"`
 }
 
 // maxBinaryScanBytes caps how much of a skip-listed (binary) bundle file the
-// secret-rule scan reads. A file over the cap is a loud Unscanned refusal
-// rather than a quiet skip: memory stays bounded and coverage stays honest.
-const maxBinaryScanBytes = 32 << 20
+// byte scan reads. It equals the sibling privacy lint's maxScanBytes
+// (internal/core/repolint/rule_privacy.go), restated here because repolint
+// imports this package and the constant cannot be shared without a cycle. The
+// cap understates cost by ~20-30x: ScanText's percent-decode pre-pass keeps an
+// 8-byte position map per input byte plus a decoded copy per line, so a
+// newline-free 16 MiB file measured ~460 MiB and 10 s. A file over the cap is
+// a loud Unscanned refusal rather than a quiet skip: memory stays bounded and
+// coverage stays honest.
+const maxBinaryScanBytes = 4 << 20
+
+// containerExtensions are the skip-listed extensions naming a compressed or
+// container format, whose bytes cannot be content-verified by a byte scan.
+var containerExtensions = toSet([]string{".zip", ".gz", ".tgz", ".tar", ".bz2", ".xz", ".7z", ".jar"})
 
 // Config is the on-disk scanner configuration (the per-repo pii.json override
 // shape). Only the consumed fields are modelled.
@@ -868,18 +889,23 @@ func (s *Scanner) ScanBundle(files []BundleFile) (ScanResult, error) {
 	secrets := secretPatterns(s.patterns)
 	for _, f := range files {
 		if s.skipByName(f.LogicalPath) || s.skipByFragment(f.LogicalPath) {
-			// A reviewed skip exempts the file from the prose/identity rules,
-			// never from the secret rules: its bytes still ship, so its bytes
-			// are still scanned (GHSA-9wv7-88w3-f77m). The read is guarded and
-			// capped — a symlinked, non-regular or oversized leaf is a loud
-			// coverage gap, not a quiet skip.
+			// A reviewed skip exempts the file from the short/generic identity
+			// rules, never from the secret rules or the long-literal identity
+			// rules: its bytes still ship, so its bytes are still scanned
+			// (GHSA-9wv7-88w3-f77m). The read is guarded and capped — a
+			// symlinked, non-regular or oversized leaf is a loud coverage gap,
+			// not a quiet skip.
 			data, err := fsutil.ReadGuarded(f.ResolvedPath, maxBinaryScanBytes)
 			if err != nil {
 				res.Unscanned = append(res.Unscanned, f.LogicalPath)
 				continue
 			}
-			res.ScannedBinary = append(res.ScannedBinary, f.LogicalPath)
-			res.Findings = append(res.Findings, ScanText(string(data), Identity{}, secrets, s.identSev, f.LogicalPath)...)
+			if _, ok := containerExtensions[strings.ToLower(filepath.Ext(f.LogicalPath))]; ok {
+				res.ContainerUnverified = append(res.ContainerUnverified, f.LogicalPath)
+			} else {
+				res.ScannedBinary = append(res.ScannedBinary, f.LogicalPath)
+			}
+			res.Findings = append(res.Findings, s.scanBytes(data, secrets, f.LogicalPath)...)
 			continue
 		}
 		data, err := os.ReadFile(f.ResolvedPath)
@@ -918,6 +944,39 @@ func (s *Scanner) ScanBundle(files []BundleFile) (ScanResult, error) {
 			" skip-listed and scanned with secret rules only, the rest unscannable)"
 	}
 	return res, nil
+}
+
+// scanBytes runs the byte-rule set over a skip-listed file's raw bytes. The
+// rule: a LONG-literal identity rule (home_path_self, real_email) runs on
+// bytes, because the literal is the caller's own and its chance collision with
+// binary content is negligible — a home path in PDF /Creator or PNG tEXt
+// metadata is the same release-blocking leak it is in prose, and renaming
+// deck.md to deck.pdf must not change the verdict. A SHORT or GENERIC identity
+// rule (local_username, real_name, github_username, home_path_other) does not:
+// on binary bytes those are noise. home_path_other runs unguarded inside the
+// identity matcher, so it is filtered out here rather than switched off by the
+// identity value.
+func (s *Scanner) scanBytes(data []byte, secrets []Pattern, logical string) []Finding {
+	long := Identity{HomePath: s.identity.HomePath, GitUserEmail: s.identity.GitUserEmail}
+	all := ScanText(string(data), long, secrets, s.identSev, logical)
+	out := all[:0]
+	for _, f := range all {
+		if isShortIdentityKind(f.Kind) {
+			continue
+		}
+		out = append(out, f)
+	}
+	return out
+}
+
+// isShortIdentityKind names the identity kinds the byte scan drops: every
+// built-in identity kind except the two long-literal ones scanBytes keeps.
+func isShortIdentityKind(kind string) bool {
+	switch kind {
+	case kindHomeSelf, kindRealEmail:
+		return false
+	}
+	return IsIdentityKind(kind)
 }
 
 // secretPatterns returns the subset of patterns that is meaningful on raw

@@ -155,10 +155,13 @@ func scanRefusals(scan scanner.ScanResult) []string {
 	// could not cover (unreadable, oversized, or binary without a reviewed skip)
 	// is refused rather than shipped raw. "Some other file scanned" is not
 	// coverage of the unscanned one, so a single scanned README cannot disarm
-	// this (GHSA-5mmm-3whv-3rqp). Skip-listed files (scan.ScannedBinary) were
-	// scanned with the secret rules, so they are verified rather than allowed;
-	// their findings arrive through HardFails like any other
-	// (GHSA-9wv7-88w3-f77m).
+	// this (GHSA-5mmm-3whv-3rqp). Skip-listed files (scan.ScannedBinary) had
+	// their bytes scanned with the secret and long-literal identity rules, so
+	// they are verified rather than allowed; their findings arrive through
+	// HardFails like any other (GHSA-9wv7-88w3-f77m). Compressed containers
+	// (scan.ContainerUnverified) got the same byte scan but are NOT
+	// content-verified and do not refuse on their own — that scope decision
+	// is iss-2608291832160371; the gate row names them instead.
 	for _, p := range scan.Unscanned {
 		reasons = append(reasons, "unscanned payload file (fail-closed coverage gap): "+p)
 	}
@@ -200,8 +203,12 @@ func scanDetail(scan scanner.ScanResult) string {
 	if scan.Unavailable {
 		return "unavailable: " + scan.UnavailableReason
 	}
-	return "scanned " + itoa(scan.FilesScanned) + " files (" + itoa(len(scan.ScannedBinary)) +
-		" binary, secret rules only), " + itoa(scan.HardFails) + " hard-fails"
+	detail := "scanned " + itoa(scan.FilesScanned) + " files (" + itoa(len(scan.ScannedBinary)) +
+		" binary, byte rules only), " + itoa(scan.HardFails) + " hard-fails"
+	if n := len(scan.ContainerUnverified); n > 0 {
+		detail += ", " + itoa(n) + " container(s) not content-verified"
+	}
+	return detail
 }
 
 func itoa(n int) string {
