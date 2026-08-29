@@ -13,6 +13,49 @@ earlier were rolled by hand and some carry a **Breaking** heading.
 
 ## [Unreleased]
 
+## [0.6.8] - 2026-08-29
+
+### Added
+
+- **`abcd ahoy remote apply` turns on GitHub native secret scanning, then push protection, on a managed repo.** It sits behind a config opt-out and the caller's confirmation, and re-running it is idempotent. (iss-2608270636272755)
+- **Repository-object settings now have a source of truth in the tree.** `.abcd/work/rulesets/repo-settings.json` mirrors the desired state and the merge-hygiene snapshot (delete-branch-on-merge and the allowed merge methods), the sibling the branch-ruleset mirror lacked. (iss-2608270512210664)
+- **`DECISIONS.md` is gated append-only.** Checks DA001-DA004 (tail position, preservation, per-parent merge multiplicity, no NUL bytes) run in `make preflight`, the pre-push hook and CI, so a line inserted above an existing entry is refused rather than reordered. (iss-2608271804494867)
+- **A lifeboat's provenance can declare a Pass B exemption.** `_provenance.json` carries a `pass_b_exemption` marker with its reason, the embark coverage handoff reads it as a declared exemption, and an unmarked record is treated exactly as before. (iss-136)
+- **Docs lint refuses an em dash inside a list item.** `punctuation/em-dash-in-list-item` is a blocker and the `spelling/*` rules warn; the seventeen existing violations under `docs/` are fixed and the writing-style guide's labels match the shipped machinery. (iss-2608280706531199)
+- **The writing-style guide gains an Audience section.** Audience-by-placement is ratified as adr-53: one register, density set by the Diataxis type, self-contained sections, terminology links, and a warn-then-promote rule for preamble. (iss-2608280750324657)
+- This repository's own `DOCUMENTATION` rules override in `.abcd/rules.json` tells an agent to run `abcd docs lint` over a drafted docs artefact before presenting it; conversational replies stay unlinted. The bundled default domain shipped in the binary is unchanged. (iss-2608280825450623)
+
+### Fixed
+
+- **A fresh plugin install no longer dies silently without a binary.** `bootstrap.sh` closes with exactly one terminal line on every path, an EXIT trap turning a silent death into the same loud refusal; the launch bundler denies released platform artefacts structurally rather than by omission; and the Cut A section 4 assertions run as an automated fresh-install self-check on a Go-free PATH. (iss-253)
+- **Auto-release no longer tags the wrong commit after a batched merge-queue push.** The release content commit is derived from the receipts directory instead of `HEAD^2^` ancestry, so a batch tip cannot resolve to an unrelated PR's commit. (iss-355)
+- **The secret scanner no longer truncates a match at a fixed 512-byte window.** A galloping (exponential-doubling) probe grows the adjacency window only while a match keeps running into its edge, so a match end is never a window-edge artefact; the spurious over-redaction and broken-recovery-chain shapes land as regression tests with a deterministic cost-class guard. (iss-229)
+- **Record lint now sees every ledger record capture would refuse.** `checkIssueRecordShape` mirrors capture's enum-membership, kebab-slug and unknown-key checks from the shared `issueschema` home, and the per-store filename match uses `recordid.FilenameNumRe`, so a record with an unknown frontmatter key or a divergent filename is flagged instead of being lint-green and silently dropped by the reader. (iss-2608261447039180, iss-2608270908342889, iss-2608270908346617)
+- **Filename and frontmatter slugs must agree across all four record stores.** The shared `recordid` splitter and the `record_schema` blocker enforce it, and the two drifted records are corrected. (iss-2608271804178239)
+- **`prepare-this-repo` is self-contained.** Every adopt-phase asset resolves from the record or the embedded binary, `ahoy install --attribution` scaffolds the `prepare-commit-msg` template, and an onboarding self-containment test refuses a machine-local path. (iss-87)
+- **The site's by-links arrangement comes to rest.** It is sized from what each region holds and settles under the coil's own packing rule, so it publishes no overlapping positions, and the overlapping-bubbles gate now measures both arrangements in the renderer's own space instead of the coil alone. (iss-2608231350127745, iss-2608231322321751)
+- `FoldPath` applies NFC after case-folding, so NFC and NFD spellings of one directory match in every folded gate (payload destination, pack overlap, embark's claimed key) on a normalisation-insensitive filesystem such as APFS. (iss-2608270926030978)
+- `ahoy` repo registration surfaces a history-lock contention failure as a change note instead of discarding it, and a concurrent double-install re-applies a pending lineage link without overwriting the winner's. (iss-128)
+- `docs/requirements.txt` and dotfiles are excluded from the built site via `exclude_docs`, so the Python pin file no longer ships as a public page. (iss-2608271711538151)
+- The writing-style guide and the rules loader's DOCUMENTATION text no longer claim staged masking lints: adr-54 rules punctuation enforcement mechanical-only, the em-dash rule is enforced as a banned token, and the casing rows carry permanent review labels with their corpus-evidence reasons. (iss-2608280801428646, iss-2608280813441672)
+- **`ACKNOWLEDGEMENTS.md` is backfilled from the attribution review.** Inspirations entries for CARL, PAUL, SpecStory, the Karpathy LLM-wiki gist, gitleaks, TruffleHog and Rams; the Diataxis entry completed with author and CC-BY-SA 4.0; the mattpocock entry widened to four adaptations; Dell'Acqua et al. 2023 added to the references and CSL; the Horn entry carries a caveat that its URL was not recoverable; in the principles, the Weng essay is source-linked and the Iacob and GLM-5 citations carry arXiv ids; the mglgit authorship is recorded in the skills-evaluation note; and the itd-27 to-prd link no longer dangles. (iss-2608280824478819)
+- `ACKNOWLEDGEMENTS.md` credits the external reporter's two reports and the README requirements section shape they proposed, and the adopt-their-branch default for contributors with working branches is recorded as a process lesson. (iss-2608271322159887)
+
+### Security
+
+- **A rule body can no longer forge a domain heading in the injected rules block.** The render site strips control characters, bidi overrides and zero-width runes and space-indents hash-leading lines, with the forgery corpus as regression tests. (iss-2608261550394120)
+- **A broken repo `guard.json` no longer switches off the whole guard registry.** `guard.Load` falls back to the bundled defaults on a repo-layer error and the hook checks them, so bundled hazards stay armed instead of failing open. (iss-2608261551087492)
+- Rule injection is bounded by a 64 KiB per-repo budget with a loud truncation notice; a truncated domain retries on a later prompt and is never silently dropped. (iss-2608261551077971)
+- **The guard closes two shell-syntax bypasses.** An unquoted brace group such as `git push {--force,} origin main` folds into a fail-closed block instead of being read as a literal token (quoted braces, `${VAR}` expansion and a reserved-word group command keep their prior verdicts), and the zsh `noglob` and `nocorrect` precommand modifiers are treated as command wrappers so a Tier-1 blocker behind them is refused rather than degraded to a warning. (iss-2608221457227161, iss-2608270655497992)
+- **The harness-leak class is defined once and enforced on three surfaces.** A live agent-session URL or a tool attribution footer is caught by the store-before-commit redactors, by `abcd lint`'s privacy rule and by the `harness_leak` record and docs-lint rule, from a single canonical pattern set carried as `scanner.OutboundPolicy`. The posting-time primitive `ScrubOutbound` exists and is tested but is wired to no command, so protection at posting time remains the re-read-and-strip policy. (iss-178)
+- **Commits from a linked worktree run the private name guard.** The committed pre-commit hook resolves the primary checkout's private banlist store from inside a worktree and enforces it there, and the CLI renders the same inherited layer. (iss-370)
+- The scanner's identity matchers and `$HOME` backstop now run over the percent-decoded copy of a line too, so a percent-encoded home path or email is redacted before it can enter a committed record. (iss-2608270720336165)
+- `ahoy` path redaction and `fsutil.RedactRoot` fold case on a case-folding filesystem, so a case-variant spelling of HOME or the repo root is redacted instead of leaking into rendered output. (iss-2608270908341622)
+- The memory store's write path sanitises frontmatter scalars and derived fields, so a committed memory page no longer replays raw control characters through `cat`, `git diff` or a pager, while the newline, tab and CR escaping provenance depends on is preserved. (iss-2608270655495573)
+- **Relative-path containment is canonical and closes a Windows traversal.** `fsutil.ValidRelPath` rejects a backslash segment, so `..\..\x` can no longer walk out of the intended root on a Windows target, and the launch install-surface tree resolver delegates to it instead of a bespoke guard that missed an embedded `a/../../b`. (iss-2608280807166510, iss-2608270655490198)
+- `abcd identity` refuses a positioning surface under `.git/`, so a credential-bearing remote URL in `.git/config` cannot be quoted into identity output. (iss-150)
+- The `intent plan`, `intent link` and `intent create` renders route the record path through `termsafe.Sanitize`, so a hostile filename tail cannot reach the terminal as escape sequences. (iss-259)
+
 ## [0.6.7] - 2026-08-27
 
 ### Fixed
