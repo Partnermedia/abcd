@@ -58,6 +58,15 @@ func TestSweepCallerHomeIsAnchoredOnAPathBoundary(t *testing.T) {
 		{"/home/a", "/home/abc/x", "/home/abc/x"},
 		{"/home/a", "HOME=/home/a /home/a/x", "HOME=~ ~/x"},
 		{"", "/root/x", "/root/x"},
+		// Sentence punctuation after the home is not a longer name.
+		{"/root", "saved under /root.", "saved under ~."},
+		{"/root", "saved under /root. Then", "saved under ~. Then"},
+		{"/root", "was /root, then", "was ~, then"},
+		{"/root", "/root.old", "/root.old"},
+		{"/root", "/root_2", "/root_2"},
+		// An empty segment before the home (file:///, a doubled slash) is not a parent.
+		{"/root", "open file:///root/x", "open file://~/x"},
+		{"/root", "//root/x", "/~/x"},
 	}
 	for _, c := range cases {
 		if got := SweepCallerHome(c.in, c.home); got != c.want {
@@ -77,19 +86,42 @@ func TestSurvivingCallerHomeIgnoresAPrefixMatch(t *testing.T) {
 	if got := SurvivingCallerHome("cd /root/x", "/root"); len(got) == 0 {
 		t.Error("the literal home standing as a path was not reported")
 	}
+	if got := SurvivingCallerHome("saved under /Users/zzhomeuser42.", "/base/zzhomeuser42"); len(got) == 0 { // abcd-audit:allow
+		t.Error("the caller's username segment followed by sentence punctuation was not reported")
+	}
+}
+
+// TestLocalUsernameIsNotSuppressedUnderADroppedHomeSpan pins the suppression
+// to the same anchor as the detection: a home_path_self span the detector
+// drops (the home is a prefix of a longer name) must not go on suppressing the
+// local_username finding underneath it, or neither fires and the username is
+// committed verbatim.
+func TestLocalUsernameIsNotSuppressedUnderADroppedHomeSpan(t *testing.T) {
+	t.Setenv("HOME", "/Users/zzhomeuser42") // abcd-audit:allow
+	sc, err := New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := "config lives at /Users/zzhomeuser42-backup/notes.md\n" // abcd-audit:allow
+	redacted, _ := Redact(text, sc.ScanText(text, "t"))
+	if strings.Contains(redacted, "zzhomeuser42") {
+		t.Errorf("the caller's username survived under a dropped home span:\n%s", redacted)
+	}
 }
 
 // TestHomePathSelfDetectionIsAnchored pins the stage-one detector to the same
 // anchor as the sweep: under HOME=/root the caller's home is "/root/x", not
 // "/rootfs/etc/hosts", so the first is a home_path_self finding and the second
-// is left alone rather than redacted to "~fs/etc/hosts".
+// is left alone rather than redacted to "~fs/etc/hosts". (A bare "root" word
+// elsewhere on the line is the local_username rule's business, not this one's,
+// so the fixture carries none.)
 func TestHomePathSelfDetectionIsAnchored(t *testing.T) {
 	t.Setenv("HOME", "/root")
 	sc, err := New(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
-	text := "copied /rootfs/etc/hosts and the /root-cause note to /root/x\n"
+	text := "copied /rootfs/etc/hosts to /root/x\n"
 	findings := sc.ScanText(text, "t")
 	var self int
 	for _, f := range findings {
@@ -101,7 +133,7 @@ func TestHomePathSelfDetectionIsAnchored(t *testing.T) {
 		t.Fatalf("want exactly one home_path_self finding (the /root/x path), got %d: %+v", self, findings)
 	}
 	redacted, _ := Redact(text, findings)
-	if !strings.Contains(redacted, "/rootfs/etc/hosts") || !strings.Contains(redacted, "/root-cause") {
+	if !strings.Contains(redacted, "/rootfs/etc/hosts") {
 		t.Errorf("a path that merely starts with the home was redacted:\n%s", redacted)
 	}
 	if strings.Contains(redacted, "/root/x") {

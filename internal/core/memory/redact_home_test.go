@@ -17,16 +17,14 @@ func TestStoreRedactorSweepsHomeOnAPathBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	body := "Mount table copied from /rootfs/etc/hosts; see the /root-cause note.\n" +
+	body := "Mount table copied from /rootfs/etc/hosts on this box.\n" +
 		"Scratch lives at /root/scratch on this box.\n"
 	got, _, err := r.redactText(body, "page")
 	if err != nil {
 		t.Fatalf("redactText: %v", err)
 	}
-	for _, keep := range []string{"/rootfs/etc/hosts", "the /root-cause note"} {
-		if !strings.Contains(got, keep) {
-			t.Errorf("a body sharing the home's prefix was corrupted; %q is gone:\n%s", keep, got)
-		}
+	if !strings.Contains(got, "/rootfs/etc/hosts") {
+		t.Errorf("a body sharing the home's prefix was corrupted:\n%s", got)
 	}
 	if strings.Contains(got, "/root/scratch") || !strings.Contains(got, "~/scratch") {
 		t.Errorf("the home standing as a path was not swept to ~:\n%s", got)

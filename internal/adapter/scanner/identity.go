@@ -228,9 +228,11 @@ func (m identityMatchers) findings(line string, lineno int, id2sev map[string]Se
 	// never to license leaving the caller's own home path unredacted. A home
 	// path followed by punctuation (e.g. "/Users/me#draft", "$HOME/dir&") is abcd-audit:allow
 	// still the caller's home and must be redacted. What is NOT the caller's
-	// home is a longer path that merely starts with it — "/rootfs/etc/hosts"
+	// home is a longer NAME that merely starts with it — "/rootfs/etc/hosts"
 	// under HOME=/root, "/home/abc" under HOME=/home/a — so a match must stand
-	// as a path of its own, by the same anchor SweepCallerHome applies.
+	// as a path of its own, by the same anchor SweepCallerHome applies; the
+	// suppression spans below are filtered by it too, so a dropped span does
+	// not go on hiding the local_username underneath it.
 	if m.homeSelf != nil {
 		for _, loc := range m.homeSelf.FindAllStringIndex(line, -1) {
 			if !homeStandsAsPath(line, loc[0], loc[1]) {
@@ -387,6 +389,9 @@ func (m identityMatchers) localSuppressionSpans(line string, urls []span) []span
 	spans := append([]span(nil), urls...)
 	if m.homeSelf != nil {
 		for _, loc := range m.homeSelf.FindAllStringIndex(line, -1) {
+			if !homeStandsAsPath(line, loc[0], loc[1]) {
+				continue // not reported as the home, so it must not suppress the username either
+			}
 			spans = append(spans, span{loc[0], loc[1]})
 		}
 	}
