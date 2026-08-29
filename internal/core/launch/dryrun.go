@@ -152,13 +152,24 @@ func scanRefusals(scan scanner.ScanResult) []string {
 		reasons = append(reasons, hardFailReason(scan))
 	}
 	// Fail closed on the coverage gap: any include-selected file the scanner
-	// could not cover (unreadable, or binary without a reviewed skip) is refused
-	// rather than shipped raw. "Some other file scanned" is not coverage of the
-	// unscanned one, so a single scanned README cannot disarm this
-	// (GHSA-5mmm-3whv-3rqp). Reviewed skips (scan.Skipped) are an accepted allow
-	// and do NOT refuse.
+	// could not cover (unreadable, over the byte-scan cap, a non-regular leaf,
+	// or binary without a reviewed skip) is refused rather than shipped raw,
+	// and the reason travels with the path. "Some other file scanned" is not
+	// coverage of the unscanned one, so a single scanned README cannot disarm
+	// this (GHSA-5mmm-3whv-3rqp). Skip-listed files (scan.ScannedBinary) were
+	// byte-scanned with the secret, harness-leak and long-literal identity
+	// rules, no format decoded, so their plaintext regions are covered and
+	// their findings arrive through HardFails like any other
+	// (GHSA-9wv7-88w3-f77m). Compressed formats (scan.ContentUnverified) got
+	// the same byte scan but are NOT content-verified and do not refuse on
+	// their own — that scope decision is iss-2608291832160371; the gate row
+	// names them instead.
 	for _, p := range scan.Unscanned {
-		reasons = append(reasons, "unscanned payload file (fail-closed coverage gap): "+p)
+		reason := "unscanned payload file (fail-closed coverage gap): " + p
+		if why := scan.UnscannedWhy[p]; why != "" {
+			reason += " (" + why + ")"
+		}
+		reasons = append(reasons, reason)
 	}
 	return reasons
 }
@@ -198,7 +209,10 @@ func scanDetail(scan scanner.ScanResult) string {
 	if scan.Unavailable {
 		return "unavailable: " + scan.UnavailableReason
 	}
-	return "scanned " + itoa(scan.FilesScanned) + " files, " + itoa(scan.HardFails) + " hard-fails"
+	return "scanned " + itoa(scan.FilesScanned) + " files with the full rule set, " +
+		itoa(len(scan.ScannedBinary)) + " binary (byte rules only), " +
+		itoa(len(scan.ContentUnverified)) + " compressed (not content-verified), " +
+		itoa(scan.HardFails) + " hard-fails"
 }
 
 func itoa(n int) string {

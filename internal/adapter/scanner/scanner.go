@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/intentdriven/abcd/internal/fsutil"
@@ -31,19 +33,65 @@ type ScanResult struct {
 	Unavailable       bool      `json:"unavailable"`
 	UnavailableReason string    `json:"unavailable_reason,omitempty"`
 	// Unscanned lists bundle files that were present but could NOT be covered:
-	// unreadable, or classified binary/unscannable by the content sniff (e.g. a
-	// leading-NUL file) WITHOUT a reviewed skip explaining it. They are the
-	// fail-closed coverage gap — the launch gate refuses on them, so a crafted
-	// binary cannot smuggle unscanned content into a source bundle
-	// (GHSA-5mmm-3whv-3rqp).
+	// unreadable, over the byte-scan cap, a non-regular or symlinked leaf, or
+	// classified binary by the content sniff (e.g. a leading-NUL file) WITHOUT
+	// a reviewed skip explaining it. They are the fail-closed coverage gap —
+	// the launch gate refuses on them, so a crafted binary cannot smuggle
+	// unscanned content into a source bundle (GHSA-5mmm-3whv-3rqp).
 	Unscanned []string `json:"unscanned,omitempty"`
-	// Skipped lists bundle files intentionally not scanned because they matched
-	// the reviewed skip sets (a binary media extension, a skip filename, or a
-	// skip fragment). Unlike Unscanned they are an accepted allow, not a refusal
-	// — but they are surfaced rather than silently dropped, so what the skip
-	// list actually excluded is visible.
-	Skipped []string `json:"skipped,omitempty"`
+	// UnscannedWhy carries, per Unscanned path, the reason it could not be
+	// covered, so an asset over the cap is distinguishable from an I/O error.
+	UnscannedWhy map[string]string `json:"unscanned_why,omitempty"`
+	// ScannedBinary lists bundle files that matched the reviewed skip sets (a
+	// binary media extension, a skip filename, or a skip fragment) AND whose
+	// name is on the plaintext allow-list (plaintextNames): a skip-listed file
+	// known to carry no compressed region, so the byte scan covers all of it.
+	// The raw bytes run through the byte rules — every secret rule, the
+	// harness-leak rules, and the long-literal identity rules — with no
+	// format decoded. A skip exempts a file from the short/generic identity
+	// rules that are noise on bytes; it is never an unverified allow, because
+	// a file that enters the payload enters it with its bytes, whatever its
+	// name says (GHSA-9wv7-88w3-f77m).
+	ScannedBinary []string `json:"scanned_binary,omitempty"`
+	// ContentUnverified lists every other skip-listed bundle file — the
+	// DEFAULT for the byte branch, because a closed list of compressed
+	// formats would label whatever it missed as verified. An archive, but
+	// equally a PNG (deflate IDAT and zTXt), a JPEG entropy stream, a PDF
+	// FlateDecode stream, an mp4 box, a database blob, a packed executable,
+	// or any extension a repo's pii.json adds to skip_extensions. They get
+	// the same byte scan as ScannedBinary (cheap, and it still catches
+	// plaintext such as an uncompressed tar's entries or PNG tEXt metadata),
+	// but a compressed region is invisible to it, so they are NOT counted as
+	// content-verified and the report says so rather than claiming coverage
+	// it does not have. The label keys on the name, so a zip renamed .png is
+	// labelled by its name; whether the gate should refuse them, and on what
+	// evidence, is iss-2608291832160371 — today they do not refuse on their own.
+	ContentUnverified []string `json:"content_unverified,omitempty"`
 }
+
+// maxBinaryScanBytes caps how much of a skip-listed (binary) bundle file the
+// byte scan reads. It equals the sibling privacy lint's maxScanBytes
+// (internal/core/repolint/rule_privacy.go), restated here because repolint
+// imports this package and the constant cannot be shared without a cycle. The
+// cap understates cost by ~20-30x: ScanText's percent-decode pre-pass keeps an
+// 8-byte position map per input byte plus a decoded copy per line, so a
+// newline-free 16 MiB file measured ~460 MiB and 10 s. A file over the cap is
+// a loud Unscanned refusal rather than a quiet skip: memory stays bounded and
+// coverage stays honest.
+const maxBinaryScanBytes = 4 << 20
+
+// plaintextNames is the allow-list of skip-listed names known to carry no
+// compressed region, so a byte scan covers all of their content and they may
+// be reported as ScannedBinary. The polarity is deliberate: the byte branch
+// defaults to ContentUnverified, and only a name listed here is promoted.
+// Keyed on the final path element's extension as filepath.Ext reports it, so a
+// skip FILENAME such as .gitignore (a dotfile, whose Ext is the whole name)
+// qualifies. Nothing on defaultSkipExtensions qualifies: .ico can embed PNG,
+// .wav can carry a compressed codec, .tar holds compressed entries, .pyc is
+// marshalled bytecode, and .so/.dylib/.dll/.exe/.sqlite/.db can all hold
+// packed sections or blobs. A config-added skip extension (.jar, say) reaches
+// this branch like any other and lands in ContentUnverified by default.
+var plaintextNames = toSet([]string{".gitignore"})
 
 // Config is the on-disk scanner configuration (the per-repo pii.json override
 // shape). Only the consumed fields are modelled.
@@ -844,21 +892,46 @@ func fingerprintSpan(out, src []byte, start, end int, whole bool) {
 }
 
 // ScanBundle scans the resolved content of every bundle file, reading
-// ResolvedPath and reporting under LogicalPath. Binary/oversized/skip-listed
-// files are skipped via the extension/filename sets and a null-byte + UTF-8
-// sniff. If the scanner is unavailable (config unreadable), it returns
-// Unavailable=true and scans nothing (fail-closed).
+// ResolvedPath and reporting under LogicalPath. A file on the reviewed skip
+// sets (extension, filename, fragment) is read through the guarded, capped
+// primitive and its bytes scanned with the byte rules (scanBytes), reported
+// under ScannedBinary (a plaintext allow-listed name) or ContentUnverified; any
+// other file is sniffed (null byte + UTF-8) and scanned with the full rule
+// set, or surfaced in Unscanned (with UnscannedWhy) when it cannot be. If the
+// scanner is unavailable (config unreadable), it returns Unavailable=true and
+// scans nothing (fail-closed).
 func (s *Scanner) ScanBundle(files []BundleFile) (ScanResult, error) {
 	if s.unavailable {
 		return ScanResult{Unavailable: true, UnavailableReason: s.unavailReason}, nil
 	}
 	var res ScanResult
+	unscanned := func(logical, why string) {
+		res.Unscanned = append(res.Unscanned, logical)
+		if res.UnscannedWhy == nil {
+			res.UnscannedWhy = map[string]string{}
+		}
+		res.UnscannedWhy[logical] = why
+	}
+	secrets := secretPatterns(s.patterns)
 	for _, f := range files {
 		if s.skipByName(f.LogicalPath) || s.skipByFragment(f.LogicalPath) {
-			// A reviewed skip (binary media extension, skip filename, skip
-			// fragment) is an accepted allow — but recorded so the skip is
-			// VISIBLE rather than an invisible `continue` (GHSA-5mmm-3whv-3rqp).
-			res.Skipped = append(res.Skipped, f.LogicalPath)
+			// A reviewed skip exempts the file from the short/generic identity
+			// rules, never from the secret, harness-leak or long-literal
+			// identity rules: its bytes still ship, so its bytes are still
+			// scanned (GHSA-9wv7-88w3-f77m). The read is guarded and capped — a
+			// symlinked, non-regular or oversized leaf is a loud coverage gap,
+			// not a quiet skip.
+			data, err := fsutil.ReadGuarded(f.ResolvedPath, maxBinaryScanBytes)
+			if err != nil {
+				unscanned(f.LogicalPath, guardedReadWhy(err))
+				continue
+			}
+			if _, ok := plaintextNames[strings.ToLower(filepath.Ext(f.LogicalPath))]; ok {
+				res.ScannedBinary = append(res.ScannedBinary, f.LogicalPath)
+			} else {
+				res.ContentUnverified = append(res.ContentUnverified, f.LogicalPath)
+			}
+			res.Findings = append(res.Findings, s.scanBytes(data, secrets, f.LogicalPath)...)
 			continue
 		}
 		data, err := os.ReadFile(f.ResolvedPath)
@@ -866,11 +939,11 @@ func (s *Scanner) ScanBundle(files []BundleFile) (ScanResult, error) {
 			// An unreadable file is skipped, not fatal — but surfaced in Unscanned
 			// with the same visibility as a binary-skipped file, so a read-skipped
 			// file cannot silently vanish from the bundle's coverage.
-			res.Unscanned = append(res.Unscanned, f.LogicalPath)
+			unscanned(f.LogicalPath, "unreadable")
 			continue
 		}
 		if !isText(data) {
-			res.Unscanned = append(res.Unscanned, f.LogicalPath)
+			unscanned(f.LogicalPath, "binary content without a reviewed skip")
 			continue
 		}
 		res.FilesScanned++
@@ -882,17 +955,152 @@ func (s *Scanner) ScanBundle(files []BundleFile) (ScanResult, error) {
 		}
 	}
 	sortFindings(res.Findings)
-	// Zero-coverage sentinel: a bundle with files but nothing scanned (every
-	// file skip-listed or unscannable, however that came about — an over-broad
-	// skip config, an all-binary tree) means the scanner effectively did not
-	// run. Fail closed so the launch path refuses rather than publishing an
-	// unscanned bundle while reporting "would publish".
+	// Zero-coverage sentinel: a bundle with files but none scanned with the
+	// FULL rule set (every file skip-listed or unscannable, however that came
+	// about — an over-broad skip config, an all-binary tree) means the prose
+	// and identity rules effectively did not run, whatever the byte-rule pass
+	// over the skip-listed files found. Fail closed so the launch path refuses
+	// rather than publishing while reporting "would publish"; the reason
+	// counts the byte-scanned files and the unread ones separately so neither
+	// is called something it is not.
 	if len(files) > 0 && res.FilesScanned == 0 && !res.Unavailable {
+		byteScanned := len(res.ScannedBinary) + len(res.ContentUnverified)
 		res.Unavailable = true
 		res.UnavailableReason = "scanner covered zero of " + strconv.Itoa(len(files)) +
-			" bundle files (all skip-listed or unscannable)"
+			" bundle files with the full rule set: " + strconv.Itoa(byteScanned) + " of " +
+			strconv.Itoa(len(files)) + " bundle files byte-scanned only, " +
+			strconv.Itoa(len(res.Unscanned)) + " could not be read"
 	}
 	return res, nil
+}
+
+// guardedReadWhy names the reason a guarded read refused a skip-listed file,
+// path-free, so the Unscanned entry can say it.
+func guardedReadWhy(err error) string {
+	switch {
+	case errors.Is(err, fsutil.ErrTooBig):
+		return "over the " + strconv.Itoa(maxBinaryScanBytes>>20) + " MiB scan cap"
+	case errors.Is(err, fsutil.ErrNotRegular):
+		return "not a regular file"
+	case errors.Is(err, syscall.ELOOP):
+		return "symlink"
+	}
+	return "unreadable"
+}
+
+// scanBytes runs the byte-rule set over a skip-listed file's raw bytes: the
+// secret patterns (secretPatterns) plus the identity rules whose literal is
+// the caller's own and long enough that a chance collision with binary
+// content is negligible — the home path, the email, and a real name that is
+// multi-word or 8+ characters. A home path in PDF /Creator, an /Author stamp,
+// or a session URL in PNG tEXt metadata is the same release-blocking leak it
+// is in prose, and renaming deck.md to deck.pdf must not change the verdict.
+// The short/generic identity kinds (local_username, github_username,
+// home_path_other, a short single-token real_name) are dropped by
+// byteScanPolicy after the scan — home_path_other runs unguarded inside the
+// identity matcher, so switching it off by identity value is not possible —
+// unless the repo's pii.json raised that kind above its built-in default,
+// which is a judgement the byte scan honours.
+func (s *Scanner) scanBytes(data []byte, secrets []Pattern, logical string) []Finding {
+	// GitRemoteUsername travels with the name so the matcher derives
+	// nameEqGithub exactly as it does on text: a user.name equal to the public
+	// handle is reported as github_username (dropped here), never promoted to
+	// a hard-fail real_name by the file's extension (iss-283).
+	long := Identity{
+		HomePath: s.identity.HomePath, GitUserEmail: s.identity.GitUserEmail,
+		GitUserName: s.identity.GitUserName, GitRemoteUsername: s.identity.GitRemoteUsername,
+	}
+	all := ScanText(string(data), long, secrets, s.identSev, logical)
+	out := all[:0]
+	for _, f := range all {
+		if s.byteScanDrops(f) {
+			continue
+		}
+		out = append(out, f)
+	}
+	return out
+}
+
+// bytePolicy is what the byte scan does with a finding of one identity kind.
+type bytePolicy int
+
+const (
+	// bytePolicyKeep: the finding stands on bytes as it does on text.
+	bytePolicyKeep bytePolicy = iota
+	// bytePolicyDrop: noise on bytes; dropped unless the repo raised the kind.
+	bytePolicyDrop
+	// bytePolicyKeepLongLiteral: kept when the matched literal is multi-word or
+	// at least byteScanLongLiteral bytes, dropped when it is a short token.
+	bytePolicyKeepLongLiteral
+)
+
+// byteScanLongLiteral is the length from which a single-token real name no
+// longer collides with binary content by chance.
+const byteScanLongLiteral = 8
+
+// byteScanPolicy is the EXPLICIT byte-scan classification of every identity
+// kind. It is a table, not a derivation: a kind that is not listed reports
+// ok=false, and TestEveryIdentityKindIsClassifiedForBytes fails until it is
+// classified, so a new kind cannot land on either side silently. The default
+// for an unlisted kind is keep — the same polarity secretPatterns gives a new
+// hard-fail pattern — so an omission fails closed rather than open.
+func byteScanPolicy(kind string) (bytePolicy, bool) {
+	switch kind {
+	case kindHomeSelf, kindRealEmail:
+		return bytePolicyKeep, true
+	case kindRealName:
+		return bytePolicyKeepLongLiteral, true
+	case kindLocalUser, kindGithubUser, kindHomeOther:
+		return bytePolicyDrop, true
+	case kindNetIPv4, kindNetIPv6, kindNetMAC, kindNetLANHost, kindNetDeviceHost:
+		// Never produced on bytes — the network patterns are not in the byte
+		// rule set — but classified so the table is total.
+		return bytePolicyDrop, true
+	}
+	return bytePolicyKeep, false
+}
+
+// byteScanDrops applies byteScanPolicy to one finding, honouring a repo-raised
+// severity: when pii.json made the kind stricter than its built-in default,
+// the repo has judged that kind a leak wherever it sits, and the drop yields.
+func (s *Scanner) byteScanDrops(f Finding) bool {
+	policy, ok := byteScanPolicy(f.Kind)
+	if !ok {
+		return false
+	}
+	if floor, has := DefaultIdentitySeverities()[f.Kind]; has && isDowngrade(floor, s.identSev[f.Kind]) {
+		return false
+	}
+	switch policy {
+	case bytePolicyDrop:
+		return true
+	case bytePolicyKeepLongLiteral:
+		return len(f.Matched) < byteScanLongLiteral && strings.IndexFunc(f.Matched, unicode.IsSpace) < 0
+	}
+	return false
+}
+
+// secretPatterns returns the subset of patterns that is meaningful on raw
+// bytes: every hard-fail rule that is not an identity kind — the token and
+// private-key rules, the harness-leak rules, and a hard-fail override of the
+// same shape. A session URL is a long literal with no chance collision, and
+// AGENTS.md declares the harness-leak class as one definition reaching launch,
+// so both its rules run on bytes: the session URL is caught anywhere on a
+// line, and the attribution footer fires on bytes exactly as it does on text
+// when a line holds it on its own (PDF and PNG metadata are line-shaped), which
+// is the wanted behaviour. IsIdentityKind already covers the network kinds, so
+// no separate network clause is needed. A username, an address or a hostname
+// inside binary bytes is noise, not a leak, and the identity rules a byte
+// scan does keep are added by scanBytes through the identity value, not here.
+func secretPatterns(patterns []Pattern) []Pattern {
+	out := make([]Pattern, 0, len(patterns))
+	for _, p := range patterns {
+		if p.Severity != SeverityHardFail || IsIdentityKind(p.Kind) {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
 }
 
 func (s *Scanner) skipByName(logical string) bool {
@@ -976,3 +1184,8 @@ func sortFindings(f []Finding) {
 		return f[i].Matched < f[j].Matched
 	})
 }
+
+// MaxBinaryScanBytesForTest exposes the byte-scan cap so the sibling privacy
+// lint's tests can hold the two caps equal (repolint imports this package, so
+// the constant cannot be shared the other way).
+func MaxBinaryScanBytesForTest() int { return maxBinaryScanBytes }
