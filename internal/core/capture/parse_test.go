@@ -143,3 +143,22 @@ func TestValidateStrictImpact(t *testing.T) {
 		t.Fatalf("absent impact rejected: %v", err)
 	}
 }
+
+// TestValidateStrictLapseCategory pins the lapse category: the ledger's lapse
+// log is a value in the validated category list, not a separate enum or store
+// (cold-reading workstream ruling (6), 2026-08-28), so a lapse record must read
+// through the same strict path every other issue does.
+func TestValidateStrictLapseCategory(t *testing.T) {
+	fm := map[string]any{
+		"schema_version": 1,
+		"id":             "iss-1",
+		"slug":           "x",
+		"severity":       "minor",
+		"category":       "lapse",
+		"source":         "user-observation",
+		"found_during":   "review",
+	}
+	if err := validateStrict(fm); err != nil {
+		t.Fatalf("lapse category rejected: %v", err)
+	}
+}
