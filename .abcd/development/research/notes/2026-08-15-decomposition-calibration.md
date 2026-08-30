@@ -1229,3 +1229,34 @@ Per hand-run, append:
   criteria govern selection rather than delivery, so the discipline family is
   the nearest home rather than an exact fit, filed there in preference to
   minting a record family for one record. Feeds the open question on the enum.
+
+### 2026-08-30 — the exclusion floor (itd-194, hand-run at filing)
+
+- **Proposal:** the cold-reading exclusion floor leaks, on ten records, and
+  itd-183 shipped over the residue under a facilitator ruling that the floor be
+  carried as its own intent.
+- **Initial routing:** four parts. (1) The capability: the include table
+  refuses what the floor cannot parse, so admission and comprehension describe
+  one set (intent, itd-194), `builds_on` itd-183. (2) The trust rule: an
+  exclusion control asserts only what it can prove, so a manifest may not claim
+  a refusal the floor did not perform (ADR + brief invariant). (3) The stance:
+  a control that declines to run must say so rather than report a clean pass.
+  (4) The plumbing: the include table's narrowing is a scope decision it makes
+  and the floor inherits unstated, which belongs in the brief.
+- **Confirmed routing:** confirmed by the orchestrator under the facilitator's
+  standing authorisation, decision (20) of 2026-08-28, no per-run human
+  confirmation. The design fork underneath part (1) was NOT absorbed into the
+  ceremony: iss-2608301450065320 states the remedy is a design question and
+  declines to pick, so it was put to the facilitator, who ruled on 2026-08-30
+  for narrowing admission rather than widening the floor's parse.
+- **Verdict:** SPLIT, into (1) and (2); (3) files nowhere and (4) rides with
+  the ADR.
+- **Notes:** part (3) is the calibration's own result this run. The stance is
+  already held by the `loud-staging` principle, whose letter covers a stage that
+  no-ops or degrades saying so, and the floor declining to scan while the
+  manifest reports exclusion is that principle's exact shape. Routing it to a
+  new principle would have been a third copy of a rule the repository already
+  states once, so the hand-run cites `loud-staging` instead of minting against
+  it. That is the first time this table has retired a part by finding its home
+  already occupied, and it is the outcome the one-canonical-primitive rule
+  predicts should be common.
