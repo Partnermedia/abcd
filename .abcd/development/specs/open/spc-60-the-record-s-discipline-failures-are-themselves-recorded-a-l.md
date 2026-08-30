@@ -136,10 +136,11 @@ Every case below is watched to fail before its change lands.
   `TestCaptureLapsedAtHasNoDefault` (a `lapse` capture with the flag omitted
   exits non-zero, writes nothing, and names the flag),
   `TestCaptureLapsedAtWritesTheGivenInstant`.
-- `internal/core/lint/schema_test.go` :
+- `internal/core/lint/schema_parity_test.go` :
   `TestIssueRecordShapeFlagsLapseWithoutLapsedAt` (the committed-ledger gate
   refuses what the reader refuses), and a corpus fixture: one well-formed lapse
-  record that the gate must pass.
+  record that the gate must pass. It sits in the parity file beside the other
+  reader-mirroring issue-shape cases, which is what it is one of.
 - The generated-reference drift test in `internal/surface/cli` fails until
   `docs/reference/cli/commands.md` is regenerated, which is the mechanism that
   keeps the new flag documented.

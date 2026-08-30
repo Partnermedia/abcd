@@ -27,6 +27,7 @@ import (
 	"github.com/intentdriven/abcd/internal/core/history"
 	"github.com/intentdriven/abcd/internal/core/identity"
 	"github.com/intentdriven/abcd/internal/core/intent"
+	"github.com/intentdriven/abcd/internal/core/issueschema"
 	"github.com/intentdriven/abcd/internal/core/launch"
 	"github.com/intentdriven/abcd/internal/core/lifeboat"
 	"github.com/intentdriven/abcd/internal/core/lint"
@@ -2305,7 +2306,7 @@ func (p *stdinPrompter) Prompt(key string, choices []string, def string) string 
 // appends an issue; list/resolve/wontfix/promote are thin consumers of capture
 // core.
 func newCaptureCommand(asJSON *bool) *cobra.Command {
-	var severity, category, source, slug, foundDuring, foundAt, blockedBy string
+	var severity, category, source, slug, foundDuring, foundAt, lapsedAt, blockedBy string
 
 	captureCmd := &cobra.Command{
 		Use:   "capture [text]",
@@ -2389,7 +2390,18 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 				Slug:        slug,
 				FoundDuring: orDefault(foundDuring, "manual-capture"),
 				FoundAt:     foundAt,
+				LapsedAt:    lapsedAt,
 				BlockedBy:   blocked,
+			}
+			// --lapsed-at has NO default, and this is where the caller learns it: a
+			// lapse capture that omits the instant is refused in flag terms before
+			// anything is reserved or written. Core refuses the same record on its
+			// own (validateStrict, in property terms, for every other caller); which
+			// category obliges the value is read from the one shared definition, not
+			// restated here.
+			if issueschema.LapsedAtRequired(string(req.Category)) && strings.TrimSpace(req.LapsedAt) == "" {
+				return &exitError{Code: 2, Msg: "abcd capture --category " + issueschema.CategoryLapse +
+					" requires --lapsed-at <RFC 3339 instant> (nothing captured — the moment the discipline gave way is never defaulted to the write-up time)"}
 			}
 			res, err := capture.Capture(req)
 			if err != nil {
@@ -2415,6 +2427,9 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	captureCmd.Flags().StringVar(&slug, "slug", "", "override the slug derived from the text")
 	captureCmd.Flags().StringVar(&foundDuring, "found-during", "", "session/command context (default manual-capture)")
 	captureCmd.Flags().StringVar(&foundAt, "found-at", "", "optional repo-relative path or conceptual location")
+	// No default, deliberately: an unsupplied lapse time would default to the wall
+	// clock at write-up, which is the one value the lapse log exists to rule out.
+	captureCmd.Flags().StringVar(&lapsedAt, "lapsed-at", "", "RFC 3339 instant a discipline gave way (the lapse, not the write-up)")
 	captureCmd.Flags().StringVar(&blockedBy, "blocked-by", "", "comma-separated iss-ids this issue is blocked by")
 
 	// list — the earned SD001 exception: a filter flag is REQUIRED.

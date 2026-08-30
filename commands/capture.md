@@ -41,11 +41,17 @@ Provide provenance and taxonomy through flags when known (each falls back to a
 default): `--severity` (`nitpick|minor|major|critical`, default `minor`),
 `--category` (default `observation`), `--source` (default `user-observation`),
 `--found-during` (session/command context, default `manual-capture`),
-`--found-at` (optional repo-relative path), `--slug` (overrides the slug derived
-from the text), `--blocked-by` (comma-separated `iss-N` ids this issue depends
-on). Report the new `id`, `status`, and `path` from the JSON. Report `redacted`
+`--found-at` (optional repo-relative path), `--lapsed-at` (RFC 3339 instant in
+UTC at which a recorded discipline gave way — the lapse itself, never the
+write-up), `--slug` (overrides the slug derived from the text), `--blocked-by`
+(comma-separated `iss-N` ids this issue depends on). Report the new `id`, `status`, and `path` from the JSON. Report `redacted`
 too whenever it is non-zero: it counts the spans rewritten before the text was
 written, and the user needs to know their wording was changed.
+
+`--category lapse` **requires** `--lapsed-at`: the flag has no default, and a
+lapse capture that omits it exits 2 and writes nothing. The instant the
+discipline gave way is the whole content of a lapse entry, and the only value
+that could be defaulted is the write-up time it exists to be distinguished from.
 
 A single whitespace-free word is refused (exit 2, nothing written): a lone
 token reads as a mistyped sub-verb, never as issue text. A near-miss of a real

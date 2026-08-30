@@ -99,13 +99,30 @@ func validateStrict(fm map[string]any) error {
 	}
 
 	// Optional scalar strings.
-	for _, opt := range []string{"found_at", "details", "suggested_fix", "wontfix_reason", "resolution", "promoted_to"} {
+	for _, opt := range []string{"found_at", "lapsed_at", "details", "suggested_fix", "wontfix_reason", "resolution", "promoted_to"} {
 		if v, present := fm[opt]; present {
 			if _, isStr := v.(string); !isStr {
 				return fmt.Errorf("%w: %q must be a string", ErrMalformedFrontmatter, opt)
 			}
 		}
 	}
+	// lapsed_at is optional for every category and REQUIRED for lapse (spc-60).
+	// It is checked after the type loop above, so a non-string value is reported as
+	// the type error it is rather than as an absent timestamp. Which category
+	// requires it, and what a well-formed value is, are read from the ONE shared
+	// definition in core/issueschema — the same one the committed-ledger gate
+	// reads, so a record this reader refuses (and therefore SKIPS, making it
+	// invisible to every capture surface) is never lint-green.
+	lapsedAt := strings.TrimSpace(asString(fm["lapsed_at"]))
+	if issueschema.LapsedAtRequired(fm["category"].(string)) && lapsedAt == "" {
+		return fmt.Errorf("%w: a %q record must carry 'lapsed_at', the instant the discipline gave way",
+			ErrMissingRequiredField, issueschema.CategoryLapse)
+	}
+	if lapsedAt != "" && !issueschema.ValidLapsedAt(lapsedAt) {
+		return fmt.Errorf("%w: lapsed_at %q is not an RFC 3339 instant (want 2026-08-28T00:00:00Z)",
+			ErrMalformedFrontmatter, lapsedAt)
+	}
+
 	if v, present := fm["promoted_to"]; present {
 		if !reItdID.MatchString(v.(string)) {
 			return fmt.Errorf("%w: promoted_to %q does not match ^itd-[0-9]+$", ErrMalformedFrontmatter, v)
@@ -270,6 +287,7 @@ func issueFromFrontmatter(fm map[string]any, status State, path, body string) Is
 		Source:        Source(asString(fm["source"])),
 		FoundDuring:   asString(fm["found_during"]),
 		FoundAt:       asString(fm["found_at"]),
+		LapsedAt:      asString(fm["lapsed_at"]),
 		PromotedTo:    asString(fm["promoted_to"]),
 		Resolution:    asString(fm["resolution"]),
 		WontfixReason: asString(fm["wontfix_reason"]),
