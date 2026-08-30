@@ -7,7 +7,7 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-189-round-3-ruthless"
 found_at: "internal/core/lint/schema.go"
-resolution: "The closed-schema and duplicate-key findings now gate their reader clause on readerFailsClosed, the same declaration the missing-property finding consults, so all three legs rest on one statement about the store rather than one leg declaring and two assuming. The issue and ADR stores keep the refusal account, which is true of them; the admission and surprise stores state what a key outside a closed schema and a duplicated key ARE, and stop there. The flag's godoc now covers all three legs."
+resolution: "The closed-schema and duplicate-key findings now gate their reader clause on readerFailsClosed, the same declaration the missing-property finding consults, so all three legs rest on one statement about the store rather than one leg declaring and two assuming. The issue store keeps the refusal account on both legs and the ADR store keeps it on the closed-schema leg, which is true of them; the admission and surprise stores state what a key outside a closed schema and a duplicated key ARE, and stop there. The duplicate-key leg is a THIRD reader question and does not stand behind this flag: the ADR dispatcher reads with the lenient scanner and refuses no duplicate, so it is declared separately as readerRefusesDuplicateKey (iss-2608301656200729)."
 impact: fix
 resolved_by:
   intent: "itd-189"
@@ -35,13 +35,22 @@ by every admission surface". True for `iss` (capture/parse.go:122); false for
 
 The sting: `6226f7d2` fixed exactly this defect in `checkRecordRequiredFields`
 one function away, and did not check the two legs beside it. The flag it added,
-`readerFailsClosed`, is correct for all four stores (verified independently by
-both reviewers) — it was simply applied to one leg.
+`readerFailsClosed`, is correct for all four stores on the UNKNOWN-KEY leg,
+which is the leg both reviewers checked: `adr` declares no `knownFields` and
+returns early, so the claim is never rendered there.
+
+It is NOT correct for `adr` on the DUPLICATE-KEY leg, and the reviewers carried
+their unknown-key verdict silently across to it. `record.readRecordHead` reads
+with `frontmatter.Fields`, the lenient scanner, and no ADR reader anywhere
+refuses a duplicated key: an ADR carrying `status` twice renders, with the first
+value and a nil error. The duplicate-key leg is declared separately, as
+`readerRefusesDuplicateKey` (iss-2608301656200729).
 
 Remedy, one condition, both sites: gate the reader clause on
 `r.store.readerFailsClosed` exactly as `checkRecordRequiredFields:745` now does,
-keeping the schema-closed half unconditional. `adr` is unaffected (nil
-knownFields, early return); `iss` keeps the claim, which is true of it. Then
-widen the flag's godoc: it covers required properties, the closed schema AND the
-duplicate key — one declaration, three legs, rather than one leg declaring and
-two assuming.
+keeping the schema-closed half unconditional. `adr` is unaffected on the
+closed-schema leg (nil knownFields, early return) and must not keep the claim on
+the duplicate-key leg; `iss` keeps both, which is true of it. Then widen the
+flag's godoc: it covers required properties and the closed schema — one
+declaration, two legs, rather than one leg declaring and one assuming — with the
+duplicate key on its own declaration beside it.

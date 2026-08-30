@@ -7,6 +7,10 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-189-round-5-ruthless"
 found_at: "internal/core/lint/schema.go"
+resolution: "The duplicate-key leg reads its own declaration, readerRefusesDuplicateKey, set on the issue store alone: capture's parseFrontmatterBlock refuses a duplicate by name, while the ADR dispatcher reads with frontmatter.Fields and renders an ADR carrying status twice on its first value with a nil error (probed through record.Describe). readerFailsClosed keeps the two legs that read a record's properties, where it is true of the ADR store. TestClosedSchemaAndDuplicateKeyClaimNoReaderWhereTheStoreHasNone now runs both halves of the split on the ADR store: the duplicate must not claim the refusal and the missing id must. The verification claim in iss-2608301519254418 is corrected to the unknown-key leg both reviewers actually checked, and the stale three-legs sentence in iss-2608301649337920's remedy with it."
+impact: fix
+resolved_by:
+  intent: "itd-189"
 ---
 
 readerFailsClosed is false for the adr store on the duplicate key leg and the record that resolved it claims all four stores were verified

@@ -34,8 +34,10 @@ are not.
 It is also the exact mistake `readerFailsClosed` was invented to prevent, in the
 same round that invented it: a message telling its reader that some other
 component refuses the thing, when that component does not know the thing exists.
-Three legs were given the flag; the fourth, in the report's own file, was
-missed.
+The record_schema legs were given a declaration; this one, in the report's own
+file, was missed.
 
 Remedy: drop the clause on the admissions path, or gate it the way
-`readerFailsClosed` gates the other three.
+record_schema's own legs are gated — `readerFailsClosed` for the two that read a
+record's properties, `readerRefusesDuplicateKey` for the duplicate, which is a
+separate reader question (iss-2608301656200729).
