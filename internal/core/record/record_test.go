@@ -82,7 +82,7 @@ func TestDescribeIssueNextMoves(t *testing.T) {
 	assertZeroWrites(t, repo, before)
 
 	// Promote it: the next move becomes the intent pointer.
-	pr, err := capture.Promote(capture.PromoteRequest{RepoRoot: repo, ID: res.ID})
+	pr, err := capture.Promote(capture.PromoteRequest{Grounds: "pursued: we expect the ledger to keep the reasoning the session would otherwise lose", RepoRoot: repo, ID: res.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,6 +109,7 @@ func TestDescribeResolvedIssueShowsTrail(t *testing.T) {
 	}
 	write(t, repo, ".abcd/development/intents/shipped/itd-9-fixer.md", "---\nid: itd-9\n---\n\n# F\n")
 	if _, err := capture.Resolve(capture.ResolveRequest{
+		Grounds:  "pursued: we expect the ledger to keep the reasoning the session would otherwise lose",
 		RepoRoot: repo, ID: res.ID, Resolution: "done", Impact: "fix",
 		ByIntent: "itd-9", ByCommit: "abc1234",
 	}); err != nil {

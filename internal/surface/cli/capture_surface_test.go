@@ -271,7 +271,7 @@ func TestCapturePromoteJSONContract(t *testing.T) {
 		t.Fatalf("capture envelope unreadable: %v\n%s", err, capOut)
 	}
 
-	out := runCLI(t, "capture", "promote", minted.ID, "--json")
+	out := runCLI(t, "capture", "promote", minted.ID, "--grounds", cliGrounds, "--json")
 	var r struct {
 		IssueID    string `json:"issue_id"`
 		IssuePath  string `json:"issue_path"`
@@ -295,7 +295,7 @@ func TestCapturePromoteJSONContract(t *testing.T) {
 	}
 
 	// Second promote refuses (exit non-zero) and names the existing intent.
-	if _, err := runCLIErr(t, "capture", "promote", minted.ID); err == nil || !strings.Contains(err.Error(), "itd-1") {
+	if _, err := runCLIErr(t, "capture", "promote", minted.ID, "--grounds", cliGrounds); err == nil || !strings.Contains(err.Error(), "itd-1") {
 		t.Fatalf("second promote must refuse naming itd-1, got: %v", err)
 	}
 }
@@ -323,12 +323,12 @@ func TestCaptureResolveProvenanceJSON(t *testing.T) {
 	}
 
 	// Unknown intent refuses; the issue stays open.
-	if _, err := runCLIErr(t, "capture", "resolve", minted.ID, "nope", "--impact", "fix", "--intent", "itd-99"); err == nil {
+	if _, err := runCLIErr(t, "capture", "resolve", minted.ID, "nope", "--impact", "fix", "--grounds", cliGrounds, "--intent", "itd-99"); err == nil {
 		t.Fatalf("resolve with an unknown --intent must refuse")
 	}
 
 	out := runCLI(t, "capture", "resolve", minted.ID, "fixed by the fixer", "--impact", "fix",
-		"--intent", "itd-4", "--commit", "abcdef0123", "--json")
+		"--grounds", cliGrounds, "--intent", "itd-4", "--commit", "abcdef0123", "--json")
 	var r struct {
 		ID         string `json:"id"`
 		ToStatus   string `json:"to_status"`
@@ -523,5 +523,106 @@ func TestCaptureLapsedAtHasNoDefault(t *testing.T) {
 	}
 	if n := ledgerIssueCount(t, repo); n != 0 {
 		t.Fatalf("the refused lapse capture wrote %d record(s); it must write nothing", n)
+	}
+}
+
+// cliGrounds is a conjecture-shaped operand for the capture surface tests.
+const cliGrounds = "pursued: we expect the recorded reasoning to outlive the session that had it"
+
+// TestCapturePromoteMissingGroundsExit2 is itd-179's refusal at the surface: the
+// flag is mandatory in effect and its absence is a USAGE error, refused at exit 2
+// with nothing written — the same shape `--category lapse` without `--lapsed-at`
+// already has. Exit 1 is reserved for a gate's own verdict.
+func TestCapturePromoteMissingGroundsExit2(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	capOut := runCLI(t, "capture", "an observation that may turn out to be a capability", "--json")
+	var minted struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(capOut, &minted); err != nil || minted.ID == "" {
+		t.Fatalf("capture envelope unreadable: %v\n%s", err, capOut)
+	}
+
+	for _, args := range [][]string{
+		{"capture", "promote", minted.ID},
+		{"capture", "resolve", minted.ID, "fixed", "--impact", "fix"},
+	} {
+		_, err := runCLIErr(t, args...)
+		if exitCodeOf(err) != 2 {
+			t.Fatalf("%v exit = %d (%v), want 2", args, exitCodeOf(err), err)
+		}
+		if !strings.Contains(err.Error(), "--grounds") {
+			t.Fatalf("%v error must name the flag, got %q", args, err.Error())
+		}
+	}
+	// Nothing was written: no draft minted, and the issue is still open.
+	if entries, _ := os.ReadDir(filepath.Join(repo, cliDrafts)); len(entries) != 0 {
+		t.Fatalf("a refused promote minted %d draft(s), want 0", len(entries))
+	}
+	out := runCLI(t, "capture", "list", "--open", "--json")
+	if !strings.Contains(string(out), minted.ID) {
+		t.Fatalf("a refused triage moved the issue out of open/:\n%s", out)
+	}
+}
+
+// TestCaptureGroundsReachTheRecord: the wired flag actually stamps, on all three
+// triage routes, and wontfix derives its `declined:` grounds from the reason it
+// already takes.
+func TestCaptureGroundsReachTheRecord(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	mint := func(text string) string {
+		t.Helper()
+		var m struct {
+			ID string `json:"id"`
+		}
+		if err := json.Unmarshal(runCLI(t, "capture", text, "--json"), &m); err != nil || m.ID == "" {
+			t.Fatalf("capture envelope unreadable: %v", err)
+		}
+		return m.ID
+	}
+	readRecord := func(id string) string {
+		t.Helper()
+		var listed struct {
+			Issues []struct {
+				ID   string `json:"id"`
+				Path string `json:"path"`
+			} `json:"issues"`
+		}
+		if err := json.Unmarshal(runCLI(t, "capture", "list", "--all", "--json"), &listed); err != nil {
+			t.Fatal(err)
+		}
+		for _, iss := range listed.Issues {
+			if iss.ID == id {
+				data, err := os.ReadFile(filepath.Join(repo, iss.Path))
+				if err != nil {
+					t.Fatal(err)
+				}
+				return string(data)
+			}
+		}
+		t.Fatalf("%s not found in the ledger", id)
+		return ""
+	}
+
+	promoted := mint("an observation worth graduating into an intent")
+	runCLI(t, "capture", "promote", promoted, "--grounds", cliGrounds)
+	if !strings.Contains(readRecord(promoted), "grounds: \""+cliGrounds+"\"") {
+		t.Fatalf("promote did not stamp the grounds:\n%s", readRecord(promoted))
+	}
+
+	resolved := mint("an observation that will be fixed outright")
+	runCLI(t, "capture", "resolve", resolved, "fixed", "--impact", "fix", "--grounds", cliGrounds)
+	if !strings.Contains(readRecord(resolved), "grounds: \""+cliGrounds+"\"") {
+		t.Fatalf("resolve did not stamp the grounds:\n%s", readRecord(resolved))
+	}
+
+	declined := mint("an observation that will not be acted on")
+	runCLI(t, "capture", "wontfix", declined, "out of scope for this cycle")
+	if !strings.Contains(readRecord(declined), "grounds: \"declined: out of scope for this cycle\"") {
+		t.Fatalf("wontfix did not derive its declined grounds:\n%s", readRecord(declined))
 	}
 }

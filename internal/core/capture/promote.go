@@ -17,6 +17,11 @@ type PromoteRequest struct {
 	IssuesRoot string
 	ID         string // iss-N
 	LinkIntent string // itd-N; "" mints
+	// Grounds is the REQUIRED conjecture behind the promotion, in the shared
+	// `<token>: <text>` grammar (core/grounds). A capture routed to an intent
+	// draft is a conjecture being pursued, and there is nothing to stage here:
+	// promote mints the value in the same call, so it has no corpus to fix.
+	Grounds string
 }
 
 // PromoteResult is the outcome of a successful Promote. Paths are
@@ -32,6 +37,12 @@ type PromoteResult struct {
 	IntentPath  string `json:"intent_path"`
 	Linked      bool   `json:"linked"`
 	MintWarning string `json:"mint_warning,omitempty"`
+	// Redacted / Degraded mirror TransitionResult: the grounds text is free prose
+	// written to the same committed ledger, so it goes through the same redactor
+	// and reports the same way. Rewriting somebody's reasoning in silence is worse
+	// than not recording it.
+	Redacted int    `json:"redacted,omitempty"`
+	Degraded string `json:"redaction_degraded,omitempty"`
 }
 
 // stampWriteHook, when non-nil, replaces the atomic in-place write inside
@@ -59,6 +70,14 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 		return PromoteResult{}, err
 	}
 	if err := mutationPreamble(issuesRoot); err != nil {
+		return PromoteResult{}, err
+	}
+	// BEFORE anything is minted or stamped. Promote's residue contract is
+	// mint-first-stamp-second, so a refusal raised any later than here would leave
+	// an orphan draft behind for a missing argument — the exact residue the rest
+	// of this path works to avoid.
+	g, gRedacted, gDegraded, err := requireGrounds(repoRoot, "promote", req.Grounds)
+	if err != nil {
 		return PromoteResult{}, err
 	}
 
@@ -142,6 +161,12 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 		if err != nil {
 			return err
 		}
+		// yamlScalar, not rawScalar: the grounds text is free prose whose colons
+		// and spaces a bare scalar could not carry.
+		newContent, err = setScalarField(newContent, "grounds", g.String())
+		if err != nil {
+			return err
+		}
 		newFM, _, err := parseFrontmatterAndBody(newContent)
 		if err != nil {
 			return err
@@ -183,6 +208,8 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 		IntentPath:  intentPath,
 		Linked:      linked,
 		MintWarning: mintWarning,
+		Redacted:    gRedacted,
+		Degraded:    gDegraded,
 	}, nil
 }
 

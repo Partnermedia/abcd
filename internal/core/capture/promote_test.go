@@ -72,7 +72,7 @@ func readIssue(t *testing.T, ir, issID string) Issue {
 func TestPromoteMintsDraftAndStampsIssue(t *testing.T) {
 	repo, ir, issID := promoteFixture(t, "the loader drops rules silently when the config is stale")
 
-	res, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: issID})
+	res, err := Promote(PromoteRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: issID})
 	if err != nil {
 		t.Fatalf("Promote: %v", err)
 	}
@@ -129,11 +129,11 @@ func TestPromoteWorksInAnyStatusAndKeepsFolder(t *testing.T) {
 		status State
 	}{
 		{"resolved", func(repo, ir, id string) error {
-			_, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: id, Resolution: "done", Impact: "fix"})
+			_, err := Resolve(ResolveRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: id, Resolution: "done", Impact: "fix"})
 			return err
 		}, StateResolved},
 		{"wontfix", func(repo, ir, id string) error {
-			_, err := Wontfix(WontfixRequest{RepoRoot: repo, IssuesRoot: ir, ID: id, Reason: "out of scope"})
+			_, err := Wontfix(WontfixRequest{Grounds: "declined: we expect this to stay out of scope for the foreseeable cycle", RepoRoot: repo, IssuesRoot: ir, ID: id, Reason: "out of scope"})
 			return err
 		}, StateWontfix},
 	} {
@@ -142,7 +142,7 @@ func TestPromoteWorksInAnyStatusAndKeepsFolder(t *testing.T) {
 			if err := tc.move(repo, ir, issID); err != nil {
 				t.Fatal(err)
 			}
-			res, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: issID})
+			res, err := Promote(PromoteRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: issID})
 			if err != nil {
 				t.Fatalf("Promote in %s/: %v", tc.status, err)
 			}
@@ -161,11 +161,11 @@ func TestPromoteWorksInAnyStatusAndKeepsFolder(t *testing.T) {
 // itd-N and mints no duplicate draft.
 func TestPromoteRefusesAlreadyPromoted(t *testing.T) {
 	repo, ir, issID := promoteFixture(t, "promote me once")
-	first, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: issID})
+	first, err := Promote(PromoteRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: issID})
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: issID})
+	_, err = Promote(PromoteRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: issID})
 	if err == nil {
 		t.Fatalf("second promote must refuse")
 	}
@@ -182,7 +182,7 @@ func TestPromoteRefusesAlreadyPromoted(t *testing.T) {
 func TestPromoteUnknownOrMalformedIDWritesNothing(t *testing.T) {
 	repo, ir, issID := promoteFixture(t, "an innocent bystander")
 	for _, bad := range []string{"iss-999", "not-an-id", "../../evil"} {
-		if _, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: bad}); err == nil {
+		if _, err := Promote(PromoteRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: bad}); err == nil {
 			t.Fatalf("Promote(%q) must fail", bad)
 		}
 		if n := draftCount(t, repo); n != 0 {
@@ -190,7 +190,7 @@ func TestPromoteUnknownOrMalformedIDWritesNothing(t *testing.T) {
 		}
 	}
 	// Link mode with an unknown intent: structural fault, nothing written.
-	if _, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: issID, LinkIntent: "itd-42"}); err == nil {
+	if _, err := Promote(PromoteRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: issID, LinkIntent: "itd-42"}); err == nil {
 		t.Fatalf("link mode must refuse an unknown itd-N")
 	}
 	if iss := readIssue(t, ir, issID); iss.PromotedTo != "" {
@@ -211,7 +211,7 @@ func TestPromoteStampFailureReportsOrphanAndLinkRepairs(t *testing.T) {
 	}
 	defer func() { stampWriteHook = nil }()
 
-	_, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: issID})
+	_, err := Promote(PromoteRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: issID})
 	if err == nil {
 		t.Fatalf("stamp into an unwritable ledger must fail")
 	}
@@ -227,7 +227,7 @@ func TestPromoteStampFailureReportsOrphanAndLinkRepairs(t *testing.T) {
 
 	// Repair: link the orphan draft. No second mint.
 	stampWriteHook = nil
-	res, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: issID, LinkIntent: "itd-1"})
+	res, err := Promote(PromoteRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: issID, LinkIntent: "itd-1"})
 	if err != nil {
 		t.Fatalf("link-mode repair: %v", err)
 	}
@@ -262,7 +262,7 @@ func TestPromoteSerializesOnLedgerLock(t *testing.T) {
 	lockTimeout = 200 * time.Millisecond
 	defer func() { lockTimeout = origTimeout }()
 
-	_, err = Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: issID})
+	_, err = Promote(PromoteRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: issID})
 	if !errors.Is(err, ErrAllocatorContention) {
 		t.Fatalf("promote must serialize on the ledger lock, got err=%v", err)
 	}

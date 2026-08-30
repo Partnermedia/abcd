@@ -101,18 +101,23 @@ type Issue struct {
 	// LapsedAt is the RFC 3339 instant at which a recorded discipline gave way —
 	// the lapse itself, never the write-up (spc-60). Required exactly when
 	// Category is lapse; optional, and rarely meaningful, for every other.
-	LapsedAt       string      `json:"lapsed_at,omitempty"`
-	RelatedIntents []string    `json:"related_intents,omitempty"`
-	RelatedSpecs   []string    `json:"related_specs,omitempty"`
-	RelatedIssues  []string    `json:"related_issues,omitempty"`
-	BlockedBy      []string    `json:"blocked_by,omitempty"` // iss-N dependency edges
-	PromotedTo     string      `json:"promoted_to,omitempty"`
-	Resolution     string      `json:"resolution,omitempty"`
-	WontfixReason  string      `json:"wontfix_reason,omitempty"`
-	ResolvedBy     *ResolvedBy `json:"resolved_by,omitempty"`
-	Status         State       `json:"status"` // derived from folder
-	Path           string      `json:"path"`   // repo-relative locator (iss-81)
-	Body           string      `json:"body"`
+	LapsedAt       string   `json:"lapsed_at,omitempty"`
+	RelatedIntents []string `json:"related_intents,omitempty"`
+	RelatedSpecs   []string `json:"related_specs,omitempty"`
+	RelatedIssues  []string `json:"related_issues,omitempty"`
+	BlockedBy      []string `json:"blocked_by,omitempty"` // iss-N dependency edges
+	PromotedTo     string   `json:"promoted_to,omitempty"`
+	// Grounds is the recorded conjecture behind the triage that moved this record
+	// — `<token>: <text>` in the shared core/grounds vocabulary. Stamped by
+	// promote, resolve and wontfix; never by the create path, because an
+	// observation being filed is not yet a conjecture being pursued.
+	Grounds       string      `json:"grounds,omitempty"`
+	Resolution    string      `json:"resolution,omitempty"`
+	WontfixReason string      `json:"wontfix_reason,omitempty"`
+	ResolvedBy    *ResolvedBy `json:"resolved_by,omitempty"`
+	Status        State       `json:"status"` // derived from folder
+	Path          string      `json:"path"`   // repo-relative locator (iss-81)
+	Body          string      `json:"body"`
 	// BlockedByOpen is the derived subset of BlockedBy whose targets are still in
 	// open/ (the priority projection populated by List/Status). Not a stored
 	// field: an empty slice means the issue is unblocked.
@@ -183,6 +188,12 @@ type ResolveRequest struct {
 	ByIntent string // itd-N
 	BySpec   string // spc-N
 	ByCommit string // 7–64 hex chars (64 covers a SHA-256 repo)
+	// Grounds is the REQUIRED conjecture behind the resolution, in the shared
+	// `<token>: <text>` grammar (core/grounds). There is no default and none may
+	// be invented: a route recorded without its reasoning is the evaporation
+	// itd-179 exists to close, and resolve mints the value in the same call, so
+	// it has no corpus to fix and refuses from the start.
+	Grounds string
 }
 
 // WontfixRequest moves an open issue to wontfix/.
@@ -191,6 +202,13 @@ type WontfixRequest struct {
 	IssuesRoot string
 	ID         string
 	Reason     string
+	// Grounds optionally overrides the text stamped as `declined: <text>`. A
+	// wontfix can never be recorded without grounds — transition already refuses
+	// an empty Reason — so what it lacked was the TYPE, not the text, and the
+	// reason supplies the default. The override exists because the user-facing
+	// reason and the conjecture are not always the same sentence. The token stays
+	// declined: a non-action is what that value names.
+	Grounds string
 }
 
 // TransitionResult is the outcome of a Resolve or Wontfix. ResolvedBy echoes
