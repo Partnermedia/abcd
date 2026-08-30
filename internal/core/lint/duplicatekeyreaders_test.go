@@ -190,6 +190,42 @@ func TestThisRulesOwnScannerKeepsTheFirstValueInEveryStore(t *testing.T) {
 	}
 }
 
+// TestTheIssueRefusalNamesTheLedgerReaderNotEverySurface pins the one message
+// that claims a refusal against the reader that contradicts the claim it used to
+// make. The clause said the record "is skipped by every issue surface"; the
+// release cut reads the same resolved record with the lenient scanner and folds
+// its impact into the changelog, so an author told the record was invisible
+// everywhere found it in the generated section (iss-2608301901260678).
+//
+// The falsifier is run FIRST and from the reader itself, so the pin cannot pass
+// on a stale belief about what the release cut does.
+func TestTheIssueRefusalNamesTheLedgerReaderNotEverySurface(t *testing.T) {
+	if got := probeChangelogIssue(t); got != keepsFirst {
+		t.Fatalf("the release cut %s; the refusal's wording has to change with it", got)
+	}
+
+	root := t.TempDir()
+	writeRel(t, root, "rec/.keep", "")
+	writeRel(t, root, "work/issues/open/iss-9-a-thing.md", issueRecord("iss-9", "iss-9"))
+	fs, err := lint.Lint(everyStoreConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rel := filepath.Join("work", "issues", "open", "iss-9-a-thing.md")
+	for _, holds := range []string{
+		"the issue ledger reader refuses a duplicated key",
+		"so capture skips the file",
+		"the release cut does not",
+	} {
+		if !finding(fs, rel, holds) {
+			t.Errorf("the refusal says what holds (%q): %+v", holds, fs)
+		}
+	}
+	if finding(fs, rel, "every issue surface") {
+		t.Errorf("the release cut is an issue surface that reads the record, so the refusal may not claim every one skips it: %+v", fs)
+	}
+}
+
 // ---------------------------------------------------------------- the probes
 
 // probeADR reads an ADR whose `status` is stated twice through the record

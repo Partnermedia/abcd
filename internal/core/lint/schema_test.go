@@ -1898,7 +1898,11 @@ func TestClosedSchemaAndDuplicateKeyClaimNoReaderWhereTheStoreHasNone(t *testing
 	}
 	for _, c := range []struct{ rel, claim string }{
 		{filepath.Join("work", "issues", "open", "iss-42-a-finding.md"), "invisible"},
-		{filepath.Join("work", "issues", "open", "iss-43-a-finding.md"), "skipped"},
+		// The duplicate-key refusal names the LEDGER reader and the verbs that skip
+		// the record, rather than "every issue surface": the release cut reads the
+		// same file leniently (iss-2608301901260678). The refusal itself is what
+		// this row pins, and it is still made.
+		{filepath.Join("work", "issues", "open", "iss-43-a-finding.md"), "capture skips the file"},
 		// The other half of the ADR split: the reader DOES confirm the id, so the
 		// missing-property leg keeps its account on the same store the duplicate-key
 		// leg above must not make it on.
