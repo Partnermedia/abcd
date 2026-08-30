@@ -559,3 +559,51 @@ func TestReadyConditionCarryingTwoMarkers(t *testing.T) {
 		t.Fatal("the fault must carry a remedy")
 	}
 }
+
+// TestReadyReportsStructuralConditionFaults: every fault the stamp refuses on
+// must also be a fault the gate names. Otherwise the gate says "run plan" and
+// plan says no, which is the dead end iss-2608300210588874 already closed once.
+func TestReadyReportsStructuralConditionFaults(t *testing.T) {
+	tests := []struct {
+		name, conditions, wantDetail string
+	}{
+		{"fenced section", "## Scope Conditions\n\n- holds on POSIX\n\n```\n- example\n```\n\n", "fenced"},
+		{"malformed marker", "## Scope Conditions\n\n- holds on POSIX <!-- cond: cond-123 -->\n\n", "malformed identity marker"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res := readyWithClaims(t, "", tt.conditions)
+			if res.Ready {
+				t.Fatal("a structural fault must not be ready")
+			}
+			c := checkByName(t, res, "scope_conditions")
+			if c.OK || !strings.Contains(c.Detail, tt.wantDetail) {
+				t.Fatalf("scope_conditions = %+v, want fail naming %q", c, tt.wantDetail)
+			}
+			if c.Remedy == "" {
+				t.Fatal("a named fault needs a remedy the reader can act on")
+			}
+		})
+	}
+}
+
+// TestReadyReportsADuplicatedSectionHeading: two headings make "the section"
+// ambiguous; the gate says so rather than silently reading the first.
+func TestReadyReportsADuplicatedSectionHeading(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, plannedDir+"/itd-10-alpha.md",
+		"---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n"+
+			"## Scope Conditions\n\n- holds on POSIX <!-- cond: cond-2608300102030405 -->\n\n"+
+			"## Scope Conditions\n\n- and again <!-- cond: cond-2608300102030406 -->\n\n"+
+			"## Acceptance Criteria\n\n- ok\n")
+	writeFile(t, root, specsOpen+"/spc-1-alpha.md", specNaming("spc-1", "alpha", "itd-10"))
+
+	res, err := Ready(root, "itd-10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := checkByName(t, res, "scope_conditions")
+	if c.OK || !strings.Contains(c.Detail, "more than one") {
+		t.Fatalf("scope_conditions = %+v, want fail naming the duplicated heading", c)
+	}
+}

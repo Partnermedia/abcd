@@ -223,6 +223,26 @@ func scopeConditionsCheck(it Intent, claims Claims) ReadyCheck {
 		c.Remedy = scopeConditionsRemedy
 		return c
 	}
+	// The structural faults first: each is a thing the STAMP refuses, so the gate
+	// has to name it rather than fall through to a remedy that cannot run.
+	if claims.ConditionsDuplicated {
+		c.OK = false
+		c.Detail = "more than one '## Scope Conditions' heading — which one is the section is undecidable"
+		c.Remedy = "merge the duplicated '## Scope Conditions' sections into one"
+		return c
+	}
+	if claims.ConditionsFenced {
+		c.OK = false
+		c.Detail = "'## Scope Conditions' contains a fenced block — a bullet inside it is an example, not a condition"
+		c.Remedy = "move the fenced example out of '## Scope Conditions'"
+		return c
+	}
+	if bad := MalformedMarkerOrdinals(claims.Conditions); len(bad) > 0 {
+		c.OK = false
+		c.Detail = fmt.Sprintf("condition(s) %s carry a malformed identity marker", joinInts(bad))
+		c.Remedy = "delete the malformed `<!-- cond: … -->` text; a real identity is minted by `abcd intent plan`, never hand-typed"
+		return c
+	}
 	if multi := MultiplyMarkedConditions(claims.Conditions); len(multi) > 0 {
 		c.OK = false
 		c.Detail = fmt.Sprintf("condition(s) %s carry more than one identity", joinInts(multi))

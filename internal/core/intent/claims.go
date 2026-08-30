@@ -69,6 +69,13 @@ var (
 	spaceRunRe = regexp.MustCompile(`\s+`)
 	// bulletPrefixRe strips a top-level list marker to leave the bullet's prose.
 	bulletPrefixRe = regexp.MustCompile(`^[-*]\s+`)
+	// fenceRe matches a fenced-code-block delimiter: a run of three or more
+	// backticks or tildes at up to three spaces of indent (CommonMark).
+	fenceRe = regexp.MustCompile("^ {0,3}(`{3,}|~{3,})(.*)$")
+	// malformedMarkerRe matches the opening of something SHAPED like an identity
+	// marker. Anything it matches that condMarkerRe did not is a hand-typed
+	// near-miss: prose to a parser, an identity to the human who wrote it.
+	malformedMarkerRe = regexp.MustCompile(`<!--\s*cond\s*:`)
 	// anyBulletRe matches a list item at ANY indent. A line that is a bullet ends
 	// the preceding bullet, so an indented sub-bullet is never folded into its
 	// parent's text.
@@ -87,6 +94,11 @@ type ScopeCondition struct {
 	// two identities is an ambiguity the gate names: a disposition keyed on one of
 	// them would attach to whichever the reader reached first.
 	ExtraIDs []string `json:"extra_ids,omitempty"`
+	// MalformedMarker reports a `<!-- cond:` in the bullet that is not a
+	// well-formed identity. Left unread it is silent prose, so the stamp glues a
+	// real marker beside it and the bullet ends up carrying two things that look
+	// like identities to a human and one to the machine.
+	MalformedMarker bool `json:"malformed_marker,omitempty"`
 }
 
 // Claims is what one intent record says about its mechanism and context claims.
@@ -101,6 +113,13 @@ type Claims struct {
 	ConditionsState  ClaimState       `json:"conditions_state"`
 	ConditionsPrompt bool             `json:"conditions_prompt"`
 	Conditions       []ScopeCondition `json:"conditions"` // populated only when stated
+	// ConditionsFenced and ConditionsDuplicated are structural faults in the
+	// `## Scope Conditions` section that make its bullets unsafe to WRITE: a
+	// fenced example a stamp could land inside, and a second heading that makes
+	// "the section" ambiguous. Both are reported by the gate and refused by the
+	// stamp, so the remedy the gate names is never a command that cannot run.
+	ConditionsFenced     bool `json:"conditions_fenced,omitempty"`
+	ConditionsDuplicated bool `json:"conditions_duplicated,omitempty"`
 }
 
 // ParseClaims reads an intent record's `## Mechanism` and `## Scope Conditions`
@@ -108,6 +127,7 @@ type Claims struct {
 // rather than re-deciding what a section, a bullet, or the nullity token is.
 func ParseClaims(content string) Claims {
 	lines := strings.Split(content, "\n")
+	fenced := fenceMask(lines)
 	c := Claims{
 		Mechanism:        claimState(lines, mechanismHeadingRe),
 		MechanismPrompt:  sectionIsPrompt(lines, mechanismHeadingRe),
@@ -115,10 +135,63 @@ func ParseClaims(content string) Claims {
 		ConditionsPrompt: sectionIsPrompt(lines, scopeHeadingRe),
 		Conditions:       []ScopeCondition{},
 	}
+	if start, end, ok := sectionLineRangeIn(lines, fenced, scopeHeadingRe); ok {
+		c.ConditionsFenced = anyFenced(fenced, start, end)
+		c.ConditionsDuplicated = countHeadings(lines, fenced, scopeHeadingRe) > 1
+	}
 	if c.ConditionsState == ClaimStated {
 		c.Conditions = parseConditions(lines)
 	}
 	return c
+}
+
+// fenceMask reports, per line, whether that line lies inside a fenced code
+// block — the delimiter lines included, since nothing on them is markdown
+// either. A markdown parser that cannot see a fence reads an EXAMPLE as an
+// instruction: a fenced `## Scope Conditions` shadows the record's real one, and
+// a fenced bullet is counted as a condition and written into by the stamp
+// (iss-2608300235388164). An unclosed fence runs to end of file, per CommonMark.
+func fenceMask(lines []string) []bool {
+	mask := make([]bool, len(lines))
+	open := ""
+	for i, raw := range lines {
+		ln := strings.TrimRight(raw, "\r")
+		m := fenceRe.FindStringSubmatch(ln)
+		if open == "" {
+			// A backtick opener's info string may not itself contain a backtick.
+			if m != nil && !(m[1][0] == '`' && strings.Contains(m[2], "`")) {
+				open = m[1]
+				mask[i] = true
+			}
+			continue
+		}
+		mask[i] = true
+		if m != nil && m[1][0] == open[0] && len(m[1]) >= len(open) && strings.TrimSpace(m[2]) == "" {
+			open = ""
+		}
+	}
+	return mask
+}
+
+// anyFenced reports whether any line of [start, end) lies inside a fence.
+func anyFenced(fenced []bool, start, end int) bool {
+	for i := start; i < end && i < len(fenced); i++ {
+		if fenced[i] {
+			return true
+		}
+	}
+	return false
+}
+
+// countHeadings counts the unfenced headings matching headRe.
+func countHeadings(lines []string, fenced []bool, headRe *regexp.Regexp) int {
+	n := 0
+	for i, ln := range lines {
+		if !fenced[i] && headRe.MatchString(strings.TrimRight(ln, "\r")) {
+			n++
+		}
+	}
+	return n
 }
 
 // claimState classifies one claim section into its byte state. A heading with
@@ -162,14 +235,15 @@ func sectionIsPrompt(lines []string, headRe *regexp.Regexp) bool {
 // prose; an indented sub-bullet is detail of its parent and ends it, exactly as
 // bulletRe already rules for acceptance criteria.
 func parseConditions(lines []string) []ScopeCondition {
-	start, end, ok := sectionLineRange(lines, scopeHeadingRe)
+	fenced := fenceMask(lines)
+	start, end, ok := sectionLineRangeIn(lines, fenced, scopeHeadingRe)
 	if !ok {
 		return []ScopeCondition{}
 	}
 	conds := []ScopeCondition{}
-	for _, b := range conditionBlocks(lines, start, end) {
-		ids, text := readConditionBlock(lines, b)
-		c := ScopeCondition{Ordinal: len(conds) + 1, Text: text}
+	for _, b := range conditionBlocks(lines, fenced, start, end) {
+		ids, malformed, text := readConditionBlock(lines, b)
+		c := ScopeCondition{Ordinal: len(conds) + 1, Text: text, MalformedMarker: malformed}
 		if len(ids) > 0 {
 			c.ID, c.ExtraIDs = ids[0], ids[1:]
 		}
@@ -184,17 +258,18 @@ type conditionBlock struct{ start, end int }
 
 // conditionBlocks splits a section body into its top-level bullets. It is the
 // single notion of where a condition starts and stops, so the reader and the
-// stamper can never disagree about which lines belong to which bullet.
-func conditionBlocks(lines []string, start, end int) []conditionBlock {
+// stamper can never disagree about which lines belong to which condition. A
+// fenced line neither opens a bullet nor continues one.
+func conditionBlocks(lines []string, fenced []bool, start, end int) []conditionBlock {
 	var blocks []conditionBlock
 	for i := start; i < end; i++ {
-		if !bulletRe.MatchString(strings.TrimRight(lines[i], "\r")) {
+		if fenced[i] || !bulletRe.MatchString(strings.TrimRight(lines[i], "\r")) {
 			continue
 		}
 		j := i + 1
 		for ; j < end; j++ {
 			cont := strings.TrimRight(lines[j], "\r")
-			if strings.TrimSpace(cont) == "" || anyBulletRe.MatchString(cont) {
+			if fenced[j] || strings.TrimSpace(cont) == "" || anyBulletRe.MatchString(cont) {
 				break
 			}
 		}
@@ -204,8 +279,11 @@ func conditionBlocks(lines []string, start, end int) []conditionBlock {
 }
 
 // readConditionBlock returns every well-formed identity marker in the bullet, in
-// the order they appear, and the bullet's prose with those markers excised.
-func readConditionBlock(lines []string, b conditionBlock) (ids []string, text string) {
+// the order they appear, whether the bullet also carries a near-miss of one, and
+// the bullet's prose with the well-formed markers excised. A malformed marker is
+// left in the prose deliberately: the gate names it and the remedy is to delete
+// it, so the reader has to be able to see what to delete.
+func readConditionBlock(lines []string, b conditionBlock) (ids []string, malformed bool, text string) {
 	var parts []string
 	for i := b.start; i < b.end; i++ {
 		ln := strings.TrimRight(lines[i], "\r")
@@ -213,12 +291,15 @@ func readConditionBlock(lines []string, b conditionBlock) (ids []string, text st
 			ids = append(ids, m[1])
 		}
 		ln = condMarkerRe.ReplaceAllString(ln, " ")
+		if malformedMarkerRe.MatchString(ln) {
+			malformed = true
+		}
 		if i == b.start {
 			ln = bulletPrefixRe.ReplaceAllString(ln, "")
 		}
 		parts = append(parts, ln)
 	}
-	return ids, strings.TrimSpace(spaceRunRe.ReplaceAllString(strings.Join(parts, " "), " "))
+	return ids, malformed, strings.TrimSpace(spaceRunRe.ReplaceAllString(strings.Join(parts, " "), " "))
 }
 
 // DuplicateConditionIDs returns the identity markers carried by more than one
@@ -252,6 +333,18 @@ func MultiplyMarkedConditions(conds []ScopeCondition) []int {
 	return out
 }
 
+// MalformedMarkerOrdinals returns the 1-based positions of bullets carrying a
+// near-miss of an identity marker.
+func MalformedMarkerOrdinals(conds []ScopeCondition) []int {
+	var out []int
+	for _, c := range conds {
+		if c.MalformedMarker {
+			out = append(out, c.Ordinal)
+		}
+	}
+	return out
+}
+
 // UnmarkedConditionOrdinals returns the 1-based positions of the conditions no
 // `Plan` run has stamped yet.
 func UnmarkedConditionOrdinals(conds []ScopeCondition) []int {
@@ -276,9 +369,20 @@ func UnmarkedConditionOrdinals(conds []ScopeCondition) []int {
 // surviving marker and the retired one simply stops appearing.
 func stampScopeConditions(content string, minter recordid.Minter) (string, int, error) {
 	lines := strings.Split(content, "\n")
-	start, end, ok := sectionLineRange(lines, scopeHeadingRe)
+	fenced := fenceMask(lines)
+	start, end, ok := sectionLineRangeIn(lines, fenced, scopeHeadingRe)
 	if !ok {
 		return content, 0, nil
+	}
+	// Two structural faults make the section unsafe to WRITE, as opposed to
+	// merely ambiguous to read, so the stamp refuses rather than guessing. Both
+	// are reported by the readiness gate too, so the remedy it names is never a
+	// command that cannot run (iss-2608300235388164).
+	if countHeadings(lines, fenced, scopeHeadingRe) > 1 {
+		return "", 0, fmt.Errorf("intent: more than one '## Scope Conditions' heading; refusing to stamp an ambiguous section")
+	}
+	if anyFenced(fenced, start, end) {
+		return "", 0, fmt.Errorf("intent: '## Scope Conditions' contains a fenced block; refusing to stamp a section whose bullets may be an example")
 	}
 	used := map[string]bool{}
 	for _, c := range parseConditions(lines) {
@@ -290,10 +394,13 @@ func stampScopeConditions(content string, minter recordid.Minter) (string, int, 
 		}
 	}
 	stamped := 0
-	for _, b := range conditionBlocks(lines, start, end) {
+	for _, b := range conditionBlocks(lines, fenced, start, end) {
 		// Marker-free bullets only. A bullet that already carries an identity —
-		// wherever in its wrapped text that identity sits — is never re-minted.
-		if ids, _ := readConditionBlock(lines, b); len(ids) > 0 {
+		// wherever in its wrapped text that identity sits — is never re-minted, and
+		// one carrying a near-miss of a marker is left for the human to correct
+		// rather than given a second thing that looks like an identity.
+		ids, malformed, _ := readConditionBlock(lines, b)
+		if len(ids) > 0 || malformed {
 			continue
 		}
 		id, err := mintConditionID(minter, used)
@@ -343,13 +450,20 @@ func mintConditionID(minter recordid.Minter, used map[string]bool) (string, erro
 // sectionBody is expressed on top of it, so the claim parse, the identity stamp
 // and the acceptance-criteria count can never drift apart.
 func sectionLineRange(lines []string, headRe *regexp.Regexp) (start, end int, ok bool) {
+	return sectionLineRangeIn(lines, fenceMask(lines), headRe)
+}
+
+// sectionLineRangeIn is sectionLineRange over a fence mask the caller already
+// computed. A fenced line is neither the heading that opens a section nor the
+// heading that closes one.
+func sectionLineRangeIn(lines []string, fenced []bool, headRe *regexp.Regexp) (start, end int, ok bool) {
 	for i, ln := range lines {
-		if !headRe.MatchString(strings.TrimRight(ln, "\r")) {
+		if fenced[i] || !headRe.MatchString(strings.TrimRight(ln, "\r")) {
 			continue
 		}
 		end = len(lines)
 		for j := i + 1; j < len(lines); j++ {
-			if headingRe.MatchString(strings.TrimRight(lines[j], "\r")) {
+			if !fenced[j] && headingRe.MatchString(strings.TrimRight(lines[j], "\r")) {
 				end = j
 				break
 			}

@@ -113,9 +113,13 @@ empty section is a gate fault, and the token is a claim considered and
 declined. Discipline-kind records are exempt: their template carries no claim
 sections, and both checks report the exemption.
 
-Each scope condition closes with a stamped identity marker
+Each scope condition carries a stamped identity marker
 (`<!-- cond: cond-<16 digits> -->`) so a later disposition attaches to the
-condition rather than to a sentence that may since have been reworded. **The
+condition rather than to a sentence that may since have been reworded. The
+marker is read anywhere in the bullet, so rewrapping the text cannot orphan it.
+Two markers in one bullet, a near-miss of one, a fenced block in the section, or
+a second `## Scope Conditions` heading are each reported by name — and each is
+refused by the stamp, so the gate never names a remedy that cannot run. **The
 markers are stamped by `abcd intent plan`, never hand-typed**, and the gate
 refuses a missing or duplicated one by name rather than repairing it — a
 reporter that writes is a reporter whose output depends on who ran it. That

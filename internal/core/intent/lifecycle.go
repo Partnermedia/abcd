@@ -218,21 +218,33 @@ func Plan(repoRoot, intentID string) (PlanResult, error) {
 func stampPlanned(repoRoot string, it Intent) (PlanResult, error) {
 	rel := it.Path
 	abs := filepath.Join(repoRoot, rel)
-	data, err := readRepoFile(abs, rel)
+	var stampedCount int
+	// The read, the mint and the write are one critical section under the store's
+	// existing advisory lock: two sessions stamping the same record would
+	// otherwise each write the file they read, and the later write would drop the
+	// earlier one's identities (iss-2608300235388164).
+	err := withIntentMintLock(repoRoot, func() error {
+		data, err := readRepoFile(abs, rel)
+		if err != nil {
+			return err
+		}
+		stamped, n, err := stampScopeConditions(string(data), recordid.Minter{})
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return fmt.Errorf("intent: %s is already planned and carries no unmarked scope condition; nothing to stamp", it.ID)
+		}
+		if err := fsutil.WriteFileAtomic(abs, []byte(stamped), 0o644); err != nil {
+			return fmt.Errorf("intent: writing scope-condition identities to %s: %w", rel, err)
+		}
+		stampedCount = n
+		return nil
+	})
 	if err != nil {
 		return PlanResult{}, err
 	}
-	stamped, n, err := stampScopeConditions(string(data), recordid.Minter{})
-	if err != nil {
-		return PlanResult{}, err
-	}
-	if n == 0 {
-		return PlanResult{}, fmt.Errorf("intent: %s is already planned and carries no unmarked scope condition; nothing to stamp", it.ID)
-	}
-	if err := fsutil.WriteFileAtomic(abs, []byte(stamped), 0o644); err != nil {
-		return PlanResult{}, fmt.Errorf("intent: writing scope-condition identities to %s: %w", rel, err)
-	}
-	return PlanResult{Intent: it, ConditionsStamped: n, StampOnly: true}, nil
+	return PlanResult{Intent: it, ConditionsStamped: stampedCount, StampOnly: true}, nil
 }
 
 // Link retroactively writes the derived spec_id link on an existing planned

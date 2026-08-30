@@ -68,7 +68,10 @@ a heading with nothing but blank lines under it is `empty`. The three states
 map to three gate outcomes and are never collapsed.
 
 **Decision — the marker grammar.** A condition's identity is an HTML comment
-closing the bullet's first line: `<!-- cond: cond-<16 digits> -->`. The comment
+carried anywhere in the bullet, written at the end of its first line:
+`<!-- cond: cond-<16 digits> -->`. It is READ anywhere in the bullet, including
+a folded continuation line, because a file wrapped at 80 columns gets rewrapped
+and a positional read would orphan the identity (iss-2608300235377731). The comment
 form is the repository's existing machine-marker idiom (`audit.go`'s
 `<!-- abcd-review: … -->`), it survives markdown rendering invisibly, and it
 keeps the condition's prose exactly what a human wrote. The family tag `cond`
