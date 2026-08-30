@@ -283,3 +283,52 @@ func TestPromoteControlCharacterGroundsWriteNothing(t *testing.T) {
 		}
 	}
 }
+
+// TestWontfixDerivedGroundsCountRedactionOnce: the derived grounds ARE the
+// reason, so redacting them is the second pass over one operand and not a second
+// span. Reporting the sum told the caller two spans were rewritten where one was
+// (iss-2608301212428844).
+func TestWontfixDerivedGroundsCountRedactionOnce(t *testing.T) {
+	repo, ir, issID := promoteFixture(t, "a thing that will not be fixed")
+
+	const fakeHome = "/Users/alice/bin/fix.sh"
+	res, err := Wontfix(WontfixRequest{
+		RepoRoot: repo, IssuesRoot: ir, ID: issID, Reason: "superseded by the rewrite at " + fakeHome,
+	})
+	if err != nil {
+		t.Fatalf("Wontfix: %v", err)
+	}
+	if res.Redacted != 1 {
+		t.Fatalf("Redacted = %d, want 1 — one span in one operand, counted once", res.Redacted)
+	}
+	// Both written fields still carry the redacted text: the count is what was
+	// wrong, never the redaction.
+	if g := groundsScalar(t, ir, issID); strings.Contains(g, "/Users/alice") {
+		t.Fatalf("the committed grounds carried the raw home path: %q", g)
+	}
+	if iss := readIssue(t, ir, issID); strings.Contains(iss.WontfixReason, "/Users/alice") {
+		t.Fatalf("the committed reason carried the raw home path: %q", iss.WontfixReason)
+	}
+}
+
+// TestWontfixEmptyReasonNamesItsOwnCause: a refusal that misnames its cause
+// sends the operator to the wrong remedy. A whitespace-only reason was refused
+// with "the reason is empty after redaction" — a cause that did not occur, since
+// nothing was redacted (iss-2608301212428844).
+func TestWontfixEmptyReasonNamesItsOwnCause(t *testing.T) {
+	repo, ir, issID := promoteFixture(t, "a thing that will not be fixed")
+
+	_, err := Wontfix(WontfixRequest{RepoRoot: repo, IssuesRoot: ir, ID: issID, Reason: "   \t "})
+	if err == nil {
+		t.Fatal("a whitespace-only reason = nil error, want a refusal")
+	}
+	if strings.Contains(err.Error(), "after redaction") {
+		t.Fatalf("Wontfix = %v, want a refusal naming the empty reason, not a redaction that did not happen", err)
+	}
+	if !strings.Contains(err.Error(), "wontfix_reason must be a non-empty string") {
+		t.Fatalf("Wontfix = %v, want the empty-reason refusal", err)
+	}
+	if iss := readIssue(t, ir, issID); iss.Status != StateOpen {
+		t.Fatalf("a refused wontfix moved the record to %s", iss.Status)
+	}
+}

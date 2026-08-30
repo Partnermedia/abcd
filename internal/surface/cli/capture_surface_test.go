@@ -660,3 +660,20 @@ func TestCaptureMalformedGroundsExit2(t *testing.T) {
 		}
 	}
 }
+
+// TestGroundsFlagUsageRendersAStringPlaceholder: cobra's UnquoteUsage takes the
+// first backquoted word of a flag's usage string as the flag's value
+// placeholder and strips it from the prose, so backticks in the wontfix
+// `--grounds` help printed `--grounds declined` and lost the word
+// (iss-2608301212428844). Every grounds flag names a string.
+func TestGroundsFlagUsageRendersAStringPlaceholder(t *testing.T) {
+	for _, verb := range []string{"promote", "resolve", "wontfix"} {
+		out, err := runCLIErr(t, "capture", verb, "--help")
+		if err != nil {
+			t.Fatalf("capture %s --help: %v\n%s", verb, err, out)
+		}
+		if !strings.Contains(string(out), "--grounds string") {
+			t.Fatalf("capture %s --help renders no `--grounds string` placeholder:\n%s", verb, out)
+		}
+	}
+}
