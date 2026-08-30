@@ -1155,3 +1155,93 @@ func TestSurpriseOccasionedByResolves(t *testing.T) {
 		t.Fatalf("expected exactly 1 finding (the dangling join), got %d: %+v", n, fs)
 	}
 }
+
+// A required property is missing when its value is empty ONCE THE YAML SCALAR IS
+// READ, not when its raw bytes happen to be empty. `grounds: ""` carries five
+// bytes and no value: the reader that validates before it reads makes nothing out
+// of it, so the record is skipped and invisible to every surface of its family —
+// the exact defect checkRecordRequiredFields exists to catch, walked straight past
+// because the check tested the quotes rather than what they contain.
+//
+// The whole class is pinned here, not the reported spelling alone: an empty
+// double-quoted value, an empty single-quoted one, whitespace inside quotes,
+// whitespace with no quotes, and the explicit nulls. A fix that answered `""` and
+// let `'  '` through would be the same bug with a narrower mouth.
+func TestRequiredFieldIsEmptyOnceTheScalarIsRead(t *testing.T) {
+	empties := map[string]string{
+		"adm-3": `""`,
+		"adm-4": `''`,
+		"adm-5": `"   "`,
+		"adm-6": `'	'`,
+		"adm-7": `~`,
+		"adm-8": `null`,
+	}
+	root := t.TempDir()
+	writeFile(t, root, "rec/.keep", "")
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-2.md", wellFormedAdmission)
+	for id, spelling := range empties {
+		writeFile(t, root, "work/issues/admissions/rdg-1/"+id+".md",
+			"---\nschema_version: 1\nid: "+id+"\nrun: rdg-1\nproposal: rdi-2\ngrounds: "+spelling+"\n---\n\n")
+	}
+
+	fs, err := Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id := range empties {
+		if !findingWith(fs, filepath.Join("work", "issues", "admissions", "rdg-1", id+".md"), ruleRecordSchema, "'grounds'") {
+			t.Errorf("grounds spelled %s carries no value and must be a finding on %s.md: %+v", empties[id], id, fs)
+		}
+	}
+	if n := countRule(fs, ruleRecordSchema); n != len(empties) {
+		t.Fatalf("expected exactly %d record_schema findings (one per empty spelling), got %d: %+v",
+			len(empties), n, fs)
+	}
+}
+
+// The sibling shape, and the reason the fix is at the ONE place this rule decides
+// emptiness rather than in the admission store's branch of it: the issue ledger
+// has carried the identical gap since required fields were declared, so a
+// committed `found_during: ""` is lint-green while capture's reader refuses the
+// record and skips it — invisible to `capture list`, `capture status` and every
+// other ledger surface while it still sits in `open/`.
+func TestQuotedEmptyRequiredFieldIsRefusedInTheIssueStore(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/.keep", "")
+	writeFile(t, root, "work/issues/open/iss-2-a-finding.md",
+		"---\nschema_version: 1\nid: \"iss-2\"\nslug: \"a-finding\"\nseverity: \"minor\"\n"+
+			"category: \"bug\"\nsource: \"impl-review\"\nfound_during: \"\"\n---\n\nbody\n")
+
+	fs, err := Lint(schemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingWith(fs, filepath.Join("work", "issues", "open", "iss-2-a-finding.md"), ruleRecordSchema, "'found_during'") {
+		t.Fatalf("a quoted-empty found_during must be a finding: %+v", fs)
+	}
+}
+
+// The block-scalar neighbour. `grounds: |` puts the value on the lines BELOW the
+// key, so the same-line scanner reads `|` — a non-empty byte that is not a value
+// at all. A block carrying text is present; a block carrying nothing is the empty
+// string, which is the same absence every spelling above is, and must be refused
+// on the same terms.
+func TestBlockScalarRequiredFieldIsJudgedByWhatTheBlockHolds(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/.keep", "")
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-2.md",
+		"---\nschema_version: 1\nid: adm-2\nrun: rdg-1\nproposal: rdi-2\ngrounds: |\n  the frame does not already hold it\n---\n\n")
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-3.md",
+		"---\nschema_version: 1\nid: adm-3\nrun: rdg-1\nproposal: rdi-2\ngrounds: >-\n---\n\n")
+
+	fs, err := Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingWith(fs, filepath.Join("work", "issues", "admissions", "rdg-1", "adm-3.md"), ruleRecordSchema, "'grounds'") {
+		t.Errorf("a block scalar holding nothing is an empty value and must be a finding: %+v", fs)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 1 {
+		t.Fatalf("a block scalar holding text is a value; expected exactly 1 finding, got %d: %+v", n, fs)
+	}
+}
