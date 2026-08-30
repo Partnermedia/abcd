@@ -51,6 +51,19 @@ var (
 	admissionFileRe = recordid.FilenameNumRe(issueschema.AdmissionFamily)
 )
 
+// admissionKey is the pair an admission actually answers: the RUN whose candidate
+// set it joins, and the PROPOSAL it admits.
+//
+// The proposal alone is not a key. Reading ids are minted per run and collide
+// across runs by construction (iss-2608300227228575), so an admission filed under
+// one run naming an id that belongs to another silenced the other run's item —
+// the report going quiet about a proposal nobody had admitted, which is the one
+// answer this leg exists to prevent (iss-2608300935215868).
+type admissionKey struct {
+	run      string
+	proposal string
+}
+
 // OutstandingItem is one reading item nobody has answered.
 type OutstandingItem struct {
 	Item string `json:"item"`
@@ -266,7 +279,7 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 				// direction only: a record the walk actually READ is a fact whatever
 				// else in that tree it could not read, and only the claim that a
 				// proposal is unadmitted needs the whole tree behind it.
-				if position == issueschema.PositionWidening && admitted[item] {
+				if position == issueschema.PositionWidening && admitted[admissionKey{run.Name(), item}] {
 					break
 				}
 				report.Undispositioned = append(report.Undispositioned, OutstandingItem{
@@ -290,7 +303,8 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 			// Everything else standing on a widening proposal — acceptance above
 			// all, which at this position IS admission — needs an admission record,
 			// because that is where the grounds live.
-			if position == issueschema.PositionWidening && admissionsReadable && !admitted[item] &&
+			if position == issueschema.PositionWidening && admissionsReadable &&
+				!admitted[admissionKey{run.Name(), item}] &&
 				answer.standing != nil && answer.standing.wellFormed &&
 				answer.standing.state != issueschema.DispositionDeclined &&
 				answer.standing.state != issueschema.DispositionHeld {
@@ -344,8 +358,8 @@ func readingPosition(content string) string {
 // statement the disposition side already refuses to make. An ABSENT tree is
 // readable and empty — a repository that has admitted nothing is in a state, not
 // a fault.
-func admittedProposals(issuesRoot, issuesDir string) (map[string]bool, bool, []UnsafePath) {
-	admitted := map[string]bool{}
+func admittedProposals(issuesRoot, issuesDir string) (map[admissionKey]bool, bool, []UnsafePath) {
+	admitted := map[admissionKey]bool{}
 	var unsafe []UnsafePath
 	admissionsRoot := filepath.Join(issuesRoot, issueschema.AdmissionsDir)
 	if !realDir(admissionsRoot) {
@@ -397,13 +411,28 @@ func admittedProposals(issuesRoot, issuesDir string) (map[string]bool, bool, []U
 				readable = false
 				continue
 			}
-			f := frontmatterFields(strings.Split(strings.ReplaceAll(string(content), "\r\n", "\n"), "\n"))["proposal"]
-			if p := strings.Trim(strings.TrimSpace(f.value), `"'`); p != "" {
-				admitted[p] = true
+			fields := frontmatterFields(strings.Split(strings.ReplaceAll(string(content), "\r\n", "\n"), "\n"))
+			proposal := admissionScalar(fields["proposal"].value)
+			// The record states its run twice — the directory it sits in and its own
+			// `run` — and a disagreement is the record contradicting itself about
+			// which candidate set it joined. Honouring the bucket alone would let the
+			// field lie; honouring the field alone would make the bucket decorative.
+			// So it admits under neither, and record_schema names the contradiction.
+			if proposal == "" || admissionScalar(fields["run"].value) != run.Name() {
+				continue
 			}
+			admitted[admissionKey{run: run.Name(), proposal: proposal}] = true
 		}
 	}
 	return admitted, readable, unsafe
+}
+
+// admissionScalar reads one frontmatter value the way the gate reads it: trimmed,
+// with the surrounding quotes stripped, so `run: "rdg-1"` and `run: rdg-1` are one
+// value. A report that read the quotes would disagree with the gate about a record
+// they are both looking at.
+func admissionScalar(value string) string {
+	return strings.TrimSpace(strings.Trim(strings.TrimSpace(value), `"'`))
 }
 
 // The reasons an Unsafe entry can carry. They are prose because they are read by
