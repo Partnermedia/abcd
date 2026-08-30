@@ -347,8 +347,14 @@ func isScriptioContinuaLetter(r rune) bool {
 // and U+FFA0 — and a conforming renderer draws them as nothing, so a text built
 // from them alone is invisible end to end while answering a letter count
 // (iss-2608301455387735). Go's Other_Default_Ignorable_Code_Point is the whole
-// test needed: the rest of the default-ignorable set is format characters and
-// variation selectors, and none of those is a letter.
+// test needed, and the reason is a measurement rather than a description of the
+// rest of the set: the table holds 3776 code points, of which exactly SEVEN are
+// assigned at all — these four letters (Lo) and three non-spacing marks (Mn) —
+// and the other 3769 are unassigned. So the only letters it can exclude are the
+// four this is here for (iss-2608301657350399, which measured it; the earlier
+// wording said the remainder was format characters and variation selectors, and
+// the table carries none of either — those reach Default_Ignorable through the
+// other contributors to that derived property, not through this one).
 //
 // This is the ONE place the floor decides what a letter is. Both halves read it
 // — textUnits for the split, ValidateText for the count — so a rune that is not

@@ -2703,14 +2703,6 @@ func emitGroundsReceipt(cmd *cobra.Command, asJSON bool, rec intent.GroundsResul
 const groundsFlagUsage = "REQUIRED — the conjecture being acted on, not the route taken: " +
 	"\"<pursued|deferred|declined>: <what is expected, and what would show it wrong>\""
 
-// requireGroundsFlag refuses a triage that names no grounds, at the CLI, as a
-// USAGE error (exit 2) with nothing written — the same shape `--category lapse`
-// without `--lapsed-at` already has. The core refuses the same call on its own
-// for every other caller; this is where a person typing the command learns it, in
-// flag terms rather than in property terms. Neither flag is marked
-// cobra-required, which would break the tree's no-required-flags invariant
-// (TestLiveTreeMarksNoFlagRequired): the requirement is semantic, not a usage
-// annotation.
 // groundsUsageError maps a core grounds refusal to exit 2, leaving every other
 // failure on its existing path.
 //
@@ -2727,6 +2719,14 @@ func groundsUsageError(verb string, err error) error {
 	return err
 }
 
+// requireGroundsFlag refuses a triage that names no grounds, at the CLI, as a
+// USAGE error (exit 2) with nothing written — the same shape `--category lapse`
+// without `--lapsed-at` already has. The core refuses the same call on its own
+// for every other caller; this is where a person typing the command learns it, in
+// flag terms rather than in property terms. Neither flag is marked
+// cobra-required, which would break the tree's no-required-flags invariant
+// (TestLiveTreeMarksNoFlagRequired): the requirement is semantic, not a usage
+// annotation.
 func requireGroundsFlag(verb, value string) error {
 	if strings.TrimSpace(value) != "" {
 		return nil

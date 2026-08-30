@@ -296,7 +296,7 @@ func scopeConditionsCheck(it Intent, claims Claims) ReadyCheck {
 // claim.
 func groundsCheck(it Intent, content string) ReadyCheck {
 	c := ReadyCheck{Name: CheckGrounds, OK: true}
-	if detail, exempt := claimCheckExemption(it); exempt {
+	if detail, exempt := groundsCheckExemption(it); exempt {
 		c.Detail = detail
 		return c
 	}
@@ -339,11 +339,32 @@ func claimCheckExemption(it Intent) (string, bool) {
 	return "", false
 }
 
-// The two strings both claim checks share, so the exemption and the remedy read
-// identically wherever they are reported.
+// groundsCheckExemption reports the buckets where the GROUNDS check has nothing
+// to ask for. The buckets are claimCheckExemption's, and for the same reasons,
+// but the detail names grounds rather than claims: reusing the claim string made
+// the grounds row of a shipped record report "a shipped record's CLAIMS are
+// never backfilled", which is a true sentence about a check that is not the one
+// reporting it (iss-2608301657350399, the detail-string class of the resolved
+// iss-2608300210588414).
+func groundsCheckExemption(it Intent) (string, bool) {
+	switch it.Bucket {
+	case BucketDisciplines:
+		return disciplineGroundsExemption, true
+	case BucketShipped, BucketSuperseded:
+		return "not applicable — a " + it.Bucket + " record's grounds are never backfilled", true
+	}
+	return "", false
+}
+
+// The strings the claim checks and the grounds check share, so an exemption and
+// a remedy read identically wherever they are reported.
 const (
 	disciplineClaimExemption = "not applicable — discipline records carry no claim sections"
-	scopeConditionsRemedy    = "write the conditions this claim holds under as top-level bullets under '## Scope Conditions', or record the exact token `None stated.` alone on its line"
+	// A discipline record is exempt for a different reason than a terminal one:
+	// it has no conjecture of its own to record, rather than a window that has
+	// closed. The two exemption strings say the two different things.
+	disciplineGroundsExemption = "not applicable — a discipline record carries no conjecture of its own"
+	scopeConditionsRemedy      = "write the conditions this claim holds under as top-level bullets under '## Scope Conditions', or record the exact token `None stated.` alone on its line"
 )
 
 // joinInts renders condition ordinals for a finding.
