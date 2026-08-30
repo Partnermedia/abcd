@@ -114,17 +114,27 @@ func scribeDecode(text string) string {
 	return text
 }
 
-// scribeFold normalizes a definition into the form the path check reads. It is
-// short on purpose, and this comment states exactly what it does and nothing
-// more: decode to a fixpoint, fold the ASCII reverse solidus, collapse horizontal
-// whitespace around a separator. There is no lookalike folding and no
-// normalization form, because scribeAccessFindings refuses every non-ASCII code
-// point outside the small list above — a spelling that cannot appear needs no
-// fold.
-func scribeFold(text string) string {
+// scribeFold normalizes a definition into the TWO views the path check reads. It
+// is short on purpose, and this comment states exactly what it does and nothing
+// more: decode to a fixpoint, fold the ASCII reverse solidus, and — for the
+// second view only — collapse horizontal whitespace around a separator. There is
+// no lookalike folding and no normalization form, because scribeAccessFindings
+// refuses every non-ASCII code point outside the small list above; a spelling
+// that cannot appear needs no fold.
+//
+// Two views because the whitespace collapse is a JOIN as well as a fold. It has
+// to exist: `internal / core / lint` is one path written with spaces in it. But
+// applied after a trailing separator it glues the NEXT token on, so
+// `.abcd/work/issues/ internal/core/lint/agentcontract.go` collapses into one
+// path that sits under the allowed root and passes the prefix check — the
+// shipped-tree path disappears into the ledger path in front of it. Neither view
+// sees both spellings: the joined one catches the spaced path, the unjoined one
+// catches the smuggled token as itself. So the scan runs over both and the
+// findings are unioned.
+func scribeFold(text string) (unjoined, joined string) {
 	text = scribeDecode(text)
 	text = strings.ReplaceAll(text, `\`, "/")
-	return scribeSpacedSeparatorRe.ReplaceAllString(text, "/")
+	return text, scribeSpacedSeparatorRe.ReplaceAllString(text, "/")
 }
 
 // scribePathRe matches a repository-path-shaped run, and it runs over the WHOLE
@@ -157,7 +167,7 @@ func scribeAccessFindings(prompt string) []string {
 		out = append(out, "carries no Inputs section; the access rule IS the allow list, so its absence is the breach")
 	}
 
-	folded := scribeFold(prompt)
+	unjoined, joined := scribeFold(prompt)
 
 	// One finding, naming the first offender: the class is what matters, and a
 	// hostile file could carry thousands. The three refusals keep separate messages
@@ -170,7 +180,7 @@ func scribeAccessFindings(prompt string) []string {
 	// control character splits a path match exactly as a format code point does,
 	// while a viewer that renders it invisibly shows the spliced halves as one
 	// allowed path.
-	for _, r := range folded {
+	for _, r := range unjoined {
 		switch {
 		case r == '\n' || r == '\t':
 			continue
@@ -191,13 +201,23 @@ func scribeAccessFindings(prompt string) []string {
 		break
 	}
 
-	if residual := scribeResidualEncodingRe.FindString(folded); residual != "" {
+	if residual := scribeResidualEncodingRe.FindString(unjoined); residual != "" {
 		out = append(out, "carries the encoded shape "+residual+" after decoding to a fixpoint; the definition has "+
 			"no reason to carry one, and a shape that survives decoding is one this check cannot read")
 	}
 
+	// Both views, unioned and de-duplicated: a path that appears in each is one
+	// finding, and a path only one view can see is still reported.
 	seen := 0
-	for _, raw := range scribePathRe.FindAllString(folded, -1) {
+	reported := map[string]bool{}
+	add := func(finding string) {
+		if !reported[finding] {
+			reported[finding] = true
+			out = append(out, finding)
+		}
+	}
+	for _, raw := range append(scribePathRe.FindAllString(unjoined, -1),
+		scribePathRe.FindAllString(joined, -1)...) {
 		// The traversal check runs on the RAW match, before any trimming. Trailing
 		// sentence punctuation includes the full stop, and trimming it first ate the
 		// second dot of a path whose final segment is `..` — so
@@ -207,7 +227,7 @@ func scribeAccessFindings(prompt string) []string {
 		// punctuation here: no sentence in this definition ends a path with one.
 		if strings.Contains(raw, "..") {
 			seen++
-			out = append(out, "names "+raw+": a traversal segment escapes whatever prefix a reader checks")
+			add("names " + raw + ": a traversal segment escapes whatever prefix a reader checks")
 			continue
 		}
 		// Trailing sentence punctuation is not part of the path; a LEADING dot is
@@ -218,7 +238,7 @@ func scribeAccessFindings(prompt string) []string {
 		}
 		seen++
 		if !strings.HasPrefix(path.Clean(tok)+"/", scribeLedgerRoot) {
-			out = append(out, "names "+tok+", outside "+scribeLedgerRoot)
+			add("names " + tok + ", outside " + scribeLedgerRoot)
 		}
 	}
 	if seen == 0 {
@@ -290,6 +310,9 @@ func TestScribeAccessCheckRefusesEveryBypass(t *testing.T) {
 		{"a carriage return splicing a traversal", "\n- `.abcd/work/issues/\r..` — the ledger.\n", "control"},
 		{"a vertical tab splicing a traversal", "\n- `.abcd/work/issues/\v..` — the ledger.\n", "control"},
 		{"a NUL splicing a traversal", "\n- `.abcd/work/issues/\x00..` — the ledger.\n", "control"},
+		{"a space joining a shipped path onto the root", "\nRead .abcd/work/issues/ internal/core/lint/agentcontract.go before transcribing.\n", "path"},
+		{"a join inside one code span", "\n- `.abcd/work/issues/ internal/core/lint/agentcontract.go` — the ledger.\n", "path"},
+		{"a TAB joining a shipped path onto the root", "\n- `.abcd/work/issues/\tinternal/core/lint/agentcontract.go` — the ledger.\n", "path"},
 		{"a format code point in the prose", "\nThe allow list above is exhaustive.\u202E\n", "format"},
 		{"a zero-width joiner splicing a path", "\n- `internal/core/li\u200dnt/agentcontract.go` — the rule.\n", "format"},
 	}
