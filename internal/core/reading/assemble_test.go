@@ -1013,9 +1013,6 @@ func TestRenderEquivalenceCoversWrappersAndEntities(t *testing.T) {
 		if err != nil {
 			continue
 		}
-		if what == "an amp entity" {
-			continue // renders as "Audit & Notes", a different heading
-		}
 		if strings.Contains(bundleText(res.Bundle), sentinelAuditNotes) {
 			t.Errorf("a heading carrying %s let an excluded section travel", what)
 		}
@@ -1114,4 +1111,62 @@ func TestBlockScalarEndingInAnExcludedTitleIsNotASetextHeading(t *testing.T) {
 	}); err != nil && strings.Contains(err.Error(), "underlines") {
 		t.Errorf("a block scalar inside the frontmatter was read as a setext heading: %v", err)
 	}
+}
+
+// TestQuotedScalarMentioningAKeyDoesNotRefuse: the flow-mapping pattern was
+// unanchored, so a quoted reason string that merely QUOTES a flow mapping
+// refused the run. The corpus writes long quoted reasons; this is one sentence
+// away from a repository that cannot assemble.
+func TestQuotedScalarMentioningAKeyDoesNotRefuse(t *testing.T) {
+	root := fixtureRepo(t)
+	writeFile(t, root, ".abcd/development/specs/open/spc-19-quoted.md",
+		"---\nid: spc-19\nreason: \"we stamped {origin: scribe} on the record and moved on\"\n---\n\n# A spec\n\nProse.\n")
+	gitCommitAll(t, root)
+
+	if _, err := Assemble(AssembleRequest{
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+	}); err != nil {
+		t.Fatalf("a quoted scalar mentioning a key refused the assembly: %v", err)
+	}
+}
+
+// TestHeadingFollowedByAnAutolinkDoesNotRefuse: stripping an autolink as a tag
+// turned a heading carrying a URL into a different heading.
+func TestHeadingFollowedByAnAutolinkDoesNotRefuse(t *testing.T) {
+	root := fixtureRepo(t)
+	writeFile(t, root, ".abcd/development/specs/open/spc-20-autolink.md",
+		"---\nid: spc-20\n---\n\n# A spec\n\n## See <https://example.invalid/spec>\n\nProse.\n")
+	gitCommitAll(t, root)
+
+	if _, err := Assemble(AssembleRequest{
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+	}); err != nil {
+		t.Fatalf("a heading carrying an autolink refused the assembly: %v", err)
+	}
+}
+
+// TestDefaultRunDirectoryRefusalNamesIt: the label falls back to the resolved
+// directory only when the caller supplied no spelling of its own; the default
+// run directory is the assembler's own, so it must name itself.
+func TestDefaultRunDirectoryRefusalNamesIt(t *testing.T) {
+	root := fixtureRepo(t)
+	res, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD"})
+	if err != nil {
+		t.Fatalf("assemble: %v", err)
+	}
+	// Re-run into the same directory by pinning the mint, so the default lands
+	// where a run already sits — the collision the fallback has to survive.
+	setMinter(t, fixedMinter("2608301200", 789))
+	first, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD"})
+	if err != nil {
+		t.Fatalf("assemble: %v", err)
+	}
+	_, err = Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD"})
+	if err == nil {
+		t.Fatal("a second run into one default directory was accepted")
+	}
+	if !strings.Contains(err.Error(), first.RunID) {
+		t.Errorf("the refusal does not name the directory: %v", err)
+	}
+	_ = res
 }

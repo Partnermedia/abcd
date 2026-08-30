@@ -238,6 +238,12 @@ func writeArtefacts(repoRoot, outDir, label string, b Bundle, m Manifest) error 
 	if !filepath.IsAbs(dir) {
 		dir = filepath.Join(repoRoot, filepath.FromSlash(outDir))
 	}
+	// The label is the OPERATOR's spelling, and there is none for the default run
+	// directory — the assembler chose it. Falling back to the directory itself
+	// keeps the refusal from naming nothing at all.
+	if label == "" {
+		label = outDir
+	}
 	if err := requireEmptyDir(label, dir); err != nil {
 		return err
 	}

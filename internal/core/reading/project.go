@@ -179,6 +179,12 @@ var (
 	mdLinkRe = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)`)
 	// explicitYAMLKeyRe matches YAML's explicit-key form, `? origin`.
 	explicitYAMLKeyRe = regexp.MustCompile(`^\s*\?\s+["']?([A-Za-z_][A-Za-z0-9_-]*)["']?\s*$`)
+	// flowMapLineRe anchors the flow-mapping scan: the brace must open the line,
+	// or follow a key at the start of it. Unanchored, the key pattern below fired
+	// on a quoted scalar that merely QUOTES a flow mapping — and this corpus
+	// writes long quoted reason strings, so an unanchored scan is one sentence
+	// away from a repository that cannot assemble.
+	flowMapLineRe = regexp.MustCompile(`^\s*(?:["']?[A-Za-z_][A-Za-z0-9_-]*["']?\s*:\s*)?\{`)
 	// flowKeyRe matches a key inside a flow mapping, at top level or nested.
 	flowKeyRe = regexp.MustCompile(`[{,]\s*["']?([A-Za-z_][A-Za-z0-9_-]*)["']?\s*:`)
 	// doubleQuotedKeyRe captures a double-quoted key's raw spelling, escapes and
@@ -549,10 +555,12 @@ func excludedKeyInFirstBlock(lines []string, fenced []bool, keys map[string]bool
 				}
 			}
 		}
-		for _, m := range flowKeyRe.FindAllStringSubmatch(lines[i], -1) {
-			for _, key := range submatches(m) {
-				if keys[key] {
-					return i + 1, key, true
+		if flowMapLineRe.MatchString(lines[i]) {
+			for _, m := range flowKeyRe.FindAllStringSubmatch(lines[i], -1) {
+				for _, key := range submatches(m) {
+					if keys[key] {
+						return i + 1, key, true
+					}
 				}
 			}
 		}
