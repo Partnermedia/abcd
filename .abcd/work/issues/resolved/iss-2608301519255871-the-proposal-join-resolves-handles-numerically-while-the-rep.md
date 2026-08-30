@@ -7,6 +7,10 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-189-round-3-security"
 found_at: "internal/core/lint/schema.go"
+resolution: "checkRecordJoins judges the SPELLING of a join that declares a family before it resolves anything: the family's own prefix, lower case, unpadded, and nothing around it. The six spellings that resolved numerically while the outstanding report keyed the value as a string are findings, and a cross-family handle with them; occasioned_by, which declares no family, keeps its prose tolerance."
+impact: fix
+resolved_by:
+  intent: "itd-189"
 ---
 
 the proposal join resolves handles numerically while the report keys them as strings so six spellings pass the gate green and admit nothing
