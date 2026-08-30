@@ -186,3 +186,55 @@ func TestRecordSchemaFlagsIssueEnumAndSlug(t *testing.T) {
 		})
 	}
 }
+
+// TestIssueRecordShapeFlagsLapseWithoutLapsedAt (spc-60) pins that the
+// committed-ledger gate refuses exactly what the reader refuses: a record whose
+// category is lapse and which carries no well-formed lapsed_at. capture's
+// validateStrict refuses such a record and SKIPS it, so it sits in the ledger
+// invisible to every capture surface — the failure mode this rule exists to turn
+// into a red gate. The well-formed record beside it is the control: the gate must
+// refuse the defect and nothing else.
+func TestIssueRecordShapeFlagsLapseWithoutLapsedAt(t *testing.T) {
+	issues := "work/issues"
+	lapse := func(id, slug, lapsedAt string) string {
+		rec := "---\nschema_version: 1\nid: " + id + "\nslug: " + slug +
+			"\nseverity: minor\ncategory: lapse\nsource: user-observation\nfound_during: preparation\n"
+		if lapsedAt != "" {
+			rec += "lapsed_at: " + lapsedAt + "\n"
+		}
+		return rec + "---\n\na lapse\n"
+	}
+
+	cases := []struct {
+		name   string
+		file   string
+		rec    string
+		substr string // "" means the record must stay clean
+	}{
+		{"absent", "iss-5-lapse-a.md", lapse("iss-5", "lapse-a", ""), "lapse record carries no 'lapsed_at'"},
+		{"date only", "iss-6-lapse-b.md", lapse("iss-6", "lapse-b", "2026-08-28"), "is not an RFC 3339 instant"},
+		{"free text", "iss-7-lapse-c.md", lapse("iss-7", "lapse-c", "yesterday"), "is not an RFC 3339 instant"},
+		{"well-formed", "iss-8-lapse-d.md", lapse("iss-8", "lapse-d", `"2026-08-28T00:00:00Z"`), ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			root := t.TempDir()
+			seedRecRoot(t, root)
+			writeFile(t, root, issues+"/open/"+c.file, c.rec)
+			fs, err := Lint(schemaConfig(), root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rel := filepath.Join(issues, "open", c.file)
+			if c.substr == "" {
+				if findingWith(fs, rel, ruleRecordSchema, "") {
+					t.Fatalf("a well-formed lapse record must stay clean: %+v", fs)
+				}
+				return
+			}
+			if !findingWith(fs, rel, ruleRecordSchema, c.substr) {
+				t.Fatalf("expected a lapse-shape finding quoting %q: %+v", c.substr, fs)
+			}
+		})
+	}
+}

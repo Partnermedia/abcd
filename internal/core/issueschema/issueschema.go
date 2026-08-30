@@ -12,7 +12,11 @@
 // capture back would be an import cycle in test.
 package issueschema
 
-import "regexp"
+import (
+	"regexp"
+	"strings"
+	"time"
+)
 
 // Required is every property the issue schema marks required, in the order a
 // record writes them. A record missing one is not a lax record: the ledger reader
@@ -96,3 +100,27 @@ var (
 // single hyphens). A slug becomes a filename, so both the ledger writer and the
 // record-lint gate hold it to exactly this shape.
 var SlugRe = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+
+// CategoryLapse is the one category whose records must state WHEN the discipline
+// gave way. It is spelled once here because two gates ask the question — the
+// ledger reader (core/capture) and the committed-ledger gate (core/lint) — and a
+// second copy would let one of them go on accepting what the other refuses.
+const CategoryLapse = "lapse"
+
+// LapsedAtRequired reports whether a category obliges a lapsed_at value. The
+// property is optional for every category and required for exactly this one: a
+// lapse entry with no lapse time is retrospective reconstruction wearing the
+// evidence's clothes, which is the thing the lapse log exists to detect.
+func LapsedAtRequired(category string) bool {
+	return category == CategoryLapse
+}
+
+// ValidLapsedAt reports whether a non-empty lapsed_at value is well formed: an
+// RFC 3339 instant. A bare date names a day rather than a moment and free text
+// names nothing a reader can order, so neither can carry the claim the property
+// makes. The offset is not constrained to Z — RFC 3339 fixes the instant either
+// way — while the convention the record pages state is UTC.
+func ValidLapsedAt(v string) bool {
+	_, err := time.Parse(time.RFC3339, strings.TrimSpace(v))
+	return err == nil
+}

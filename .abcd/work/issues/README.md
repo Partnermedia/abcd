@@ -55,7 +55,11 @@ Optional:
 - `lapsed_at` — the RFC 3339 instant, in UTC, at which a recorded discipline gave
   way: the lapse itself, not its write-up. The record id is timestamp-numeric and
   therefore already carries write-up time, which is the value this property
-  distinguishes itself from.
+  distinguishes itself from. **Required when `category` is `lapse`**, and refused
+  when it is not an RFC 3339 instant: a lapse entry with no lapse time is
+  reconstruction rather than evidence, so the reader and the record-lint blocker
+  `record_schema` both refuse it. The point in the process at which the discipline
+  gave way is `found_during`, which every record already carries.
 - `related_intents` — list of `itd-N` ids.
 - `related_specs` — list of `spc-N` ids.
 - `related_issues` — list of `iss-N` ids.

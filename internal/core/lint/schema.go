@@ -529,6 +529,24 @@ func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
 			add(f.line, "invalid slug '"+v+"'; a slug is kebab-case (lower-case alphanumerics joined by single hyphens) and capture refuses any other shape")
 		}
 	}
+
+	// lapsed_at: required exactly when the category is lapse, and an RFC 3339
+	// instant whenever it is present. Both halves read the ONE shared definition in
+	// core/issueschema, the same one capture's validateStrict reads, so this gate
+	// refuses exactly the record the reader refuses (and therefore skips, making it
+	// invisible to every capture surface while it still sits in the ledger).
+	lapseField, hasLapseField := r.fields["lapsed_at"]
+	lapsedAt := ""
+	if hasLapseField && !isAbsentValue(lapseField.value) {
+		lapsedAt = issueScalar(lapseField.value)
+	}
+	if f, present := r.fields["category"]; present && !isAbsentValue(f.value) &&
+		issueschema.LapsedAtRequired(issueScalar(f.value)) && lapsedAt == "" {
+		add(f.line, "lapse record carries no 'lapsed_at'; capture refuses a lapse entry with no instant at which the discipline gave way and skips the record")
+	}
+	if lapsedAt != "" && !issueschema.ValidLapsedAt(lapsedAt) {
+		add(lapseField.line, "lapsed_at '"+lapsedAt+"' is not an RFC 3339 instant (want 2026-08-28T00:00:00Z); capture refuses the record and skips it")
+	}
 	return out
 }
 

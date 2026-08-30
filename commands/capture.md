@@ -48,6 +48,11 @@ write-up), `--slug` (overrides the slug derived from the text), `--blocked-by`
 too whenever it is non-zero: it counts the spans rewritten before the text was
 written, and the user needs to know their wording was changed.
 
+`--category lapse` **requires** `--lapsed-at`: the flag has no default, and a
+lapse capture that omits it exits 2 and writes nothing. The instant the
+discipline gave way is the whole content of a lapse entry, and the only value
+that could be defaulted is the write-up time it exists to be distinguished from.
+
 A single whitespace-free word is refused (exit 2, nothing written): a lone
 token reads as a mistyped sub-verb, never as issue text. A near-miss of a real
 sub-verb is refused the same way, with the correction named, so a two-word input

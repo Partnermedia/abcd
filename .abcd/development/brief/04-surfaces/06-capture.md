@@ -24,7 +24,7 @@ See itd-4 for the full intent. Ledger schema lives in the Go binary (`internal/c
 | Subcommand | Purpose | File movement |
 |---|---|---|
 | `/abcd:capture` (no args) | Help + status: shows the most recent open issues and closes with a three-way routing hint — capture vs intent, plus an ideate route (a big, unproven idea? `abcd ideate` runs the optional admission gauntlet and records the verdict either way). Bare invocation owns the default status/help render — there is no implicit-default filtered list. | — |
-| `/abcd:capture "<text>"` | Fast path: appends a structured issue entry to the ledger with auto-assigned `iss-N`; provenance and taxonomy are caller-supplied flags — `--severity`, `--category`, `--source`, and `--found-during` each carry a default; `--found-at`, `--lapsed-at` (the RFC 3339 instant a recorded discipline gave way — the lapse, never the write-up), `--slug`, and `--blocked-by` (comma-separated `iss-N` dependency edges; blocked/priority status is derived from `blocked_by`, never stored) have none | writes `.abcd/work/issues/open/iss-N-<slug>.md` |
+| `/abcd:capture "<text>"` | Fast path: appends a structured issue entry to the ledger with auto-assigned `iss-N`; provenance and taxonomy are caller-supplied flags — `--severity`, `--category`, `--source`, and `--found-during` each carry a default; `--found-at`, `--lapsed-at` (the RFC 3339 instant a recorded discipline gave way — the lapse, never the write-up; **required with `--category lapse`**, where omitting it exits 2 and writes nothing, because the only available default is the write-up time the entry exists to distinguish itself from), `--slug`, and `--blocked-by` (comma-separated `iss-N` dependency edges; blocked/priority status is derived from `blocked_by`, never stored) have none | writes `.abcd/work/issues/open/iss-N-<slug>.md` |
 | `/abcd:capture list --open` | Query the ledger for currently-open issues (flag immediately adjacent — earned SD001 exception) | — |
 | `/abcd:capture list --resolved` | Query the ledger for resolved issues | — |
 | `/abcd:capture list --wontfix` | Query the ledger for wontfix issues | — |
@@ -57,7 +57,7 @@ category: bug|documentation|drift|inconsistency|tech-debt|security|ux|process|ar
 source: plan-review|impl-review|manual-test|review-followup|agent-finding|agent-observation|user-observation|drift-detection|memory-curation
 found_during: <session-or-command-context>
 found_at: <path-or-conceptual>
-lapsed_at: <rfc3339-utc>   # the instant a discipline gave way — the lapse, not the write-up
+lapsed_at: <rfc3339-utc>   # required when category is lapse: the instant the discipline gave way, not the write-up
 details: "<text>"          # optional structured detail
 suggested_fix: "<text>"    # optional proposed remedy
 related_intents: [itd-N, ...]
