@@ -11,6 +11,14 @@ package capture
 // rule it enforces. A record the writer would refuse must never reach the
 // committed tree, because the reader refuses it too — and a record no reader can
 // read is not a lax record, it is a lost one.
+//
+// One limit on that, stated rather than implied: the committed-tree gate
+// (record_schema) declares no required fields for these two families yet, so it
+// judges their SHAPE — bucket, filename, id — and not their content. A record
+// these functions would refuse still reaches the tree if it is written by hand
+// rather than through them. Closing that means declaring the families' required
+// fields to the gate; until then the writer and review are what stand behind the
+// content, and saying so is better than letting the header claim cover for it.
 
 import (
 	"fmt"

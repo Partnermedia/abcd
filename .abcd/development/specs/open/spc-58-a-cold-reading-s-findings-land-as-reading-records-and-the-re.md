@@ -142,11 +142,20 @@ refusal names the rule it enforces:
   is a behaviour rather than a comment.
 
 `capture promote` gains the same posture. It accepts an `rdi-N` alongside an
-`iss-N`; for an `rdi-N` it probes `dispositions/rdi-N/` before anything is minted
-and refuses when the directory is absent, naming the collapse the refusal exists
-to prevent. On success it stamps `promoted_to` on the reading record and
-`promoted_from` in the minted draft, the forward-and-back join itd-180's routing
-rule requires. Circumventing it is a lapse-log entry, not a gate.
+`iss-N`; for an `rdi-N` it reads the item's STANDING disposition before anything
+is minted and refuses every state but `accepted`, naming the rule the refusal
+enforces. An absent disposition directory is the first of those refusals and the
+one itd-180 states — it collapses the answer and the action into one act, so
+nothing can show the finding was weighed before it was acted on — and the same
+reasoning carries the rest: a `rejected` or `declined` item would put a refusal
+and the admission it refused in one ledger, and a `held` one would settle by
+action exactly what the hold left open. Where the answer needs to change, a
+superseding disposition is what changes it. The standing state is read again
+inside the write's own lock, so a disposition landing between the two cannot
+leave a refusal beside a stamp. On success it stamps `promoted_to` on the reading
+record and `promoted_from` in the minted draft, the forward-and-back join
+itd-180's routing rule requires. Circumventing it is a lapse-log entry, not a
+gate.
 
 ### The outstanding report is a report
 

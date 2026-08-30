@@ -199,10 +199,18 @@ var recordStores = []recordStore{
 		requiredFields: issueschema.Required},
 	// The three reading families (spc-58). Each buckets by GRAMMAR because its
 	// buckets are minted: a reading item and a run record live under the run that
-	// produced them, and a disposition lives under the item it answers. Their
-	// required-field sets are deliberately absent here — the four stores above
-	// have four different schemas, and these three have their own, judged by the
-	// writer that refuses them at the boundary.
+	// produced them, and a disposition lives under the item it answers.
+	//
+	// Their required-field sets are absent, and that is a STATED GAP rather than a
+	// delegation. What this rule gives them is structural — the bucket grammar,
+	// the filename ↔ id agreement, no undeclared lifecycle directory — and their
+	// CONTENT is judged by the writer that refuses a malformed record at the
+	// boundary, and by review. So the guarantee the issue store has, that a record
+	// the reader would refuse is not lint-green, does not yet hold here: a record
+	// hand-written into these trees can carry a body no reader reads and pass this
+	// gate. Declaring their required fields is what closes it, and until that
+	// lands the gap belongs in writing rather than in the difference between two
+	// store entries.
 	{prefix: "rdi", noun: "reading item", nodeType: "reading", bucketRe: readingRunBucketRe,
 		fileNumRe: readingItemFileNumRe, fileFamily: "rdi", filename: "rdi-<N>.md"},
 	{prefix: "rdg", noun: "reading run", nodeType: "reading-run", bucketRe: readingRunBucketRe,
