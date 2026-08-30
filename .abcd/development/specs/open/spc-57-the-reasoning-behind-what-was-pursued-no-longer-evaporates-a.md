@@ -92,8 +92,10 @@ separates words and a single LETTER where it does not, so that a script written
 without inter-word spaces is not refused for having one run, and the letter
 count reading letters rather than runes so that padding does not answer it —
 text carrying a control
-character no record field can hold, and text that is only the vocabulary token
-or the verb's own name repeated. The
+character the frontmatter serialiser refuses (below U+0020, the class
+`yamlScalar` will not write, which is narrower than what a record cannot hold:
+the store carries DEL, C1, the line separator and the bidi overrides), and text
+that is only the vocabulary token or the verb's own name repeated. The
 substantive requirement is carried by the prompt in `commands/intent.md` and
 `commands/capture.md`, where the interview asks for the expectation and its
 falsifier. The spec claims the floor, not the judgement.

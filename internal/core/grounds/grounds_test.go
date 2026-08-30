@@ -325,6 +325,34 @@ func TestGroundsNoWordBreaksRefusalIsOnlyForScriptsWithout(t *testing.T) {
 	}
 }
 
+// TestControlRefusalClaimsOnlyWhatItChecks is iss-2608301646042379. The refusal
+// said the rune was one "no record field can hold". The check is r < 0x20,
+// congruent with yamlScalar; the store holds DEL, C1, a line separator and a
+// bidi override quite happily, and the round-5 security review round-tripped all
+// four through committed grounds and wontfix_reason scalars.
+//
+// The wording is narrowed rather than the check widened, because widening would
+// put this floor out of step with the serialiser it deliberately mirrors, which
+// is the gate-versus-reader split this repository treats as its own defect
+// class. So the message may name the class it refuses and may not describe a
+// store-wide rule; this test holds it to that.
+func TestControlRefusalClaimsOnlyWhatItChecks(t *testing.T) {
+	err := ValidateText("we expect the conjecture to outlive the session\x01 and be read later")
+	if err == nil {
+		t.Fatal("a text carrying U+0001 must be refused")
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "no record field can hold") {
+		t.Errorf("the refusal claims a store-wide rule the store does not have: %q", msg)
+	}
+	// Runes the store demonstrably DOES hold must not be described as refused.
+	for _, held := range []rune{0x7F, 0x9B, 0x2028, 0x202E} {
+		if e := ValidateText("we expect the conjecture to outlive the session and be read later" + string(held)); e != nil {
+			t.Errorf("U+%04X round-trips through a committed scalar, so this floor must not refuse it: %v", held, e)
+		}
+	}
+}
+
 // TestScriptioContinuaOnlyNeedsTheWholeUnit is iss-2608301620343236. The
 // unit-length half of scriptioContinuaOnly's test has no fixture reaching it
 // through ValidateText: textUnits gives every scriptio-continua letter a unit of

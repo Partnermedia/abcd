@@ -7,6 +7,11 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-179-round-5-security"
 found_at: "internal/core/grounds/grounds.go"
+resolution: "The refusal and both doc claims now name the class the check refuses, below U+0020, which is what yamlScalar will not write."
+impact: fix
+grounds: "pursued: We expect narrowing the wording rather than widening the check to be the right close, because the check deliberately mirrors the frontmatter serialiser and widening it would put the floor out of step with the reader it exists to match."
+resolved_by:
+  intent: "itd-179"
 ---
 
 the control character refusal claims no record field can hold the rune when DEL C1 and bidi all round trip through committed scalars
