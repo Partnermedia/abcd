@@ -231,7 +231,7 @@ Mark an open issue resolved (open/ -> resolved/), optionally naming what fixed i
       --commit string            resolved_by provenance: the fixing commit sha (7-64 hex chars, shape-checked only)
       --impact string            product impact: additive|breaking|fix|internal (required)
       --intent string            resolved_by provenance: the itd-N that fixed it (must exist)
-      --production-mode string   restamp how this record's text was produced: hand-written|dictated-and-formatted|scribe-transcribed (default: leave the record's existing stamp alone)
+      --production-mode string   restamp how this record's text was produced: hand-written|dictated-and-formatted|scribe-transcribed (default: leave the record's existing stamp alone; refused on a record that predates disclosure)
       --shipped-in string        MIGRATION USE: the release that already carried this work (vX.Y.Z), leaving the record out of the current cut; unnecessary in a repo abcd managed from the start
       --spec string              resolved_by provenance: the spc-N that fixed it (must exist)
 ```
@@ -245,7 +245,7 @@ Record an explicit non-action decision (open/ -> wontfix/)
 **Flags:**
 
 ```
-      --production-mode string   restamp how this record's text was produced: hand-written|dictated-and-formatted|scribe-transcribed (default: leave the record's existing stamp alone)
+      --production-mode string   restamp how this record's text was produced: hand-written|dictated-and-formatted|scribe-transcribed (default: leave the record's existing stamp alone; refused on a record that predates disclosure)
 ```
 
 ### `abcd changelog`

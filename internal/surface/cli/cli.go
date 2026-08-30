@@ -2645,7 +2645,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	// unresolved: an undeclared mode must leave the record's existing stamp alone,
 	// and taking the repo default here would silently overwrite it (itd-178).
 	resolveCmd.Flags().StringVar(&resolveModeRestamp, "production-mode", "",
-		"restamp how this record's text was produced: "+provenance.ModeList()+" (default: leave the record's existing stamp alone)")
+		"restamp how this record's text was produced: "+provenance.ModeList()+" (default: leave the record's existing stamp alone; refused on a record that predates disclosure)")
 	resolveCmd.Flags().StringVar(&resolveShippedIn, "shipped-in", "", "MIGRATION USE: the release that already carried this work (vX.Y.Z), leaving the record out of the current cut; unnecessary in a repo abcd managed from the start")
 	captureCmd.AddCommand(resolveCmd)
 
@@ -2775,7 +2775,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 		},
 	}
 	wontfixCmd.Flags().StringVar(&wontfixProductionMode, "production-mode", "",
-		"restamp how this record's text was produced: "+provenance.ModeList()+" (default: leave the record's existing stamp alone)")
+		"restamp how this record's text was produced: "+provenance.ModeList()+" (default: leave the record's existing stamp alone; refused on a record that predates disclosure)")
 	captureCmd.AddCommand(wontfixCmd)
 
 	return captureCmd
