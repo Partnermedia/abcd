@@ -1,6 +1,9 @@
 package grounds
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // conjecture is a text that clears the substance floor, used wherever a test is
 // about something other than the text.
@@ -114,5 +117,32 @@ func TestGroundsCollapsesWhitespace(t *testing.T) {
 	}
 	if g.Text != "we expect a stamped identity to survive rewording" {
 		t.Fatalf("text = %q, want the folded single line", g.Text)
+	}
+}
+
+// TestGroundsFloorCountsLettersNotRunes is iss-2608301206034359: the floor
+// measured rune LENGTH, so a text with no letters in it at all cleared it —
+// twenty zero-width spaces, twenty dots, twenty digits. The refusal this
+// vocabulary was promoted to make is not a floor if it is answerable with
+// nothing.
+func TestGroundsFloorCountsLettersNotRunes(t *testing.T) {
+	for name, text := range map[string]string{
+		"zero-width spaces": strings.Repeat("​", 20),
+		"dots":              strings.Repeat(".", 20),
+		"digits":            "12345678901234567890",
+		"one long word":     "internationalisation",
+		"two words":         "unrecoverable regressions",
+		"padded one word":   "supercalifragilistic ... 123",
+	} {
+		if _, err := New(Pursued, text); err == nil {
+			t.Fatalf("%s: New(%q) = nil error, want a refusal", name, text)
+		}
+		// The reader holds a hand-typed bullet to the same floor.
+		if err := ValidateText(Fold(text)); err == nil {
+			t.Fatalf("%s: ValidateText(%q) = nil error, want a refusal", name, text)
+		}
+	}
+	if _, err := New(Pursued, conjecture); err != nil {
+		t.Fatalf("New(%q) = %v, want the conjecture accepted", conjecture, err)
 	}
 }

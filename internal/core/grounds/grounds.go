@@ -62,6 +62,17 @@ type Grounds struct {
 // which records less than a short honest sentence does.
 const MinTextLen = 20
 
+// MinTextWords is the same floor measured in LETTER-RUNS, and it is the half
+// that does the work. Counting runes alone made the floor answerable with
+// nothing at all: twenty zero-width spaces, twenty dots or twenty digits each
+// cleared MinTextLen while wordRe found no words, and a refusal a caller can
+// satisfy with characters that render as emptiness is not a floor
+// (iss-2608301206034359). Three is the lowest count that can carry a subject, a
+// verb and an object — the shape of a claim somebody could later find wrong —
+// and the corpus's shortest real entry runs to thirty-two words, so nothing
+// honest is anywhere near it.
+const MinTextWords = 3
+
 var (
 	// wordRe picks the letter-runs out of a text for the degeneracy check, so
 	// punctuation and digits cannot pad a text past it.
@@ -146,8 +157,10 @@ func Fold(text string) string {
 }
 
 // ValidateText is the substance floor over an already-folded text. It refuses
-// the empty text, the text below the floor, and the text made only of the
-// vocabulary's own words or the asking verb's name. Everything else passes: what
+// the empty text, the text below either half of the floor — the character count
+// and the WORD count, the second being the one a text of zero-width spaces
+// cannot satisfy — and the text made only of the vocabulary's own words or the
+// asking verb's name. Everything else passes: what
 // this cannot do is tell a conjecture from a restatement of the decision, and it
 // does not claim to.
 func ValidateText(text string) error {
@@ -160,7 +173,17 @@ func ValidateText(text string) error {
 			text, MinTextLen)
 	}
 	words := wordRe.FindAllString(strings.ToLower(text), -1)
-	onlyDegenerate := len(words) > 0
+	// The floor is measured in words, not in characters: a character count is
+	// satisfied by anything that occupies a rune, and the texts worth refusing
+	// are precisely the ones that occupy runes and say nothing. The character
+	// floor above stays because it refuses the terse-but-lettered shrug ("no
+	// time now") that clears three words.
+	if len(words) < MinTextWords {
+		return fmt.Errorf(
+			"grounds text %q carries %d word(s), below the %d-word floor; name the conjecture being acted on, not the route taken",
+			text, len(words), MinTextWords)
+	}
+	onlyDegenerate := true
 	for _, w := range words {
 		if !degenerateWords[w] {
 			onlyDegenerate = false
