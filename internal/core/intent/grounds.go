@@ -95,16 +95,31 @@ func RecordGrounds(repoRoot, intentID string, g grounds.Grounds) (GroundsResult,
 	}
 
 	abs := filepath.Join(repoRoot, it.Path)
-	data, err := readRepoFile(abs, it.Path)
-	if err != nil {
-		return GroundsResult{}, err
-	}
-	content := string(data)
-	updated := appendGroundsBullet(content, validated)
-	if err := groundsWriteIsReadable(content, updated, validated); err != nil {
-		return GroundsResult{}, err
-	}
-	if err := writeIntentFile(abs, it.Path, updated); err != nil {
+	var entries int
+	// The read, the append, the read-back and the write are ONE critical section
+	// under the store's advisory lock, exactly as stampPlanned's stamp is: two
+	// sessions appending to the same record would otherwise each write the file
+	// they read, the later write would drop the earlier one's entry, and BOTH
+	// would report success — the read-back check compares each writer's own
+	// before/after pair, which stays consistent across the loss. An append-only
+	// contract that a second concurrent writer can erase is not one
+	// (iss-2608301206036067, reopening iss-2608300235388164 in this package).
+	if err := withIntentMintLock(repoRoot, func() error {
+		data, err := readRepoFile(abs, it.Path)
+		if err != nil {
+			return err
+		}
+		content := string(data)
+		updated := appendGroundsBullet(content, validated)
+		if err := groundsWriteIsReadable(content, updated, validated); err != nil {
+			return err
+		}
+		if err := writeIntentFile(abs, it.Path, updated); err != nil {
+			return err
+		}
+		entries = len(ParseGrounds(updated))
+		return nil
+	}); err != nil {
 		return GroundsResult{}, err
 	}
 	return GroundsResult{
@@ -112,7 +127,7 @@ func RecordGrounds(repoRoot, intentID string, g grounds.Grounds) (GroundsResult,
 		Path:     it.Path,
 		Token:    string(validated.Token),
 		Text:     validated.Text,
-		Entries:  len(ParseGrounds(updated)),
+		Entries:  entries,
 		Redacted: redacted,
 	}, nil
 }
