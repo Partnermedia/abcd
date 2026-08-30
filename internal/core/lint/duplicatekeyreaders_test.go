@@ -430,6 +430,8 @@ func probeUnread(t *testing.T, rel, body string) answer {
 	root, _ := readingLedger(t, detectionItem)
 	writeRel(t, root, rel, body)
 	writeRel(t, root, ".abcd/work/issues/open/iss-9-a-thing.md", issueRecord("iss-9", "iss-9"))
+	writeRel(t, root, ".abcd/development/decisions/adrs/0009-a-decision.md",
+		"---\nid: adr-9\nstatus: accepted\n---\n\n# A decision\n")
 
 	var rendered []string
 	if d, err := record.Describe(root, "adr-9"); err == nil {
@@ -447,10 +449,19 @@ func probeUnread(t *testing.T, rel, body string) answer {
 	if rep, err := lint.ReadReadingOutstanding(root, ".abcd/work/issues"); err == nil {
 		rendered = append(rendered, fmt.Sprintf("%+v", rep))
 	}
-	for _, out := range rendered {
-		if strings.Contains(out, "MARKER") {
-			t.Fatalf("a reader outside this rule read %s: %s", rel, out)
+	out := strings.Join(rendered, "\n")
+
+	// The positive control comes FIRST. A probe whose readers had all errored, or
+	// had been pointed at an empty corpus, would report "nobody read the record"
+	// for the wrong reason and the absence would look established. These three
+	// records are in the same corpus and every one of them is read.
+	for _, seen := range []string{"adr-9", "iss-9", "rdi-2"} {
+		if !strings.Contains(out, seen) {
+			t.Fatalf("the readers did not walk the corpus (%s is missing), so this probe establishes nothing: %s", seen, out)
 		}
+	}
+	if strings.Contains(out, "MARKER") {
+		t.Fatalf("a reader outside this rule read %s: %s", rel, out)
 	}
 	return unread
 }
