@@ -1,6 +1,7 @@
 package intent
 
 import (
+	"encoding/binary"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -157,8 +158,11 @@ func Plan(repoRoot, intentID string) (PlanResult, error) {
 	// half-planned record neither Plan nor Link repairs; and it left a freshly
 	// minted spec behind with nothing pointing at it (iss-2608300335369473). The
 	// check runs first, before the spec is minted, over the id that mint WOULD
-	// produce. A prediction is enough because writeIntentFile still backstops
-	// every write: the only cost of a wrong guess is a refusal one step later.
+	// produce — and again below with the id it actually produced, because NextID
+	// is predicted outside the mint lock and a concurrent create can push the id
+	// to a wider number. Both run before the first write, so neither refusal
+	// leaves a half-planned record; a spec minted and then refused is reusable,
+	// since the next run finds it through ByIntent.
 	specID := sp.ID
 	if !ok {
 		if specID, _, err = spec.NextID(repoRoot); err != nil {
@@ -173,6 +177,10 @@ func Plan(repoRoot, intentID string) (PlanResult, error) {
 	if !ok {
 		sp, mintWarning, err = spec.Create(repoRoot, intentID, it.Slug)
 		if err != nil {
+			return PlanResult{}, err
+		}
+		// Re-judge against the id the mint actually chose, still before any write.
+		if err := checkDraftFaceSize(content, it, sp.ID, draftRel); err != nil {
 			return PlanResult{}, err
 		}
 	}
@@ -231,11 +239,21 @@ func Plan(repoRoot, intentID string) (PlanResult, error) {
 // cap its own reader enforces, BEFORE the first write and before the bucket
 // move. It reproduces the three growth steps in order and judges the largest.
 func checkDraftFaceSize(content string, it Intent, specID, rel string) error {
-	stamped, _, err := stampScopeConditions(content, sizeProbeMinter)
+	// Every native id is the same width, so a fixed clock and an ADVANCING suffix
+	// measure exactly what the real mint will write. The entropy has to advance:
+	// a constant source hands the second bullet the id the first already used, the
+	// redraw loop exhausts, and the whole judgement is lost behind a mint error on
+	// every record with more than one condition (iss-2608300352403199). The source
+	// is per-call, so two concurrent plans never share a counter.
+	probe := recordid.Minter{
+		Now:     func() time.Time { return time.Unix(0, 0).UTC() },
+		Entropy: &probeEntropy{},
+	}
+	stamped, _, err := stampScopeConditions(content, probe)
 	if err != nil {
-		// A structural refusal (a fenced or commented section) is the stamp's to
-		// report where it happens, with its own message.
-		return nil //nolint:nilerr // the real stamp reports this a few lines later
+		// Including a structural refusal: reporting it here, before the spec is
+		// minted, is strictly better than letting the real stamp reach it later.
+		return err
 	}
 	kind := it.Kind
 	if frontmatter.IsNull(kind) {
@@ -261,25 +279,27 @@ func checkDraftFaceSize(content string, it Intent, specID, rel string) error {
 	return nil
 }
 
-// sizeProbeMinter mints ids for the size probe only. Every native id is the same
-// width, so a fixed clock and a fixed suffix measure exactly what the real mint
-// will write, and nothing it produces is ever stored.
-var sizeProbeMinter = recordid.Minter{
-	Now:     func() time.Time { return time.Unix(0, 0).UTC() },
-	Entropy: constantEntropy{},
-}
+// probeSuffixSpan keeps every probe draw below the mint's rejection band, so no
+// draw is discarded and the counter advances one id per bullet. Suffixes repeat
+// after 10,000 bullets — a record that long fails the size cap many times over.
+const probeSuffixSpan = 50000
 
-// constantEntropy is an endless zero source for the size probe.
-type constantEntropy struct{}
+// probeEntropy is the size probe's entropy: an advancing counter, never
+// crypto/rand. It exists so the probe's ids are distinct and sixteen digits
+// wide; nothing it produces is ever stored.
+type probeEntropy struct{ n uint16 }
 
-func (constantEntropy) Read(p []byte) (int, error) {
-	for i := range p {
-		p[i] = 0
+func (e *probeEntropy) Read(p []byte) (int, error) {
+	var b [2]byte
+	for i := 0; i < len(p); i += 2 {
+		e.n = (e.n + 1) % probeSuffixSpan
+		binary.BigEndian.PutUint16(b[:], e.n)
+		copy(p[i:], b[:])
 	}
 	return len(p), nil
 }
 
-// stampPlanned is Plan's idempotent second face: it mints an identity for every
+// stampPlanned is Plan's idempotent second face// stampPlanned is Plan's idempotent second face: it mints an identity for every
 // unmarked scope-condition bullet of an already-planned record and writes it
 // back, touching nothing else — no spec, no frontmatter, no bucket move. An
 // already-marked bullet is left byte-identical, so re-running after an edit

@@ -458,34 +458,56 @@ func TestAuditEmitRefusesPastTheReadCap(t *testing.T) {
 // first write. Checking per-write let a draft pass the kind write, MOVE to
 // planned, and then fail the spec_id write, leaving a half-planned record that
 // neither Plan nor Link repairs.
+//
+// The two-condition row is iss-2608300352403199: the probe minter's entropy was
+// constant, so the SECOND identity collided with the first, exhausted its
+// redraws, and the resulting error was swallowed as though it were a structural
+// refusal — skipping the whole pre-write judgement for the common case of a
+// record with more than one condition.
 func TestPlanRefusesBeforeAnyWriteOnTheDraftFace(t *testing.T) {
-	root := t.TempDir()
-	head := "---\nid: itd-10\nslug: alpha\nspec_id: null\nkind: null\n---\n# alpha\n\n" +
-		"## Scope Conditions\n\n- holds on POSIX\n\n## Why This Matters\n\n"
-	tail := "\n\n## Acceptance Criteria\n\n- ok\n"
-	record := head + strings.Repeat("x", 262101-len(head)-len(tail)) + tail
-	if len(record) != 262101 {
-		t.Fatalf("fixture is %d bytes, want 262101", len(record))
+	tests := []struct {
+		name       string
+		conditions string
+		size       int
+	}{
+		// One stamp (+37) and the kind rewrite (+6) fit; the spec_id rewrite (+1)
+		// does not.
+		{"one condition", "- holds on POSIX\n", 262101},
+		// Two stamps (+74) and the kind rewrite land exactly ON the cap; the
+		// spec_id rewrite is the byte that crosses it.
+		{"two conditions", "- holds on POSIX\n- holds below 10k records\n", 262064},
 	}
-	writeFile(t, root, draftsDir+"/itd-10-alpha.md", record)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			head := "---\nid: itd-10\nslug: alpha\nspec_id: null\nkind: null\n---\n# alpha\n\n" +
+				"## Scope Conditions\n\n" + tt.conditions + "\n## Why This Matters\n\n"
+			tail := "\n\n## Acceptance Criteria\n\n- ok\n"
+			record := head + strings.Repeat("x", tt.size-len(head)-len(tail)) + tail
+			if len(record) != tt.size {
+				t.Fatalf("fixture is %d bytes, want %d", len(record), tt.size)
+			}
+			writeFile(t, root, draftsDir+"/itd-10-alpha.md", record)
 
-	if _, err := Plan(root, "itd-10"); err == nil {
-		t.Fatal("Plan must refuse before any write")
-	} else if !strings.Contains(err.Error(), "cap") {
-		t.Fatalf("the refusal must name the cap, got %q", err)
-	}
-	after, err := os.ReadFile(filepath.Join(root, draftsDir, "itd-10-alpha.md"))
-	if err != nil {
-		t.Fatal("the draft must still be in drafts/: " + err.Error())
-	}
-	if string(after) != record {
-		t.Fatal("the draft was rewritten by a refused plan")
-	}
-	if entries, err := os.ReadDir(filepath.Join(root, specsOpen)); err == nil && len(entries) > 0 {
-		t.Fatalf("a refused plan left %d spec(s) dangling", len(entries))
-	}
-	if _, err := Load(root); err != nil {
-		t.Fatalf("the corpus no longer loads: %v", err)
+			if _, err := Plan(root, "itd-10"); err == nil {
+				t.Fatal("Plan must refuse before any write")
+			} else if !strings.Contains(err.Error(), "cap") {
+				t.Fatalf("the refusal must name the cap, got %q", err)
+			}
+			after, err := os.ReadFile(filepath.Join(root, draftsDir, "itd-10-alpha.md"))
+			if err != nil {
+				t.Fatal("the draft must still be in drafts/: " + err.Error())
+			}
+			if string(after) != record {
+				t.Fatal("the draft was rewritten by a refused plan")
+			}
+			if entries, err := os.ReadDir(filepath.Join(root, specsOpen)); err == nil && len(entries) > 0 {
+				t.Fatalf("a refused plan left %d spec(s) dangling", len(entries))
+			}
+			if _, err := Load(root); err != nil {
+				t.Fatalf("the corpus no longer loads: %v", err)
+			}
+		})
 	}
 }
 
