@@ -340,3 +340,50 @@ func TestPeelTrailingLinkRefsReturnsTheRunAndTrimsBothSides(t *testing.T) {
 		t.Fatalf("a mid-section definition was peeled: got %q, section %q", got, mid)
 	}
 }
+
+// pathologicalRuns builds a line of k backtick runs of DISTINCT lengths, so no
+// run has a closer of its own length. It is the shape a per-run rescan to end of
+// line is quadratic on.
+func pathologicalRuns(k int) string {
+	var b strings.Builder
+	for n := 1; n <= k; n++ {
+		b.WriteString(strings.Repeat("`", n))
+		b.WriteString("x <!- y ")
+	}
+	return b.String()
+}
+
+func BenchmarkOpensCommentDistinctRuns(b *testing.B) {
+	ln := pathologicalRuns(120)
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if OpensComment(ln) {
+			b.Fatal("the fixture must not open a comment")
+		}
+	}
+}
+
+func BenchmarkCodeSpanRangesDistinctRuns(b *testing.B) {
+	ln := pathologicalRuns(120)
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if r := CodeSpanRanges(ln); len(r) != 0 {
+			b.Fatalf("the fixture must pair no spans, got %v", r)
+		}
+	}
+}
+
+// typicalLine is what record prose actually looks like: one or two code spans
+// and no pathology. It is here so the run-list allocation the benchmarks above
+// pay for is measured on the case that is common rather than only on the case
+// that is bad.
+const typicalLine = "The reader asks `ParseSectionAboveFloor`, which the intent half also asks, and the writer appends one bullet."
+
+func BenchmarkOpensCommentTypicalLine(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		if OpensComment(typicalLine) {
+			b.Fatal("the fixture must not open a comment")
+		}
+	}
+}
