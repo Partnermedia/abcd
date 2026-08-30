@@ -64,6 +64,12 @@ var stampWriteHook func(path string, data []byte) error
 // does — so a failure after the mint leaves an orphan draft; the returned
 // error names the draft and the stamp-only remedy
 // (`capture promote <iss-N> --intent <itd-N>`).
+//
+// Every refusal that can be established from the bytes in hand is therefore
+// raised BEFORE the mint: the grounds text, and whether the record can take the
+// append at all. What is left to the stamp is what only a write under the lock
+// can discover, which is the residue the remedy above is for — never a
+// deterministic refusal that would leak one draft per attempt.
 func Promote(req PromoteRequest) (PromoteResult, error) {
 	repoRoot, issuesRoot, err := resolveRoots(req.RepoRoot, req.IssuesRoot)
 	if err != nil {
@@ -97,6 +103,23 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 	}
 	if existing := asString(fm["promoted_to"]); existing != "" {
 		return PromoteResult{}, fmt.Errorf("%s is already promoted to %s; refusing to promote twice", req.ID, existing)
+	}
+	// Establish that the RECORD can accept the append, before anything is minted.
+	// requireGrounds above already gated the grounds TEXT; what it cannot answer
+	// is whether the bytes it will be appended to can hold it. A record whose body
+	// leaves a fence or a comment open masks everything appended below it, so the
+	// stamp's read-back refuses — permanently, and identically on every retry,
+	// including the retry through the repair verb the failure message names. With
+	// the mint first, that left one orphan draft per attempt and a draft counter
+	// climbing behind an operator who had no way to succeed (iss-2608301803423101).
+	//
+	// The dry run is the real append against the pre-flight bytes, discarded. It
+	// is not a substitute for the guard under the lock — the file may change
+	// between the two, and the write is judged again there — but the failure it
+	// removes is the deterministic one, where the record could never have taken
+	// the entry in the first place.
+	if _, err := appendGrounds("promote", content, g); err != nil {
+		return PromoteResult{}, err
 	}
 
 	var itdID, intentPath, mintWarning string

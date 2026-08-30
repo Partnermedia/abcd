@@ -7,6 +7,10 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-179-delta-ruthless"
 found_at: "internal/core/grounds/record.go"
+resolution: "the refusal now names the line and the construct that blinded the record instead of the grounds operand, and promote establishes that the record can accept the append before it mints, so a permanent refusal no longer leaks one orphan draft per attempt"
+impact: fix
+resolved_by:
+  intent: "itd-179"
 ---
 
 an unclosed comment or fence anywhere in an issue record blinds every grounds triage route permanently and promote orphans a draft per attempt
@@ -55,3 +59,7 @@ Remedy has two halves and both are needed. The refusal must DIAGNOSE rather than
 misattribute: `Mask` already knows which line opened the span, so name that line
 and that construct. And `Promote` must establish that the append can succeed
 before it mints, or a permanent refusal leaks one orphan draft per attempt.
+
+## Grounds
+
+- pursued: we expect a locked record to be diagnosable from its refusal alone, and a refusal that can never succeed to leave no residue behind it

@@ -68,7 +68,33 @@ const (
 // runs to end of file — CommonMark's rule for a fence, and the only safe reading
 // of a comment nobody closed.
 func Mask(lines []string) []uint8 {
-	mask := make([]uint8, len(lines))
+	mask, _, _ := scan(lines)
+	return mask
+}
+
+// Unclosed reports the line that opened a span nothing closes before the end of
+// the input, and which construct it is (MaskFence or MaskComment).
+//
+// An unclosed opener is not itself a fault — running it to end of file is
+// CommonMark's rule for a fence and the only safe reading of a comment nobody
+// closed, and Mask does exactly that. What it IS, is the reason every line below
+// it stops being live markdown, so a writer whose appended line lands there can
+// never read it back. That writer has to be able to NAME the line, or its
+// refusal describes the symptom and sends the operator to rewrite whatever it
+// was appending — which is the one part of the record that is innocent
+// (iss-2608301803423101).
+func Unclosed(lines []string) (line int, flag uint8, ok bool) {
+	_, openLine, openFlag := scan(lines)
+	return openLine, openFlag, openLine >= 0
+}
+
+// scan is the single pass Mask and Unclosed share: the per-line mask, plus the
+// line that opened whatever span is still open at the end (-1 when none is).
+// Spelled twice, the two could disagree about which lines a span covers and
+// which line opened it.
+func scan(lines []string) (mask []uint8, openLine int, openFlag uint8) {
+	mask = make([]uint8, len(lines))
+	openLine, openFlag = -1, 0
 	fenceOpen := ""
 	inComment := false
 	for i, raw := range lines {
@@ -80,27 +106,34 @@ func Mask(lines []string) []uint8 {
 			// closer; the remainder of the line is live markdown again and may open
 			// a fresh span.
 			if k := strings.Index(ln, "-->"); k >= 0 {
-				inComment = opensCommentFrom(ln, k+len("-->"))
+				if inComment = opensCommentFrom(ln, k+len("-->")); inComment {
+					openLine, openFlag = i, MaskComment
+				} else {
+					openLine, openFlag = -1, 0
+				}
 			}
 		case fenceOpen != "":
 			mask[i] |= MaskFence
 			if m := fenceRe.FindStringSubmatch(ln); m != nil && m[1][0] == fenceOpen[0] && len(m[1]) >= len(fenceOpen) && strings.TrimSpace(m[2]) == "" {
 				fenceOpen = ""
+				openLine, openFlag = -1, 0
 			}
 		default:
 			// A backtick opener's info string may not itself contain a backtick.
 			if m := fenceRe.FindStringSubmatch(ln); m != nil && !(m[1][0] == '`' && strings.Contains(m[2], "`")) {
 				fenceOpen = m[1]
 				mask[i] |= MaskFence
+				openLine, openFlag = i, MaskFence
 				continue
 			}
 			if OpensComment(ln) {
 				inComment = true
 				mask[i] |= MaskComment
+				openLine, openFlag = i, MaskComment
 			}
 		}
 	}
-	return mask
+	return mask, openLine, openFlag
 }
 
 // OpensComment reports whether a line leaves an HTML comment open. It walks the

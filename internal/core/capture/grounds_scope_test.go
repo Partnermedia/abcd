@@ -2,8 +2,11 @@ package capture
 
 import (
 	"os"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/intentdriven/abcd/internal/core/frontmatter"
 )
 
 // rewriteIssue re-reads an issue file, applies fn to its text and writes it
@@ -51,5 +54,91 @@ func TestGroundsLandInTheBodyNotAFrontmatterComment(t *testing.T) {
 	}
 	if !strings.Contains(iss.Body, "## Grounds") {
 		t.Fatalf("the entry did not land in the body:\n%s", iss.Body)
+	}
+}
+
+// openFence appends an UNCLOSED fence delimiter to a record's body. Nothing
+// closes it, so mdrecord.Mask runs the span to end of file — CommonMark's rule —
+// and every line appended below it is masked.
+func openFence(t *testing.T, ir, issID string) {
+	t.Helper()
+	rewriteIssue(t, ir, issID, func(s string) string {
+		return strings.TrimRight(s, "\n") + "\n\n" + "```go\n"
+	})
+}
+
+// fenceBodyLine returns the 1-based BODY line the unclosed fence sits on, which
+// is the locator a refusal has to name for the record to be diagnosable from the
+// message alone. It is deliberately body-relative rather than file-relative: the
+// triage verbs append after setting their note field, so by then the content
+// carries frontmatter lines the record on disk does not, and a file-relative
+// number would name a line the operator's own copy does not have.
+func fenceBodyLine(t *testing.T, ir, issID string) int {
+	t.Helper()
+	path, _, err := findIssue(ir, issID)
+	if err != nil {
+		t.Fatalf("findIssue(%s): %v", issID, err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, body := frontmatter.Split(string(data))
+	for i, ln := range strings.Split(body, "\n") {
+		if strings.HasPrefix(ln, "```") {
+			return i + 1
+		}
+	}
+	t.Fatalf("no fence in %s", path)
+	return 0
+}
+
+// TestGroundsRefusalNamesTheUnclosedSpan is the diagnosis half of
+// iss-2608301803423101. An unclosed opener in the body masks everything below
+// it, so the appended bullet cannot read back and the write is refused — which
+// is correct. What was not correct is the message: it named the appended entry,
+// the one part of the record that cannot be at fault, and sent the operator to
+// rewrite it. Mask already knows which line opened the span, so the refusal
+// names THAT line and THAT construct.
+func TestGroundsRefusalNamesTheUnclosedSpan(t *testing.T) {
+	repo, ir, issID := promoteFixture(t, "the loader drops rules silently when the config is stale")
+	openFence(t, ir, issID)
+	want := strconv.Itoa(fenceBodyLine(t, ir, issID))
+
+	_, err := Resolve(ResolveRequest{
+		RepoRoot: repo, IssuesRoot: ir, ID: issID,
+		Resolution: "closed by the fix under review", Impact: "fix", Grounds: testGrounds,
+	})
+	if err == nil {
+		t.Fatal("Resolve over a record with an unclosed fence = nil error, want a refusal")
+	}
+	msg := err.Error()
+	for _, frag := range []string{"fenced code block", "body line " + want, "```go"} {
+		if !strings.Contains(msg, frag) {
+			t.Fatalf("the refusal does not name %q, so the record is not diagnosable from it: %s", frag, msg)
+		}
+	}
+}
+
+// TestPromoteDoesNotMintWhatItCannotStamp is the residue half of
+// iss-2608301803423101. Promote mints the draft BEFORE it appends, so a record
+// whose append can never succeed leaked one orphan draft per attempt — and the
+// repair verb the error names fails identically, so the operator retries.
+// requireGrounds already gates the grounds TEXT before the mint; what was
+// missing is whether the RECORD can accept an append.
+func TestPromoteDoesNotMintWhatItCannotStamp(t *testing.T) {
+	repo, ir, issID := promoteFixture(t, "the loader drops rules silently when the config is stale")
+	openFence(t, ir, issID)
+	before := draftCount(t, repo)
+
+	for i := 0; i < 3; i++ {
+		if _, err := Promote(PromoteRequest{
+			RepoRoot: repo, IssuesRoot: ir, ID: issID, Grounds: testGrounds,
+		}); err == nil {
+			t.Fatal("Promote over a record with an unclosed fence = nil error, want a refusal")
+		}
+	}
+	if after := draftCount(t, repo); after != before {
+		t.Fatalf("three refused promotes minted %d draft(s) nothing can stamp", after-before)
 	}
 }
