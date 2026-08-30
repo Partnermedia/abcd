@@ -86,10 +86,11 @@ gate reads it as data with no second parser.
 not only the decision" is a review property; no machine reads a sentence and
 knows whether it names a conjecture. What ships is a floor that refuses the
 degenerate cases: empty or whitespace-only text, text below either half of the
-floor — the character count and the LEXICAL-UNIT count, the second being what a
-text of twenty zero-width spaces cannot clear, a unit being a letter-run where
-the script separates words and a single LETTER where it does not, so that a
-script written without inter-word spaces is not refused for having one run —
+floor — the LEXICAL-UNIT count and the LETTER count, neither of which a text of
+twenty zero-width spaces can clear, a unit being a letter-run where the script
+separates words and a single LETTER where it does not, so that a script written
+without inter-word spaces is not refused for having one run, and the letter
+count reading letters rather than runes so that padding does not answer it —
 text carrying a control
 character no record field can hold, and text that is only the vocabulary token
 or the verb's own name repeated. The

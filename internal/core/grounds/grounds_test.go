@@ -323,3 +323,42 @@ func TestGroundsNoWordBreaksRefusalIsOnlyForScriptsWithout(t *testing.T) {
 		}
 	}
 }
+
+// TestGroundsFloorCountsLettersNotPadding is iss-2608301455387735: the character
+// half of the floor counted RUNES, so anything that occupied a rune answered it.
+// Three one-letter words and seventeen dots cleared a twenty-"character" floor
+// while carrying three letters of reasoning; and a text of Hangul fillers —
+// letters Unicode marks default-ignorable, which render as nothing — cleared the
+// whole floor while being invisible from end to end. A floor a caller can
+// satisfy with characters that say nothing is not a floor.
+func TestGroundsFloorCountsLettersNotPadding(t *testing.T) {
+	const zeroWidth = "​"
+	const filler = "ㅤ"
+	for name, text := range map[string]string{
+		"one-letter words padded with dots":     "a b c" + strings.Repeat(".", 17),
+		"one-letter words padded with digits":   "a b c 1234567890123456",
+		"invisible letters, zero-width padding": filler + strings.Repeat(zeroWidth, 9) + filler + strings.Repeat(zeroWidth, 9) + filler,
+		"twenty invisible letters":              strings.TrimSuffix(strings.Repeat(filler+zeroWidth, 20), zeroWidth),
+		"invisible letters, spaced":             strings.TrimSuffix(strings.Repeat(filler+" ", 20), " "),
+	} {
+		if _, err := New(Pursued, text); err == nil {
+			t.Fatalf("%s: New(%q) = nil error, want a refusal", name, text)
+		}
+		// The reader holds a hand-typed bullet to the same floor.
+		if err := ValidateText(Fold(text)); err == nil {
+			t.Fatalf("%s: ValidateText(%q) = nil error, want a refusal", name, text)
+		}
+	}
+	// A text with the units but not the letters is told which of the two it is
+	// short of, so a caller who padded it learns what the padding did not buy.
+	_, err := New(Pursued, "a b c"+strings.Repeat(".", 17))
+	if err == nil {
+		t.Fatal("New = nil error, want a refusal")
+	}
+	if !strings.Contains(err.Error(), "letter floor") {
+		t.Fatalf("refusal of a padded text = %q, want the letter floor named", err)
+	}
+	if _, err := New(Pursued, conjecture); err != nil {
+		t.Fatalf("New(%q) = %v, want the conjecture accepted", conjecture, err)
+	}
+}
