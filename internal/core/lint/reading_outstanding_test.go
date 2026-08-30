@@ -3,6 +3,7 @@ package lint
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -855,5 +856,38 @@ func TestTheGateAndTheReportReadOnePaddedRunTheSameWay(t *testing.T) {
 	if gateRefused != reportRefused {
 		t.Fatalf("the gate and the report disagree about one record (gate refused=%v, report refused=%v): %+v",
 			gateRefused, reportRefused, fs)
+	}
+}
+
+// Empty is the predicate a surface renders silence on, so a fault it does not
+// consider is a fault the board reports as nothing outstanding — the one answer
+// this report must never give by accident. Each clause is therefore held by a
+// case of its own, and the cases are enumerated from the STRUCT rather than
+// listed: a field added to the report and forgotten in Empty is precisely the
+// omission that goes unnoticed, and a hand-written list would be forgotten in the
+// same change (iss-2608301327012407).
+//
+// The pin matters ahead of the first surface that gates on it. Empty is exported
+// because the report has two surfaces, and a clause nothing exercises is a clause
+// that can be dropped in a refactor without a single test going red.
+func TestEmptyConsidersEveryFaultTheReportCarries(t *testing.T) {
+	rt := reflect.TypeOf(OutstandingReadings{})
+	if (OutstandingReadings{}).Empty() != true {
+		t.Fatal("a report carrying nothing is empty")
+	}
+	for i := 0; i < rt.NumField(); i++ {
+		f := rt.Field(i)
+		if f.Type.Kind() != reflect.Slice {
+			t.Fatalf("%s is not a slice; this test enumerates the report's fault lists and cannot judge a %s",
+				f.Name, f.Type.Kind())
+		}
+		t.Run(f.Name, func(t *testing.T) {
+			v := reflect.New(rt).Elem()
+			v.Field(i).Set(reflect.MakeSlice(f.Type, 1, 1))
+			if v.Interface().(OutstandingReadings).Empty() {
+				t.Errorf("a report carrying a %s entry is not empty; Empty does not consider that field, "+
+					"so a surface gating on it renders silence over a fault the report holds", f.Name)
+			}
+		})
 	}
 }
