@@ -1456,11 +1456,18 @@ func scanRecordStores(repoRoot string, cfg RuleConfig) ([]schemaRecord, []Findin
 				// because it is this rule's own scanner that does the silencing.
 				//
 				// The refusal names the LEDGER reader, not every surface. It once said the
-				// file was "skipped by every issue surface", and the release cut reads the
-				// same resolved record with the lenient scanner and folds its impact into
-				// the changelog — so an author told the record was invisible everywhere
-				// found it in the generated section (iss-2608301901260678). Both halves are
-				// rows in TestDuplicateTopLevelKeyReaderByReader.
+				// file was "skipped by every issue surface", and the release cut reads a
+				// resolved record with the lenient scanner and folds its impact into the
+				// changelog — so an author told the record was invisible everywhere found it
+				// in the generated section (iss-2608301901260678). Both halves are rows in
+				// TestDuplicateTopLevelKeyReaderByReader.
+				//
+				// The RESOLVED qualifier is load-bearing and the correction ran the same way
+				// round: the cut walks .abcd/work/issues/resolved and the shipped intents,
+				// while this leg fires on every bucket the store declares, so a bare "the
+				// release cut reads this record" is false of an open or wontfix issue and
+				// would send its author to look in a generated section that cannot hold it —
+				// the same defect, inverted, as the clause it replaced.
 				for _, dup := range frontmatterDuplicates(lines) {
 					msg := "frontmatter has a duplicate top-level key '" + dup.Key +
 						"'; this rule's own scanner keeps only the first value, " +
@@ -1468,8 +1475,8 @@ func scanRecordStores(repoRoot string, cfg RuleConfig) ([]schemaRecord, []Findin
 					if store.readerRefusesDuplicateKey {
 						msg = "frontmatter has a duplicate top-level key '" + dup.Key +
 							"'; the " + store.noun + " ledger reader refuses a duplicated key, so capture skips the file — " +
-							"the release cut does not: it reads the same record on its first value, as this rule's own " +
-							"scanner does, so a second line can silence a blocker armed on the value the first hides"
+							"but the release cut still reads a resolved record, on its first value, as this rule's own " +
+							"scanner reads it here: a second line can silence a blocker armed on the value the first hides"
 					}
 					out = append(out, Finding{
 						File: rel, Line: dup.Line, RuleID: ruleRecordSchema, Severity: cfg.Severity, Message: msg,
