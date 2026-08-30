@@ -19,8 +19,10 @@ reaches `filepath.Join(repoRoot, ...)` at schema.go:1007 with no `..` or
 `IsAbs` rejection, and the gate then reads and echoes `.md` frontmatter from
 outside the checkout. Reproduced on both HEAD and base:
 
-    ../outside/decisions/0001-outside-secret.md:2: [BLOCKER record_schema]
-    filename claims id 'adr-1' but frontmatter declares 'adr-77'
+```text
+../outside/decisions/0001-outside-secret.md:2: [BLOCKER record_schema]
+filename claims id 'adr-1' but frontmatter declares 'adr-77'
+```
 
 `validateRecordStores` checks only prefix membership and inter-store layout,
 not containment.
