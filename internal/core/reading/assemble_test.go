@@ -482,3 +482,59 @@ func TestAssembleRefusesAStoreTheConfigurationDoesNotName(t *testing.T) {
 		t.Errorf("the refusal does not name the unconfigured store: %v", err)
 	}
 }
+
+// The three shapes that slip past a first-occurrence, exact-match redaction.
+// Each is a warm field the manifest asserts was refused, still in the bundle.
+
+// TestDuplicateExcludedKeyRefusesTheFile: Fields keeps the first occurrence of a
+// key and drops the rest silently, so redacting what it reports leaves the
+// second copy in place.
+func TestDuplicateExcludedKeyRefusesTheFile(t *testing.T) {
+	root := fixtureRepo(t)
+	writeFile(t, root, ".abcd/development/specs/open/spc-2-duplicated.md",
+		"---\nid: spc-2\norigin: cold\norigin: "+sentinelOrigin+"\n---\n\n# A spec\n\nProse.\n")
+	gitCommitAll(t, root)
+
+	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	if err == nil {
+		t.Fatal("a duplicated excluded key did not refuse the file; the second copy survives redaction")
+	}
+	if !strings.Contains(err.Error(), "origin") {
+		t.Errorf("the refusal does not name the duplicated key: %v", err)
+	}
+}
+
+// TestExcludedKeySurvivingRedactionRefusesTheFile: StripFrontmatter closes on a
+// `---` PREFIX, so a four-dash close is cut from the body while Fields, which
+// wants the delimiter exactly, reads no fields at all and redacts nothing.
+func TestExcludedKeySurvivingRedactionRefusesTheFile(t *testing.T) {
+	root := fixtureRepo(t)
+	writeFile(t, root, ".abcd/development/specs/open/spc-3-four-dashes.md",
+		"---\nid: spc-3\norigin: "+sentinelOrigin+"\n----\n\n# A spec\n\nProse.\n")
+	gitCommitAll(t, root)
+
+	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	if err == nil {
+		t.Fatal("an excluded key survived redaction and was passed")
+	}
+	if !strings.Contains(err.Error(), "origin") {
+		t.Errorf("the refusal does not name the surviving key: %v", err)
+	}
+}
+
+// TestCaseVariantExcludedHeadingRefusesTheFile: the heading redaction matches a
+// title exactly, so another spelling of the same heading travels whole.
+func TestCaseVariantExcludedHeadingRefusesTheFile(t *testing.T) {
+	root := fixtureRepo(t)
+	writeFile(t, root, ".abcd/development/specs/open/spc-4-case-variant.md",
+		"---\nid: spc-4\n---\n\n# A spec\n\n## audit notes\n\n"+sentinelAuditNotes+"\n")
+	gitCommitAll(t, root)
+
+	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	if err == nil {
+		t.Fatal("a case-variant excluded heading was passed whole")
+	}
+	if !strings.Contains(strings.ToLower(err.Error()), "audit notes") {
+		t.Errorf("the refusal does not name the surviving heading: %v", err)
+	}
+}

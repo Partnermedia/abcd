@@ -3,6 +3,7 @@ package reading
 import (
 	"fmt"
 	"path"
+	"regexp"
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/frontmatter"
@@ -105,7 +106,103 @@ func redactExcluded(rel, doc string, exclusions []Exclusion) (string, error) {
 			kept = append(kept, line)
 		}
 	}
-	return strings.Join(kept, "\n"), nil
+	out := strings.Join(kept, "\n")
+	if err := verifyRedaction(rel, doc, out, keys, headings); err != nil {
+		return "", err
+	}
+	return out, nil
+}
+
+// excludedKeyLineRe matches an excluded key still at column 0. The key set is
+// small and fixed, so the pattern is composed from it rather than spelled twice.
+var excludedKeyLineRe = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_-]*)\s*:`)
+
+// headingLineRe matches a markdown ATX heading and captures its title.
+var headingLineRe = regexp.MustCompile(`^(#{1,6})\s+(.*?)\s*$`)
+
+// verifyRedaction is the key-and-heading half of the exclusion floor made
+// fail-closed, the way the path half already is.
+//
+// Redaction is a positive act over what a parser reported, and three shapes slip
+// past a parser that reports one value per key and matches a title exactly. A
+// DUPLICATED key keeps its second copy, because Fields keeps the first
+// occurrence and drops the rest silently. A frontmatter block closed with four
+// dashes is cut from the body by StripFrontmatter, which closes on a `---`
+// PREFIX, while Fields wants the delimiter exactly and so reads no fields at all.
+// And a heading spelled in another case is not the title the redactor looked for.
+//
+// In each case the field travels and the manifest still asserts it was refused,
+// which is the one thing the manifest exists not to do. A floor a file can
+// quietly walk through is a disclosure, not a gate — so a file that still
+// carries an excluded shape after redaction refuses the run and names the shape.
+func verifyRedaction(rel, original, redacted string, keys, headings map[string]bool) error {
+	if len(keys) > 0 {
+		for _, dup := range frontmatter.Duplicates(strings.Split(original, "\n")) {
+			if keys[dup.Key] {
+				return fmt.Errorf("reading: %s declares the excluded key %q more than once (line %d); "+
+					"only the first occurrence is redactable, so the rest would travel", rel, dup.Key, dup.Line)
+			}
+		}
+		if line, key, ok := excludedKeyInFirstBlock(redacted, keys); ok {
+			return fmt.Errorf("reading: %s still carries the excluded key %q at line %d after redaction; "+
+				"the frontmatter block is not closed the way the field reader expects it", rel, key, line)
+		}
+	}
+	if len(headings) == 0 {
+		return nil
+	}
+	for i, line := range strings.Split(redacted, "\n") {
+		m := headingLineRe.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		for title := range headings {
+			if strings.EqualFold(m[2], title) {
+				return fmt.Errorf("reading: %s still carries the excluded heading %q at line %d after "+
+					"redaction; the floor names %q, and a heading is excluded however it is spelled",
+					rel, m[2], i+1, title)
+			}
+		}
+	}
+	return nil
+}
+
+// excludedKeyInFirstBlock reports an excluded key sitting at column 0 inside the
+// document's first delimiter-fenced region.
+//
+// Two loosenesses are deliberate, and each closes a shape the strict reading
+// misses. The region is bounded by any line OPENING with three dashes, not by an
+// exact `---`, because that is the rule the frontmatter stripper applies and the
+// gap between the two rules is where a key survives. And the region is found
+// wherever it starts rather than at line 0, because a preamble ahead of the
+// block makes the field reader report nothing at all while the keys sit there
+// in plain sight.
+func excludedKeyInFirstBlock(doc string, keys map[string]bool) (int, string, bool) {
+	lines := strings.Split(doc, "\n")
+	open := -1
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if i == 0 {
+			trimmed = strings.TrimSpace(frontmatter.TrimBOM(line))
+		}
+		if strings.HasPrefix(trimmed, "---") {
+			open = i
+			break
+		}
+	}
+	if open < 0 {
+		return 0, "", false
+	}
+	for i := open + 1; i < len(lines); i++ {
+		if strings.HasPrefix(strings.TrimSpace(lines[i]), "---") {
+			return 0, "", false
+		}
+		m := excludedKeyLineRe.FindStringSubmatch(lines[i])
+		if m != nil && keys[m[1]] {
+			return i + 1, m[1], true
+		}
+	}
+	return 0, "", false
 }
 
 // projectField extracts one named field from a record's text. Only a record is
