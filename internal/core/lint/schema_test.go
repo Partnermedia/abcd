@@ -748,7 +748,7 @@ func TestNestedStoreRootIsNotAnUndeclaredBucket(t *testing.T) {
 	writeFile(t, root, "work/issues/open/iss-1-a-finding.md",
 		"---\nschema_version: 1\nid: iss-1\nslug: a-finding\nseverity: minor\ncategory: bug\nsource: user-observation\nfound_during: t\n---\n\nan issue\n")
 	writeFile(t, root, "work/issues/readings/rdg-1/rdi-2.md",
-		"---\nschema_version: 1\nid: rdi-2\nrun: rdg-1\nmanifest: sha256:beef\nposition: detection\nregime: supplied\npattern: a stated constraint\ntension: t\nconstraint_in_play: c\nwhy_a_tension: w\n---\n\n")
+		"---\nschema_version: 1\nid: rdi-2\nrun: rdg-1\nmanifest: sha256:beef\nposition: detection\nregime: registrative\npattern: a stated constraint\ntension: t\nconstraint_in_play: c\nwhy_a_tension: w\n---\n\n")
 	writeFile(t, root, "work/issues/dispositions/rdi-2/dsp-3.md",
 		"---\nschema_version: 1\nid: dsp-3\nitem: rdi-2\nstate: accepted\ndisposition_grounds: worth acting on\n---\n\n")
 
@@ -781,7 +781,7 @@ func TestReadingRunBucketDeclaredByGrammar(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "rec/.keep", "")
 	writeFile(t, root, "work/issues/readings/rdg-1/rdi-2.md",
-		"---\nschema_version: 1\nid: rdi-2\nrun: rdg-1\nmanifest: sha256:beef\nposition: detection\nregime: supplied\npattern: a stated constraint\ntension: t\nconstraint_in_play: c\nwhy_a_tension: w\n---\n\n")
+		"---\nschema_version: 1\nid: rdi-2\nrun: rdg-1\nmanifest: sha256:beef\nposition: detection\nregime: registrative\npattern: a stated constraint\ntension: t\nconstraint_in_play: c\nwhy_a_tension: w\n---\n\n")
 
 	fs, err := Lint(readingSchemaConfig(), root)
 	if err != nil {

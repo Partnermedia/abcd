@@ -254,6 +254,19 @@ func promoteReadingItem(repoRoot, issuesRoot string, req PromoteRequest) (Promot
 	if err != nil {
 		return PromoteResult{}, err
 	}
+	// Answered, and the answer was not "act". `accepted` is the one standing
+	// state a promotion follows from: acceptance is the record, and the action it
+	// licenses is this separate admission. Promoting a `rejected` or `declined`
+	// item would let the action contradict the record it is supposed to follow
+	// from — the ledger would hold a refusal and the admission it refused —
+	// and promoting a `held` one would settle by action exactly what the hold
+	// left open. The undispositioned refusal above stops an action outrunning
+	// the answer; this is the same rule once the answer has arrived.
+	if state != issueschema.DispositionAccepted {
+		return PromoteResult{}, fmt.Errorf(
+			"%s carries a standing disposition of %q, and only %q licenses an action; supersede it with a new disposition first (abcd capture disposition %s --state accepted --grounds \"...\" --supersedes %s)",
+			req.ID, state, issueschema.DispositionAccepted, req.ID, standing[0])
+	}
 
 	var itdID, intentPath, mintWarning string
 	linked := req.LinkIntent != ""

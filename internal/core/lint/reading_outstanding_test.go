@@ -18,7 +18,7 @@ func readingLedger(t *testing.T, run, item, position string) string {
 			"run: \""+run+"\"\n"+
 			"manifest: \"sha256:beef\"\n"+
 			"position: \""+position+"\"\n"+
-			"regime: \"supplied\"\n"+
+			"regime: \"registrative\"\n"+
 			"pattern: \"a stated constraint\"\n"+
 			"---\n\n")
 	return root

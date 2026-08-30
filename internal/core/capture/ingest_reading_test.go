@@ -11,6 +11,7 @@ import (
 
 	"github.com/intentdriven/abcd/internal/core/issueschema"
 	"github.com/intentdriven/abcd/internal/core/recordid"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // One item in, one record out — each under the run's own directory, each
@@ -22,7 +23,7 @@ func TestIngestWritesOneRecordPerItem(t *testing.T) {
 	res, err := IngestReading(IngestReadingRequest{
 		RepoRoot: repo, IssuesRoot: ir,
 		Run: run, Manifest: "sha256:beef",
-		Position: "detection", Regime: "supplied",
+		Position: "detection", Regime: "registrative",
 		Items: []ReadingItem{
 			{Pattern: "constraint one", Body: bodyFor("detection")},
 			{Pattern: "constraint two", Body: bodyFor("detection")},
@@ -72,7 +73,7 @@ func TestTwoRunsSameTensionMintDistinctIDs(t *testing.T) {
 		res, err := IngestReading(IngestReadingRequest{
 			RepoRoot: repo, IssuesRoot: ir,
 			Run: run, Manifest: "sha256:beef",
-			Position: "detection", Regime: "supplied",
+			Position: "detection", Regime: "registrative",
 			Items: []ReadingItem{same},
 		})
 		if err != nil {
@@ -150,7 +151,7 @@ func TestIngestRedrawsAnIntraBatchIDCollision(t *testing.T) {
 	res, err := IngestReading(IngestReadingRequest{
 		RepoRoot: repo, IssuesRoot: ir,
 		Run: "rdg-2608300000000001", Manifest: "sha256:beef",
-		Position: "detection", Regime: "supplied",
+		Position: "detection", Regime: "registrative",
 		Items: []ReadingItem{
 			{Pattern: "the first item", Body: bodyFor("detection")},
 			{Pattern: "the second item", Body: bodyFor("detection")},
@@ -203,5 +204,45 @@ func TestTwoRunsAtOneInstantMintDistinctIDs(t *testing.T) {
 		if _, err := findReadingItem(ir, id); err != nil {
 			t.Fatalf("findReadingItem(%s): %v", id, err)
 		}
+	}
+}
+
+// A mid-batch write failure reports which items LANDED. Returning a bare error
+// with no record list leaves the caller unable to say what is on disk, and a
+// retry then mints fresh ids for the items that already wrote — duplicating them
+// inside the run directory.
+func TestIngestReportsWhichItemsLandedWhenAWriteFails(t *testing.T) {
+	repo, ir := ledger(t)
+	pinnedMinter(t, 0x00, 0x07, 0x00, 0x08, 0x00, 0x09)
+
+	calls := 0
+	origWrite := readingWriteHook
+	readingWriteHook = func(path string, data []byte) error {
+		calls++
+		if calls == 2 {
+			return errors.New("disk full")
+		}
+		return fsutil.WriteFileAtomic(path, data, 0o644)
+	}
+	t.Cleanup(func() { readingWriteHook = origWrite })
+
+	res, err := IngestReading(IngestReadingRequest{
+		RepoRoot: repo, IssuesRoot: ir,
+		Run: "rdg-2608300000000001", Manifest: "sha256:beef",
+		Position: "detection", Regime: "registrative",
+		Items: []ReadingItem{
+			{Pattern: "the first item", Body: bodyFor("detection")},
+			{Pattern: "the second item", Body: bodyFor("detection")},
+			{Pattern: "the third item", Body: bodyFor("detection")},
+		},
+	})
+	if err == nil {
+		t.Fatal("a failing write must be reported as an error")
+	}
+	if len(res.Records) != 1 {
+		t.Fatalf("the result must name the %d item(s) that landed, got %d: %+v", 1, len(res.Records), res.Records)
+	}
+	if !strings.Contains(err.Error(), res.Records[0].ID) {
+		t.Fatalf("the error must name what landed so a retry is not blind; got %v", err)
 	}
 }

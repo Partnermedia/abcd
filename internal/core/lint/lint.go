@@ -18,10 +18,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/intentdriven/abcd/internal/core/issueschema"
-
 	"github.com/intentdriven/abcd/internal/core/changelog"
 	"github.com/intentdriven/abcd/internal/core/frontmatter"
+	"github.com/intentdriven/abcd/internal/core/issueschema"
 	"github.com/intentdriven/abcd/internal/core/launch"
 	"github.com/intentdriven/abcd/internal/core/recordid"
 	"github.com/intentdriven/abcd/internal/fsutil"

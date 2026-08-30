@@ -493,7 +493,7 @@ func writeReadingFixture(t *testing.T, repo, run, item string) {
 		"run: \"" + run + "\"\n" +
 		"manifest: \"sha256:beef\"\n" +
 		"position: \"detection\"\n" +
-		"regime: \"supplied\"\n" +
+		"regime: \"registrative\"\n" +
 		"pattern: \"a stated constraint\"\n" +
 		"tension: \"the two sides disagree\"\n" +
 		"constraint_in_play: \"the stated invariant\"\n" +

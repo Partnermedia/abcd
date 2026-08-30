@@ -174,14 +174,20 @@ keeps its status folder: promotion is orthogonal to fix-status and is not
 resolution. An issue already carrying `promoted_to` is refused with the
 existing `itd-N`.
 
-A reading item (`rdi-N`) graduates the same way, with one refusal in front: an
-item that carries no disposition is refused and nothing is minted. Acceptance is
-one record and the action is a separate admission; promoting an undispositioned
-item collapses the two, and then nothing can show the finding was weighed before
-it was acted on. Record the disposition first
-(`capture disposition <rdi-N> --state …`). The `issue_status` field carries the
-standing disposition's state for a reading item, because that family's status
-signal is the keyed disposition rather than a folder.
+A reading item (`rdi-N`) graduates the same way, with one refusal in front: only
+an item whose **standing disposition is `accepted`** may be promoted. Acceptance
+is one record and the action is a separate admission, so an item that carries no
+disposition is refused (promoting it would collapse the two acts, and then
+nothing could show the finding was weighed before it was acted on), and so is one
+whose standing answer is `rejected`, `declined`, or `held` — the first two would
+put a refusal and the admission it refused in the same ledger, and the third
+would settle by action exactly what the hold left open. Where the answer needs to
+change, supersede it: `capture disposition <rdi-N> --state accepted --grounds
+"…" --supersedes <dsp-N>`. Nothing is minted when the promote is refused.
+
+For a reading item the JSON's `issue_status` carries the **standing
+disposition's state** (`accepted`), not a status folder: that family's status
+signal is the keyed disposition, and it has no folder to name.
 
 `--intent <itd-N>` is the stamp-only mode: it links an *existing* draft instead
 of minting — the repair path when a stamp failed after the mint (the error

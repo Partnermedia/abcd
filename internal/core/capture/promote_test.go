@@ -345,3 +345,61 @@ func TestPromoteStampsReadingItemPromotedTo(t *testing.T) {
 		t.Fatal("a second promote of one reading item must be refused")
 	}
 }
+
+// A rejected or declined item has been answered — and the answer was "no". The
+// spec's rule is that acceptance is one record and the action it licenses is a
+// separate admission; promoting an item whose standing answer refuses it would
+// let the action contradict the record it is supposed to follow from, and the
+// ledger would then hold both a refusal and the admission it refused. The
+// undispositioned refusal exists to stop an action outrunning the answer; this is
+// the same rule where the answer has arrived and says no.
+func TestPromoteRefusesARefusedReadingItem(t *testing.T) {
+	for _, tc := range []struct{ position, state string }{
+		{"detection", issueschema.DispositionRejected},
+		{"widening", issueschema.DispositionDeclined},
+	} {
+		t.Run(tc.state, func(t *testing.T) {
+			repo, ir, item := readingFixture(t, tc.position)
+			if _, err := Disposition(DispositionRequest{
+				RepoRoot: repo, IssuesRoot: ir, Item: item,
+				State: tc.state, Grounds: "the constraint already covers it",
+			}); err != nil {
+				t.Fatalf("Disposition: %v", err)
+			}
+			before := draftCount(t, repo)
+
+			_, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: item})
+			if err == nil {
+				t.Fatalf("promoting a %s item must be refused", tc.state)
+			}
+			if !strings.Contains(err.Error(), tc.state) {
+				t.Fatalf("the refusal must name the standing answer; got %v", err)
+			}
+			if after := draftCount(t, repo); after != before {
+				t.Fatalf("a refused promote minted a draft (%d -> %d)", before, after)
+			}
+		})
+	}
+}
+
+// A held item is directional, not refused: it is still open, and the answer that
+// ends it is a superseding disposition. Promoting it would settle by action what
+// the hold left open, so it is refused too — and the refusal names the exit
+// condition, which is the thing that would have to happen first.
+func TestPromoteRefusesAHeldReadingItem(t *testing.T) {
+	repo, ir, item := readingFixture(t, "detection")
+	if _, err := Disposition(DispositionRequest{
+		RepoRoot: repo, IssuesRoot: ir, Item: item,
+		State: issueschema.DispositionHeld, ExitCondition: "the closing run returns it again",
+	}); err != nil {
+		t.Fatalf("Disposition: %v", err)
+	}
+
+	_, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: item})
+	if err == nil {
+		t.Fatal("promoting a held item must be refused")
+	}
+	if !strings.Contains(err.Error(), "held") {
+		t.Fatalf("the refusal must name the standing answer; got %v", err)
+	}
+}

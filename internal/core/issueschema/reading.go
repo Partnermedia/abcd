@@ -48,20 +48,27 @@ const (
 	DispositionsDir = "dispositions"
 )
 
-// ReadingPosition binds one reading position to the body its items carry.
+// ReadingPosition binds one reading position to the supply regime it implies and
+// the body its items carry.
 //
 // Two vocabularies meet here and both are load-bearing, so they are bound in one
 // place rather than left to agree by habit: Position is the value the envelope
-// carries (the instrument's own name for where it read from), and Body is the
-// design record's name for the item shape that position returns. Ruling (17) is
-// what makes the pair necessary — "detection" stays the name of the Step-6
-// instrument and of its REGISTRATIVE body — and a table that held only one of
-// the two names would leave the other to drift in prose.
+// carries (the instrument's own name for where it read from), and Regime is the
+// supply regime that position was read under, which also names the item body it
+// returns. Ruling (17) is what makes the pair necessary — "detection" stays the
+// name of the Step-6 instrument and of its REGISTRATIVE body — and a table that
+// held only one of the two names would leave the other to drift in prose.
+//
+// The regime is resolvable by position ALONE, which is the property ruling (4)
+// and ruling (18) rest on: it is stated in the reading's definition and no
+// operator input can set it. Binding the pair here is what lets the ingest check
+// that rather than take a caller's word for it.
 type ReadingPosition struct {
 	// Position is the envelope's `position` value.
 	Position string
-	// Body names the item body this position returns.
-	Body string
+	// Regime is the supply regime this position implies, and the name of the
+	// item body it returns.
+	Regime string
 	// Fields are the body properties an item at this position must carry. The
 	// pattern named is NOT among them: it is an envelope field, because a
 	// universal core condition must not live in a variant part (ruling (18)).
@@ -76,10 +83,10 @@ type ReadingPosition struct {
 // types would be four places for one schema to drift. So: one record type, an
 // untyped body, and the per-position required-field set held here as data.
 var ReadingPositions = []ReadingPosition{
-	{Position: "widening", Body: "generative", Fields: []string{"configuration", "what_admits_it"}},
-	{Position: "entailment", Body: "explicative", Fields: []string{"claim_surfaced", "claim_type", "what_implies_it"}},
-	{Position: "comparative", Body: "evaluative", Fields: []string{"candidate_id", "criterion", "characterisation"}},
-	{Position: "detection", Body: "registrative", Fields: []string{"tension", "constraint_in_play", "why_a_tension"}},
+	{Position: "widening", Regime: "generative", Fields: []string{"configuration", "what_admits_it"}},
+	{Position: "entailment", Regime: "explicative", Fields: []string{"claim_surfaced", "claim_type", "what_implies_it"}},
+	{Position: "comparative", Regime: "evaluative", Fields: []string{"candidate_id", "criterion", "characterisation"}},
+	{Position: "detection", Regime: "registrative", Fields: []string{"tension", "constraint_in_play", "why_a_tension"}},
 }
 
 // Positions is the position values alone, in ReadingPositions order — for a
@@ -210,14 +217,16 @@ var ReservedHoldFields = []string{"hold_frame_location", "hold_moscow"}
 // HoldMoscowValues is the stated (dormant) grammar of the MoSCoW axis.
 var HoldMoscowValues = []string{"must", "should", "could", "wont"}
 
-// ReadingBodyName is the design record's name for the body a position returns
-// ("registrative" for the detection position, and so on). It is what a refusal
-// quotes, so a message names the shape the reader will look up rather than only
-// the position that produced it.
-func ReadingBodyName(position string) string {
+// ReadingRegime is the supply regime a position implies ("registrative" for the
+// detection position, and so on) — also the design record's name for the body
+// that position returns, which is why a refusal quotes it: a message then names
+// the shape the reader will look up rather than only the position that produced
+// it. An unknown position yields "", which the caller reports as an unknown
+// position rather than as a regime mismatch.
+func ReadingRegime(position string) string {
 	for _, p := range ReadingPositions {
 		if p.Position == position {
-			return p.Body
+			return p.Regime
 		}
 	}
 	return ""

@@ -330,7 +330,7 @@ func readingFields(repoRoot, id string, req IngestReadingRequest, item ReadingIt
 		{"schema_version", 1},
 		{"id", id},
 		{"run", req.Run},
-		{"manifest", req.Manifest},
+		{"manifest", scrub(req.Manifest)},
 		{"position", req.Position},
 		{"regime", req.Regime},
 		{"pattern", scrub(item.Pattern)},
@@ -339,7 +339,7 @@ func readingFields(repoRoot, id string, req IngestReadingRequest, item ReadingIt
 		"schema_version": 1,
 		"id":             id,
 		"run":            req.Run,
-		"manifest":       req.Manifest,
+		"manifest":       fields[3].val,
 		"position":       req.Position,
 		"regime":         req.Regime,
 		"pattern":        fields[len(fields)-1].val,
@@ -453,6 +453,15 @@ func validateReadingStrict(fm map[string]any) error {
 		return fmt.Errorf("%w: position %q is not one of {%s}",
 			ErrMalformedFrontmatter, position, strings.Join(issueschema.Positions, ", "))
 	}
+	// The supply regime is resolved from the definition THROUGH the position, so
+	// no operator input can set it (rulings (4) and (18)). Accepting it as free
+	// text would leave the one field whose whole purpose is to be underivable by
+	// the caller derivable by the caller — and a record whose regime disagrees
+	// with its own position says nothing about what it was read under.
+	if regime := fm["regime"].(string); regime != issueschema.ReadingRegime(position) {
+		return fmt.Errorf("%w: regime %q is not the regime the %s position implies (%s); the regime is resolved from the reading's definition through its position and is never supplied",
+			ErrInvariantViolation, regime, position, issueschema.ReadingRegime(position))
+	}
 
 	// One record type, four bodies: the item carries the body its own position
 	// declares, and no other. A field belonging to a different position is a known
@@ -463,7 +472,7 @@ func validateReadingStrict(fm map[string]any) error {
 		declared[f] = true
 		if err := requireNonBlankString(fm, f); err != nil {
 			return fmt.Errorf("%w (the %s body, which the %s position returns, is %s)",
-				err, issueschema.ReadingBodyName(position), position, strings.Join(want, " · "))
+				err, issueschema.ReadingRegime(position), position, strings.Join(want, " · "))
 		}
 	}
 	for k := range fm {

@@ -18,7 +18,7 @@ func readingFixture(t *testing.T, position string) (repo, ir, item string) {
 	res, err := IngestReading(IngestReadingRequest{
 		RepoRoot: repo, IssuesRoot: ir,
 		Run: "rdg-2608300000000001", Manifest: "sha256:" + strings.Repeat("a", 64),
-		Position: position, Regime: "supplied",
+		Position: position, Regime: issueschema.ReadingRegime(position),
 		Items: []ReadingItem{{Pattern: "a stated constraint", Body: bodyFor(position)}},
 	})
 	if err != nil {
@@ -49,7 +49,7 @@ func TestReadingRecordRefusesUnknownProperty(t *testing.T) {
 	_, err := IngestReading(IngestReadingRequest{
 		RepoRoot: repo, IssuesRoot: ir,
 		Run: "rdg-2608300000000001", Manifest: "sha256:beef",
-		Position: "detection", Regime: "supplied",
+		Position: "detection", Regime: "registrative",
 		Items: []ReadingItem{{
 			Pattern: "a stated constraint",
 			Body:    map[string]string{"tension": "t", "constraint_in_play": "c", "why_a_tension": "w", "vibes": "no"},
@@ -77,7 +77,7 @@ func TestReadingRecordRequiresPositionBodyFields(t *testing.T) {
 				_, err := IngestReading(IngestReadingRequest{
 					RepoRoot: repo, IssuesRoot: ir,
 					Run: "rdg-2608300000000001", Manifest: "sha256:beef",
-					Position: p.Position, Regime: "supplied",
+					Position: p.Position, Regime: p.Regime,
 					Items: []ReadingItem{{Pattern: "a stated constraint", Body: body}},
 				})
 				if !errors.Is(err, ErrMissingRequiredField) {
@@ -199,7 +199,7 @@ func TestPopulatedSurpriseKeyRefused(t *testing.T) {
 	_, err := IngestReading(IngestReadingRequest{
 		RepoRoot: repo, IssuesRoot: ir,
 		Run: "rdg-2608300000000001", Manifest: "sha256:beef",
-		Position: "detection", Regime: "supplied",
+		Position: "detection", Regime: "registrative",
 		Items: []ReadingItem{{
 			Pattern: "a stated constraint", Body: bodyFor("detection"),
 			OccasionedBy: "iss-1",
@@ -260,5 +260,74 @@ func TestRefuseExistingRecordGuardsAnIrreversibleWrite(t *testing.T) {
 	}
 	if !strings.Contains(string(content), "a file abcd did not write") {
 		t.Fatal("the refused write must leave the existing file untouched")
+	}
+}
+
+// The supply regime is resolved from the definition THROUGH the position, so no
+// operator input can set it (ruling (4), ruling (18)). Validating it as a free
+// string would leave the one field whose whole purpose is to be underivable by
+// the caller derivable by the caller: the record must say which regime it was
+// read under, and a regime that disagrees with its own position says nothing.
+func TestIngestRefusesARegimeThePositionDoesNotImply(t *testing.T) {
+	repo, ir := ledger(t)
+	_, err := IngestReading(IngestReadingRequest{
+		RepoRoot: repo, IssuesRoot: ir,
+		Run: "rdg-2608300000000001", Manifest: "sha256:beef",
+		Position: "detection", Regime: "generative",
+		Items: []ReadingItem{{Pattern: "a stated constraint", Body: bodyFor("detection")}},
+	})
+	if !errors.Is(err, ErrInvariantViolation) {
+		t.Fatalf("a regime the position does not imply: err = %v, want ErrInvariantViolation", err)
+	}
+	if !strings.Contains(err.Error(), "generative") || !strings.Contains(err.Error(), "registrative") {
+		t.Fatalf("the refusal must name the regime given and the one the position implies; got %v", err)
+	}
+}
+
+// Every position implies exactly one regime, and an ingest that states it
+// correctly is accepted — the gate above must not be a gate on all four.
+func TestIngestAcceptsThePositionsOwnRegime(t *testing.T) {
+	for _, p := range issueschema.ReadingPositions {
+		t.Run(p.Position, func(t *testing.T) {
+			repo, ir := ledger(t)
+			if _, err := IngestReading(IngestReadingRequest{
+				RepoRoot: repo, IssuesRoot: ir,
+				Run: "rdg-2608300000000001", Manifest: "sha256:beef",
+				Position: p.Position, Regime: issueschema.ReadingRegime(p.Position),
+				Items: []ReadingItem{{Pattern: "a stated constraint", Body: bodyFor(p.Position)}},
+			}); err != nil {
+				t.Fatalf("IngestReading at %s: %v", p.Position, err)
+			}
+		})
+	}
+}
+
+// The manifest reference is free text an instrument hands over, and it lands in
+// the committed ledger like every other free-text value here. Writing it verbatim
+// is the same leak the ledger redactor exists to close — nothing upstream
+// constrains what it holds.
+func TestIngestRedactsTheManifestReference(t *testing.T) {
+	repo, ir := ledger(t)
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	res, err := IngestReading(IngestReadingRequest{
+		RepoRoot: repo, IssuesRoot: ir,
+		Run: "rdg-2608300000000001", Manifest: filepath.Join(home, "runs", "manifest.json"),
+		Position: "detection", Regime: "registrative",
+		Items: []ReadingItem{{Pattern: "a stated constraint", Body: bodyFor("detection")}},
+	})
+	if err != nil {
+		t.Fatalf("IngestReading: %v", err)
+	}
+	if res.Redacted == 0 {
+		t.Fatal("Redacted = 0, want the home path in the manifest reference counted")
+	}
+	content, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(res.Records[0].Path)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(content), home) {
+		t.Fatalf("the committed reading record carries the caller's home root:\n%s", content)
 	}
 }
