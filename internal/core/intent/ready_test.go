@@ -730,3 +730,35 @@ func TestReadyGroundsExemptInTerminalBuckets(t *testing.T) {
 		}
 	}
 }
+
+// TestGroundsExemptionIsNotTheClaimExemption is the third nit of
+// iss-2608301657350399: groundsCheck reused claimCheckExemption, so the grounds
+// row of a shipped record reported "a shipped record's CLAIMS are never
+// backfilled" — a true sentence about a check that is not the one reporting it,
+// the same detail-string class as the resolved iss-2608300210588414.
+//
+// The assertion is that the two rows do not report the SAME STRING, not that the
+// grounds row avoids some particular word. One string doing two jobs is the
+// defect itself, and identity is what no rewording of either sentence can
+// satisfy while the reuse is still there.
+func TestGroundsExemptionIsNotTheClaimExemption(t *testing.T) {
+	for _, bucket := range []string{BucketShipped, BucketSuperseded, BucketDisciplines} {
+		it := Intent{ID: "itd-1", Bucket: bucket}
+		got := groundsCheck(it, "")
+		if !got.OK {
+			t.Fatalf("%s: the grounds row is exempt, so it must pass: %+v", bucket, got)
+		}
+		claim, exempt := claimCheckExemption(it)
+		if !exempt {
+			t.Fatalf("%s: the claim check is expected to be exempt here too", bucket)
+		}
+		if got.Detail == claim {
+			t.Errorf("%s: the grounds row reports the CLAIM check's exemption verbatim: %q", bucket, got.Detail)
+		}
+		// And it says what it is about, so the fix is a different sentence rather
+		// than an empty one.
+		if !strings.Contains(got.Detail, "grounds") && !strings.Contains(got.Detail, "conjecture") {
+			t.Errorf("%s: the grounds row names neither grounds nor the conjecture: %q", bucket, got.Detail)
+		}
+	}
+}
