@@ -2358,6 +2358,13 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 						fmt.Fprintf(w, "  outstanding %s (run %s) — no disposition\n",
 							termsafe.Sanitize(o.Item), termsafe.Sanitize(o.Run))
 					}
+					// An item answered twice and standing none is a fault, not an
+					// unanswered item, and saying "carries no disposition" about it
+					// would be a confident wrong statement.
+					for _, c := range board.Outstanding.Cyclic {
+						fmt.Fprintf(w, "  tangled %s (run %s) — its dispositions supersede one another, so none stands\n",
+							termsafe.Sanitize(c.Item), termsafe.Sanitize(c.Run))
+					}
 					// A tree the walk declined to enter is named, because a tree
 					// nobody walked looks exactly like a tree with nothing in it.
 					for _, u := range board.Outstanding.Unsafe {
@@ -2867,6 +2874,9 @@ func captureBoardOf(repoRoot string, st capture.StatusResult) (captureBoard, err
 	}
 	if report.Unsafe == nil {
 		report.Unsafe = []string{}
+	}
+	if report.Cyclic == nil {
+		report.Cyclic = []lint.OutstandingItem{}
 	}
 	return captureBoard{StatusResult: st, Outstanding: report}, nil
 }

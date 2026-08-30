@@ -182,3 +182,41 @@ func TestSymlinkedReadingTreesAreReportedNotSkippedSilently(t *testing.T) {
 		})
 	}
 }
+
+// An item whose dispositions supersede each other in a cycle carries answers and
+// stands none. Reporting it as "carries no disposition" would be a confident
+// wrong statement — the item has been answered twice — and would invite exactly
+// the fresh uncited answer the verb refuses. The board names the fault instead.
+func TestSupersessionCycleIsReportedAsAFaultNotAsOutstanding(t *testing.T) {
+	run, item := "rdg-2608300000000001", "rdi-2608300000000002"
+	root := readingLedger(t, run, item, "detection")
+	writeFile(t, root, ".abcd/work/issues/dispositions/"+item+"/dsp-2608300000000003.md",
+		"---\nschema_version: 1\nid: \"dsp-2608300000000003\"\nitem: \""+item+"\"\n"+
+			"state: \"accepted\"\ndisposition_grounds: \"a\"\nsupersedes_disposition: \"dsp-2608300000000004\"\n---\n\n")
+	writeFile(t, root, ".abcd/work/issues/dispositions/"+item+"/dsp-2608300000000004.md",
+		"---\nschema_version: 1\nid: \"dsp-2608300000000004\"\nitem: \""+item+"\"\n"+
+			"state: \"rejected\"\ndisposition_grounds: \"b\"\nsupersedes_disposition: \"dsp-2608300000000003\"\n---\n\n")
+
+	fs, err := Lint(readingOutstandingConfig(severityBlocker), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saidFault bool
+	for _, f := range fs {
+		if f.RuleID != ruleReadingOutstanding {
+			continue
+		}
+		if strings.Contains(f.Message, "carries no disposition") {
+			t.Errorf("an item answered twice must not be reported as unanswered: %s", f.Message)
+		}
+		if strings.Contains(f.Message, "supersede") {
+			saidFault = true
+			if f.Severity != severityInfo {
+				t.Errorf("severity = %q, want %q — this report never gates", f.Severity, severityInfo)
+			}
+		}
+	}
+	if !saidFault {
+		t.Fatalf("the supersession cycle went unreported; findings: %+v", fs)
+	}
+}

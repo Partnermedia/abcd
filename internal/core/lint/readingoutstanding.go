@@ -65,13 +65,20 @@ type OutstandingReadings struct {
 	// outstanding items" is the one answer this report must never give by
 	// accident.
 	Unsafe []string `json:"unsafe,omitempty"`
+	// Cyclic names items whose dispositions supersede one another, so every
+	// answer is retired and none stands. It is a ledger fault, not an unanswered
+	// item: reporting it as outstanding would be a confident wrong statement about
+	// an item that has been answered twice, and would invite exactly the fresh
+	// uncited answer the write path refuses.
+	Cyclic []OutstandingItem `json:"cyclic,omitempty"`
 }
 
 // Empty reports whether there is nothing outstanding — the ordinary state of a
 // repository that has commissioned no reading, and the state a surface renders
 // as silence rather than as a heading with nothing under it.
 func (r OutstandingReadings) Empty() bool {
-	return len(r.Undispositioned) == 0 && len(r.OpenHolds) == 0 && len(r.Unsafe) == 0
+	return len(r.Undispositioned) == 0 && len(r.OpenHolds) == 0 &&
+		len(r.Unsafe) == 0 && len(r.Cyclic) == 0
 }
 
 // ReadReadingOutstanding builds the report from the ledger at issuesDir
@@ -131,11 +138,15 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 				// wrong statement, and the Unsafe line above already says why.
 				continue
 			}
-			standing, err := standingDisposition(issuesRoot, issuesDir, item)
+			standing, cyclic, err := standingDisposition(issuesRoot, issuesDir, item)
 			if err != nil {
 				return OutstandingReadings{}, err
 			}
 			switch {
+			case cyclic:
+				report.Cyclic = append(report.Cyclic, OutstandingItem{
+					Item: item, Run: run.Name(), Path: filepath.ToSlash(rel),
+				})
 			case standing == nil:
 				report.Undispositioned = append(report.Undispositioned, OutstandingItem{
 					Item: item, Run: run.Name(), Path: filepath.ToSlash(rel),
@@ -156,6 +167,7 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 	sort.Slice(report.OpenHolds, func(i, j int) bool {
 		return report.OpenHolds[i].Item < report.OpenHolds[j].Item
 	})
+	sort.Slice(report.Cyclic, func(i, j int) bool { return report.Cyclic[i].Item < report.Cyclic[j].Item })
 	sort.Strings(report.Unsafe)
 	return report, nil
 }
@@ -180,18 +192,20 @@ type standingRecord struct {
 }
 
 // standingDisposition returns the disposition of item that no sibling
-// supersedes, or nil when the item is unanswered.
-func standingDisposition(issuesRoot, issuesDir, item string) (*standingRecord, error) {
+// supersedes, or nil when the item is unanswered. It also reports whether the
+// item's dispositions form a supersession CYCLE — records present and none
+// standing — which is a different fact from "nobody has answered it".
+func standingDisposition(issuesRoot, issuesDir, item string) (*standingRecord, bool, error) {
 	itemDir := filepath.Join(issuesRoot, issueschema.DispositionsDir, item)
 	if !realDir(itemDir) {
-		return nil, nil
+		return nil, false, nil
 	}
 	entries, err := os.ReadDir(itemDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return nil, false, nil
 		}
-		return nil, err
+		return nil, false, err
 	}
 	var records []issueschema.DispositionRecord
 	rel := map[string]string{}
@@ -208,7 +222,7 @@ func standingDisposition(issuesRoot, issuesDir, item string) (*standingRecord, e
 		}
 		content, err := os.ReadFile(filepath.Join(itemDir, e.Name()))
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		records = append(records, issueschema.ParseDisposition(id, string(content)))
 		rel[id] = filepath.Join(issuesDir, issueschema.DispositionsDir, item, e.Name())
@@ -220,7 +234,10 @@ func standingDisposition(issuesRoot, issuesDir, item string) (*standingRecord, e
 	// the board and the verb cannot disagree about what is in force.
 	standing := issueschema.StandingDispositionIDs(records)
 	if len(standing) == 0 {
-		return nil, nil
+		// Records present with nothing standing is a supersession CYCLE; no
+		// records at all is simply an item nobody has answered. Rendering the two
+		// the same way would announce an item answered twice as unanswered.
+		return nil, len(records) > 0, nil
 	}
 	// More than one standing answer is a ledger fault the write path refuses.
 	// Reporting the FIRST by id keeps this report deterministic; naming the fault
@@ -231,9 +248,9 @@ func standingDisposition(issuesRoot, issuesDir, item string) (*standingRecord, e
 		}
 		return &standingRecord{
 			id: r.ID, state: r.State, exitCondition: r.ExitCondition, rel: rel[r.ID],
-		}, nil
+		}, false, nil
 	}
-	return nil, nil
+	return nil, false, nil
 }
 
 // checkReadingOutstanding renders the report as findings, every one of them at
@@ -259,6 +276,14 @@ func checkReadingOutstanding(repoRoot string, cfg RuleConfig) ([]Finding, error)
 			Message: "this is not a real directory (a symlink, or not a directory at all), so the reading walk did not enter it — " +
 				"the items under it are neither reported outstanding nor confirmed answered. " +
 				"`abcd capture` refuses to read the reading trees through a link, because its read is followed by a write",
+		})
+	}
+	for _, c := range report.Cyclic {
+		out = append(out, Finding{
+			File: c.Path, Line: 1, RuleID: ruleReadingOutstanding, Severity: severityInfo,
+			Message: c.Item + " (run " + c.Run + ") carries dispositions that supersede one another, so none stands — " +
+				"a ledger fault, not an unanswered item. No write path can produce it and only a hand edit can repair it; " +
+				"`abcd capture disposition " + c.Item + "` refuses until it is untied",
 		})
 	}
 	for _, h := range report.OpenHolds {

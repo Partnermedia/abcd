@@ -111,12 +111,20 @@ func ParseDisposition(id, content string) DispositionRecord {
 		values[key] = strings.Trim(strings.TrimSpace(value), `"'`)
 	}
 
+	// A record citing ITSELF is not well-formed. Honouring the citation would
+	// supersede the record out of the standing set, so an item plainly carrying an
+	// answer would read as carrying none — the verb would accept a fresh uncited
+	// answer and the board would report it outstanding. Nothing legitimate spells
+	// it: a supersession names the answer being replaced, and no record replaces
+	// itself.
+	if s := values["supersedes_disposition"]; s == id {
+		return DispositionRecord{ID: id}
+	} else if dispositionIDRe.MatchString(s) {
+		rec.Supersedes = s
+	}
 	rec.WellFormed = true
 	rec.State = values["state"]
 	rec.ExitCondition = values["exit_condition"]
-	if s := values["supersedes_disposition"]; dispositionIDRe.MatchString(s) {
-		rec.Supersedes = s
-	}
 	return rec
 }
 

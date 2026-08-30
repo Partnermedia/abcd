@@ -370,6 +370,12 @@ func standingDispositionState(issuesRoot, item string, standing []string) (strin
 			ErrInvariantViolation, item, len(standing), renderList(standing))
 	}
 	path := filepath.Join(issuesRoot, issueschema.DispositionsDir, item, standing[0]+".md")
+	// The third reader of a disposition file, and it needs the same guard as the
+	// other two: the state read here is what licenses the stamp, so a symlinked
+	// record would license it from outside the ledger.
+	if err := refuseSymlinkedFile(path); err != nil {
+		return "", err
+	}
 	content, _, err := readWithChecksum(path)
 	if err != nil {
 		return "", err

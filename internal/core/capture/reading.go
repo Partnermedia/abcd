@@ -753,7 +753,19 @@ func standingDispositions(itemDir string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return issueschema.StandingDispositionIDs(records), nil
+	standing := issueschema.StandingDispositionIDs(records)
+	// Records present and NOTHING standing is a supersession cycle: every answer
+	// retired by another, so an item carrying several reads as carrying none. That
+	// is a ledger fault, not an unanswered item, and the difference is the whole
+	// point — treating it as unanswered would let the verb write a fresh uncited
+	// answer on top of a tangle nobody has untied. It can only be reached by hand
+	// (the verb refuses a second answer that supersedes nothing, and --supersedes
+	// must name a STANDING id), so untying it by hand is the remedy.
+	if len(records) > 0 && len(standing) == 0 {
+		return nil, fmt.Errorf("%w: every disposition of %s is superseded by another, so none stands — a supersession cycle in %s, which no write path can produce and only a hand edit can repair",
+			ErrInvariantViolation, filepath.Base(itemDir), filepath.Base(itemDir))
+	}
+	return standing, nil
 }
 
 // readDispositions reads one item's disposition directory into the shared record

@@ -426,3 +426,76 @@ func TestSymlinkedDispositionFileRefused(t *testing.T) {
 		t.Fatalf("a symlinked disposition file: err = %v, want ErrPathUnsafe", err)
 	}
 }
+
+// writeRawDisposition drops a disposition into an item's directory by hand,
+// which is the only way the two faults below can arise: the verb refuses a second
+// answer that does not supersede a standing one, and --supersedes must name a
+// standing id, so neither a self-citation nor a cycle can be written through it.
+func writeRawDisposition(t *testing.T, ir, item, id, state, supersedes string) {
+	t.Helper()
+	dir := filepath.Join(ir, issueschema.DispositionsDir, item)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := "---\nschema_version: 1\nid: \"" + id + "\"\nitem: \"" + item + "\"\nstate: \"" + state + "\"\n" +
+		"disposition_grounds: \"by hand\"\n"
+	if supersedes != "" {
+		body += "supersedes_disposition: \"" + supersedes + "\"\n"
+	}
+	if err := os.WriteFile(filepath.Join(dir, id+".md"), []byte(body+"---\n\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A disposition citing ITSELF retires nothing. Honouring the citation would make
+// the record supersede itself out of the standing set, leaving the item reading
+// as undispositioned — so the verb would accept a fresh uncited answer and the
+// board would report an item that plainly carries one as unanswered.
+func TestSelfSupersedingDispositionRetiresNothing(t *testing.T) {
+	repo, ir, item := readingFixture(t, "detection")
+	writeRawDisposition(t, ir, item, "dsp-2608300000000001", "accepted", "dsp-2608300000000001")
+
+	standing, err := standingDispositions(filepath.Join(ir, issueschema.DispositionsDir, item))
+	if err != nil {
+		t.Fatalf("standingDispositions: %v", err)
+	}
+	if len(standing) != 1 || standing[0] != "dsp-2608300000000001" {
+		t.Fatalf("standing = %v, want the self-citing record to stand", standing)
+	}
+	_, err = Disposition(DispositionRequest{
+		RepoRoot: repo, IssuesRoot: ir, Item: item,
+		State: issueschema.DispositionAccepted, Grounds: "a second answer",
+	})
+	if !errors.Is(err, ErrInvariantViolation) {
+		t.Fatalf("a second answer beside a standing one: err = %v, want ErrInvariantViolation", err)
+	}
+}
+
+// Two dispositions superseding each other leave NOTHING standing over a
+// non-empty set — every answer retired, and an item that carries two answers
+// reading as though it carries none. It is a ledger fault, not an unanswered
+// item, and the difference matters: the verb must not accept a fresh uncited
+// answer on top of it, and the board must not report it as outstanding.
+func TestSupersessionCycleIsALedgerFault(t *testing.T) {
+	repo, ir, item := readingFixture(t, "detection")
+	writeRawDisposition(t, ir, item, "dsp-2608300000000001", "accepted", "dsp-2608300000000002")
+	writeRawDisposition(t, ir, item, "dsp-2608300000000002", "rejected", "dsp-2608300000000001")
+
+	_, err := standingDispositions(filepath.Join(ir, issueschema.DispositionsDir, item))
+	if !errors.Is(err, ErrInvariantViolation) {
+		t.Fatalf("a supersession cycle: err = %v, want ErrInvariantViolation", err)
+	}
+	if !strings.Contains(err.Error(), item) {
+		t.Fatalf("the refusal must name the item; got %v", err)
+	}
+
+	if _, err := Disposition(DispositionRequest{
+		RepoRoot: repo, IssuesRoot: ir, Item: item,
+		State: issueschema.DispositionAccepted, Grounds: "a fresh answer",
+	}); !errors.Is(err, ErrInvariantViolation) {
+		t.Fatalf("Disposition over a cycle: err = %v, want ErrInvariantViolation", err)
+	}
+	if _, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: item}); !errors.Is(err, ErrInvariantViolation) {
+		t.Fatalf("Promote over a cycle: err = %v, want ErrInvariantViolation", err)
+	}
+}
