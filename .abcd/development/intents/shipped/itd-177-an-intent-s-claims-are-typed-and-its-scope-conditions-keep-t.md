@@ -26,8 +26,8 @@ adr-45 mint.
 > declared, explicitly, as "none stated". Each scope condition carries a
 > persistent identity, so when its text is edited the condition is still the
 > same condition, and the disposition that later attaches to it (survived,
-> narrowed, falsified, untested) attaches to the claim rather than to a
-> sentence that no longer exists.
+> narrowed, falsified, untested) attaches to the claim rather than to
+> wording that an edit replaces.
 
 ## What's In Scope
 
