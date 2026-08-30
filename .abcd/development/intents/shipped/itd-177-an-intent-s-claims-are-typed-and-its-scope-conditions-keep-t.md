@@ -80,3 +80,7 @@ None stated.
   **when** the readiness gate runs, **then** the gate exits non-zero and
   names the fault.
 
+## Audit Notes
+
+<!-- abcd-review: OWED receipt=rcp-8ca51595aa96 -->
+Fidelity review OWED (receipt rcp-8ca51595aa96).

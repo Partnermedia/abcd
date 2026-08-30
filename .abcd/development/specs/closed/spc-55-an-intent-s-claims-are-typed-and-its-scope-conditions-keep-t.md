@@ -8,7 +8,7 @@ intent: itd-177
 
 ## Summary
 
-spc-55 delivers [itd-177](../../intents/planned/itd-177-an-intent-s-claims-are-typed-and-its-scope-conditions-keep-t.md):
+spc-55 delivers [itd-177](../../intents/shipped/itd-177-an-intent-s-claims-are-typed-and-its-scope-conditions-keep-t.md):
 the intent record's three claim kinds become machine-readable, and every scope
 condition gains a minted identity that survives a rewrite of its own text. The
 recording requirements themselves are not this spec's to invent: they are the
@@ -18,7 +18,7 @@ rule, and the two sections are
 format. What lands here is the parse, the mint, the render, and the refusal.
 
 The identity is the load-bearing half. A disposition attaches to a condition,
-not to a sentence, so [spc-59](spc-59-a-shipped-intent-s-scope-conditions-are-dispositioned-by-the.md)
+not to a sentence, so [spc-59](../open/spc-59-a-shipped-intent-s-scope-conditions-are-dispositioned-by-the.md)
 has something stable to key on when the fidelity verdict arrives.
 
 ## Scope
