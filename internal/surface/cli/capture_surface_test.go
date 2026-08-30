@@ -626,3 +626,37 @@ func TestCaptureGroundsReachTheRecord(t *testing.T) {
 		t.Fatalf("wontfix did not derive its declined grounds:\n%s", readRecord(declined))
 	}
 }
+
+// TestCaptureMalformedGroundsExit2 closes the uneven half of
+// iss-2608300930057882: a MISSING --grounds exited 2 while a MALFORMED one
+// exited 1, so a caller distinguishing usage errors from real failures learned
+// the wrong thing from the same flag. Every grounds refusal is a usage error.
+func TestCaptureMalformedGroundsExit2(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	capOut := runCLI(t, "capture", "an observation that may turn out to be a capability", "--json")
+	var minted struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(capOut, &minted); err != nil || minted.ID == "" {
+		t.Fatalf("capture envelope unreadable: %v\n%s", err, capOut)
+	}
+
+	for _, bad := range []string{
+		"planned: out of vocabulary entirely",
+		"no token at all in this operand",
+		"pursued: yes",
+	} {
+		for _, args := range [][]string{
+			{"capture", "promote", minted.ID, "--grounds", bad},
+			{"capture", "resolve", minted.ID, "fixed", "--impact", "fix", "--grounds", bad},
+			{"capture", "wontfix", minted.ID, "no", "--grounds", bad},
+		} {
+			_, err := runCLIErr(t, args...)
+			if exitCodeOf(err) != 2 {
+				t.Fatalf("%v with %q: exit = %d (%v), want 2", args[:2], bad, exitCodeOf(err), err)
+			}
+		}
+	}
+}

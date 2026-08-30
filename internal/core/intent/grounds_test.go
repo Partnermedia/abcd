@@ -214,3 +214,51 @@ func TestRecordGroundsRefusesTextThatMasksTheRecord(t *testing.T) {
 		t.Fatalf("the scope-conditions claim reads as %q, want the nullity it carried", c.ConditionsState)
 	}
 }
+
+// TestParseGroundsSkipsSubFloorEntry: the readiness gate claims a substance
+// floor, so the reader has to apply it. A hand-typed `- pursued: yes` is not an
+// entry — it clears the grammar and records nothing — and admitting it let the
+// seventh check pass on a record that answers nothing (iss-2608300930057882).
+func TestParseGroundsSkipsSubFloorEntry(t *testing.T) {
+	content := plannedUnlinked("itd-10", "alpha") + "\n## Grounds\n\n- pursued: yes\n"
+	if got := ParseGrounds(content); len(got) != 0 {
+		t.Fatalf("ParseGrounds read %d entries from a sub-floor bullet, want 0: %+v", len(got), got)
+	}
+	root := t.TempDir()
+	writeFile(t, root, plannedDir+"/itd-10-alpha.md", content)
+	res, err := Ready(root, "itd-10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g := checkByName(t, res, CheckGrounds); g.OK {
+		t.Fatalf("grounds check = %+v, want a refusal on a sub-floor entry", g)
+	}
+}
+
+// TestRecordGroundsRefusesTerminalBuckets: population is forward-only, and the
+// readiness gate says so by exempting shipped/ and superseded/ records from the
+// grounds check. A writer that backfills them anyway makes that exemption a lie
+// (iss-2608300930057882).
+func TestRecordGroundsRefusesTerminalBuckets(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, shippedDir+"/itd-10-alpha.md", plannedUnlinked("itd-10", "alpha"))
+	writeFile(t, root, supersededDir+"/itd-11-beta.md", plannedUnlinked("itd-11", "beta"))
+	writeFile(t, root, plannedDir+"/itd-12-gamma.md", plannedUnlinked("itd-12", "gamma"))
+
+	g := mustGrounds(t, grounds.Pursued, "we expect a forward-only rule to be enforced by the writer, not only claimed by the gate")
+	for _, id := range []string{"itd-10", "itd-11"} {
+		if _, err := RecordGrounds(root, id, g); err == nil {
+			t.Fatalf("RecordGrounds on a terminal-bucket record (%s) = nil error, want a refusal", id)
+		}
+	}
+	for _, rel := range []string{shippedDir + "/itd-10-alpha.md", supersededDir + "/itd-11-beta.md"} {
+		if strings.Contains(readIntent(t, root, rel), "## "+GroundsHeading) {
+			t.Fatalf("a refused call still wrote to %s", rel)
+		}
+	}
+	// A planned record is unaffected: the rule is about backfilling, not about
+	// recording.
+	if _, err := RecordGrounds(root, "itd-12", g); err != nil {
+		t.Fatalf("RecordGrounds on a planned record = %v, want it accepted", err)
+	}
+}
