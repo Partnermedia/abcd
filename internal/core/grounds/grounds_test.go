@@ -146,3 +146,37 @@ func TestGroundsFloorCountsLettersNotRunes(t *testing.T) {
 		t.Fatalf("New(%q) = %v, want the conjecture accepted", conjecture, err)
 	}
 }
+
+// TestGroundsRefusesControlCharacters is iss-2608301206032013: Go's RE2 `\s`
+// excludes the vertical tab, so Fold carried U+000B through and the pre-mint
+// gate passed a value the frontmatter serialiser then rejected under the ledger
+// lock — after the draft had been minted. The argument boundary refuses exactly
+// what yamlScalar refuses, so no route reaches the serialiser carrying one.
+func TestGroundsRefusesControlCharacters(t *testing.T) {
+	for name, text := range map[string]string{
+		"vertical tab": "we expect the gate\vto refuse a control character",
+		"NUL":          "we expect the gate\x00to refuse a control character",
+		"bell":         "we expect the gate\ato refuse a control character",
+		"escape":       "we expect the gate\x1bto refuse a control character",
+		"tab-adjacent": "we expect the gate to\v refuse a control character",
+	} {
+		if _, err := New(Pursued, text); err == nil {
+			t.Fatalf("%s: New(%q) = nil error, want a refusal", name, text)
+		}
+		if err := ValidateText(Fold(text)); err == nil {
+			t.Fatalf("%s: ValidateText = nil error, want a refusal", name)
+		}
+	}
+	// The whitespace Fold already normalises is not a control-character refusal:
+	// a multi-line operand is folded, not rejected, and a control character at
+	// either END is trimmed away by Fold before the text is judged — it is not in
+	// the value, so there is nothing to refuse.
+	for name, text := range map[string]string{
+		"folded multi-line":  "we expect a stamped identity\n\tto survive rewording",
+		"trimmed at the end": "\vwe expect a stamped identity to survive rewording\v",
+	} {
+		if _, err := New(Pursued, text); err != nil {
+			t.Fatalf("%s: New = %v, want it accepted", name, err)
+		}
+	}
+}
