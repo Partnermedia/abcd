@@ -143,10 +143,16 @@ off the keyed reading record — never from a flag, because a caller-supplied
 position would let a disposition assert the rule it has to satisfy.
 
 `--grounds` is required on every state except `held`. A second answer to one
-item must cite the standing one with `--supersedes <dsp-N>`: the standing
-disposition of an item is the one no sibling supersedes, and the superseded
-record stays in place, because a hold that vanished when it was answered would
-take its own exit condition with it. `--recurs` cites prior item ids — the
+item must cite the standing one with `--supersedes <dsp-N>`. Where **more than
+one** answer already stands — two branches each answered the item and merged
+cleanly — the verb refuses instead: a fresh answer supersedes at most one of them
+and adds its own, so the contest would never shrink. Write
+`supersedes_disposition` into the records that are no longer meant to stand, by
+hand, until exactly one does.
+
+The standing disposition of an item is the one no sibling supersedes, and the
+superseded record stays in place, because a hold that vanished when it was
+answered would take its own exit condition with it. `--recurs` cites prior item ids — the
 recorded form of a warm recognition that something has come back, never a
 mechanical join and never a state of its own.
 

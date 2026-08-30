@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/intentdriven/abcd/internal/core/issueschema"
 )
 
 // readingLedger writes one reading record and returns the repo root, so each
@@ -328,5 +330,76 @@ func TestUnreadableStandingAnswerIsReportedNotVanished(t *testing.T) {
 	}
 	if !said {
 		t.Fatalf("the unreadable standing answer went unreported; findings: %+v", fs)
+	}
+}
+
+// A symlinked rdi-N.md was admitted as a real item: the board reported it
+// outstanding, and the very verb it told the reader to run then refused to touch
+// it. The dispositions tree already routes a non-regular entry to Unsafe; the
+// reading tree has to do the same, and for the same reason — an item the walk
+// cannot read is not an item nobody has answered.
+func TestSymlinkedReadingItemFileIsUnsafeNotOutstanding(t *testing.T) {
+	run, item := "rdg-2608300000000001", "rdi-2608300000000002"
+	root := readingLedger(t, run, item, "detection")
+	itemFile := filepath.Join(root, filepath.FromSlash(".abcd/work/issues/readings/"+run+"/"+item+".md"))
+	if err := os.Remove(itemFile); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(t.TempDir(), itemFile); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	report, err := ReadReadingOutstanding(root, ".abcd/work/issues")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Undispositioned) != 0 {
+		t.Fatalf("a symlinked item file must not be reported outstanding: %+v", report.Undispositioned)
+	}
+	if len(report.Unsafe) != 1 {
+		t.Fatalf("a symlinked item file must be reported unreadable: %+v", report)
+	}
+
+	fs, err := Lint(readingOutstandingConfig(severityBlocker), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range fs {
+		if f.RuleID == ruleReadingOutstanding && strings.Contains(f.Message, "carries no disposition") {
+			t.Fatalf("the board told the reader to answer an item it could not read: %s", f.Message)
+		}
+	}
+}
+
+// Every guarded-read failure was rendered with the not-a-real-directory wording,
+// which is false for a regular file the walk could not read — an oversized one,
+// or one whose permissions refuse it. The reason travels with the path, so the
+// line describes what is actually wrong.
+func TestUnsafeEntryCarriesItsReason(t *testing.T) {
+	run, item := "rdg-2608300000000001", "rdi-2608300000000002"
+	root := readingLedger(t, run, item, "detection")
+	oversized := "---\nschema_version: 1\nid: \"dsp-2608300000000003\"\nitem: \"" + item + "\"\n" +
+		"state: \"accepted\"\ndisposition_grounds: \"a\"\n---\n\n"
+	oversized += strings.Repeat("x", issueschema.RecordReadLimit+1-len(oversized))
+	writeFile(t, root, ".abcd/work/issues/dispositions/"+item+"/dsp-2608300000000003.md", oversized)
+
+	fs, err := Lint(readingOutstandingConfig(severityBlocker), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var said bool
+	for _, f := range fs {
+		if f.RuleID != ruleReadingOutstanding {
+			continue
+		}
+		if strings.Contains(f.Message, "not a real directory") {
+			t.Errorf("an oversized regular file described as a directory: %s", f.Message)
+		}
+		if strings.Contains(f.Message, "cap") || strings.Contains(f.Message, "too big") {
+			said = true
+		}
+	}
+	if !said {
+		t.Fatalf("the unsafe entry does not say why the file could not be read; findings: %+v", fs)
 	}
 }

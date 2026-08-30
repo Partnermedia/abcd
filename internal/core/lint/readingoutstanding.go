@@ -17,12 +17,15 @@ package lint
 // deliberately absent from issueschema.StatusDirs.
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/intentdriven/abcd/internal/core/issueschema"
 	"github.com/intentdriven/abcd/internal/fsutil"
@@ -67,7 +70,7 @@ type OutstandingReadings struct {
 	// a tree nobody walked looks exactly like a tree with nothing in it, and "no
 	// outstanding items" is the one answer this report must never give by
 	// accident.
-	Unsafe []string `json:"unsafe,omitempty"`
+	Unsafe []UnsafePath `json:"unsafe,omitempty"`
 	// Cyclic names items whose dispositions supersede one another, so every
 	// answer is retired and none stands. It is a ledger fault, not an unanswered
 	// item: reporting it as outstanding would be a confident wrong statement about
@@ -87,6 +90,16 @@ type OutstandingReadings struct {
 	// and the item simply vanished from the board — and an item whose only answer
 	// is unreadable is the case most in need of a line, not least.
 	Unreadable []UnreadableAnswer `json:"unreadable,omitempty"`
+}
+
+// UnsafePath is one path the walk declined to read, with the reason it declined.
+// The reason travels with the path because one line served every failure and was
+// false for most of them: an oversized or permission-refused REGULAR FILE was
+// described as "not a real directory", which sends the reader to look for a
+// symlink that is not there.
+type UnsafePath struct {
+	Path   string `json:"path"`
+	Reason string `json:"reason"`
 }
 
 // UnreadableAnswer is one item whose standing disposition cannot be read.
@@ -125,7 +138,10 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 	issuesRoot := filepath.Join(repoRoot, filepath.FromSlash(issuesDir))
 	readingsRoot := filepath.Join(issuesRoot, issueschema.ReadingsDir)
 	if !realDir(readingsRoot) {
-		report.Unsafe = append(report.Unsafe, filepath.ToSlash(filepath.Join(issuesDir, issueschema.ReadingsDir)))
+		report.Unsafe = append(report.Unsafe, UnsafePath{
+			Path:   filepath.ToSlash(filepath.Join(issuesDir, issueschema.ReadingsDir)),
+			Reason: notARealDirectory,
+		})
 		return report, nil
 	}
 	runs, err := os.ReadDir(readingsRoot)
@@ -141,7 +157,10 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 	dispositionsRoot := filepath.Join(issuesRoot, issueschema.DispositionsDir)
 	dispositionsReadable := realDir(dispositionsRoot)
 	if !dispositionsReadable {
-		report.Unsafe = append(report.Unsafe, filepath.ToSlash(filepath.Join(issuesDir, issueschema.DispositionsDir)))
+		report.Unsafe = append(report.Unsafe, UnsafePath{
+			Path:   filepath.ToSlash(filepath.Join(issuesDir, issueschema.DispositionsDir)),
+			Reason: notARealDirectory,
+		})
 	}
 
 	for _, run := range runs {
@@ -152,7 +171,10 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 		// A symlink is a directory to ReadDir, so the check is on the entry
 		// itself, not on whether the walk would descend into it.
 		if !realDir(runDir) {
-			report.Unsafe = append(report.Unsafe, filepath.ToSlash(filepath.Join(issuesDir, issueschema.ReadingsDir, run.Name())))
+			report.Unsafe = append(report.Unsafe, UnsafePath{
+				Path:   filepath.ToSlash(filepath.Join(issuesDir, issueschema.ReadingsDir, run.Name())),
+				Reason: notARealDirectory,
+			})
 			continue
 		}
 		entries, err := os.ReadDir(runDir)
@@ -166,6 +188,15 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 			}
 			item := m[1]
 			rel := filepath.Join(issuesDir, issueschema.ReadingsDir, run.Name(), e.Name())
+			// The item file itself, on the same terms as everything below it. A
+			// symlinked rdi-N.md was admitted as a real item, so the board reported
+			// it outstanding and the verb it named then refused to touch it.
+			if fi, lerr := os.Lstat(filepath.Join(runDir, e.Name())); lerr != nil || !fi.Mode().IsRegular() {
+				report.Unsafe = append(report.Unsafe, UnsafePath{
+					Path: filepath.ToSlash(rel), Reason: notARegularFile,
+				})
+				continue
+			}
 			if !dispositionsReadable {
 				// The item's answer is unreadable, which is not the same fact as
 				// "unanswered" — reporting it outstanding would be a confident
@@ -220,8 +251,33 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 	sort.Slice(report.Cyclic, func(i, j int) bool { return report.Cyclic[i].Item < report.Cyclic[j].Item })
 	sort.Slice(report.Contested, func(i, j int) bool { return report.Contested[i].Item < report.Contested[j].Item })
 	sort.Slice(report.Unreadable, func(i, j int) bool { return report.Unreadable[i].Item < report.Unreadable[j].Item })
-	sort.Strings(report.Unsafe)
+	sort.Slice(report.Unsafe, func(i, j int) bool { return report.Unsafe[i].Path < report.Unsafe[j].Path })
 	return report, nil
+}
+
+// The reasons an Unsafe entry can carry. They are prose because they are read by
+// a person deciding what to go and look at, and each names a DIFFERENT thing to
+// look for.
+const (
+	notARealDirectory = "not a real directory (a symlink, or not a directory at all)"
+	notARegularFile   = "not a regular file (a symlink, a directory, or a device)"
+)
+
+// unreadableReason turns a guarded-read failure into the thing a reader should
+// go and look for. It exists because one sentence used to serve every failure and
+// was false for most of them.
+func unreadableReason(err error) string {
+	switch {
+	case errors.Is(err, fsutil.ErrTooBig):
+		return "larger than the " + strconv.Itoa(issueschema.RecordReadLimit) + "-byte record cap"
+	case errors.Is(err, fsutil.ErrNotRegular), errors.Is(err, syscall.ELOOP):
+		return notARegularFile
+	case errors.Is(err, fs.ErrPermission):
+		return "unreadable: permission denied"
+	case errors.Is(err, fs.ErrNotExist):
+		return "gone between the directory listing and the read"
+	}
+	return "unreadable"
 }
 
 // realDir reports whether path is a directory the walk may enter — present, and
@@ -263,7 +319,7 @@ type itemAnswer struct {
 	holds []OpenHold
 	// unsafe names the repo-relative paths the walk declined to read. Any one of
 	// them means the item's answer is unknown, not absent.
-	unsafe []string
+	unsafe []UnsafePath
 }
 
 // standingDisposition reads one item's dispositions and says what stands.
@@ -271,8 +327,10 @@ func standingDisposition(issuesRoot, issuesDir, item string) (itemAnswer, error)
 	var answer itemAnswer
 	itemDir := filepath.Join(issuesRoot, issueschema.DispositionsDir, item)
 	if !realDir(itemDir) {
-		answer.unsafe = append(answer.unsafe,
-			filepath.ToSlash(filepath.Join(issuesDir, issueschema.DispositionsDir, item)))
+		answer.unsafe = append(answer.unsafe, UnsafePath{
+			Path:   filepath.ToSlash(filepath.Join(issuesDir, issueschema.DispositionsDir, item)),
+			Reason: notARealDirectory,
+		})
 		return answer, nil
 	}
 	entries, err := os.ReadDir(itemDir)
@@ -294,10 +352,12 @@ func standingDisposition(issuesRoot, issuesDir, item string) (itemAnswer, error)
 		// O_NOFOLLOW and validates on the SAME descriptor, so no symlink swap fits
 		// between the check and the read. A record it refuses makes the item's
 		// answer UNKNOWN, which is not the same fact as unanswered.
-		content, err := fsutil.ReadGuarded(filepath.Join(itemDir, e.Name()), citationPageSizeLimit)
+		content, err := fsutil.ReadGuarded(filepath.Join(itemDir, e.Name()), issueschema.RecordReadLimit)
 		if err != nil {
-			answer.unsafe = append(answer.unsafe,
-				filepath.ToSlash(filepath.Join(issuesDir, issueschema.DispositionsDir, item, e.Name())))
+			answer.unsafe = append(answer.unsafe, UnsafePath{
+				Path:   filepath.ToSlash(filepath.Join(issuesDir, issueschema.DispositionsDir, item, e.Name())),
+				Reason: unreadableReason(err),
+			})
 			continue
 		}
 		r := issueschema.ParseDisposition(id, string(content))
@@ -372,10 +432,10 @@ func checkReadingOutstanding(repoRoot string, cfg RuleConfig) ([]Finding, error)
 	}
 	for _, u := range report.Unsafe {
 		out = append(out, Finding{
-			File: u, Line: 1, RuleID: ruleReadingOutstanding, Severity: severityInfo,
-			Message: "this is not a real directory (a symlink, or not a directory at all), so the reading walk did not enter it — " +
-				"the items under it are neither reported outstanding nor confirmed answered. " +
-				"`abcd capture` refuses to read the reading trees through a link, because its read is followed by a write",
+			File: u.Path, Line: 1, RuleID: ruleReadingOutstanding, Severity: severityInfo,
+			Message: "the reading walk did not read this — " + u.Reason + ". " +
+				"What it holds is neither reported outstanding nor confirmed answered, because a path nobody read " +
+				"supports no claim either way. `abcd capture` refuses the same paths outright, because its read is followed by a write",
 		})
 	}
 	for _, c := range report.Contested {
@@ -383,8 +443,10 @@ func checkReadingOutstanding(repoRoot string, cfg RuleConfig) ([]Finding, error)
 			File: c.Path, Line: 1, RuleID: ruleReadingOutstanding, Severity: severityInfo,
 			Message: c.Item + " (run " + c.Run + ") has " + strconv.Itoa(len(c.Standing)) +
 				" standing answers, none superseding another: " + strings.Join(c.Standing, ", ") +
-				". Which one is in force is a judgement the ledger does not contain, so nothing here picks one — " +
-				"supersede the answers that are no longer meant to stand",
+				". Which one is in force is a judgement the ledger does not contain, so nothing here picks one. " +
+				"`abcd capture disposition " + c.Item + "` refuses until exactly one stands: write " +
+				"`supersedes_disposition` into the records that are no longer meant to stand, by hand — a new " +
+				"disposition would retire one id and add its own, so the contest would never shrink",
 		})
 	}
 	for _, c := range report.Cyclic {

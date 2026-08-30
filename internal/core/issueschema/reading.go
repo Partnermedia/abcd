@@ -50,6 +50,18 @@ const (
 	DispositionsDir = "dispositions"
 )
 
+// RecordReadLimit is the byte cap on ONE record of these families, and it lives
+// here for the same reason the property allow-list does: both readers of the
+// family must apply it, and a cap the board applies loosely while the verb
+// applies tightly means an oversized disposition stands on the board and is
+// refused by the verb — the ledger then says two things about one file. There
+// were two caps, eight megabytes apart, before this was one.
+//
+// A reading record and a disposition are single-screen documents. The cap is not
+// there to bound legitimate content; it is there so a device, or a file swapped
+// for a huge one, cannot make a read unbounded.
+const RecordReadLimit = 1 << 20
+
 // ReadingPosition binds one reading position to the supply regime it implies and
 // the body its items carry.
 //

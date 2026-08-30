@@ -1,9 +1,11 @@
 package capture
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/intentdriven/abcd/internal/core/issueschema"
@@ -122,9 +124,10 @@ func TestStandingDispositionAgreesAcrossBothReaders(t *testing.T) {
 			// only the NEWEST record also reported no hold. All six rows passed
 			// under a mutation that reintroduced the divergence.
 			//
-			// So the expectation is built from mine[0] — the first standing id,
-			// which is the one lint's report renders — and it is non-trivial on
-			// every row.
+			// So the expectation is built from the WHOLE of `mine`: every standing
+			// hold, and the whole contested set. No first-standing-id shortcut
+			// survives here — there is no first id in the report any more either,
+			// since a contest is named in full rather than resolved by sorting.
 			writeReadingFor(t, repo, "rdi-9")
 			report, err := lint.ReadReadingOutstanding(repo, LedgerRelPath)
 			if err != nil {
@@ -219,4 +222,69 @@ func stateOf(t *testing.T, itemDir, id string) string {
 		t.Fatal(err)
 	}
 	return issueschema.ParseDisposition(id, string(content)).State
+}
+
+// The two readers must agree on how big a record may be, for the same reason
+// they must agree on which one stands: a cap the board applies loosely and the
+// verb applies tightly means an oversized disposition stands on the board and is
+// refused by the verb, and the ledger says two things about one file. The caps
+// were 8 MiB in lint (borrowed from the citation page limit) and 1 MiB in
+// capture, so the disagreement was eight megabytes wide.
+func TestBothReadersShareOneRecordByteCap(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		size     int
+		readable bool
+	}{
+		{"at the cap", issueschema.RecordReadLimit, true},
+		{"one byte over the cap", issueschema.RecordReadLimit + 1, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := t.TempDir()
+			issuesRoot := filepath.Join(repo, LedgerRelPath)
+			itemDir := filepath.Join(issuesRoot, issueschema.DispositionsDir, "rdi-9")
+			if err := os.MkdirAll(itemDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			body := disp("dsp-1", "held", "")
+			if pad := tc.size - len(body); pad > 0 {
+				body += strings.Repeat("x", pad)
+			}
+			if len(body) != tc.size {
+				t.Fatalf("fixture is %d bytes, want %d", len(body), tc.size)
+			}
+			if err := os.WriteFile(filepath.Join(itemDir, "dsp-1.md"), []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			writeReadingFor(t, repo, "rdi-9")
+
+			mine, captureErr := standingDispositions(itemDir)
+			report, err := lint.ReadReadingOutstanding(repo, LedgerRelPath)
+			if err != nil {
+				t.Fatalf("lint.ReadReadingOutstanding: %v", err)
+			}
+
+			if tc.readable {
+				if captureErr != nil {
+					t.Fatalf("capture refused a record at the cap: %v", captureErr)
+				}
+				if len(mine) != 1 {
+					t.Fatalf("capture stands %v, want the record at the cap to stand", mine)
+				}
+				if len(report.OpenHolds) != 1 {
+					t.Fatalf("lint did not render the hold at the cap: %+v", report)
+				}
+				return
+			}
+			if !errors.Is(captureErr, ErrPathUnsafe) {
+				t.Fatalf("capture read a record over the cap: err = %v, want ErrPathUnsafe", captureErr)
+			}
+			if len(report.Unsafe) != 1 {
+				t.Fatalf("lint read a record over the cap instead of reporting it unreadable: %+v", report)
+			}
+			if len(report.Undispositioned) != 0 {
+				t.Fatalf("a record too big to read is not an absent answer: %+v", report.Undispositioned)
+			}
+		})
+	}
 }

@@ -499,3 +499,49 @@ func TestSupersessionCycleIsALedgerFault(t *testing.T) {
 		t.Fatalf("Promote over a cycle: err = %v, want ErrInvariantViolation", err)
 	}
 }
+
+// contestedFixture leaves two independent standing answers on one item, the
+// state two branches produce by each answering it and merging cleanly.
+func contestedFixture(t *testing.T) (repo, ir, item string) {
+	t.Helper()
+	repo, ir, item = readingFixture(t, "detection")
+	writeRawDisposition(t, ir, item, "dsp-2608300000000001", "accepted", "")
+	writeRawDisposition(t, ir, item, "dsp-2608300000000002", "held", "")
+	return repo, ir, item
+}
+
+// RULED: the disposition verb refuses under contest, exactly as promote does.
+//
+// The remedy the board used to offer was `--supersedes`, which retires one id
+// and adds one, so a contested set never shrinks — the reader would have been
+// sent round a loop. Untangling it means writing supersedes_disposition into the
+// surplus records by hand, which is what the refusal now says.
+func TestDispositionRefusesUnderContest(t *testing.T) {
+	repo, ir, item := contestedFixture(t)
+
+	for _, tc := range []struct {
+		name       string
+		supersedes string
+	}{
+		{"a fresh answer", ""},
+		{"an answer citing one of them", "dsp-2608300000000001"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Disposition(DispositionRequest{
+				RepoRoot: repo, IssuesRoot: ir, Item: item,
+				State: issueschema.DispositionAccepted, Grounds: "another answer",
+				Supersedes: tc.supersedes,
+			})
+			if !errors.Is(err, ErrInvariantViolation) {
+				t.Fatalf("a disposition under contest: err = %v, want ErrInvariantViolation", err)
+			}
+			if !strings.Contains(err.Error(), "dsp-2608300000000001") ||
+				!strings.Contains(err.Error(), "dsp-2608300000000002") {
+				t.Fatalf("the refusal must name every standing answer; got %v", err)
+			}
+			if !strings.Contains(err.Error(), "supersedes_disposition") {
+				t.Fatalf("the refusal must name the hand repair; got %v", err)
+			}
+		})
+	}
+}
