@@ -179,17 +179,6 @@ Every test below is watched red before the change and green after.
   `TestReadBlockCatchesWarmFieldsOnIncludedTypes` are watched red against the
   same temporary hole technique, each removing the single exclusion it covers.
 
-## Grounds (pursued)
-
-_Pre-tooling: recorded in the plan record until the grounds argument (itd-179) ships._
-
-Every other component in the workstream asserts the blindfold; this one is the
-only component capable of falsifying it, and an eval that read the assembler's
-own include table could only ever confirm the table rather than test the
-property. It is pursued now because the assembler exists to hold a firewall
-whose failure is otherwise silent: warm content that reaches a reading
-contaminates the reading invisibly, and nothing else in the cycle would notice.
-
 ## Out of scope
 
 - The assembler itself, its include table, its projection, and its manifest

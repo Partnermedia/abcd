@@ -217,17 +217,6 @@ them for spc-63's instrument identity.
   `TestColdReadingDefinitionsSatisfyTheAgentContract`, runs the
   `agent_contract` rule over the tree from the test so the failure is local.
 
-## Grounds (pursued)
-
-_Pre-tooling: recorded in the plan record until the grounds argument (itd-179) ships._
-
-This conjecture is pursued now because one definition with four objects cannot
-hold: the prohibition against proposing is constitutive of the detection pass
-and would void the widening pass entirely, so the count of definitions has to
-be settled before anything is written that a reading would read against. The
-byte-identical core is the cheap guarantee that separating them by licence
-does not also separate them by blindness.
-
 ## Out of scope
 
 - **Running a reading.** The instrument ships unrun for the whole cycle: the

@@ -84,3 +84,7 @@ None stated.
 
 <!-- abcd-review: OWED receipt=rcp-8ca51595aa96 -->
 Fidelity review OWED (receipt rcp-8ca51595aa96).
+
+## Grounds
+
+- pursued: Pursued now because adr-51 shipped the sections as a format and explicitly deferred their enforcement to "its own record", and because spc-59 cannot key a disposition to anything until a condition has an identity that outlives its wording. Enforcement without identity would record dispositions against sentences, which is the failure the gradient exists to prevent.

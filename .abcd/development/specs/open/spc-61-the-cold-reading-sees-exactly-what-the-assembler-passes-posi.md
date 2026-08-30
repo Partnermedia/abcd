@@ -252,17 +252,6 @@ wiring pinned in `internal/surface/cli/`.
   `TestTargetRefusesBranchAndTag`, `TestAssembleDryRunWritesNothing`,
   `TestReadingVerbReachesBothPlanes`.
 
-## Grounds (pursued)
-
-_Pre-tooling: recorded in the plan record until the grounds argument (itd-179) ships._
-
-This conjecture is pursued now because the location tiering the repository
-already has is organisational rather than an access control: nothing today
-prevents a reading reaching ledger content, so every claim the instrument
-makes about what it saw rests on a disclosure taken on trust. The assembler is
-the cheapest point at which that becomes checkable, and the two evals and the
-output contract that follow have nothing to guard until it exists.
-
 ## Out of scope
 
 - **Running a reading.** The instrument ships unrun for the whole cycle: no

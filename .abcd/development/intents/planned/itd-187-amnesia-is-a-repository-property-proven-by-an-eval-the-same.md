@@ -41,3 +41,6 @@ None stated.
 - **Given** a nondeterminism introduced into the assembler (walk order,
   timestamps), **when** the eval runs, **then** it fails.
 
+## Grounds
+
+- pursued: Amnesia is a property of what the assembler passes, not an instruction an agent can be trusted to follow, and a case run could only ever exhibit it rather than prove it. It is pursued now because a case run is the scarcest thing in the cycle: making amnesia a repository eval leaves the closing run of Iteration 2 carrying only the properties a case run can carry, purpose durability and convergence, and lets any reader check the rest for themselves.

@@ -109,3 +109,7 @@ Gap audit:
   - No delivered mechanism can establish that a lapsed_at instant was recorded at the lapse rather than chosen at write-up; the gates enforce presence and RFC 3339 shape only, and the spec places that judgement out of scope
     evidence: internal/core/issueschema/issueschema.go:123 — "func ValidLapsedAt(v string) bool {"
     evidence: internal/core/lint/schema.go:596 — "add(lapseField.line, \"lapsed_at '\"+lapsedAt+\"' is not an RFC 3339 instant (want 2026-08-28T00:00:00Z); capture refuses the record and skips it\")"
+
+## Grounds
+
+- pursued: Pursued now because the lapse log is not merely a disclosure obligation: the working claim under test in this cycle is that recording at the point of commitment prevents retrospective reconstruction, and the lapse log is the evidence bearing on that claim. A log opened after the cycle's lapses have already accumulated is reconstruction, and so cannot be evidence about reconstruction.

@@ -59,3 +59,6 @@ None stated.
 - **Given** a hand-edited record carrying either key, **when** the lint
   runs, **then** the lint reports it.
 
+## Grounds
+
+- pursued: Pursued now because a record says nothing about where its items came from or how its text was produced, and the reading workstream is about to start contributing items that a reader must be able to tell apart from researcher-authored ones. The keys have to exist before the first contributed item lands, or the distinction is unrecoverable.

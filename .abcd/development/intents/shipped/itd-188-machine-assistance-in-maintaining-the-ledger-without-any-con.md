@@ -113,3 +113,7 @@ Gap audit:
   - The scribe's ingest path ("when the verb lands") — scoped out by the intent itself; the emitted shapes have no schema until spc-58's stores land, so the record gate refuses their directory as an undeclared bucket rather than judging a record
     evidence: agents/scribe.md:162 — "There is no ingest verb, so what you emit is committed through the ordinary record path"
     evidence: .abcd/development/brief/05-internals/01-agents.md:87 — "**There is no ingest verb.**"
+
+## Grounds
+
+- pursued: Pursued now because the ledger has to be maintained during this cycle and the obvious way to get help with it is the one thing the design cannot allow: a context holding both a reading and the ledger. Defining the scribe's inverse access rule before the first run is what keeps machine assistance from becoming the channel by which reading and ledger meet, and session retention is what lets that claim be checked rather than asserted.

@@ -52,3 +52,6 @@ None stated.
 - **Given** a surprise, **when** it is recorded, **then** the surprise
   entry is a distinct record from any disposition it relates to.
 
+## Grounds
+
+- pursued: Pursued now because declining a proposal costs nothing epistemically while admitting one is where the frame is actually engaged, and uniform adoption of everything a reading proposes is equally consistent with careful judgement and with abdication. Only a record that carries grounds on each admission and a disposition on each decline can tell the two apart, and it has to exist before the first widening run rather than after it.
