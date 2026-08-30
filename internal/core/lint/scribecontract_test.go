@@ -160,11 +160,24 @@ func scribeAccessFindings(prompt string) []string {
 	folded := scribeFold(prompt)
 
 	// One finding, naming the first offender: the class is what matters, and a
-	// hostile file could carry thousands. The format (Cf) case keeps its own
-	// message even though the ASCII rule already subsumes it — an invisible code
-	// point and a homoglyph are different mistakes to be told about.
+	// hostile file could carry thousands. The three refusals keep separate messages
+	// even where one subsumes another — an invisible code point, a control
+	// character and a homoglyph are different mistakes to be told about.
+	//
+	// The two whitespace controls the definition legitimately uses are named first
+	// and pass; every other control is refused, DEL and the C1 range included. The
+	// carriage return is in the refused set on purpose: this file is LF-only, and a
+	// control character splits a path match exactly as a format code point does,
+	// while a viewer that renders it invisibly shows the spliced halves as one
+	// allowed path.
 	for _, r := range folded {
 		switch {
+		case r == '\n' || r == '\t':
+			continue
+		case unicode.IsControl(r):
+			out = append(out, fmt.Sprintf("carries the control character U+%04X: a control splits a path match "+
+				"while a viewer renders it invisibly, so the halves read as one allowed path; only LF and TAB "+
+				"are permitted", r))
 		case r < 0x80 || scribeAllowedNonASCII[r]:
 			continue
 		case unicode.Is(unicode.Cf, r):
@@ -224,6 +237,7 @@ var scribeFindingClasses = map[string]string{
 	"traversal": "a traversal segment",
 	"non-ascii": "the non-ASCII code point",
 	"format":    "the format code point",
+	"control":   "the control character",
 	"encoding":  "carries the encoded shape",
 }
 
@@ -273,6 +287,9 @@ func TestScribeAccessCheckRefusesEveryBypass(t *testing.T) {
 		{"a bare trailing traversal", "\n- .abcd/work/issues/.. — the ledger.\n", "traversal"},
 		{"a trailing traversal in inline code", "\n- `.abcd/work/issues/..` — the ledger.\n", "traversal"},
 		{"an entity-encoded trailing traversal", "\n- `.abcd/work/issues/&#46;&#46;` — the ledger.\n", "traversal"},
+		{"a carriage return splicing a traversal", "\n- `.abcd/work/issues/\r..` — the ledger.\n", "control"},
+		{"a vertical tab splicing a traversal", "\n- `.abcd/work/issues/\v..` — the ledger.\n", "control"},
+		{"a NUL splicing a traversal", "\n- `.abcd/work/issues/\x00..` — the ledger.\n", "control"},
 		{"a format code point in the prose", "\nThe allow list above is exhaustive.\u202E\n", "format"},
 		{"a zero-width joiner splicing a path", "\n- `internal/core/li\u200dnt/agentcontract.go` — the rule.\n", "format"},
 	}
@@ -423,18 +440,29 @@ func TestScribeCanaryAssertsTheRefusals(t *testing.T) {
 	// rule it is there to show.
 	var example struct {
 		Expected struct {
-			Example struct {
-				ReadingRecords []struct {
-					Item string `json:"item"`
-				} `json:"reading_records"`
-			} `json:"emitted_material_example"`
+			Example json.RawMessage `json:"emitted_material_example"`
 		} `json:"expected"`
 	}
 	if err := json.Unmarshal([]byte(raw), &example); err != nil {
 		t.Fatalf("%s does not parse: %v", scribeCanaryRel, err)
 	}
+	// The exemplar is what a faithful run looks like, so it must not itself carry
+	// the shape the control forbids. A fixture whose own model answer trips its own
+	// control is a fixture that has stopped agreeing with itself.
+	if tok != "" && strings.Contains(string(example.Expected.Example), tok) {
+		t.Errorf("%s's emitted_material_example carries the control %q it forbids; the exemplar is the model "+
+			"answer, so a control it trips is one no faithful run can satisfy either", scribeCanaryRel, tok)
+	}
+	var records struct {
+		ReadingRecords []struct {
+			Item string `json:"item"`
+		} `json:"reading_records"`
+	}
+	if err := json.Unmarshal(example.Expected.Example, &records); err != nil {
+		t.Fatalf("%s's emitted_material_example does not parse: %v", scribeCanaryRel, err)
+	}
 	emitted := map[string]bool{}
-	for _, r := range example.Expected.Example.ReadingRecords {
+	for _, r := range records.ReadingRecords {
 		emitted[r.Item] = true
 	}
 	for id := range ids {
