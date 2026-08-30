@@ -7,6 +7,10 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-189-round-5-ruthless"
 found_at: "internal/core/lint/schema.go"
+resolution: "checkRecordJoins and checkRecordBucketField now put the RAW frontmatter value to isAbsentValue rather than one issueScalar has already read, so all three legs decide emptiness on one strip. A value that is two apostrophes inside double quotes is present to every leg again: the join judges its spelling and the bucket field judges its disagreement with the directory, instead of all three standing down on an admission that admits nothing."
+impact: fix
+resolved_by:
+  intent: "itd-189"
 ---
 
 the join and bucket legs strip the scalar twice so a doubly quoted empty value is present to one leg and absent to the other and no leg speaks
