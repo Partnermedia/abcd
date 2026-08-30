@@ -217,10 +217,12 @@ type recordJoin struct {
 	// means the join carries neither obligation: its value may be prose.
 	//
 	// Naming the family is what makes the SPELLING judgeable. A join whose value
-	// may be prose can only be read leniently, and reading this one leniently is
-	// how six spellings of the proposal — cased, zero-padded, and spaced inside
-	// the quotes — resolved to the record while the reader that matches the value
-	// as a string admitted nothing (iss-2608301519255871).
+	// may be prose can only be read leniently, and reading this one leniently left
+	// six spellings of the proposal green while the reader that matches the value
+	// as a string admitted nothing: three that parsed and resolved (upper-cased,
+	// mixed-cased, zero-padded), and three that parsed as no handle at all and
+	// took the silence prose is owed (a space inside the quotes on either side,
+	// and bare prose) (iss-2608301519255871).
 	//
 	// An admission is meaningful only against the run whose proposals it admits,
 	// and the outstanding report keys the admitted set on the PAIR — the run the
@@ -841,17 +843,20 @@ func checkRecordUnknownFields(r schemaRecord, severity string) []Finding {
 // keying field nothing resolved while the surprise's `occasioned_by` was
 // (iss-2608300935215868).
 //
-// Resolution has three halves, because a join can fail in three ways.
+// Resolution asks three questions, because a join can fail in three ways.
 //
 // The first is SPELLING, and it is asked only of a join that declares a family
 // (sameBucketAs): such a join's value is a handle of that family by declaration,
 // so it is judged verbatim — the family's own prefix in lower case, one hyphen,
 // an unpadded ordinal, and nothing around it. It is judged as a STRING because
 // what reads the family matches it as one: the outstanding report keys the
-// admitted set on the value as written (admittedProposals) while a handle pattern
-// resolves it as a number, so `RDI-2`, `Rdi-2`, `rdi-02` and a space surviving
-// the quotes all resolved to the record and matched its bucket while admitting
-// nothing at all (iss-2608301519255871).
+// admitted set on the value as written (admittedProposals), while the two
+// questions below parse it as a handle and compare its ordinal as a number. Six
+// spellings fell between the two readings and were green. `RDI-2`, `Rdi-2` and
+// `rdi-02` parsed, resolved and matched their bucket, so the gate approved them;
+// a space inside the quotes on either side, and bare prose, parsed as no handle
+// at all and took the silence prose is owed. Every one of them admitted nothing
+// (iss-2608301519255871).
 //
 // The second is PRESENCE: a target that is not in the corpus joins nothing.
 //
