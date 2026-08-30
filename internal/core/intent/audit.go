@@ -61,11 +61,15 @@ var verdictEnum = map[string]bool{
 // from the cited-evidence rule.
 const dispositionUntested = "untested"
 
+// dispositionNarrowed is the one disposition that requires a stated narrowing —
+// and the only one permitted to carry one.
+const dispositionNarrowed = "narrowed"
+
 // dispositionEnum is the closed set of scope-condition dispositions (spc-59).
 // It is deliberately disjoint from verdictEnum: a condition is not a criterion,
 // and an acceptance verdict is not a judgement about an ex-ante assumption.
 var dispositionEnum = map[string]bool{
-	"survived": true, "narrowed": true, "falsified": true, dispositionUntested: true,
+	"survived": true, dispositionNarrowed: true, "falsified": true, dispositionUntested: true,
 }
 
 var (
@@ -402,7 +406,7 @@ func IngestVerdict(repoRoot, verdictPath string) (IngestVerdictResult, error) {
 		Met: rollup["MET"], MetWithConcern: rollup["MET_WITH_CONCERNS"],
 		NotMet: rollup["NOT_MET"], Inconclusive: rollup["INCONCLUSIVE"],
 		Conditions: len(v.ScopeConditions), Survived: split["survived"],
-		Narrowed: split["narrowed"], Falsified: split["falsified"],
+		Narrowed: split[dispositionNarrowed], Falsified: split["falsified"],
 		Untested: split[dispositionUntested],
 	}, nil
 }
@@ -527,16 +531,28 @@ func validateVerdict(raw []byte, rcp, intentContent string) (verdict, error) {
 // rollout safe — an intent shipped before the identity mint existed carries no
 // conditions, so the check is vacuous rather than blocking.
 func validateConditionDispositions(v verdict, intentContent string) error {
+	conds := ParseClaims(intentContent).Conditions
 	known := map[string]bool{}
-	for _, c := range ParseClaims(intentContent).Conditions {
+	for _, c := range conds {
 		// An unstamped condition has no identity for a disposition to attach to,
 		// so accepting the verdict would leave it permanently undisposed — which
 		// is exactly the absence itd-181 refuses. The readiness gate reports the
-		// same fault with the remedy (`abcd intent plan` is the only stamper).
+		// same fault, but it only reports: it is read-only, and it refuses a
+		// shipped bucket outright — which is the only bucket the ingest ever
+		// sees. So this is the gate, not a second opinion.
 		if c.ID == "" {
 			return fmt.Errorf("scope condition %d carries no minted identity, so no disposition can be keyed to it", c.Ordinal)
 		}
 		known[c.ID] = true
+	}
+	// Two bullets sharing one identity collapse into a single entry in `known`,
+	// so the set-sized coverage check below would accept one disposition for two
+	// conditions and leave the second silently undisposed. A copy-pasted bullet
+	// keeps its invisible marker and nothing re-stamps a shipped record, so the
+	// state is reachable. DuplicateConditionIDs is the canonical detector — the
+	// same one the readiness gate reports with — never a second notion of it.
+	if dupes := DuplicateConditionIDs(conds); len(dupes) > 0 {
+		return fmt.Errorf("scope condition identity %q is carried by more than one condition, so a disposition cannot be keyed to either", dupes[0])
 	}
 	if len(known) == 0 {
 		if len(v.ScopeConditions) != 0 {
@@ -557,8 +573,15 @@ func validateConditionDispositions(v verdict, intentContent string) error {
 		if !dispositionEnum[c.Disposition] {
 			return fmt.Errorf("scope condition %q has out-of-enum disposition %q", c.ConditionID, c.Disposition)
 		}
-		if c.Disposition == "narrowed" && strings.TrimSpace(c.Narrowing) == "" {
+		// `narrowing` is required on `narrowed` and empty everywhere else — the
+		// rule the definition publishes, gated in both directions. A narrowing
+		// carried by a `survived` condition renders a stated narrowing into the
+		// record while the split reports no narrowed condition at all.
+		if c.Disposition == dispositionNarrowed && strings.TrimSpace(c.Narrowing) == "" {
 			return fmt.Errorf("scope condition %q is narrowed but states no narrowing", c.ConditionID)
+		}
+		if c.Disposition != dispositionNarrowed && strings.TrimSpace(c.Narrowing) != "" {
+			return fmt.Errorf("scope condition %q is %s but states a narrowing; only a narrowed condition carries one", c.ConditionID, c.Disposition)
 		}
 		// `untested` is by definition the absence of evidence; every other
 		// disposition is a claim about delivered reality and must cite one.
@@ -587,13 +610,18 @@ func deadLetter(repoRoot string, it Intent, content, rcp string, raw []byte, rea
 	if err := fsutil.WriteFileAtomic(filepath.Join(dir, rcp+".deadletter.json"), raw, 0o644); err != nil {
 		return IngestVerdictResult{}, fmt.Errorf("intent: retaining dead-letter payload %s: %w", dlRel, err)
 	}
-	block := deadLetterBlock(rcp, reason, dlRel, untestedDispositions(content))
+	untested := untestedDispositions(content)
+	block := deadLetterBlock(rcp, reason, dlRel, untested)
 	updated := upsertReviewBlock(content, rcp, block)
 	if err := writeIntentFile(filepath.Join(repoRoot, it.Path), it.Path, updated); err != nil {
 		return IngestVerdictResult{}, err
 	}
+	// The counts exist so a surface reports the split WITHOUT re-reading the
+	// record, so they must agree with what was just written there: the quarantine
+	// records every condition untested, and says so here too.
 	return IngestVerdictResult{
 		Status: "dead_letter", ReceiptID: rcp, IntentID: it.ID,
+		Conditions: len(untested), Untested: len(untested),
 		DeadLetterPath: dlRel, Reason: reason,
 	}, nil
 }
@@ -944,7 +972,7 @@ func countVerdicts(v verdict) map[string]int {
 // countDispositions is the per-value split of the scope-condition dispositions,
 // so a surface reports it without re-reading the record.
 func countDispositions(v verdict) map[string]int {
-	m := map[string]int{"survived": 0, "narrowed": 0, "falsified": 0, dispositionUntested: 0}
+	m := map[string]int{"survived": 0, dispositionNarrowed: 0, "falsified": 0, dispositionUntested: 0}
 	for _, c := range v.ScopeConditions {
 		m[c.Disposition]++
 	}

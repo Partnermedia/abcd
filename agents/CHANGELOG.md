@@ -24,8 +24,9 @@ never invented), a four-value rubric — `survived`, `narrowed`, `falsified`,
 `untested` — framed as harshly as the acceptance rubric (`untested` is the
 correct disposition for a vacuum, not `survived`), the extended output block, and
 two numbered rules naming what the ingest refuses: exact coverage of the supplied
-identities in both directions, the closed value set, a stated `narrowing` on
-`narrowed`, and cited evidence on everything but `untested`.
+identities in both directions, the closed value set, `narrowing` required on
+`narrowed` and refused on every other disposition, and cited evidence on
+everything but `untested`.
 
 MINOR in the `0.x` band: the output contract is extended rather than reshaped,
 and a verdict for an intent that records no conditions — every intent shipped

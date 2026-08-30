@@ -360,6 +360,55 @@ func TestIngestRefusesUnstampedCondition(t *testing.T) {
 	assertDeadLetter(t, root, rcp)
 }
 
+// TestIngestRefusesDuplicateConditionIdentityInTheRecord is the coverage check's
+// blind spot: the check compares SET sizes, so two bullets carrying the same
+// identity collapse to one entry and a single disposition satisfies a record
+// that holds two conditions. A copy-pasted bullet keeps its invisible marker,
+// and nothing re-stamps a shipped record — `Plan` refuses one — so the state is
+// reachable and leaves a condition silently undisposed, which is exactly the
+// absence itd-181 refuses.
+func TestIngestRefusesDuplicateConditionIdentityInTheRecord(t *testing.T) {
+	root := t.TempDir()
+	rcp := shipWithConditions(t, root,
+		stampedCondition(condOne, "holds on POSIX"),
+		stampedCondition(condOne, "holds on POSIX, pasted a second time"),
+	)
+	vp := writeVerdict(t, root, verdictWithConditions(t, rcp, dispositionOf(condOne, "survived")))
+	res, err := IngestVerdict(root, vp)
+	if err != nil {
+		t.Fatalf("dead-letter path must not error: %v", err)
+	}
+	if res.Status != "dead_letter" {
+		t.Fatalf("status = %q, want dead_letter", res.Status)
+	}
+	assertReason(t, res, "carried by more than one condition")
+}
+
+// TestIngestRefusesNarrowingOnAnUnnarrowedDisposition closes the one asymmetry
+// between the published contract and the gate: the definition says `narrowing`
+// is "required on 'narrowed', empty otherwise", and a narrowing carried by a
+// `survived` condition renders a stated narrowing into the record while the
+// split reports no narrowed condition at all.
+func TestIngestRefusesNarrowingOnAnUnnarrowedDisposition(t *testing.T) {
+	for _, value := range []string{"survived", "falsified", "untested"} {
+		t.Run(value, func(t *testing.T) {
+			root := t.TempDir()
+			rcp := shipWithConditions(t, root, stampedCondition(condOne, "holds below 10k records"))
+			entry := dispositionOf(condOne, value)
+			entry["narrowing"] = "actually holds only below 2k records"
+			vp := writeVerdict(t, root, verdictWithConditions(t, rcp, entry))
+			res, err := IngestVerdict(root, vp)
+			if err != nil {
+				t.Fatalf("dead-letter path must not error: %v", err)
+			}
+			if res.Status != "dead_letter" {
+				t.Fatalf("status = %q, want dead_letter", res.Status)
+			}
+			assertReason(t, res, "states a narrowing")
+		})
+	}
+}
+
 // TestDeadLetterRecordsConditionsUntested proves the quarantine path stays
 // honest in the disposition vocabulary too: every condition the record carries
 // is recorded `untested`, keyed by its identity.
@@ -382,6 +431,9 @@ func TestDeadLetterRecordsConditionsUntested(t *testing.T) {
 	}
 	if res.Status != "dead_letter" {
 		t.Fatalf("status = %q, want dead_letter", res.Status)
+	}
+	if res.Conditions != 2 || res.Untested != 2 {
+		t.Fatalf("dead-letter result = %+v, want it to report the 2 conditions it recorded untested", res)
 	}
 	s := intentBody(t, root)
 	for _, id := range []string{condOne, condTwo} {
@@ -452,6 +504,12 @@ func TestShippedVerdictsSurviveTheStagedRollout(t *testing.T) {
 		}
 		content := string(data)
 		if !strings.Contains(content, "abcd-review: INGESTED") {
+			continue
+		}
+		// A record that DOES carry conditions is judged by its own verdict's
+		// dispositions, not by this vacuity assertion — including it would turn
+		// the test red on a correct corpus the moment a conditioned intent ships.
+		if len(ParseClaims(content).Conditions) > 0 {
 			continue
 		}
 		checked++
