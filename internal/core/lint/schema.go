@@ -1030,14 +1030,24 @@ func checkRecordJoins(r schemaRecord, index map[recordRef]schemaRecord, retired 
 		if join.sameBucketAs == "" || target.bucket == r.bucket {
 			continue
 		}
+		msg := join.field + " names '" + ref.String() + "', which is filed under '" + target.bucket +
+			"' while this " + r.noun() + " is filed under '" + r.bucket +
+			"'; what reads that family keys it on the pair — the bucket it is filed under and the " +
+			target.noun() + " it names — so this " + r.noun() +
+			" is keyed on a pair nothing ever queries and counts for nothing"
+		// The tail names a REPORT LINE, so it is appended only where the target's
+		// filename is a bare handle — the same test the padding leg makes one block
+		// above, and for the same reason: what reads the family never opens a file
+		// whose name is not one, and emits nothing at all about that target. The
+		// leading clause is true of every cross-bucket target, so the finding stands
+		// either way; sending the operator to find a line that does not exist is what
+		// does not (iss-2608301656193936).
+		if stemIsHandle {
+			msg += ", and the " + target.noun() +
+				" it names goes on being reported as unanswered with no sign that an answer was written"
+		}
 		out = append(out, Finding{
-			File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: cfg.Severity,
-			Message: join.field + " names '" + ref.String() + "', which is filed under '" + target.bucket +
-				"' while this " + r.noun() + " is filed under '" + r.bucket +
-				"'; what reads that family keys it on the pair — the bucket it is filed under and the " +
-				target.noun() + " it names — so this " + r.noun() +
-				" is keyed on a pair nothing ever queries: it counts for nothing, and the " +
-				target.noun() + " it names goes on being reported as unanswered with no sign that an answer was written",
+			File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: cfg.Severity, Message: msg,
 		})
 	}
 	return out

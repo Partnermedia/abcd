@@ -7,6 +7,10 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-189-round-5-ruthless"
 found_at: "internal/core/lint/schema.go"
+resolution: "The bucket blocker's tail is appended only where spellsHandleOf(join.sameBucketAs, stem) holds, the same test the padding leg one block above computes. The leading clause — the record is keyed on a pair nothing ever queries and counts for nothing — is true of every cross-bucket target and still blocks; the claim that names a REPORT LINE is made only about a target whose file the family actually opens, so the operator is no longer sent to find a line the report never emits. The control and the stand-down are asserted together so the negative assertion cannot go vacuous on a rewording."
+impact: fix
+resolved_by:
+  intent: "itd-189"
 ---
 
 the bucket blocker claims the item goes on being reported unanswered for exactly the target shape the padding leg beside it stands down on

@@ -2113,3 +2113,54 @@ func TestAnAdmissionNamingAnItemOutsideTheWideningPositionIsRefused(t *testing.T
 		}
 	}
 }
+
+// The bucket blocker's leading clause — this record is keyed on a pair nothing
+// queries — is true of every cross-bucket target. Its TAIL is not: it says the
+// item goes on being reported as unanswered, and the padding leg one block above
+// stands down on a target whose filename is not a bare handle precisely because
+// what reads the family never opens such a file. The report emits nothing at all
+// about `rdi-7-widen-the-frame.md`, so the operator was sent to find a report line
+// that does not exist (iss-2608301656193936).
+//
+// The tail is therefore appended on the same test the padding leg computes. The
+// two cases run together so the negative assertion cannot go vacuous: the control
+// pins the tail's current wording, so a rewording fails there before the
+// stand-down's absence can pass for nothing.
+func TestTheBucketBlockerClaimsAReportLineOnlyForAFileTheFamilyReads(t *testing.T) {
+	const tail = "goes on being reported as unanswered"
+	root := admissionCorpus(t)
+	// Read by the family: its filename is a bare handle.
+	writeFile(t, root, "work/issues/readings/rdg-9/rdi-8.md",
+		"---\nschema_version: 1\nid: rdi-8\nrun: rdg-9\nmanifest: sha256:beef\nposition: widening\n---\n\n")
+	// Never opened by the family: its filename carries a slug.
+	writeFile(t, root, "work/issues/readings/rdg-9/rdi-7-widen-the-frame.md",
+		"---\nschema_version: 1\nid: rdi-7\nrun: rdg-9\nmanifest: sha256:beef\nposition: widening\n---\n\n")
+
+	adm := func(id, proposal string) string {
+		return "---\nschema_version: 1\nid: " + id + "\nrun: rdg-1\nproposal: " + proposal +
+			"\ngrounds: the configuration it admits is one the frame does not already hold\n---\n\n"
+	}
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-8.md", adm("adm-8", "rdi-8"))
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-7.md", adm("adm-7", "rdi-7"))
+
+	fs, err := Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := filepath.Join("work", "issues", "admissions", "rdg-1", "adm-8.md")
+	unread := filepath.Join("work", "issues", "admissions", "rdg-1", "adm-7.md")
+
+	// Both are keyed on a pair nothing queries, so both are still blocked.
+	for _, rel := range []string{read, unread} {
+		if !findingWith(fs, rel, ruleRecordSchema, "keyed on a pair nothing ever queries") {
+			t.Errorf("a cross-bucket target is a finding whatever its filename: %s: %+v", rel, fs)
+		}
+	}
+	if !findingWith(fs, read, ruleRecordSchema, tail) {
+		t.Errorf("the family reads rdi-8.md, so the blocker may say the item %s: %+v", tail, fs)
+	}
+	if findingWith(fs, unread, ruleRecordSchema, tail) {
+		t.Errorf("nothing reads rdi-7-widen-the-frame.md, so no report line names it and the blocker "+
+			"must not say the item %s: %+v", tail, fs)
+	}
+}
