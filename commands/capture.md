@@ -167,6 +167,21 @@ grammars are stated and a populated value is refused until activation is ruled.
 Nothing means "already covered" — an item nobody has answered is reported as
 outstanding by `abcd lint`, never named as a state.
 
+**Admissions and surprises are written by hand.** A widening proposal admitted
+into the candidate set carries an **admission record** (`adm-N`, under
+`.abcd/work/issues/admissions/<run-id>/`) whose `grounds` say what it was
+admitted on; a **surprise entry** (`srp-N`, under
+`.abcd/work/issues/surprises/`) records what was unexpected, keyed by
+`occasioned_by` to whatever occasioned it and never folded into a disposition. A
+declined proposal is not a third record: it is the disposition above in its
+`declined` state. Neither shape has a sub-verb — this surface writes no `adm-N`
+and no `srp-N`, and the command-side refusal is the next iteration's. What holds
+today is the committed-tree gate: `record_schema` refuses an admission with a
+blank `grounds` or no `proposal`, a surprise whose `occasioned_by` names a
+record the corpus does not hold, and either record filed in the other's store.
+`abcd lint` reports a widening proposal carrying neither an admission nor a
+decline, at `info`.
+
 ## Promote an issue into an intent
 
 When a one-line issue turns out to be a capability, graduate it without
