@@ -47,3 +47,7 @@ impact: additive
   inspected, **then** each is a distinct retained session and no session
   holds both.
 
+## Audit Notes
+
+<!-- abcd-review: OWED receipt=rcp-71f5a9b044cb -->
+Fidelity review OWED (receipt rcp-71f5a9b044cb).
