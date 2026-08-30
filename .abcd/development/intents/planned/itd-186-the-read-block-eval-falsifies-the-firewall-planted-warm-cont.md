@@ -1,8 +1,8 @@
 ---
 id: itd-186
 slug: the-read-block-eval-falsifies-the-firewall-planted-warm-cont
-spec_id: null
-kind: null
+spec_id: spc-64
+kind: standalone
 suggested_kind: standalone
 reclassification_history: []
 builds_on: []

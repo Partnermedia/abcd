@@ -1,8 +1,8 @@
 ---
 id: itd-189
 slug: what-the-widening-reading-proposes-is-admitted-or-declined-o
-spec_id: null
-kind: null
+spec_id: spc-67
+kind: standalone
 suggested_kind: standalone
 reclassification_history: []
 builds_on: []

@@ -1,8 +1,8 @@
 ---
 id: itd-184
 slug: four-cold-reading-definitions-one-blindness-core-each-positi
-spec_id: null
-kind: null
+spec_id: spc-62
+kind: bundle-member
 suggested_kind: bundle-member
 reclassification_history: []
 builds_on: [itd-86]

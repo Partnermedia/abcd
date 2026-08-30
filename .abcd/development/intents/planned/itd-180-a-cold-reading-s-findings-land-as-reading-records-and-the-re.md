@@ -1,8 +1,8 @@
 ---
 id: itd-180
 slug: a-cold-reading-s-findings-land-as-reading-records-and-the-re
-spec_id: null
-kind: null
+spec_id: spc-58
+kind: standalone
 suggested_kind: standalone
 reclassification_history: []
 builds_on: [itd-86]
