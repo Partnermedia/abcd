@@ -538,3 +538,63 @@ func TestAdmissionLegSeverityIsInfoNotBlocker(t *testing.T) {
 		}
 	}
 }
+
+// The report must read every admission filename the GATE accepts, or the two
+// disagree about a record that is sitting in the store: record_schema takes the
+// family's canonical grammar (`adm-<N>[-<slug>].md`, the spelling every sibling
+// family uses), so a report holding a stricter one would pass the record and then
+// announce that the proposal it admits carries no admission — a confident false
+// statement about a file the gate has just accepted. These records are
+// hand-written this cycle, which is exactly when a filename variation arrives.
+func TestAdmissionFilenameGrammarMatchesTheGate(t *testing.T) {
+	run, item := "rdg-2608300000000001", "rdi-2608300000000002"
+	root := readingLedger(t, run, item, "widening")
+	writeFile(t, root, ".abcd/work/issues/admissions/"+run+"/adm-2608300000000004-widened-frame.md",
+		"---\nschema_version: 1\nid: \"adm-2608300000000004\"\nrun: \""+run+"\"\n"+
+			"proposal: \""+item+"\"\ngrounds: \"the configuration it admits is one the frame does not hold\"\n---\n\n")
+
+	fs, err := Lint(readingOutstandingConfig(severityBlocker), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleReadingOutstanding); n != 0 {
+		t.Fatalf("an admission carrying a slug in its filename must still admit its proposal, got %d finding(s): %+v", n, fs)
+	}
+}
+
+// Readability supports ONE direction only. A record the walk actually read is a
+// fact whatever else in the tree it could not read — so an admission it holds
+// answers its proposal even while a sibling run directory is unreadable, and only
+// the claim that a proposal is UNADMITTED needs the whole tree behind it.
+// Reporting the admitted item anyway would tell the researcher to answer a
+// proposal the ledger shows they admitted.
+func TestAPartlyUnreadableAdmissionTreeStillAdmitsWhatItRead(t *testing.T) {
+	run, item := "rdg-2608300000000001", "rdi-2608300000000002"
+	root := readingLedger(t, run, item, "widening")
+	admissionRecord(t, root, run, "adm-2608300000000004", item)
+
+	link := filepath.Join(root, filepath.FromSlash(".abcd/work/issues/admissions/rdg-2608300000000009"))
+	if err := os.Symlink(t.TempDir(), link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	fs, err := Lint(readingOutstandingConfig(severityBlocker), root)
+	if err != nil {
+		t.Fatalf("a symlinked admission run must not fail the whole lint: %v", err)
+	}
+	var said bool
+	for _, f := range fs {
+		if f.RuleID != ruleReadingOutstanding {
+			continue
+		}
+		if strings.Contains(f.Message, "symlink") {
+			said = true
+		}
+		if strings.Contains(f.Message, "carries no disposition") || strings.Contains(f.Message, "neither an admission nor a decline") {
+			t.Errorf("a proposal the walk read an admission for was reported unanswered: %s", f.Message)
+		}
+	}
+	if !said {
+		t.Fatalf("the unreadable run directory must still be named; findings: %+v", fs)
+	}
+}
