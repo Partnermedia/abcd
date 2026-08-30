@@ -1456,3 +1456,38 @@ func TestQuotedPaddingIsNotTrimmedOutOfAValueTheReaderRefuses(t *testing.T) {
 		t.Fatalf("capture refuses a padded enum value, so the gate must too: %+v", fs)
 	}
 }
+
+// An ABSENT property and an EMPTY one are both findings, and they are not the
+// same finding. The reader refuses a record that omits a required property
+// outright (capture's validateStrict: `missing required property`) and skips it,
+// so that message's account of the consequence is true. It type-checks a present
+// one WITHOUT judging its content, so it accepts `found_during: ""` — and telling
+// the author their record is being skipped sends them to look for a refusal that
+// never happens. The blank is still a finding, on its own honest grounds: a
+// required property exists to state something, and a blank states nothing.
+func TestAbsentAndEmptyRequiredPropertiesGiveDifferentReasons(t *testing.T) {
+	root := admissionCorpus(t)
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-3.md",
+		"---\nschema_version: 1\nid: adm-3\nrun: rdg-1\nproposal: rdi-2\n---\n\n")
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-4.md",
+		"---\nschema_version: 1\nid: adm-4\nrun: rdg-1\nproposal: rdi-2\ngrounds: \"\"\n---\n\n")
+
+	fs, err := Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	absent := filepath.Join("work", "issues", "admissions", "rdg-1", "adm-3.md")
+	empty := filepath.Join("work", "issues", "admissions", "rdg-1", "adm-4.md")
+	if !findingWith(fs, absent, ruleRecordSchema, "skipped") {
+		t.Errorf("an omitted property IS refused by the reader, and the finding should say so: %+v", fs)
+	}
+	if findingWith(fs, empty, ruleRecordSchema, "skipped") {
+		t.Errorf("the reader accepts a present-but-empty property, so the finding must not claim it is skipped: %+v", fs)
+	}
+	if !findingWith(fs, empty, ruleRecordSchema, "'grounds'") {
+		t.Errorf("a blank required property is still a finding: %+v", fs)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 2 {
+		t.Fatalf("expected exactly 2 findings, got %d: %+v", n, fs)
+	}
+}
