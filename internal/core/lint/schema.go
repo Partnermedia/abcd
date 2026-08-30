@@ -95,7 +95,11 @@ var (
 	// carrying one holds its value on the lines BELOW it, so the same-line scanner
 	// reports the header as the value — which is why a rule asking "is this
 	// property empty?" has to look at the block rather than at the byte.
-	blockScalarIndicatorRe = regexp.MustCompile(`^[|>][0-9+-]*$`)
+	// The trailing comment YAML permits after the header is part of the header,
+	// not of the value: `grounds: | # nothing` over an empty block is the empty
+	// string exactly as a bare `grounds: |` is, and a pattern that read only the
+	// bare spellings left the reported defect passing under four legal ones.
+	blockScalarIndicatorRe = regexp.MustCompile(`^[|>][0-9+-]*(?:\s+#.*)?$`)
 	// The cross-reference frontmatter fields whose targets must resolve. They are
 	// the record's machine-readable claims that another record exists and is a
 	// live input — as distinct from prose, where naming a released or retired id
@@ -525,11 +529,16 @@ func checkRecordSchema(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 // schema question than this rule's, so only a present one is compared.
 func checkRecordFilename(r schemaRecord, severity string) []Finding {
 	f := r.fields["id"]
-	if isAbsentValue(f.value) {
+	// Absence here means NOT WRITTEN, which is why it is isNull and not
+	// isAbsentValue: an EMPTY id is a value that disagrees with the filename, and
+	// the delegation below only reaches a store that declares a required set. The
+	// intent, spec and three reading stores declare none, so reading `id: ""` as
+	// absence would send the delegation nowhere and leave it green in every rule.
+	if isNull(strings.TrimSpace(f.value)) {
 		return nil
 	}
 	want := r.handle()
-	got := strings.Trim(strings.TrimSpace(f.value), `"'`)
+	got := issueScalar(f.value)
 	// Compared as a PARSED handle, not as a string: `adr-0012` and `adr-12` are one
 	// id written two ways (the rest of the rule already compares numerically), and
 	// a string comparison would report the record's own zero-padded spelling as a
@@ -590,14 +599,17 @@ func checkRecordFilename(r schemaRecord, severity string) []Finding {
 // gate refuses across all four stores.
 func checkRecordFilenameSlug(r schemaRecord, severity string) []Finding {
 	f := r.fields["slug"]
-	if isAbsentValue(f.value) {
+	// isNull, not isAbsentValue, for checkRecordFilename's reason: an empty slug
+	// is a value that disagrees, and the stores that would otherwise catch it
+	// declare no required set to delegate to.
+	if isNull(strings.TrimSpace(f.value)) {
 		return nil
 	}
 	_, fnSlug, ok := recordid.SplitRecordFilename(r.store.fileFamily, filepath.Base(r.rel))
 	if !ok {
 		return nil
 	}
-	got := strings.Trim(strings.TrimSpace(f.value), `"'`)
+	got := issueScalar(f.value)
 	if fnSlug == got {
 		return nil
 	}
@@ -858,7 +870,7 @@ func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
 	// list-shaped value falls through as a present value that is no instant, which
 	// is exactly what it is.
 	//
-	// The value is trimmed AFTER issueScalar strips the quotes, because a quoted
+	// issueScalar trims again after stripping the quotes, because a quoted
 	// all-whitespace value (`lapsed_at: "   "`) still carries its padding once the
 	// quotes are gone. capture's reader trims before judging, so it reads that as
 	// ABSENT: a clean record with an optional property left unset, or — on a lapse
@@ -868,7 +880,7 @@ func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
 	lapseField, hasLapseField := r.fields["lapsed_at"]
 	lapsedAt := ""
 	if hasLapseField && !isNull(strings.TrimSpace(lapseField.value)) {
-		lapsedAt = strings.TrimSpace(issueScalar(lapseField.value))
+		lapsedAt = issueScalar(lapseField.value)
 	}
 	// A key whose own line carries no value may still carry one, on the indented
 	// lines below it. The shared scanner is a same-line scanner, so it reports that
@@ -906,11 +918,31 @@ func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
 	return out
 }
 
-// issueScalar strips the surrounding whitespace and quotes off a frontmatter
-// value so a quoted enum (`severity: "minor"`) compares as capture's parser reads
-// it — unquoted.
+// issueScalar reads one frontmatter value as the record's readers read it: the
+// surrounding whitespace and quotes stripped, so a quoted enum
+// (`severity: "minor"`) compares unquoted.
+//
+// It is the package's ONE scalar reader, and both halves of that matter.
+//
+// The whitespace is trimmed AGAIN after the quotes come off, because a quoted
+// all-whitespace value still carries its padding once they are gone; capture's
+// reader trims before judging, so `lapsed_at: "   "` is ABSENT to it
+// (iss-2608300212513349). Three spellings of this function used to exist — here,
+// in isAbsentValue, and in the outstanding report — and they did not agree: the
+// gate called `run: " rdg-1 "` a contradiction while the report called it a
+// match, so one record got two answers and the more permissive one was the
+// report's.
+//
+// Exactly ONE surrounding quote pair is stripped, never every quote character at
+// either end: a value that is itself quotes (`grounds: "”"`) is a value, and
+// eating it down to nothing puts a missing-property blocker on a property the
+// record plainly carries.
 func issueScalar(value string) string {
-	return strings.Trim(strings.TrimSpace(value), `"'`)
+	v := strings.TrimSpace(value)
+	if len(v) >= 2 && (v[0] == '"' || v[0] == '\'') && v[len(v)-1] == v[0] {
+		v = v[1 : len(v)-1]
+	}
+	return strings.TrimSpace(v)
 }
 
 // inSet reports membership in a small value list.
@@ -1146,7 +1178,7 @@ func undeclaredSubdirMessage(store recordStore, bucket, name string) string {
 // before it reads makes nothing out of it either — so the record is skipped and
 // invisible to every surface of its family while the gate armed to catch exactly
 // that stayed green (iss-2608300935218982). The quotes are stripped with the
-// rule's own issueScalar and the result trimmed AFTER, because a quoted
+// rule's own issueScalar, which trims again afterwards because a quoted
 // all-whitespace value still carries its padding once the quotes are gone (the
 // lesson lapsed_at already learned in iss-2608300212513349).
 //
@@ -1163,7 +1195,7 @@ func isAbsentValue(value string) bool {
 	if strings.HasPrefix(v, "[") && strings.HasSuffix(v, "]") {
 		return strings.TrimSpace(v[1:len(v)-1]) == ""
 	}
-	return strings.TrimSpace(issueScalar(v)) == ""
+	return issueScalar(v) == ""
 }
 
 // recordRefsOf reads the handles of every cross-reference field once per record.
@@ -1265,21 +1297,63 @@ func frontmatterBlockAt(lines []string, line int) []string {
 // empty block pass as present.
 func frontmatterBlocksOf(lines []string, fields map[string]fmField) map[string]string {
 	var blocks map[string]string
-	for key, f := range fields {
-		v := strings.TrimSpace(f.value)
-		if v != "" && !blockScalarIndicatorRe.MatchString(v) {
-			continue
-		}
-		block := frontmatterBlockAt(lines, f.line)
-		if len(block) == 0 {
-			continue
+	put := func(key, value string) {
+		if value == "" {
+			return
 		}
 		if blocks == nil {
 			blocks = map[string]string{}
 		}
-		blocks[key] = strings.Join(block, ", ")
+		blocks[key] = value
+	}
+	for key, f := range fields {
+		v := strings.TrimSpace(f.value)
+		switch {
+		case blockScalarIndicatorRe.MatchString(v):
+			put(key, blockScalarAt(lines, f.line))
+		case v == "":
+			put(key, strings.Join(frontmatterBlockAt(lines, f.line), ", "))
+		}
 	}
 	return blocks
+}
+
+// blockScalarAt returns the lines that continue a key carrying a block-scalar
+// HEADER (`grounds: |`), joined, or the empty string when the block holds
+// nothing.
+//
+// It is a second walker rather than a reuse of frontmatterBlockAt, and the
+// difference is one line of it: that walker skips blank and `#`-led lines,
+// because in a block SEQUENCE a `#` line is a comment interrupting the list.
+// Inside a literal block scalar a `#` is CONTENT, so reading a scalar with the
+// sequence walker makes a legal record's whole value vanish and reports a
+// required property missing that the file plainly carries — a confident false
+// statement from the rule whose design argument is that it never makes one.
+//
+// line is the key's 1-based source line, so the scan starts at the line after it
+// and ends at the first unindented non-blank line: the next key at column 0, the
+// closing delimiter, or the end of the file.
+func blockScalarAt(lines []string, line int) string {
+	var block []string
+	for i := line; i >= 1 && i < len(lines); i++ {
+		l := strings.TrimRight(lines[i], " \t\r")
+		if strings.TrimSpace(l) == "" {
+			// A blank line is inside the block, not the end of it — YAML keeps it as
+			// content. It holds nothing on its own, so it never makes an otherwise
+			// empty block look full.
+			block = append(block, "")
+			continue
+		}
+		if l[0] != ' ' && l[0] != '\t' {
+			break
+		}
+		block = append(block, l)
+	}
+	joined := strings.Join(block, "\n")
+	if strings.TrimSpace(joined) == "" {
+		return ""
+	}
+	return joined
 }
 
 // recordRefsIn reads every record handle out of a frontmatter value, tolerating
