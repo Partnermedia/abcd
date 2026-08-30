@@ -90,6 +90,12 @@ var (
 	// it carries rather than by a directory.
 	admissionFileNumRe = recordid.FilenameNumRe(issueschema.AdmissionFamily)
 	surpriseFileNumRe  = recordid.FilenameNumRe(issueschema.SurpriseFamily)
+	// A YAML block-scalar header and nothing else: `|`, `>`, with the chomping and
+	// indentation indicators the spelling allows (`|-`, `>+`, `|2-`). A key
+	// carrying one holds its value on the lines BELOW it, so the same-line scanner
+	// reports the header as the value — which is why a rule asking "is this
+	// property empty?" has to look at the block rather than at the byte.
+	blockScalarIndicatorRe = regexp.MustCompile(`^[|>][0-9+-]*$`)
 	// The cross-reference frontmatter fields whose targets must resolve. They are
 	// the record's machine-readable claims that another record exists and is a
 	// live input — as distinct from prose, where naming a released or retired id
@@ -299,6 +305,22 @@ type schemaRecord struct {
 // handle renders the record's prose handle (adr-12, itd-47).
 func (r schemaRecord) handle() string {
 	return r.store.prefix + "-" + strconv.Itoa(r.num)
+}
+
+// valueEmpty reports whether the record carries no value for field — the
+// question isAbsentValue answers for a same-line value, widened by the one
+// spelling whose value is not on the key's own line at all.
+//
+// `grounds: |` puts the value on the indented lines below, so the same-line
+// scanner reads the indicator itself: a non-empty byte that is not a value. A
+// block holding text is a value; a block holding nothing is the empty string,
+// which is the same absence every other spelling is and must be refused on the
+// same terms rather than passing on the strength of a `|`.
+func (r schemaRecord) valueEmpty(field string, f fmField) bool {
+	if blockScalarIndicatorRe.MatchString(strings.TrimSpace(f.value)) {
+		return strings.TrimSpace(r.blocks[field]) == ""
+	}
+	return isAbsentValue(f.value)
 }
 
 // recordRef is one handle read out of a cross-reference field.
@@ -568,12 +590,15 @@ func checkRecordFilenameSlug(r schemaRecord, severity string) []Finding {
 // A record nobody can read is not a lax record, it is a lost one.
 //
 // A property present but empty (`schema_version:`) counts as missing for the same
-// reason: the reader cannot make a value out of it either.
+// reason: the reader cannot make a value out of it either. "Empty" is judged on
+// the value the YAML scalar carries rather than on its bytes — see isAbsentValue
+// for the quoted spellings, and blockScalarIndicatorRe for the one shape whose
+// value is not on the key's own line at all.
 func checkRecordRequiredFields(r schemaRecord, severity string) []Finding {
 	var out []Finding
 	for _, field := range r.store.requiredFields {
 		f, present := r.fields[field]
-		if present && !isAbsentValue(f.value) {
+		if present && !r.valueEmpty(field, f) {
 			continue
 		}
 		line := f.line
@@ -1034,6 +1059,21 @@ func undeclaredSubdirMessage(store recordStore, bucket, name string) string {
 // malformed value. It is local rather than folded into the shared isNull because
 // isNull also judges SCALAR fields (kind, impact, slug), where a list literal is a
 // wrong value rather than an unset one, and should keep saying so.
+//
+// Absence is decided on the value the YAML SCALAR carries, never on its raw
+// bytes: `grounds: ""` is five bytes and no value, and a reader that validates
+// before it reads makes nothing out of it either — so the record is skipped and
+// invisible to every surface of its family while the gate armed to catch exactly
+// that stayed green (iss-2608300935218982). The quotes are stripped with the
+// rule's own issueScalar and the result trimmed AFTER, because a quoted
+// all-whitespace value still carries its padding once the quotes are gone (the
+// lesson lapsed_at already learned in iss-2608300212513349).
+//
+// This is deliberately the ONE place the rule decides emptiness, so the fix is
+// store-wide rather than scoped to the store the defect was reported against: the
+// pre-existing issue ledger carried the identical gap (a committed
+// `found_during: ""` was lint-green), and a per-store answer would leave the same
+// bug behind a narrower mouth in three other stores.
 func isAbsentValue(value string) bool {
 	v := strings.TrimSpace(value)
 	if isNull(v) {
@@ -1042,7 +1082,7 @@ func isAbsentValue(value string) bool {
 	if strings.HasPrefix(v, "[") && strings.HasSuffix(v, "]") {
 		return strings.TrimSpace(v[1:len(v)-1]) == ""
 	}
-	return false
+	return strings.TrimSpace(issueScalar(v)) == ""
 }
 
 // recordRefsOf reads the handles of every cross-reference field once per record.
@@ -1137,10 +1177,16 @@ func frontmatterBlockAt(lines []string, line int) []string {
 // value at all. It is held on the record for the same reason refs is: a rule that
 // re-read the lines would be a second parse of one spelling, and a rule that
 // skipped the look-ahead would read a value that is plainly in the file as absent.
+//
+// A key carrying a block-scalar HEADER (`grounds: |`) is read on the same terms,
+// because its value is on those lines too — the header is not the value, it is
+// the announcement of one, and a rule that took the byte for a value would let an
+// empty block pass as present.
 func frontmatterBlocksOf(lines []string, fields map[string]fmField) map[string]string {
 	var blocks map[string]string
 	for key, f := range fields {
-		if strings.TrimSpace(f.value) != "" {
+		v := strings.TrimSpace(f.value)
+		if v != "" && !blockScalarIndicatorRe.MatchString(v) {
 			continue
 		}
 		block := frontmatterBlockAt(lines, f.line)
