@@ -305,8 +305,12 @@ func TestReadyChecksOrderAndCount(t *testing.T) {
 // given bodies verbatim — the fixture the five gradient cases vary.
 func plannedWithClaims(mechanism, conditions string) string {
 	return "---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n" +
-		mechanism + conditions + "## Acceptance Criteria\n\n- ok\n"
+		mechanism + conditions + "## Acceptance Criteria\n\n- ok\n" + groundsSection
 }
+
+// groundsSection is the recorded-grounds section a green fixture carries, so a
+// test about the claim checks is not incidentally a test about the grounds one.
+const groundsSection = "\n## Grounds\n\n- pursued: we expect the recorded conjecture to outlive the session that had it\n"
 
 // readyWithClaims runs the gate over a planned record carrying the given claim
 // sections, against a written spec, so only the claim checks can fail.
@@ -642,9 +646,34 @@ func TestReadyNamesADuplicateHiddenBehindANullity(t *testing.T) {
 	}
 }
 
-// TestReadyGroundsReportsEntries: a record carrying a well-formed entry passes
-// the grounds check, and the report says how many are recorded.
-func TestReadyGroundsReportsEntries(t *testing.T) {
+// TestReadyGroundsAbsentFails: with the recording path landed and the planned/
+// bucket populated, the check refuses. The remedy names the flag and the closed
+// vocabulary, so the report says exactly how to answer it.
+func TestReadyGroundsAbsentFails(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, plannedDir+"/itd-10-alpha.md", plannedUnlinked("itd-10", "alpha"))
+
+	res, err := Ready(root, "itd-10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertShape(t, res)
+	g := checkByName(t, res, CheckGrounds)
+	if g.OK {
+		t.Fatalf("grounds check = %+v, want a refusal on a record carrying none", g)
+	}
+	if !strings.Contains(g.Remedy, "--grounds") || !strings.Contains(g.Remedy, "pursued") {
+		t.Fatalf("grounds remedy = %q, want the flag and the vocabulary", g.Remedy)
+	}
+	if res.Ready {
+		t.Fatal("an intent with no recorded grounds must not be ready")
+	}
+}
+
+// TestReadyGroundsPresentPasses and TestReadyGroundsReportsEntries are one
+// assertion: a record carrying a well-formed entry passes, and the report says
+// how many are recorded.
+func TestReadyGroundsPresentPasses(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, plannedDir+"/itd-10-alpha.md",
 		plannedUnlinked("itd-10", "alpha")+

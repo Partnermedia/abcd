@@ -1595,7 +1595,7 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 	var readyGrounds string
 	readyCmd := &cobra.Command{
 		Use:   "ready <itd-N> [--grounds \"<pursued|deferred|declined>: <conjecture>\"]",
-		Short: "Report whether an intent is ready to implement (planned + AC + claims + written spec); exit 1 when not",
+		Short: "Report whether an intent is ready to implement (planned + AC + claims + written spec + recorded grounds); exit 1 when not",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()

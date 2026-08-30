@@ -282,11 +282,11 @@ func scopeConditionsCheck(it Intent, claims Claims) ReadyCheck {
 // it is the only check about why the work is being done at all rather than about
 // whether the record is well formed.
 //
-// It is staged. Recording lands before refusing: promoting the refusal while the
-// planned/ bucket carried no entries would turn the gate into a wall of
-// pre-existing failures, which is how a gate gets routed around instead of
-// answered. Until the bucket is populated the check REPORTS and never fails, and
-// the detail says which state the record is in either way.
+// It REFUSES. The staging that put recording before refusing is spent: the
+// planned/ bucket carries entries, so the gate no longer arrives as a wall of
+// pre-existing failures — which is how a gate gets routed around instead of
+// answered. Records planned before the argument existed fail it, and that is the
+// finding, not a defect: an unrecorded conjecture is exactly what this reports.
 //
 // Only a well-formed entry counts. Prose under the heading is prose: putting a
 // gate verdict on a sentence somebody wrote for a human is a judgement no parser
@@ -300,12 +300,24 @@ func groundsCheck(it Intent, content string) ReadyCheck {
 	}
 	entries := ParseGrounds(content)
 	if len(entries) == 0 {
+		c.OK = false
 		c.Detail = "no recorded grounds — the conjecture behind pursuing " + it.ID + " is unrecorded"
+		c.Remedy = groundsRemedy(it.ID)
 		return c
 	}
 	last := entries[len(entries)-1]
 	c.Detail = fmt.Sprintf("%d recorded ground(s), most recent %s", len(entries), last.Token)
 	return c
+}
+
+// groundsRemedy is the one spelling of how a ground is recorded, so the gate and
+// the surfaces name the same command and the same closed vocabulary. It asks for
+// the expectation AND its falsifier, because that is the difference between a
+// conjecture and a restatement of the decision — the part no parser can check.
+func groundsRemedy(intentID string) string {
+	return "run `abcd intent ready " + intentID +
+		" --grounds \"pursued: <what is expected, and what would show it wrong>\"` " +
+		"(vocabulary: pursued | deferred | declined) — name the conjecture being acted on, not the route taken"
 }
 
 // claimCheckExemption reports the buckets where a claim check has nothing to

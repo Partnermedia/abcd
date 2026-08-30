@@ -366,7 +366,7 @@ func TestStatusCounts(t *testing.T) {
 func plannedLinked(id, slug, specID string) string {
 	return "---\nid: " + id + "\nslug: " + slug + "\nspec_id: " + specID + "\nkind: standalone\n---\n" +
 		"# " + slug + "\n\n## Scope Conditions\n\n" + NullityToken +
-		"\n\n## Acceptance Criteria\n\n- ok\n\n## Audit Notes\n"
+		"\n\n## Acceptance Criteria\n\n- ok\n" + groundsSection + "\n## Audit Notes\n"
 }
 
 // specNaming is an open spec file whose intent: link names the given intent.
