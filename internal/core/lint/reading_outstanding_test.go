@@ -22,7 +22,9 @@ func readingLedger(t *testing.T, run, item, position string) string {
 			"run: \""+run+"\"\n"+
 			"manifest: \"sha256:beef\"\n"+
 			"position: \""+position+"\"\n"+
-			"regime: \"registrative\"\n"+
+			// The regime is resolvable by position ALONE, so a fixture that
+			// spelled its own would be a record no writer could have produced.
+			"regime: \""+issueschema.ReadingRegime(position)+"\"\n"+
 			"pattern: \"a stated constraint\"\n"+
 			"---\n\n")
 	return root
@@ -401,5 +403,138 @@ func TestUnsafeEntryCarriesItsReason(t *testing.T) {
 	}
 	if !said {
 		t.Fatalf("the unsafe entry does not say why the file could not be read; findings: %+v", fs)
+	}
+}
+
+// admissionRecord writes one well-formed admission against a proposal.
+func admissionRecord(t *testing.T, root, run, id, proposal string) {
+	t.Helper()
+	writeFile(t, root, ".abcd/work/issues/admissions/"+run+"/"+id+".md",
+		"---\n"+
+			"schema_version: 1\n"+
+			"id: \""+id+"\"\n"+
+			"run: \""+run+"\"\n"+
+			"proposal: \""+proposal+"\"\n"+
+			"grounds: \"the configuration it admits is one the frame does not hold\"\n"+
+			"---\n\n")
+}
+
+// dispositionRecord writes one disposition in the given state.
+func dispositionRecord(t *testing.T, root, item, id, state string) {
+	t.Helper()
+	writeFile(t, root, ".abcd/work/issues/dispositions/"+item+"/"+id+".md",
+		"---\nschema_version: 1\nid: \""+id+"\"\nitem: \""+item+"\"\n"+
+			"state: \""+state+"\"\ndisposition_grounds: \"weighed and answered\"\n---\n\n")
+}
+
+// The widening position's answer set is wider than a disposition: a proposal is
+// answered by an ADMISSION carrying its grounds, or by a DECLINE. Acceptance at
+// the widening position IS admission, so an accepted proposal with no admission
+// record is an admission whose grounds were never written — which is the whole
+// thing itd-189 exists to prevent, and without this leg nothing would say so.
+//
+// It is a branch inside the existing report, not a second rule: a parallel
+// admission_outstanding would put one judgement in two places, and the first
+// divergence between them would be silent.
+func TestWideningProposalWithoutAdmissionOrDeclineIsOutstanding(t *testing.T) {
+	run, item := "rdg-2608300000000001", "rdi-2608300000000002"
+	root := readingLedger(t, run, item, "widening")
+	dispositionRecord(t, root, item, "dsp-2608300000000003", issueschema.DispositionAccepted)
+
+	fs, err := Lint(readingOutstandingConfig(severityBlocker), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleReadingOutstanding); n != 1 {
+		t.Fatalf("expected exactly 1 %s finding, got %d: %+v", ruleReadingOutstanding, n, fs)
+	}
+	if !strings.Contains(fs[0].Message, item) || !strings.Contains(fs[0].Message, "admission") {
+		t.Fatalf("the report must name the proposal and the missing admission; got %q", fs[0].Message)
+	}
+
+	// And the admission answers it: the grounds are on the record, so there is
+	// nothing left outstanding about the proposal.
+	admissionRecord(t, root, run, "adm-2608300000000004", item)
+	fs, err = Lint(readingOutstandingConfig(severityBlocker), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleReadingOutstanding); n != 0 {
+		t.Fatalf("an admitted proposal must not be outstanding, got %d finding(s): %+v", n, fs)
+	}
+}
+
+// The control on the ledger side: a DECLINED proposal is answered, and it is
+// answered by spc-58's disposition record in the state the widening position
+// reserves — not by a second record type. Declining costs nothing epistemically,
+// so nothing further is owed once the decline is on the record.
+func TestDeclinedDispositionSatisfiesTheAdmissionLeg(t *testing.T) {
+	item := "rdi-2608300000000002"
+	root := readingLedger(t, "rdg-2608300000000001", item, "widening")
+	dispositionRecord(t, root, item, "dsp-2608300000000003", issueschema.DispositionDeclined)
+
+	fs, err := Lint(readingOutstandingConfig(severityBlocker), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleReadingOutstanding); n != 0 {
+		t.Fatalf("a declined proposal is answered, got %d finding(s): %+v", n, fs)
+	}
+}
+
+// An admission is an answer in its own right, so a proposal carrying one is not
+// outstanding even before any disposition exists. Reporting it would tell the
+// researcher to answer a proposal they have already admitted, with grounds.
+func TestAdmissionRecordSatisfiesTheAdmissionLeg(t *testing.T) {
+	run, item := "rdg-2608300000000001", "rdi-2608300000000002"
+	root := readingLedger(t, run, item, "widening")
+	admissionRecord(t, root, run, "adm-2608300000000004", item)
+
+	fs, err := Lint(readingOutstandingConfig(severityBlocker), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleReadingOutstanding); n != 0 {
+		t.Fatalf("an admitted proposal must not be outstanding, got %d finding(s): %+v", n, fs)
+	}
+
+	// The leg is scoped to the widening position: an admission is what the
+	// candidate set is joined by, and no other position has one. A detection with
+	// no disposition is outstanding on the original leg, whatever admissions the
+	// run holds.
+	other := "rdi-2608300000000005"
+	writeFile(t, root, ".abcd/work/issues/readings/"+run+"/"+other+".md",
+		"---\nschema_version: 1\nid: \""+other+"\"\nrun: \""+run+"\"\nmanifest: \"sha256:beef\"\n"+
+			"position: \"detection\"\nregime: \"registrative\"\npattern: \"a stated constraint\"\n---\n\n")
+	fs, err = Lint(readingOutstandingConfig(severityBlocker), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleReadingOutstanding); n != 1 {
+		t.Fatalf("an undispositioned detection is still outstanding, got %d finding(s): %+v", n, fs)
+	}
+}
+
+// The admission leg is part of a REPORT, and the report's severity is pinned in
+// code. An unanswered proposal must never block a push that has nothing to do
+// with it — the config below asks for blocker precisely so the refusal to honour
+// it is what this test observes.
+func TestAdmissionLegSeverityIsInfoNotBlocker(t *testing.T) {
+	item := "rdi-2608300000000002"
+	root := readingLedger(t, "rdg-2608300000000001", item, "widening")
+	dispositionRecord(t, root, item, "dsp-2608300000000003", issueschema.DispositionAccepted)
+
+	fs, err := Lint(readingOutstandingConfig(severityBlocker), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fs) == 0 {
+		t.Fatal("expected the admission leg to produce a finding")
+	}
+	for _, f := range fs {
+		if f.RuleID == ruleReadingOutstanding && f.Severity != severityInfo {
+			t.Fatalf("severity = %q, want %q — a config that could raise this to blocker is a gate waiting to happen",
+				f.Severity, severityInfo)
+		}
 	}
 }

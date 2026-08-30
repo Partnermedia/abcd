@@ -41,6 +41,7 @@ const severityInfo = "info"
 var (
 	readingRunDirRe   = regexp.MustCompile(`^` + issueschema.ReadingRunFamily + `-[0-9]+$`)
 	readingItemFileRe = regexp.MustCompile(`^(` + issueschema.ReadingItemFamily + `-[0-9]+)\.md$`)
+	admissionFileRe   = regexp.MustCompile(`^` + issueschema.AdmissionFamily + `-[0-9]+\.md$`)
 )
 
 // OutstandingItem is one reading item nobody has answered.
@@ -62,7 +63,20 @@ type OpenHold struct {
 // OutstandingReadings is the whole report, ordered deterministically.
 type OutstandingReadings struct {
 	Undispositioned []OutstandingItem `json:"undispositioned"`
-	OpenHolds       []OpenHold        `json:"open_holds"`
+	// Unadmitted names widening PROPOSALS that are neither admitted nor declined
+	// (spc-67). The widening position's answer set is wider than a disposition —
+	// an admission record carrying its grounds answers a proposal, and so does a
+	// decline — so the same question needs one more branch here rather than a
+	// parallel rule beside it: two rules asking one question diverge, and the
+	// first divergence between them is silent.
+	//
+	// Acceptance at the widening position IS admission, so an accepted proposal
+	// with no admission record is an admission whose grounds were never written.
+	// That is the case this leg exists for: uniform adoption of everything a
+	// reading proposes is equally consistent with careful judgement and with
+	// abdication, and only the grounds tell the two apart.
+	Unadmitted []OutstandingItem `json:"unadmitted,omitempty"`
+	OpenHolds  []OpenHold        `json:"open_holds"`
 	// Unsafe names the repo-relative directories the walk declined to enter
 	// because they are not real directories. core/capture REFUSES these outright,
 	// because its read is followed by a write; this walk is genuinely read-only,
@@ -123,7 +137,7 @@ type ContestedItem struct {
 // repository that has commissioned no reading, and the state a surface renders
 // as silence rather than as a heading with nothing under it.
 func (r OutstandingReadings) Empty() bool {
-	return len(r.Undispositioned) == 0 && len(r.OpenHolds) == 0 &&
+	return len(r.Undispositioned) == 0 && len(r.Unadmitted) == 0 && len(r.OpenHolds) == 0 &&
 		len(r.Unsafe) == 0 && len(r.Cyclic) == 0 && len(r.Contested) == 0 &&
 		len(r.Unreadable) == 0
 }
@@ -162,6 +176,11 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 			Reason: notARealDirectory,
 		})
 	}
+	// The admission side of the widening position's answer set, read once for the
+	// same reason: a proposal's admission is a record in a different family, and
+	// re-walking that tree per item would ask one question many times.
+	admitted, admissionsReadable, admissionUnsafe := admittedProposals(issuesRoot, issuesDir)
+	report.Unsafe = append(report.Unsafe, admissionUnsafe...)
 
 	for _, run := range runs {
 		if !readingRunDirRe.MatchString(run.Name()) {
@@ -191,12 +210,20 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 			// The item file itself, on the same terms as everything below it. A
 			// symlinked rdi-N.md was admitted as a real item, so the board reported
 			// it outstanding and the verb it named then refused to touch it.
-			if fi, lerr := os.Lstat(filepath.Join(runDir, e.Name())); lerr != nil || !fi.Mode().IsRegular() {
+			//
+			// It is READ rather than stat-ed because the item's own POSITION decides
+			// which answers count for it: a widening proposal is answered by an
+			// admission or a decline, and every other position by a disposition. The
+			// guarded read is one open with O_NOFOLLOW validated on the same
+			// descriptor, so no symlink swap fits between the check and the read.
+			content, rerr := fsutil.ReadGuarded(filepath.Join(runDir, e.Name()), issueschema.RecordReadLimit)
+			if rerr != nil {
 				report.Unsafe = append(report.Unsafe, UnsafePath{
-					Path: filepath.ToSlash(rel), Reason: notARegularFile,
+					Path: filepath.ToSlash(rel), Reason: unreadableReason(rerr),
 				})
 				continue
 			}
+			position := readingPosition(string(content))
 			if !dispositionsReadable {
 				// The item's answer is unreadable, which is not the same fact as
 				// "unanswered" — reporting it outstanding would be a confident
@@ -223,6 +250,13 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 					Standing: answer.contested,
 				})
 			case answer.standing == nil:
+				// A widening proposal carrying an admission is answered: the
+				// admission records the grounds it was admitted on, and telling the
+				// researcher to answer a proposal they have already admitted would
+				// be the report saying something the ledger contradicts.
+				if position == issueschema.PositionWidening && admissionsReadable && admitted[item] {
+					break
+				}
 				report.Undispositioned = append(report.Undispositioned, OutstandingItem{
 					Item: item, Run: run.Name(), Path: filepath.ToSlash(rel),
 				})
@@ -230,6 +264,26 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 				report.Unreadable = append(report.Unreadable, UnreadableAnswer{
 					Item: item, Run: run.Name(), Path: filepath.ToSlash(answer.standing.rel),
 					Disposition: answer.standing.id,
+				})
+			}
+			// The admission leg. It sits outside the switch for the same reason the
+			// holds do: it is an ADDITIONAL fact about an item that already has a
+			// standing answer, not an alternative to it.
+			//
+			// A `declined` proposal is answered on the ledger side and owes nothing
+			// further. A `held` one is already published with its exit condition
+			// below, and naming it twice would trade one silence for a duplicate —
+			// whether `held` is even available at this position is deferred to the
+			// first widening run's dispositions, so this leg does not decide it.
+			// Everything else standing on a widening proposal — acceptance above
+			// all, which at this position IS admission — needs an admission record,
+			// because that is where the grounds live.
+			if position == issueschema.PositionWidening && admissionsReadable && !admitted[item] &&
+				answer.standing != nil && answer.standing.wellFormed &&
+				answer.standing.state != issueschema.DispositionDeclined &&
+				answer.standing.state != issueschema.DispositionHeld {
+				report.Unadmitted = append(report.Unadmitted, OutstandingItem{
+					Item: item, Run: run.Name(), Path: filepath.ToSlash(rel),
 				})
 			}
 			// Every standing hold is rendered, whatever else is true of the item —
@@ -245,6 +299,9 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 	sort.Slice(report.Undispositioned, func(i, j int) bool {
 		return report.Undispositioned[i].Item < report.Undispositioned[j].Item
 	})
+	sort.Slice(report.Unadmitted, func(i, j int) bool {
+		return report.Unadmitted[i].Item < report.Unadmitted[j].Item
+	})
 	sort.Slice(report.OpenHolds, func(i, j int) bool {
 		return report.OpenHolds[i].Item < report.OpenHolds[j].Item
 	})
@@ -253,6 +310,88 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 	sort.Slice(report.Unreadable, func(i, j int) bool { return report.Unreadable[i].Item < report.Unreadable[j].Item })
 	sort.Slice(report.Unsafe, func(i, j int) bool { return report.Unsafe[i].Path < report.Unsafe[j].Path })
 	return report, nil
+}
+
+// readingPosition reads the `position` off a reading record's frontmatter. It is
+// the lenient scanner the record-schema rule already reads every record in this
+// tree with, not a second parser: what the position decides here is which
+// ANSWERS count for an item, and a record whose frontmatter no reader can read
+// carries no position, so it takes the ordinary disposition-only path.
+func readingPosition(content string) string {
+	f := frontmatterFields(strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n"))["position"]
+	return strings.Trim(strings.TrimSpace(f.value), `"'`)
+}
+
+// admittedProposals reads the admission store once and returns the set of
+// proposals it admits, whether the store was readable at all, and the paths the
+// walk declined to read.
+//
+// The readability verdict travels with the set because an unreadable admission
+// tree is not an empty one: reporting every widening proposal as unadmitted
+// because nobody could read the admissions would be the same confident wrong
+// statement the disposition side already refuses to make. An ABSENT tree is
+// readable and empty — a repository that has admitted nothing is in a state, not
+// a fault.
+func admittedProposals(issuesRoot, issuesDir string) (map[string]bool, bool, []UnsafePath) {
+	admitted := map[string]bool{}
+	var unsafe []UnsafePath
+	admissionsRoot := filepath.Join(issuesRoot, issueschema.AdmissionsDir)
+	if !realDir(admissionsRoot) {
+		return admitted, false, []UnsafePath{{
+			Path:   filepath.ToSlash(filepath.Join(issuesDir, issueschema.AdmissionsDir)),
+			Reason: notARealDirectory,
+		}}
+	}
+	runs, err := os.ReadDir(admissionsRoot)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return admitted, true, nil
+		}
+		// A root that exists and cannot be listed supports no claim about what has
+		// been admitted, which is the same fact an unsafe root carries.
+		return admitted, false, []UnsafePath{{
+			Path:   filepath.ToSlash(filepath.Join(issuesDir, issueschema.AdmissionsDir)),
+			Reason: unreadableReason(err),
+		}}
+	}
+	readable := true
+	for _, run := range runs {
+		if !readingRunDirRe.MatchString(run.Name()) {
+			continue
+		}
+		runRel := filepath.Join(issuesDir, issueschema.AdmissionsDir, run.Name())
+		runDir := filepath.Join(admissionsRoot, run.Name())
+		if !realDir(runDir) {
+			unsafe = append(unsafe, UnsafePath{Path: filepath.ToSlash(runRel), Reason: notARealDirectory})
+			readable = false
+			continue
+		}
+		entries, err := os.ReadDir(runDir)
+		if err != nil {
+			unsafe = append(unsafe, UnsafePath{Path: filepath.ToSlash(runRel), Reason: unreadableReason(err)})
+			readable = false
+			continue
+		}
+		for _, e := range entries {
+			if e.IsDir() || !admissionFileRe.MatchString(e.Name()) {
+				continue
+			}
+			content, err := fsutil.ReadGuarded(filepath.Join(runDir, e.Name()), issueschema.RecordReadLimit)
+			if err != nil {
+				unsafe = append(unsafe, UnsafePath{
+					Path:   filepath.ToSlash(filepath.Join(runRel, e.Name())),
+					Reason: unreadableReason(err),
+				})
+				readable = false
+				continue
+			}
+			f := frontmatterFields(strings.Split(strings.ReplaceAll(string(content), "\r\n", "\n"), "\n"))["proposal"]
+			if p := strings.Trim(strings.TrimSpace(f.value), `"'`); p != "" {
+				admitted[p] = true
+			}
+		}
+	}
+	return admitted, readable, unsafe
 }
 
 // The reasons an Unsafe entry can carry. They are prose because they are read by
@@ -420,6 +559,16 @@ func checkReadingOutstanding(repoRoot string, cfg RuleConfig) ([]Finding, error)
 				"An item nobody has answered has no state to sit in, because nothing in this " +
 				"vocabulary means \"already covered\"; answer it with `abcd capture disposition " +
 				o.Item + " --state <state> ...`",
+		})
+	}
+	for _, o := range report.Unadmitted {
+		out = append(out, Finding{
+			File: o.Path, Line: 1, RuleID: ruleReadingOutstanding, Severity: severityInfo,
+			Message: o.Item + " (run " + o.Run + ") is a widening proposal with neither an admission nor a decline — outstanding. " +
+				"At the widening position acceptance IS admission, and the grounds an admission was made on live in an " +
+				"admission record (`" + issueschema.AdmissionFamily + "-N` under " + issueschema.AdmissionsDir + "/" + o.Run +
+				"/), because uniform adoption of everything a reading proposes is equally consistent with judgement and with abdication. " +
+				"Declining costs nothing epistemically and is recorded as a disposition in the `" + issueschema.DispositionDeclined + "` state",
 		})
 	}
 	for _, u := range report.Unreadable {
