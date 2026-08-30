@@ -226,7 +226,7 @@ Record an explicit non-action decision (open/ -> wontfix/)
 **Flags:**
 
 ```
-      --grounds declined   override the stamped grounds text (the token stays declined — a wontfix IS that non-action)
+      --grounds string   override the stamped grounds text (the token stays declined — a wontfix IS that non-action)
 ```
 
 ### `abcd changelog`

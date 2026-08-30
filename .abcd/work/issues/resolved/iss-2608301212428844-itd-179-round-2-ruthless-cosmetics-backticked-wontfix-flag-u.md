@@ -7,6 +7,11 @@ category: "ux"
 source: "user-observation"
 found_during: "itd-179-round-2-ruthless"
 found_at: "internal/surface/cli/cli.go"
+resolution: "the wontfix --grounds usage no longer backticks its placeholder and the reference is regenerated, the derived-grounds redaction is counted once, and the whitespace-only reason is refused by its own cause"
+impact: fix
+grounds: "pursued: we expect a refusal that misnames its cause and a count that over-reports to cost more operator time than the three lines they take to fix, and a help page printing --grounds declined is the visible end of it"
+resolved_by:
+  intent: "itd-179"
 ---
 
 itd-179 round-2 ruthless cosmetics: backticked wontfix flag usage, double-counted redaction spans, refusal message names a cause that did not occur

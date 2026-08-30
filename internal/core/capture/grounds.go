@@ -60,15 +60,24 @@ func requireGrounds(repoRoot, verb, raw string) (g grounds.Grounds, redacted int
 // contradicts.
 func wontfixGrounds(repoRoot, raw, reason string) (g grounds.Grounds, redacted int, degraded string, err error) {
 	if strings.TrimSpace(raw) == "" {
-		redText, n, deg := redactLedgerText(repoRoot, reason)
+		if strings.TrimSpace(reason) == "" {
+			// The cause is the reason itself, and the refusal says so: naming a
+			// redaction that did not happen sends the operator to the wrong remedy
+			// (iss-2608301212428844). transition raises the same refusal on its own,
+			// but it is never reached — this runs first.
+			return grounds.Grounds{}, 0, "", fmt.Errorf(
+				"wontfix: %w: wontfix_reason must be a non-empty string; nothing written", ErrGroundsRefused)
+		}
+		redText, _, deg := redactLedgerText(repoRoot, reason)
 		folded := grounds.Fold(redText)
 		if folded == "" {
-			// transition refuses an empty reason on its own; this only guards the
-			// case where redaction consumed the whole of it.
 			return grounds.Grounds{}, 0, "", fmt.Errorf(
 				"wontfix: %w: the reason is empty after redaction; nothing written", ErrGroundsRefused)
 		}
-		return grounds.Grounds{Token: grounds.Declined, Text: folded}, n, deg, nil
+		// The count is deliberately dropped, not added: the derived grounds ARE the
+		// reason, and transition redacts and counts that same operand on its way to
+		// the note field. Returning it here made one redactable span report as two.
+		return grounds.Grounds{Token: grounds.Declined, Text: folded}, 0, deg, nil
 	}
 	g, redacted, degraded, err = requireGrounds(repoRoot, "wontfix", raw)
 	if err != nil {
