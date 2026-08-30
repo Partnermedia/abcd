@@ -337,6 +337,7 @@ func NewRootCommand() *cobra.Command {
 	root.AddCommand(newDisembarkCommand(&asJSON))
 	root.AddCommand(newEmbarkCommand(&asJSON))
 	root.AddCommand(newSiteCommand(&asJSON))
+	root.AddCommand(newReadingCommand(&asJSON))
 
 	// A cobra usage error (unknown flag, unknown subcommand, stray positional
 	// argument) is a plain error with no ExitCode(), so Run() would map it to
