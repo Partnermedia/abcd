@@ -1,6 +1,6 @@
 # Agent Catalog
 
-The catalog below declares the **16-agent design roster** (not all are shipped yet; the **Status** column marks which of these exist today, and [`06-delivery/`](../06-delivery) carries current delivery state); the shipped agents that live outside this roster are listed under [§ Shipped agents outside the design roster](#shipped-agents-outside-the-design-roster). Ten agent prompt files ship in `agents/` today. Each catalog agent declares JSON inputs/outputs (schemas owned by the core, `internal/core/schema`). Agents are **markdown**, host-delegated reviewers the host dispatches (adr-25); markdown is rendered, not authored by agents.
+The catalog below declares the **16-agent design roster** (not all are shipped yet; the **Status** column marks which of these exist today, and [`06-delivery/`](../06-delivery) carries current delivery state); the shipped agents that live outside this roster are listed under [§ Shipped agents outside the design roster](#shipped-agents-outside-the-design-roster). Eleven agent prompt files ship in `agents/` today. Each catalog agent declares JSON inputs/outputs (schemas owned by the core, `internal/core/schema`). Agents are **markdown**, host-delegated reviewers the host dispatches (adr-25); markdown is rendered, not authored by agents.
 
 `agents/` also holds two plain docs — `agents/README.md` and `agents/CHANGELOG.md` — that carry no agent frontmatter. Because `.claude-plugin/plugin.json` declares no `agents` key, the plugin loader globs the flat `agents/*.md` set and registers both as harness agents (`abcd:README`, `abcd:CHANGELOG`) alongside the real prompt files; iss-110 tracks the mis-registration.
 
@@ -25,7 +25,7 @@ The catalog below declares the **16-agent design roster** (not all are shipped y
 
 ## Shipped agents outside the design roster
 
-Six further agent prompts ship in `agents/` today, outside the 16-agent design roster above — lifeboat/launch synthesis helpers and repo-workflow reviewers, each a **markdown**, host-delegated agent the host dispatches:
+Seven further agent prompts ship in `agents/` today, outside the 16-agent design roster above — lifeboat/launch synthesis helpers, repo-workflow reviewers and the ledger scribe, each a **markdown**, host-delegated agent the host dispatches:
 
 | Agent | Purpose |
 |---|---|
@@ -35,6 +35,7 @@ Six further agent prompts ship in `agents/` today, outside the 16-agent design r
 | `ruthless-reviewer` | Demanding senior code review — correctness, resource handling, error paths, API misuse, dead code — run before presenting a non-trivial diff. |
 | `security-reviewer` | Adversarial security review of a diff or design touching a trust boundary (auth, secrets, network, input parsing, subprocess). |
 | `sota-researcher` | Deep state-of-the-art research — ranked recommendations with evidence tiers and source attributions. |
+| `scribe` | Transcribe a returned reading and the researcher's dispositions into the ledger's reading-record and disposition shapes — ledger context only, authors nothing (see [§ The scribe protocol](#the-scribe-protocol)). |
 
 ## `intent-auditor`'s three roles, three verbs
 
@@ -77,6 +78,21 @@ Two verdict-enum families are in play across abcd:
 
 These two enums are deliberately disjoint and never mixed. Reviews emit family 1; auditors emit family 2.
 
+## The scribe protocol
+
+The `scribe` is machine assistance in maintaining the ledger, and its access rule is the exact inverse of the assembler's (invariant 15 in [`02-constraints/03-invariants.md`](../02-constraints/03-invariants.md), which binds this section). The assembler passes a reading a positively included slice of the shipped repository and no ledger; the scribe receives ledger content under `.abcd/work/issues/` plus the reading output it is transcribing, and never the shipped repository as an object of judgement. **No session holds both a reading and the ledger.** The scribe is also not a consumer of the session-transcript store: that store's consumer list is enumerated in the same invariant, and adding the scribe to it is an invariant change rather than a code path.
+
+The scribe's inputs block is an allow list, not a deny list, because positive inclusion is what excludes the path nobody thought to name — including a record type the list has never heard of. `TestScribeInputsAreLedgerOnly` and `TestScribeDeclaresNoTranscriptStoreAccess` in `internal/core/lint` hold the definition to that, and their reach is exactly what they say: they prove the definition names the right paths, not that a host assembled the right context. Mechanical assembly belongs to the ingest verb.
+
+**There is no ingest verb.** The scribe's emitted records are committed through the ordinary record path, and the four rules below are followed by hand by whoever runs the session:
+
+1. **Entries are transcribed when the reading returns**, not later. A protocol invented under time pressure is a protocol that gets skipped, and a batch of readings held for transcription is the pressure that invents one.
+2. **The reading run and the scribe run are separate host sessions**, always. Each is retained under its own session id, and `history list` over the repository's root-commit key is what shows two distinct sessions. The honest limit: the store shows that two sessions exist and that neither carries the other's material; it cannot enforce that the practice held, because the separation happens in the host before anything is retained. The enforcement is procedural and the retained sessions are its evidence.
+3. **The transcribed material is committed through the ordinary record path**, so `record_schema` judges it — a malformed reading record or disposition is refused the moment it is committed. That is the validation path, and it needs no verb.
+4. **A fidelity flag is carried to the researcher unresolved.** The scribe may flag an internal inconsistency in the material it is transcribing — a disposition contradicting a ruling recorded earlier in the same session — because that is transcription fidelity rather than judgement. It may never propose a resolution. The flag is a named field beside the transcribed material, so it can be counted and answered rather than buried in prose, and it sits beside the records rather than inside them: a record carrying an undeclared property is refused when it is committed.
+
+Anything the scribe is explicitly asked to produce **beyond formatting** opens with a contribution stamp that travels with the material if it is adopted, and an unstamped contribution is never delivered — a refusal in the definition, not a preference. The stamp is the hand-run form of the record's origin keys and stands until those keys ship.
+
 ## Agent prompt frontmatter
 
 Every agent's prompt file carries declared frontmatter. Current fields:
@@ -87,7 +103,7 @@ Every agent's prompt file carries declared frontmatter. Current fields:
 | `description` | yes | harness registration | When the host should dispatch this agent (the harness's dispatch hint) |
 | `color` | optional | harness presentation | Presentation hint; carried today by the five reviewer/researcher prompts (`intent-auditor`, `docs-currency-reviewer`, `ruthless-reviewer`, `security-reviewer`, `sota-researcher`) |
 | `prompt_version` | yes | itd-5 | Semver of the agent prompt; bumps on any prompt change |
-| `capability_scope` | yes (every shipped prompt) | itd-5 extension (idea-4 jagged-frontier) | Declared task classes the agent is designed for. Object: `{ task_classes: [<token>, ...], designed_for: "<free-text 1-line>" }`. **`task_classes` is authored as a YAML inline list** — `task_classes: [spec_planning, audit]` on one line, never a block list of `- token` items (the frontmatter parser does not support a block list nested under a nested key). Carried today by all ten shipped prompts — the five synthesis/composer prompts and the five reviewer/researcher prompts alike (e.g. `intent-auditor` declares `task_classes: [intent_audit]`, `ruthless-reviewer` and `security-reviewer` `[oracle_review]`). Set-membership lint in `internal/core/lint` against the `task_classes` closed enum (owned by `internal/core/schema`; prose counterpart in `02-constraints/04-naming.md`, PR-to-extend) is a design target — no shipped check reads the field. Cites Dell'Acqua et al. 2023 ("Navigating the Jagged Technological Frontier") as the framing source. |
+| `capability_scope` | yes (every shipped prompt) | itd-5 extension (idea-4 jagged-frontier) | Declared task classes the agent is designed for. Object: `{ task_classes: [<token>, ...], designed_for: "<free-text 1-line>" }`. **`task_classes` is authored as a YAML inline list** — `task_classes: [spec_planning, audit]` on one line, never a block list of `- token` items (the frontmatter parser does not support a block list nested under a nested key). Carried today by all eleven shipped prompts — the five synthesis/composer prompts, the five reviewer/researcher prompts and the ledger scribe alike (e.g. `intent-auditor` declares `task_classes: [intent_audit]`, `ruthless-reviewer` and `security-reviewer` `[oracle_review]`). Set-membership lint in `internal/core/lint` against the `task_classes` closed enum (owned by `internal/core/schema`; prose counterpart in `02-constraints/04-naming.md`, PR-to-extend) is a design target — no shipped check reads the field. Cites Dell'Acqua et al. 2023 ("Navigating the Jagged Technological Frontier") as the framing source. |
 | `reads_untrusted_input` | conditional (agents that read untrusted input) | itd-5 | Boolean. `true` declares the agent reads attacker-influenceable input (transcripts, lifeboats, GitHub issues, commit messages, model-emitted reviews). When `true`, the agent MUST carry at least one canary fixture under `agents/<name>/fixtures/`; a fixture-presence prompt-lint in `internal/core/lint` is a design target — no shipped check enforces it (the M6 agents ship conforming files, not the linter — see `agents/README.md`). |
 
 **Deliberately omitted from agent frontmatter** (boundary against scope creep, per idea-4's static/dynamic split): `known_failure_modes` (runtime-appended events), per-task-class `model_id` history, plan-time capability gating output. These belong to the later-phase Frontier Awareness intent — capture-stable, no ID reserved.
