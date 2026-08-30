@@ -1357,9 +1357,9 @@ func TestABlockScalarWhoseOnlyLineIsHashLedIsAValue(t *testing.T) {
 }
 
 // issueScalar strips ONE surrounding quote pair, not every quote character at
-// either end. A required value that is itself quotes (`"”"`) is a value, and
-// eating it down to nothing turns a present property into a blocker that names a
-// field the record carries.
+// either end. A required value that is itself two apostrophes inside double
+// quotes is a value, and eating it down to nothing turns a present property into
+// a blocker that names a field the record carries.
 func TestARequiredValueMadeOfQuoteCharactersIsPresent(t *testing.T) {
 	root := admissionCorpus(t)
 	writeFile(t, root, "work/issues/admissions/rdg-1/adm-3.md",
@@ -1428,5 +1428,31 @@ func TestQuotedEmptySupersededByIsUnsetNotMalformed(t *testing.T) {
 	}
 	if n := countRule(fs, ruleRecordSchema); n != 0 {
 		t.Fatalf("an empty superseded_by is unset, got %d finding(s): %+v", n, fs)
+	}
+}
+
+// The scalar reader must not trim INSIDE the quotes. capture's parse path trims
+// the raw value before decoding (parse.go, `rest := strings.TrimSpace(...)`) and
+// then strips the quotes without trimming again, so `severity: "  minor  "`
+// reaches validateStrict as `  minor  `, fails the enum map lookup outright, and
+// the record is refused and skipped — invisible to every capture surface while it
+// still sits in the ledger. A gate that trimmed the padding away would call that
+// record clean, which is the exact silence this rule exists to break.
+//
+// Emptiness is the one question that does trim, and it is asked separately:
+// a value of nothing but padding carries nothing whatever a reader does with it.
+func TestQuotedPaddingIsNotTrimmedOutOfAValueTheReaderRefuses(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/.keep", "")
+	writeFile(t, root, "work/issues/open/iss-2-a-finding.md",
+		"---\nschema_version: 1\nid: \"iss-2\"\nslug: \"a-finding\"\nseverity: \"  minor  \"\n"+
+			"category: \"bug\"\nsource: \"impl-review\"\nfound_during: \"a session\"\n---\n\nbody\n")
+
+	fs, err := Lint(schemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingWith(fs, filepath.Join("work", "issues", "open", "iss-2-a-finding.md"), ruleRecordSchema, "severity") {
+		t.Fatalf("capture refuses a padded enum value, so the gate must too: %+v", fs)
 	}
 }

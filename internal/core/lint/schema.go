@@ -870,7 +870,7 @@ func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
 	// list-shaped value falls through as a present value that is no instant, which
 	// is exactly what it is.
 	//
-	// issueScalar trims again after stripping the quotes, because a quoted
+	// The value is trimmed AFTER issueScalar strips the quotes, because a quoted
 	// all-whitespace value (`lapsed_at: "   "`) still carries its padding once the
 	// quotes are gone. capture's reader trims before judging, so it reads that as
 	// ABSENT: a clean record with an optional property left unset, or — on a lapse
@@ -880,7 +880,7 @@ func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
 	lapseField, hasLapseField := r.fields["lapsed_at"]
 	lapsedAt := ""
 	if hasLapseField && !isNull(strings.TrimSpace(lapseField.value)) {
-		lapsedAt = issueScalar(lapseField.value)
+		lapsedAt = strings.TrimSpace(issueScalar(lapseField.value))
 	}
 	// A key whose own line carries no value may still carry one, on the indented
 	// lines below it. The shared scanner is a same-line scanner, so it reports that
@@ -922,27 +922,31 @@ func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
 // surrounding whitespace and quotes stripped, so a quoted enum
 // (`severity: "minor"`) compares unquoted.
 //
-// It is the package's ONE scalar reader, and both halves of that matter.
+// It is the package's ONE scalar reader, and it mirrors capture's parse path
+// deliberately: that path trims the raw value before decoding and then strips the
+// quotes WITHOUT trimming again, so padding inside the quotes survives. This does
+// the same. Trimming it away here would call `severity: "  minor  "` clean while
+// capture's enum lookup refuses the record and skips it — lint-green and
+// invisible to every ledger surface, which is the one silence this rule exists to
+// break. Whether padding is a value is the FIELD's question, and the two fields
+// that answer "no" — emptiness in isAbsentValue, and the lapse instant — trim at
+// their own call site rather than moving the trim in here for everyone.
 //
-// The whitespace is trimmed AGAIN after the quotes come off, because a quoted
-// all-whitespace value still carries its padding once they are gone; capture's
-// reader trims before judging, so `lapsed_at: "   "` is ABSENT to it
-// (iss-2608300212513349). Three spellings of this function used to exist — here,
-// in isAbsentValue, and in the outstanding report — and they did not agree: the
-// gate called `run: " rdg-1 "` a contradiction while the report called it a
-// match, so one record got two answers and the more permissive one was the
-// report's.
+// Three spellings of this function used to exist — here, in isAbsentValue, and in
+// the outstanding report — and they did not agree: the gate called
+// `run: " rdg-1 "` a contradiction while the report called it a match, so one
+// record got two answers and the more permissive one was the report's.
 //
 // Exactly ONE surrounding quote pair is stripped, never every quote character at
-// either end: a value that is itself quotes (`grounds: "”"`) is a value, and
-// eating it down to nothing puts a missing-property blocker on a property the
-// record plainly carries.
+// either end: a value that is itself two apostrophes inside double quotes is a
+// value, and eating it down to nothing puts a missing-property blocker on a
+// property the record plainly carries.
 func issueScalar(value string) string {
 	v := strings.TrimSpace(value)
 	if len(v) >= 2 && (v[0] == '"' || v[0] == '\'') && v[len(v)-1] == v[0] {
 		v = v[1 : len(v)-1]
 	}
-	return strings.TrimSpace(v)
+	return v
 }
 
 // inSet reports membership in a small value list.
@@ -1178,7 +1182,7 @@ func undeclaredSubdirMessage(store recordStore, bucket, name string) string {
 // before it reads makes nothing out of it either — so the record is skipped and
 // invisible to every surface of its family while the gate armed to catch exactly
 // that stayed green (iss-2608300935218982). The quotes are stripped with the
-// rule's own issueScalar, which trims again afterwards because a quoted
+// rule's own issueScalar and the result trimmed AFTER, because a quoted
 // all-whitespace value still carries its padding once the quotes are gone (the
 // lesson lapsed_at already learned in iss-2608300212513349).
 //
@@ -1195,7 +1199,11 @@ func isAbsentValue(value string) bool {
 	if strings.HasPrefix(v, "[") && strings.HasSuffix(v, "]") {
 		return strings.TrimSpace(v[1:len(v)-1]) == ""
 	}
-	return issueScalar(v) == ""
+	// Trimmed HERE rather than inside issueScalar: emptiness is a question a value
+	// of nothing but padding answers the same way whatever a reader does with it,
+	// while moving the trim into the shared reader would hide a PADDED value that
+	// capture refuses and skips (see issueScalar).
+	return strings.TrimSpace(issueScalar(v)) == ""
 }
 
 // recordRefsOf reads the handles of every cross-reference field once per record.
