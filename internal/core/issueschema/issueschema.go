@@ -73,6 +73,9 @@ var (
 	Categories = []string{
 		"bug", "documentation", "drift", "inconsistency", "tech-debt", "security",
 		"ux", "process", "architectural-insight", "future-work-seed", "observation",
+		// lapse is the ledger's lapse log — a recording step skipped, disclosed
+		// as a value in this list rather than a separate enum or store.
+		"lapse",
 	}
 	// Sources is the surfacing channel enum.
 	Sources = []string{

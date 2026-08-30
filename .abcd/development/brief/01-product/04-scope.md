@@ -1,6 +1,6 @@
 # Scope
 
-The scope this brief covers is bounded by what is bundled into the seven planned phases (Phase 0 — Foundations through Phase 6 — Lifeboat round-trip; see [`roadmap/phases/README.md`](../../roadmap/phases/README.md)) plus what is explicitly slated for a later phase.
+The scope this brief covers is bounded by what is bundled into the eight planned phases (Phase 0 — Foundations through Phase 7 — Provenance ledger and cold reading; see [`roadmap/phases/README.md`](../../roadmap/phases/README.md)) plus what is explicitly slated for a later phase.
 
 ## What the phases deliver
 
@@ -21,7 +21,7 @@ The scope this brief covers is bounded by what is bundled into the seven planned
 **Phased intents — derived, never hand-counted here.** The intents each phase
 bundles are named in that phase doc's `## Scope` section — the single source of
 the mapping ([adr-9](../../decisions/adrs/0009-phase-as-product-layer.md)); the
-phased set is the union across the seven phase docs, and this page keeps no
+phased set is the union across the eight phase docs, and this page keeps no
 static copy of it (a hand-kept count re-drifts the moment a phase doc changes,
 the same failure the roadmap dashboard avoids by deriving counts from disk).
 The set spans two of the three kinds: standalone capabilities, plus the three

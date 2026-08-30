@@ -245,10 +245,15 @@ severity: minor          # seeded capture-grain severity of the draft
 ## What's In Scope
 ## What's Out of Scope
 
-## Mechanism                # Optional (adr-51): why the authors expect this to work —
-                            #   a falsifiable "we expect X because Y", not the outcome restated
-## Scope Conditions         # Optional (adr-51): the population/platform/scale/assumptions the
-                            #   claim holds under; reuse outside them is a visible re-decision
+## Mechanism                # Prompted, nullable (claim-recording-gradient discipline, per adr-51):
+                            #   a falsifiable "we expect X because Y", not the outcome restated.
+                            #   A blank section passes the readiness gate with the nullity recorded —
+                            #   an absent field and a recorded nullity are never collapsed
+## Scope Conditions         # Required at the readiness gate (claim-recording-gradient discipline):
+                            #   the population/platform/scale/assumptions the claim holds under, each
+                            #   condition carrying a persistent identity that survives edits to its
+                            #   text — or the explicit nullity "none stated". An absent section (no
+                            #   conditions AND no nullity) exits the gate non-zero, naming the field
 
 ## Acceptance Criteria      # Required (per the itd-1 discipline); Given-When-Then bullets
 
@@ -256,9 +261,13 @@ severity: minor          # seeded capture-grain severity of the draft
 ## Audit Notes               # populated by `/abcd:intent audit` (manual Role 1 run)
 ```
 
-The two optional sections are unenforced by design — whether either becomes
-required is a deferred discipline question
-([adr-51](../../decisions/adrs/0051-intents-declare-mechanism-and-scope-conditions.md)).
+The two sections follow the claim recording gradient — criteria mandatory
+(itd-1), mechanism prompted-and-nullable, scope conditions mandatory with an
+explicit nullity — enforced by the claim-recording-gradient discipline, the
+staged gate [adr-51](../../decisions/adrs/0051-intents-declare-mechanism-and-scope-conditions.md)
+anticipated ("its own record on the itd-84/itd-1 pattern"). The distinction
+the gate preserves: an absent field is a claim not carried; a recorded
+nullity is a claim considered and declined. They are never collapsed.
 
 Discipline-kind intents use a different template — see § 1 "Discipline format" above.
 

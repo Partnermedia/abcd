@@ -43,7 +43,7 @@ Required:
 - `severity` — one of `critical`, `major`, `minor`, `nitpick`.
 - `category` — the loose taxonomy (`bug`, `documentation`, `drift`,
   `inconsistency`, `tech-debt`, `security`, `ux`, `process`,
-  `architectural-insight`, `future-work-seed`, `observation`).
+  `architectural-insight`, `future-work-seed`, `observation`, `lapse`).
 - `source` — the surfacing channel (`plan-review`, `impl-review`,
   `manual-test`, `review-followup`, `agent-finding`, `agent-observation`,
   `user-observation`, `drift-detection`, `memory-curation`).
