@@ -805,7 +805,15 @@
     {
       "path": "abcd intent ready",
       "hidden": false,
-      "flags": []
+      "flags": [
+        {
+          "name": "grounds",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
     },
     {
       "path": "abcd launch",

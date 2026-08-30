@@ -24,6 +24,7 @@ import (
 	"github.com/intentdriven/abcd/internal/core"
 	"github.com/intentdriven/abcd/internal/core/ahoy"
 	"github.com/intentdriven/abcd/internal/core/capture"
+	"github.com/intentdriven/abcd/internal/core/grounds"
 	"github.com/intentdriven/abcd/internal/core/history"
 	"github.com/intentdriven/abcd/internal/core/identity"
 	"github.com/intentdriven/abcd/internal/core/intent"
@@ -1583,14 +1584,39 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 	// machine seam an autonomous run gates on: 0 ready, 1 not ready (the rendered
 	// report is the output, empty message — the embark-conflicts precedent), 2
 	// structural fault.
-	intentCmd.AddCommand(&cobra.Command{
-		Use:   "ready <itd-N>",
+	//
+	// --grounds is wired here as TWO calls rather than as a parameter of the gate:
+	// intent.Ready is documented and tested as a reporter that never mutates the
+	// store, and that contract is worth more than flag placement (spc-57). So the
+	// flag records first through intent.RecordGrounds and then reports through the
+	// unchanged Ready. A failed write is a STRUCTURAL fault (exit 2), never the
+	// gate's own exit 1: a caller that maps 1 to SKIP must not read a lost write
+	// as a skipped item.
+	var readyGrounds string
+	readyCmd := &cobra.Command{
+		Use:   "ready <itd-N> [--grounds \"<pursued|deferred|declined>: <conjecture>\"]",
 		Short: "Report whether an intent is ready to implement (planned + AC + claims + written spec); exit 1 when not",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
 			if err != nil {
 				return err
+			}
+			if strings.TrimSpace(readyGrounds) != "" {
+				g, perr := grounds.Parse(readyGrounds)
+				if perr != nil {
+					return &exitError{Code: 2, Msg: "abcd intent ready: " + perr.Error() + " (nothing recorded)"}
+				}
+				rec, rerr := intent.RecordGrounds(cwd, args[0], g)
+				if rerr != nil {
+					return &exitError{Code: 2, Msg: "abcd intent ready: " + rerr.Error()}
+				}
+				// Redaction alters what the caller reasoned, so it is never silent.
+				if rec.Redacted > 0 {
+					fmt.Fprintf(cmd.ErrOrStderr(),
+						"abcd: redacted %d span(s) from the grounds text before writing (home paths and identifiers are never committed)\n",
+						rec.Redacted)
+				}
 			}
 			res, err := intent.Ready(cwd, args[0])
 			if err != nil {
@@ -1632,7 +1658,10 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 			}
 			return nil
 		},
-	})
+	}
+	readyCmd.Flags().StringVar(&readyGrounds, "grounds", "",
+		"record the conjecture behind this gate decision: \"<pursued|deferred|declined>: <what is expected, and what would show it wrong>\"")
+	intentCmd.AddCommand(readyCmd)
 
 	// link <itd-N> <spc-N> — retroactively set spec_id on a planned intent.
 	intentCmd.AddCommand(&cobra.Command{

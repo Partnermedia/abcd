@@ -634,7 +634,13 @@ Plan a draft intent (mint its spec, link both sides, move drafts -> planned); on
 
 Report whether an intent is ready to implement (planned + AC + claims + written spec); exit 1 when not
 
-**Usage:** `abcd intent ready <itd-N>`
+**Usage:** `abcd intent ready <itd-N> [--grounds "<pursued|deferred|declined>: <conjecture>"] [flags]`
+
+**Flags:**
+
+```
+      --grounds string   record the conjecture behind this gate decision: "<pursued|deferred|declined>: <what is expected, and what would show it wrong>"
+```
 
 ### `abcd launch`
 
