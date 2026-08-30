@@ -23,8 +23,26 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/intentdriven/abcd/internal/core/frontmatter"
 	"github.com/intentdriven/abcd/internal/core/mdrecord"
 )
+
+// Body returns the part of a record FILE the `## Grounds` section lives in —
+// everything after the leading frontmatter block. It is the ONE answer the
+// writer and every reader ask, so the bytes a write is judged over are the bytes
+// a reader will consult.
+//
+// Handed the whole file instead, a reader looks for its heading in the
+// frontmatter too, where `# Grounds` is a legal YAML comment the block parser
+// skips and an ATX heading pattern matches. Writer and reader could then agree
+// an entry had landed while disagreeing about where (iss-2608301805069999).
+//
+// A text that carries no frontmatter is already a body and comes back unchanged,
+// which is what lets a caller holding either shape ask.
+func Body(content string) string {
+	_, body := frontmatter.Split(content)
+	return body
+}
 
 // Heading is the section a record carries its grounds under. It is spelled once:
 // the writer creates it, the reader locates it, and a gate names it in a remedy.
@@ -101,8 +119,16 @@ func blockText(lines []string, b mdrecord.BulletBlock) string {
 	return Fold(strings.Join(parts, " "))
 }
 
-// AppendToSection appends one grounds entry to a record body, creating the
-// `## Grounds` section when it is absent, and returns the body to write.
+// AppendToRecord appends one grounds entry to a record FILE, creating the
+// `## Grounds` section when it is absent, and returns the file to write.
+//
+// The append and its read-back run over the record BODY, and the result is
+// spliced back onto the frontmatter unchanged. That is what makes the guard a
+// property of the section the reader will actually consult rather than of the
+// whole file: judged over the whole file, the writer matched a frontmatter
+// `# Grounds` comment as its heading, wrote the bullet there, read it back
+// happily, and reported success about a value the body reader could not see
+// (iss-2608301805069999).
 //
 // It refuses a write that would leave the record LESS readable than it was
 // (iss-2608300927577980) rather than performing it. A grounds text is operator
@@ -121,20 +147,21 @@ func blockText(lines []string, b mdrecord.BulletBlock) string {
 // cause is worth more than one that can only say the entry did not arrive.
 //
 // The refusal names no record family; the caller wraps it with its own.
-func AppendToSection(content string, g Grounds) (string, error) {
+func AppendToRecord(content string, g Grounds) (string, error) {
 	if mdrecord.OpensComment(g.Bullet()) {
 		return "", fmt.Errorf(
 			"the grounds text leaves an HTML comment open (`<!--` with no `-->`); "+
 				"written, it would hide the entry and every line below it from every reader of this record — "+
 				"close the comment or drop the marker; nothing written (text: %q)", g.Text)
 	}
-	updated := appendBullet(content, g)
-	if want, got := len(ParseSection(content))+1, len(ParseSection(updated)); got != want {
+	head, body := frontmatter.Split(content)
+	updated := appendBullet(body, g)
+	if want, got := len(ParseSection(body))+1, len(ParseSection(updated)); got != want {
 		return "", fmt.Errorf(
 			"the appended grounds entry does not read back (%d entries after the append, expected %d); "+
 				"nothing written", got, want)
 	}
-	return updated, nil
+	return head + updated, nil
 }
 
 // appendBullet puts one entry at the end of the record's `## Grounds` section,

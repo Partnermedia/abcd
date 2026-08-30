@@ -94,7 +94,9 @@ func wontfixGrounds(repoRoot, raw, reason string) (g grounds.Grounds, redacted i
 // appendGrounds puts one entry in the record's append-only `## Grounds` body
 // section — core/grounds's record form, the same one the intent half writes
 // through, so the two record families cannot come to disagree about what an
-// entry is.
+// entry is. It is handed the whole record file and gets the whole record file
+// back: where the frontmatter stops is core/grounds's own question, asked once
+// there so the write is judged over the bytes issueFromFrontmatter reads.
 //
 // It is an APPEND, and that is the whole of the fix for iss-2608301657354776.
 // The value used to be a single `grounds:` frontmatter scalar, and a scalar is
@@ -107,7 +109,7 @@ func wontfixGrounds(repoRoot, raw, reason string) (g grounds.Grounds, redacted i
 // against, which is the argument the intent half already makes for the same
 // data.
 func appendGrounds(verb, content string, g grounds.Grounds) (string, error) {
-	updated, err := grounds.AppendToSection(content, g)
+	updated, err := grounds.AppendToRecord(content, g)
 	if err != nil {
 		return "", fmt.Errorf("%s: %w: %v", verb, ErrGroundsRefused, err)
 	}

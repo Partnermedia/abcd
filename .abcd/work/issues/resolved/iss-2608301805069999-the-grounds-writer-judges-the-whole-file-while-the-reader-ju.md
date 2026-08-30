@@ -7,6 +7,10 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-179-delta-security"
 found_at: "internal/core/capture/validate.go"
+resolution: "the grounds append and its read-back now run over the record BODY and are spliced back onto the frontmatter, so the writer judges the bytes issueFromFrontmatter reads and a frontmatter Grounds comment can no longer match as the section heading"
+impact: fix
+resolved_by:
+  intent: "itd-179"
 ---
 
 the grounds writer judges the whole file while the reader judges the body so a frontmatter Grounds comment makes triage report success and record nothing
@@ -43,3 +47,6 @@ The sibling shape (`# Grounds` followed by `# Notes`) puts the bullet inside the
 frontmatter and IS caught downstream, fail-closed, but with a message naming
 neither cause nor remedy.
 
+## Grounds
+
+- pursued: we expect a writer and a reader that judge the same bytes to make the disagreement unrepresentable, rather than a ban on the one spelling that triggered it
