@@ -102,8 +102,11 @@ too short, or the vocabulary word repeated back — and cannot tell a conjecture
 from a restatement. That part is yours: put the question to the user and write
 down their answer.
 
-The value lands as a `grounds:` frontmatter scalar and is scanned before it is
-committed, so report `redacted` whenever it is non-zero.
+The value is APPENDED as a `- <token>: <text>` bullet under the record's
+`## Grounds` heading, never set in frontmatter, so a record promoted and then
+resolved carries both conjectures: the earlier one is what a later reader checks
+the outcome against. It is scanned before it is committed, so report `redacted`
+whenever it is non-zero.
 
 ## Resolve / wontfix
 

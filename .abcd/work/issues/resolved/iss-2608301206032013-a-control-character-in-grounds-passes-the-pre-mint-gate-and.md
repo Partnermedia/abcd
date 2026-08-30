@@ -9,7 +9,6 @@ found_during: "itd-179-round-2-security"
 found_at: "internal/core/capture/promote.go"
 resolution: "ValidateText refuses any rune below 0x20, so a control character is caught at the argument boundary all three grounds writers cross rather than by yamlScalar after the draft has been minted"
 impact: fix
-grounds: "pursued: we expect a pre-mint gate to be worth having only if it refuses everything the post-mint serialiser refuses, and a vertical tab reaching the mint and orphaning a draft is what showed the gap"
 resolved_by:
   intent: "itd-179"
 ---
@@ -35,3 +34,7 @@ mint.
 Remedy: `grounds.ValidateText` refuses what `yamlScalar` refuses (any rune
 below 0x20), so the class is caught at the argument boundary for all three
 routes rather than at one of them.
+
+## Grounds
+
+- pursued: we expect a pre-mint gate to be worth having only if it refuses everything the post-mint serialiser refuses, and a vertical tab reaching the mint and orphaning a draft is what showed the gap

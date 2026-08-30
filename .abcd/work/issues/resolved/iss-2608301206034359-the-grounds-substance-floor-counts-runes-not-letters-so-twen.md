@@ -9,7 +9,6 @@ found_during: "itd-179-round-2-security"
 found_at: "internal/core/grounds/grounds.go"
 resolution: "ValidateText now measures the floor in letter-runs as well as runes, so a text of zero-width spaces, dots or digits carries no words and is refused at the one place both the writer and the reader inherit it from"
 impact: fix
-grounds: "pursued: we expect a floor stated in characters to be answerable with characters that render as nothing, and a text of twenty zero-width spaces clearing the promoted refusal is what showed it"
 resolved_by:
   intent: "itd-179"
 ---
@@ -40,3 +39,7 @@ through it.
 Remedy: `ValidateText` requires a minimum count of `wordRe` matches and refuses
 `len(words) == 0`, rather than counting runes. Both the writer and
 `ParseGrounds` inherit it from the one place.
+
+## Grounds
+
+- pursued: we expect a floor stated in characters to be answerable with characters that render as nothing, and a text of twenty zero-width spaces clearing the promoted refusal is what showed it

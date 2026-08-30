@@ -161,9 +161,7 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 		if err != nil {
 			return err
 		}
-		// yamlScalar, not rawScalar: the grounds text is free prose whose colons
-		// and spaces a bare scalar could not carry.
-		newContent, err = setScalarField(newContent, "grounds", g.String())
+		newContent, err = appendGrounds("promote", newContent, g)
 		if err != nil {
 			return err
 		}

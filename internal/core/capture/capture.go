@@ -107,11 +107,18 @@ type Issue struct {
 	RelatedIssues  []string `json:"related_issues,omitempty"`
 	BlockedBy      []string `json:"blocked_by,omitempty"` // iss-N dependency edges
 	PromotedTo     string   `json:"promoted_to,omitempty"`
-	// Grounds is the recorded conjecture behind the triage that moved this record
-	// — `<token>: <text>` in the shared core/grounds vocabulary. Stamped by
-	// promote, resolve and wontfix; never by the create path, because an
-	// observation being filed is not yet a conjecture being pursued.
-	Grounds       string      `json:"grounds,omitempty"`
+	// Grounds is the record's recorded conjectures, in the order they were
+	// written: one `<token>: <text>` value in the shared core/grounds vocabulary
+	// per grounds-bearing act. Appended by promote, resolve and wontfix; never by
+	// the create path, because an observation being filed is not yet a conjecture
+	// being pursued.
+	//
+	// It is a LIST because recording is append-only. A record promoted and then
+	// resolved carries both conjectures, and the earlier one is precisely what a
+	// later reader checks the outcome against (iss-2608301657354776). The values
+	// live in the body's `## Grounds` section, not in frontmatter: a frontmatter
+	// scalar is set, and setting is what destroyed the first of them.
+	Grounds       []string    `json:"grounds,omitempty"`
 	Resolution    string      `json:"resolution,omitempty"`
 	WontfixReason string      `json:"wontfix_reason,omitempty"`
 	ResolvedBy    *ResolvedBy `json:"resolved_by,omitempty"`

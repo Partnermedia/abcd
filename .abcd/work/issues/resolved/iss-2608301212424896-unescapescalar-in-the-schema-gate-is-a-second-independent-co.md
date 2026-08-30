@@ -9,7 +9,6 @@ found_during: "itd-179-round-2-ruthless"
 found_at: "internal/core/lint/schema.go"
 resolution: "the two byte-identical decoders are now one exported frontmatter.Unquote that capture's reader and record-lint's schema gate both call, and the grounds parity table carries a backslash-escaped row in both halves"
 impact: internal
-grounds: "pursued: we expect two copies of one decoder to drift on the case neither table covers, and the parity table's missing escaping row over a duplicated escaping loop is exactly that gap"
 resolved_by:
   intent: "itd-179"
 ---
@@ -35,3 +34,7 @@ skips goes lint-green.
 Remedy: export the decoder from one shared home, or at minimum add a
 backslash-escaped row to the parity table so a divergence fails a row rather
 than passing unnoticed.
+
+## Grounds
+
+- pursued: we expect two copies of one decoder to drift on the case neither table covers, and the parity table's missing escaping row over a duplicated escaping loop is exactly that gap

@@ -7,6 +7,10 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-179-round-5-ruthless"
 found_at: "internal/core/capture/workflow.go"
+resolution: "The ledger's grounds are now an append-only `## Grounds` body section, mirroring the intent half: promote, resolve and wontfix each append a bullet, the reader parses the section, and the frontmatter scalar is retired with 16 committed records migrated. The record form (heading, reader, append, readability check) moved to core/grounds and the markdown-body machinery under it to a new core/mdrecord leaf, so both record families share one definition. The proposed refusal was not taken: all three routes require grounds, so refusing an overwrite would make a promoted issue impossible to resolve."
+impact: fix
+resolved_by:
+  intent: "itd-179"
 ---
 
 a resolve or wontfix replaces the grounds scalar so the conjecture a promote recorded is silently destroyed
@@ -40,3 +44,7 @@ non-empty `grounds`, matching the double-promote refusal already inside the same
 locked section; or, if last-write-wins is intended, say so in `Issue.Grounds`
 and in spc-57 so the loss is a chosen tradeoff. An append-only list here is a
 schema decision and is not to be added on this branch without one.
+
+## Grounds
+
+- pursued: we expect one shared record form to be what makes the overwrite unrepresentable rather than merely refused, and a promote-then-resolve sequence that keeps both conjectures in order is what would show it wrong

@@ -33,11 +33,13 @@ conjecture somebody can later find wrong.
 - **Readiness gate** (`internal/core/intent/ready.go`): A `grounds` check,
   reported last, failing when the record carries no well-formed entry.
 - **Ledger side** (`internal/core/capture`): A `Grounds` member on
-  `PromoteRequest`, `ResolveRequest` and `WontfixRequest`, stamped as a
-  `grounds` frontmatter scalar through the existing `setScalarField`, inside the
+  `PromoteRequest`, `ResolveRequest` and `WontfixRequest`, APPENDED to the
+  record's `## Grounds` section through the shared record form, inside the
   existing ledger lock and atomic transition.
-- **Issue schema** (`internal/core/issueschema/issueschema.go`): `grounds` added
-  to `Known`, without which capture's reader refuses every stamped record.
+- **Issue schema** (`internal/core/issueschema/issueschema.go`): `grounds`
+  TOLERATED in `Known` as a legacy key a record written by an older abcd may
+  carry, its value read by nothing; the record lint's `record_schema` blocks a
+  frontmatter `grounds:` and names the section it belongs in.
 - **Surfaces** (`internal/surface/cli/cli.go`, `commands/intent.md`,
   `commands/capture.md`): `--grounds` on `abcd intent ready`,
   `abcd capture promote`, `abcd capture resolve` and `abcd capture wontfix`.
@@ -67,20 +69,29 @@ grounds rather than two. Thirteen specs carry one, open and closed alike — the
 migration covers all of them, not the four the record named when this was
 written, because a stand-in left standing anywhere is a second home.
 
-**Decision — wontfix is stamped `declined` and needs no new required flag.**
+**Decision — wontfix records `declined` and needs no new required flag.**
 `capture.transition` already refuses an empty `wontfix_reason`, so a wontfix can
 never be recorded without grounds; what it lacks is the type. Wontfix therefore
-stamps `grounds: declined: <reason>` from the reason it already takes, and
+appends `- declined: <reason>` from the reason it already takes, and
 `--grounds` overrides the text when the conjecture is worth stating separately
 from the user-facing reason. Promote and resolve, which have no such note,
 refuse without the flag.
 
-**The grammar is one line, parsed once.** `grounds: <token>: <text>` is a plain
-YAML scalar readable by `frontmatter.Fields` in every store; `grounds.Parse`
-splits on the first colon, validates the token against the closed set, and
-returns the text. On the intent side the same value renders as a bullet
-`- pursued: <text>` under `## Grounds`, so the record reads as prose and the
-gate reads it as data with no second parser.
+**The grammar is one line, parsed once, and the record form is one section.**
+`<token>: <text>` is a single line; `grounds.Parse` splits on the first colon,
+validates the token against the closed set, and returns the text. Both record
+families carry it as a bullet `- pursued: <text>` under `## Grounds`, so the
+record reads as prose and the gate reads it as data with no second parser.
+
+**Recording is APPEND-ONLY, on both sides.** A frontmatter scalar is SET, so the
+ledger's first shape let a resolve overwrite the conjecture the promote before it
+recorded — silently, with a success result, on the sequence fourteen resolved
+records already follow (iss-2608301657354776). Refusing the overwrite was never
+open: promote, resolve and wontfix all REQUIRE grounds, so a refusal would make a
+promoted issue impossible to resolve. The earlier conjecture is precisely what a
+later reader checks the outcome against, which is the argument the intent half
+already made for the same data, so the two halves now share ONE record form
+rather than holding two.
 
 **The substance floor is a shape check, and it says so.** "Name the conjecture,
 not only the decision" is a review property; no machine reads a sentence and
@@ -112,7 +123,7 @@ because rewriting somebody's reasoning silently is worse than not recording it.
 the ADR family's Alternatives Considered. This spec adds the finer grain beside
 them and takes no position on the coarser one.
 
-**Staging.** The recording path, the vocabulary and the stamping land first with
+**Staging.** The recording path, the vocabulary and the writers land first with
 the `grounds` check reporting `OK`; the refusal is promoted in a second commit.
 The promotion is deliberately forward-only rather than staged behind a populated
 corpus: measured at the branch tip, 10 of the 66 `planned/` records carry an
@@ -127,7 +138,7 @@ in the same call and have no corpus to fix.
 
 | itd-179 criterion | How spc-57 satisfies it | Test that pins it |
 | --- | --- | --- |
-| A capture routed to an intent draft, triaged without grounds → the command refuses | `PromoteRequest.Grounds` is validated before any mint or stamp, and an absent value returns an error with nothing written | `TestPromoteRefusesWithoutGrounds`, `TestPromoteWithoutGroundsWritesNothing`, CLI `TestCapturePromoteMissingGroundsExit2` |
+| A capture routed to an intent draft, triaged without grounds → the command refuses | `PromoteRequest.Grounds` is validated before any mint or write, and an absent value returns an error with nothing written | `TestPromoteRefusesWithoutGrounds`, `TestPromoteWithoutGroundsWritesNothing`, CLI `TestCapturePromoteMissingGroundsExit2` |
 | A recorded gate decision → the grounds name the conjecture, not only the decision | The three-value token plus the substance floor, with the conjecture-naming prompt on both surfaces | `TestGroundsParseVocabulary`, `TestGroundsRefusesDegenerateText`, `TestRecordGroundsWritesEntry` |
 
 ## Tests

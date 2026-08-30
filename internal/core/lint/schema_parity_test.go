@@ -312,20 +312,37 @@ func resolvedIssue(id, slug, extra string) string {
 //     They now share frontmatter.Unquote, and this row is what fails if either
 //     side stops calling it: undecoded, the token reads `pursued\` and the gate
 //     reports a record the reader accepts.
-func TestRecordSchemaGroundsSpellingsMatchTheReader(t *testing.T) {
+
+// TestRecordSchemaBlocksAFrontmatterGroundsKey is the gate half of the move off
+// frontmatter (iss-2608301657354776). Grounds are appended as `## Grounds`
+// bullets in the record body; a frontmatter `grounds:` is a value nothing reads.
+//
+// The gate deliberately does NOT mirror the reader here, and that is the point
+// of the rule. capture TOLERATES the key in every spelling — refusing would make
+// it skip the record, hiding it from every capture surface while it still sits
+// in the ledger — so the reader's verdict cannot be what notices a misplaced
+// value. This gate is. The reader half is proved in
+// capture.TestReaderToleratesALegacyGroundsKey; package lint cannot import
+// capture, so nothing here can speak for it.
+//
+// The spellings are the ones that used to decide the old grammar rule's verdict,
+// including the two it passed (a well-formed value, an empty one). The property
+// asserted is that the KEY is what is blocked, so a rule that went back to
+// judging the value fails on whichever spelling it started letting through.
+func TestRecordSchemaBlocksAFrontmatterGroundsKey(t *testing.T) {
 	const issues = "work/issues"
 	for _, tc := range []struct {
 		name  string
 		extra string
-		find  bool // does the reader refuse it, and therefore the gate too?
 	}{
-		{"single quoted", "grounds: 'pursued: we expect the reader to see the quote'\n", true},
-		{"empty list", "grounds: []\n", true},
-		{"block spelled", "grounds:\n  pursued: we expect a mapping rather than a string\n", true},
-		{"empty string", "grounds: \"\"\n", false},
-		{"backslash escaped", "grounds: \"pursued\\: we expect the escape reversed before the token is read\"\n", false},
-		{"bare null", "grounds: null\n", false},
-		{"well formed", "grounds: \"pursued: we expect the recorded reasoning to outlive the session\"\n", false},
+		{"single quoted", "grounds: 'pursued: we expect the reader to see the quote'\n"},
+		{"empty list", "grounds: []\n"},
+		{"block spelled", "grounds:\n  pursued: we expect a mapping rather than a string\n"},
+		{"empty string", "grounds: \"\"\n"},
+		{"bare null", "grounds: null\n"},
+		{"out of vocabulary", "grounds: \"planned: not a value the vocabulary carries\"\n"},
+		{"no token", "grounds: \"no token at all here\"\n"},
+		{"well formed", "grounds: \"pursued: we expect the recorded reasoning to outlive the session\"\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
@@ -336,10 +353,35 @@ func TestRecordSchemaGroundsSpellingsMatchTheReader(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			got := countRule(fs, ruleRecordSchema) > 0
-			if got != tc.find {
-				t.Fatalf("gate finding = %v, want %v (the reader's own verdict): %+v", got, tc.find, fs)
+			if n := countRule(fs, ruleRecordSchema); n != 1 {
+				t.Fatalf("a frontmatter grounds key raised %d record_schema finding(s), want 1: %+v", n, fs)
+			}
+			// The remedy has to be actionable, and the only actionable thing to
+			// say about a misplaced value is where it goes.
+			if !findingWith(fs, filepath.Join(issues, "resolved", "iss-1-ok.md"), ruleRecordSchema, "## Grounds") {
+				t.Fatalf("the finding does not name the section the value belongs in: %+v", fs)
 			}
 		})
+	}
+}
+
+// TestRecordSchemaSilentOnAGroundsSection: the body section is where grounds
+// live, so a record carrying one and no frontmatter key is clean. Without this
+// the rule above could be satisfied by a gate that blocks every record with the
+// word "grounds" anywhere in it.
+func TestRecordSchemaSilentOnAGroundsSection(t *testing.T) {
+	const issues = "work/issues"
+	root := t.TempDir()
+	seedRecRoot(t, root)
+	writeFile(t, root, issues+"/resolved/iss-1-ok.md",
+		resolvedIssue("iss-1", "ok", "")+
+			"\n## Grounds\n\n- pursued: we expect the recorded reasoning to outlive the session\n")
+
+	fs, err := Lint(schemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 0 {
+		t.Fatalf("a record carrying its grounds in the body raised %d record_schema finding(s): %+v", n, fs)
 	}
 }

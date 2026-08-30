@@ -9,7 +9,6 @@ found_during: "itd-179-round-5-builder"
 found_at: "internal/core/grounds/grounds.go"
 resolution: "The guard is kept and pinned by a direct helper test rather than deleted, because it is half of the predicate's definition rather than defensive scaffolding."
 impact: internal
-grounds: "pursued: We expect a direct helper test to be the right close rather than deletion, because the guard states what a unit must be and not merely what the caller happens to send, so removing it would leave a weaker claim agreeing silently with the stronger one until textUnits changed."
 resolved_by:
   intent: "itd-179"
 ---
@@ -43,3 +42,7 @@ So it is pinned rather than removed, at the helper, which is the only level a
 fixture for it exists at. Unreachable through `ValidateText` is not the same as
 unreachable, and the test that proves it is load-bearing is the one that kills
 the mutant `textUnits` cannot currently feed it.
+
+## Grounds
+
+- pursued: We expect a direct helper test to be the right close rather than deletion, because the guard states what a unit must be and not merely what the caller happens to send, so removing it would leave a weaker claim agreeing silently with the stronger one until textUnits changed.

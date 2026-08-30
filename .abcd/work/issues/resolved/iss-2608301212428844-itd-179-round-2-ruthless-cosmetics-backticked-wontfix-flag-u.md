@@ -9,7 +9,6 @@ found_during: "itd-179-round-2-ruthless"
 found_at: "internal/surface/cli/cli.go"
 resolution: "the wontfix --grounds usage no longer backticks its placeholder and the reference is regenerated, the derived-grounds redaction is counted once, and the whitespace-only reason is refused by its own cause"
 impact: fix
-grounds: "pursued: we expect a refusal that misnames its cause and a count that over-reports to cost more operator time than the three lines they take to fix, and a help page printing --grounds declined is the visible end of it"
 resolved_by:
   intent: "itd-179"
 ---
@@ -40,3 +39,7 @@ batched.
    that did not occur; it previously said "wontfix_reason must be a non-empty
    string". A refusal that misnames its cause sends the operator to the wrong
    remedy.
+
+## Grounds
+
+- pursued: we expect a refusal that misnames its cause and a count that over-reports to cost more operator time than the three lines they take to fix, and a help page printing --grounds declined is the visible end of it
