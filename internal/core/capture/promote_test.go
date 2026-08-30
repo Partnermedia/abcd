@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/intentdriven/abcd/internal/core/frontmatter"
 	"github.com/intentdriven/abcd/internal/core/intent"
 	"github.com/intentdriven/abcd/internal/core/issueschema"
 )
@@ -454,5 +455,36 @@ func TestPromoteRechecksTheStandingStateUnderTheLock(t *testing.T) {
 	}
 	if strings.Contains(string(content), "promoted_to") {
 		t.Fatalf("the reading record was stamped despite the refusal:\n%s", content)
+	}
+}
+
+// TestPromoteStampsExtractedFromRecord proves the one arrival path a command
+// derives from what it did rather than from what it was told: promote is the one
+// shipped verb that derives a record from another record, so the draft it mints
+// says so. No flag carries the value, and the issue's own origin is untouched —
+// promotion does not change where the issue came from.
+func TestPromoteStampsExtractedFromRecord(t *testing.T) {
+	repo, ir, issID := promoteFixture(t, "an observation worth graduating")
+	res, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: issID})
+	if err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(repo, res.IntentPath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := frontmatter.Fields(strings.Split(string(data), "\n"))
+	if got := fields["origin"].Value; got != "extracted-from-record" {
+		t.Errorf("promoted draft origin = %q, want extracted-from-record", got)
+	}
+	if got := fields["production_mode"].Value; got != "hand-written" {
+		t.Errorf("promoted draft production_mode = %q, want hand-written", got)
+	}
+	if got := readIssue(t, ir, issID); got.ID != issID {
+		t.Fatalf("issue re-read as %+v", got)
+	}
+	fm := readLedgerFrontmatter(t, ir, issID)
+	if fm["origin"] != "researcher-authored" {
+		t.Errorf("the source issue's origin moved to %v; promotion must not rewrite it", fm["origin"])
 	}
 }

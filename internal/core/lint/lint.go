@@ -540,6 +540,16 @@ func LintAt(cfg Config, repoRoot string, now time.Time) ([]Finding, error) {
 		findings = append(findings, ro...)
 	}
 
+	// record_provenance reads the same cross-store scan record_schema walks, so
+	// it runs once here rather than per root.
+	if rpCfg, ok := cfg.Rules[ruleRecordProvenance]; ok && rpCfg.Enabled {
+		rp, err := checkRecordProvenance(repoRoot, cfg, rpCfg)
+		if err != nil {
+			return nil, err
+		}
+		findings = append(findings, rp...)
+	}
+
 	if impactCfg, ok := cfg.Rules["issue_impact_valid"]; ok && impactCfg.Enabled {
 		ledger, err := scanIssues(issuesDirOf(impactCfg))
 		if err != nil {

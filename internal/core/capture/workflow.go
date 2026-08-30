@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/changelog"
+	"github.com/intentdriven/abcd/internal/core/provenance"
 	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
@@ -128,6 +129,14 @@ func captureBlockers(issuesRoot string, blockedBy []string) error {
 }
 
 func commitCapture(issuesRoot string, req CaptureRequest, issID, slug, placeholder string) (CaptureResult, error) {
+	// The disclosure pair (itd-178). origin is DERIVED — a capture is a person
+	// filing an observation, so it is researcher-authored and no request member
+	// carries it — while the production mode is the closed choice the caller
+	// declared, defaulted here so a captured record always carries both keys.
+	stamp, err := provenance.NewStamp(provenance.KindResearcherAuthored, req.ProductionMode)
+	if err != nil {
+		return CaptureResult{}, fmt.Errorf("capture: %w", err)
+	}
 	fields := []kv{
 		{"schema_version", 1},
 		{"id", issID},
@@ -146,6 +155,13 @@ func commitCapture(issuesRoot string, req CaptureRequest, issID, slug, placehold
 		"source":         string(req.Source),
 		"found_during":   req.FoundDuring,
 	}
+	// Written bare, like every other machine-read scalar: a quoted value reads as
+	// a different string to the line scanner the gate compares against.
+	fields = append(fields,
+		kv{provenance.KeyOrigin, rawScalar(stamp.OriginValue())},
+		kv{provenance.KeyProductionMode, rawScalar(stamp.ModeValue())})
+	fm[provenance.KeyOrigin] = stamp.OriginValue()
+	fm[provenance.KeyProductionMode] = stamp.ModeValue()
 	if req.FoundAt != "" {
 		fields = append(fields, kv{"found_at", req.FoundAt})
 		fm["found_at"] = req.FoundAt
@@ -245,6 +261,9 @@ func Resolve(req ResolveRequest) (TransitionResult, error) {
 		return TransitionResult{}, fmt.Errorf(
 			"resolve: --shipped-in %q is not a release tag (want vMAJOR.MINOR.PATCH); nothing written", req.ShippedIn)
 	}
+	if err := validateRestampMode(req.ProductionMode); err != nil {
+		return TransitionResult{}, fmt.Errorf("resolve: %w", err)
+	}
 	extras := []kv{{"impact", rawScalar(string(impact))}}
 	if req.ShippedIn != "" {
 		// rawScalar, like impact above: a plain string is double-quoted by
@@ -268,7 +287,7 @@ func Resolve(req ResolveRequest) (TransitionResult, error) {
 		extras = append(extras, kv{"resolved_by", members})
 	}
 	res, err := transition(req.RepoRoot, req.IssuesRoot, req.ID, "resolution", req.Resolution,
-		extras, StateResolved)
+		extras, req.ProductionMode, StateResolved)
 	if err != nil {
 		return TransitionResult{}, err
 	}
@@ -325,12 +344,64 @@ var reShippedIn = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
 // wontfix/ carries no impact (issue_impact_valid gates resolved/ only), so no
 // judgement is stamped.
 func Wontfix(req WontfixRequest) (TransitionResult, error) {
-	return transition(req.RepoRoot, req.IssuesRoot, req.ID, "wontfix_reason", req.Reason, nil, StateWontfix)
+	if err := validateRestampMode(req.ProductionMode); err != nil {
+		return TransitionResult{}, fmt.Errorf("wontfix: %w", err)
+	}
+	return transition(req.RepoRoot, req.IssuesRoot, req.ID, "wontfix_reason", req.Reason, nil, req.ProductionMode, StateWontfix)
+}
+
+// validateRestampMode checks a declared restamp against the closed vocabulary
+// before the ledger is touched at all, so a typo costs no lock and no read. An
+// undeclared mode is not a value to validate: it means "leave the record's
+// existing stamp alone".
+//
+// Whether the record can BE restamped is a separate question, answered inside
+// the transition against the record's own bytes (see restampField).
+func validateRestampMode(mode string) error {
+	if mode == "" {
+		return nil
+	}
+	_, err := provenance.ParseMode(mode)
+	return err
+}
+
+// restampField returns the production_mode entry a transition writes, or nothing
+// when none was declared. It is the ONE place the restamp rule lives, so the two
+// transitions cannot come to differ about it.
+//
+// It REFUSES a restamp of a record carrying no origin. Every record committed
+// before the disclosure keys existed is in that state, and forward-only
+// population means none of them is backfilled — so appending a lone
+// production_mode there produces exactly the shape record_provenance reports as
+// "a state no command produced", against a record the command had just written.
+// The pair is written together or not at all.
+//
+// An undeclared mode writes nothing whatever the record carries: an unstamped
+// record must stay resolvable, because the refusal is about the restamp and never
+// about the transition.
+func restampField(fm map[string]any, issID, mode string) ([]kv, error) {
+	if mode == "" {
+		return nil, nil
+	}
+	if asString(fm[provenance.KeyOrigin]) == "" {
+		return nil, fmt.Errorf(
+			"%s carries no %s, so it predates disclosure and there is nothing to restamp: the pair is written together or not at all, and a lone %s is a state no command produces (nothing written — re-run without --production-mode)",
+			issID, provenance.KeyOrigin, provenance.KeyProductionMode)
+	}
+	m, err := provenance.ParseMode(mode)
+	if err != nil {
+		return nil, err
+	}
+	return []kv{{provenance.KeyProductionMode, rawScalar(string(m))}}, nil
 }
 
 // transition moves an open issue to target, setting the defining note field and
 // any extra frontmatter fields (e.g. resolved/'s impact) in one atomic write.
-func transition(repoRoot, issuesRoot, issID, field, note string, extra []kv, target State) (TransitionResult, error) {
+//
+// productionMode, when non-empty, restamps the record's production_mode in the
+// same write — and is refused against a record that carries no origin, before
+// anything is written (restampField).
+func transition(repoRoot, issuesRoot, issID, field, note string, extra []kv, productionMode string, target State) (TransitionResult, error) {
 	rr, ir, err := resolveRoots(repoRoot, issuesRoot)
 	if err != nil {
 		return TransitionResult{}, err
@@ -364,6 +435,16 @@ func transition(repoRoot, issuesRoot, issID, field, note string, extra []kv, tar
 		if err != nil {
 			return err
 		}
+		// The restamp is judged against the record's OWN bytes, read here, and
+		// refused before any of the writes below are composed.
+		currentFM, _, err := parseFrontmatterAndBody(content)
+		if err != nil {
+			return err
+		}
+		restamp, err := restampField(currentFM, issID, productionMode)
+		if err != nil {
+			return err
+		}
 		// The note is the only free text a transition adds, so it is what gets
 		// redacted — before it is written into the record, never after, so no
 		// rewritten span can reach a field the validator has already passed.
@@ -372,7 +453,7 @@ func transition(repoRoot, issuesRoot, issID, field, note string, extra []kv, tar
 		if err != nil {
 			return err
 		}
-		for _, f := range extra {
+		for _, f := range append(append([]kv{}, extra...), restamp...) {
 			if members, isNested := f.val.(nested); isNested {
 				newContent, err = setMapField(newContent, f.key, members)
 			} else {

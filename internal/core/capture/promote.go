@@ -7,6 +7,7 @@ import (
 
 	"github.com/intentdriven/abcd/internal/core/intent"
 	"github.com/intentdriven/abcd/internal/core/issueschema"
+	"github.com/intentdriven/abcd/internal/core/provenance"
 	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
@@ -21,6 +22,13 @@ type PromoteRequest struct {
 	// that has been dispositioned.
 	ID         string
 	LinkIntent string // itd-N; "" mints
+	// ProductionMode is how the MINTED DRAFT's seed text was produced (itd-178),
+	// or empty for the vocabulary's default. It has no effect in stamp-only mode,
+	// where nothing is minted. The draft's `origin` is not a member here: promote
+	// is the one shipped path that derives a record from another record, so it
+	// derives extracted-from-record from what it did rather than from what it was
+	// told.
+	ProductionMode string
 }
 
 // PromoteResult is the outcome of a successful Promote. Paths are
@@ -127,6 +135,9 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 			Title:        title,
 			SeedBody:     seed,
 			PromotedFrom: req.ID,
+			// The one arrival path a command derives from what it did (itd-178).
+			Origin:         provenance.KindExtractedFromRecord,
+			ProductionMode: req.ProductionMode,
 		})
 		if err != nil {
 			return PromoteResult{}, err
@@ -286,6 +297,9 @@ func promoteReadingItem(repoRoot, issuesRoot string, req PromoteRequest) (Promot
 			Title:        title,
 			SeedBody:     seed,
 			PromotedFrom: req.ID,
+			// The one arrival path a command derives from what it did (itd-178).
+			Origin:         provenance.KindExtractedFromRecord,
+			ProductionMode: req.ProductionMode,
 		})
 		if err != nil {
 			return PromoteResult{}, err

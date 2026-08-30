@@ -651,3 +651,83 @@ func TestCaptureBoardCarriesTheOutstandingRoster(t *testing.T) {
 		t.Fatalf("the board must render an open hold with its exit condition:\n%s", text)
 	}
 }
+
+// TestCaptureProductionModeFlag proves the closed-choice flag reaches the
+// ledger: a declared mode is stamped, an undeclared one takes the repo's
+// default, and a value outside the vocabulary is refused with nothing written.
+// The flag is not free text — that is what keeps itd-178's "neither key was
+// supplied as free text by the operator" true while a flag exists at all.
+func TestCaptureProductionModeFlag(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	rec := captureRecordFields(t, repo, "a finding worth stamping", "--production-mode", "dictated-and-formatted")
+	if rec["production_mode"] != "dictated-and-formatted" {
+		t.Errorf("production_mode = %q, want dictated-and-formatted", rec["production_mode"])
+	}
+	if rec["origin"] != "researcher-authored" {
+		t.Errorf("origin = %q, want researcher-authored", rec["origin"])
+	}
+
+	rec = captureRecordFields(t, repo, "a finding with no declared mode")
+	if rec["production_mode"] != "hand-written" {
+		t.Errorf("defaulted production_mode = %q, want hand-written", rec["production_mode"])
+	}
+
+	before := ledgerIssueCount(t, repo)
+	out, err := runCLIErr(t, "capture", "a finding with a bogus mode", "--production-mode", "typed")
+	if err == nil {
+		t.Fatalf("an out-of-vocabulary production mode must be refused:\n%s", out)
+	}
+	if n := ledgerIssueCount(t, repo); n != before {
+		t.Errorf("a refused capture wrote a record: %d -> %d", before, n)
+	}
+}
+
+// TestCaptureProductionModeDefaultsToThePin proves the itd-91 attribution seam
+// is the source of the default: a repo that declares one in its identity pin
+// stamps it without the operator naming it on every command.
+func TestCaptureProductionModeDefaultsToThePin(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+	if err := os.MkdirAll(filepath.Join(repo, ".abcd", "config"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	pin := `{"name":"A Maintainer","email":"maintainer@example.com","production_mode":"scribe-transcribed"}` + "\n"
+	if err := os.WriteFile(filepath.Join(repo, ".abcd", "config", "identity.json"), []byte(pin), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rec := captureRecordFields(t, repo, "a finding taking the repo default")
+	if rec["production_mode"] != "scribe-transcribed" {
+		t.Errorf("production_mode = %q, want the pin's scribe-transcribed", rec["production_mode"])
+	}
+}
+
+// captureRecordFields files an issue through the CLI and returns the written
+// record's frontmatter as key/value pairs, read off the bytes that landed.
+func captureRecordFields(t *testing.T, repo, text string, extra ...string) map[string]string {
+	t.Helper()
+	args := append([]string{"capture", text, "--json"}, extra...)
+	out := runCLI(t, args...)
+	var r struct {
+		Path string `json:"path"`
+	}
+	if err := json.Unmarshal(out, &r); err != nil {
+		t.Fatalf("capture --json: %v\n%s", err, out)
+	}
+	data, err := os.ReadFile(filepath.Join(repo, r.Path))
+	if err != nil {
+		t.Fatalf("reading %s: %v", r.Path, err)
+	}
+	fields := map[string]string{}
+	for _, line := range strings.Split(string(data), "\n") {
+		if line == "---" && len(fields) > 0 {
+			break
+		}
+		k, v, ok := strings.Cut(line, ": ")
+		if ok {
+			fields[k] = v
+		}
+	}
+	return fields
+}

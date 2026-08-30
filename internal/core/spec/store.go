@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/intentdriven/abcd/internal/core/frontmatter"
+	"github.com/intentdriven/abcd/internal/core/provenance"
 	"github.com/intentdriven/abcd/internal/core/recordid"
 	"github.com/intentdriven/abcd/internal/fsutil"
 )
@@ -216,16 +217,24 @@ func maxIntentSpecNum(repoRoot string) (int, error) {
 }
 
 // Create mints an id via NextID and writes specs/open/spc-N-<slug>.md with the
-// intent link in frontmatter. Both the intent id and the slug are validated
-// before any path is built (the slug becomes a filename). The write is atomic.
-// The returned mintWarning is non-empty when the refs-union scan degraded to
-// working-tree-only minting; the caller MUST surface it (never swallow it).
-func Create(repoRoot, intentID, slug string) (Spec, string, error) {
+// intent link and the origin/production_mode disclosure pair in frontmatter.
+// Both the intent id and the slug are validated before any path is built (the
+// slug becomes a filename), as is the production mode — a spec is minted by a
+// verb a person invoked, so its arrival path is researcher-authored and is
+// derived here rather than asked for. An empty mode takes the vocabulary's
+// default. The write is atomic. The returned mintWarning is non-empty when the
+// refs-union scan degraded to working-tree-only minting; the caller MUST surface
+// it (never swallow it).
+func Create(repoRoot, intentID, slug, productionMode string) (Spec, string, error) {
 	if !recordid.ValidIntentID(intentID) {
 		return Spec{}, "", fmt.Errorf("spec: intent id %q must match ^itd-[0-9]+$", intentID)
 	}
 	if !slugRe.MatchString(slug) {
 		return Spec{}, "", fmt.Errorf("spec: slug %q must be kebab-case", slug)
+	}
+	stamp, err := provenance.NewStamp(provenance.KindResearcherAuthored, productionMode)
+	if err != nil {
+		return Spec{}, "", fmt.Errorf("spec: %w", err)
 	}
 	// Mint and write under the exclusive mint lock: NextID scans the store for
 	// max N and this writes spc-N-<slug>.md, so without serialization two
@@ -235,7 +244,7 @@ func Create(repoRoot, intentID, slug string) (Spec, string, error) {
 	// second run see the first's file and mint N+1.
 	var sp Spec
 	var mintWarning string
-	err := withMintLock(repoRoot, func() error {
+	err = withMintLock(repoRoot, func() error {
 		id, warn, err := NextID(repoRoot)
 		if err != nil {
 			return err
@@ -247,7 +256,7 @@ func Create(repoRoot, intentID, slug string) (Spec, string, error) {
 		}
 		name := fmt.Sprintf("%s-%s.md", id, slug)
 		// 0o644 matches the intent-side markdown writer — both write committed design-record files.
-		if err := fsutil.WriteFileAtomic(filepath.Join(openDir, name), []byte(renderSpec(id, slug, intentID)), 0o644); err != nil {
+		if err := fsutil.WriteFileAtomic(filepath.Join(openDir, name), []byte(renderSpec(id, slug, intentID, stamp)), 0o644); err != nil {
 			return fmt.Errorf("spec: writing %s: %w", filepath.Join(SpecsRelDir, StatusOpen, name), err)
 		}
 		sp = Spec{

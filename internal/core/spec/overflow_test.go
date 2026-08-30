@@ -24,7 +24,7 @@ func TestCreateRefusesAtIntegerCeiling(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, _, err := Create(root, "itd-2", "new-one")
+	_, _, err := Create(root, "itd-2", "new-one", "")
 	if err == nil {
 		t.Fatal("Create must refuse at the integer ceiling, not mint a wrapped negative id")
 	}
