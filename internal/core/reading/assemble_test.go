@@ -908,3 +908,46 @@ func TestAFailedManifestWriteLeavesNoBundle(t *testing.T) {
 		t.Error("the bundle survived a failed manifest write")
 	}
 }
+
+// TestHeadingsThatRenderAsAnExcludedTitleAreRecognised: a heading that renders
+// identically to an excluded one but differs in bytes is the same heading to
+// every reader of the rendered page, and the byte comparison misses it.
+func TestHeadingsThatRenderAsAnExcludedTitleAreRecognised(t *testing.T) {
+	cases := map[string]string{
+		"bold":                 "## **Audit Notes**\n\n" + sentinelAuditNotes + "\n",
+		"a code span":          "## `Audit Notes`\n\n" + sentinelAuditNotes + "\n",
+		"a non-breaking space": "## Audit Notes\n\n" + sentinelAuditNotes + "\n",
+		"emphasis":             "## _Audit Notes_\n\n" + sentinelAuditNotes + "\n",
+	}
+	for what, body := range cases {
+		root := fixtureRepo(t)
+		writeFile(t, root, ".abcd/development/specs/open/spc-11-rendered.md",
+			"---\nid: spc-11\n---\n\n# A spec\n\nProse.\n\n"+body)
+		gitCommitAll(t, root)
+
+		res, err := Assemble(AssembleRequest{
+			RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+		})
+		if err != nil {
+			continue // a refusal is a legitimate way to recognise the spelling
+		}
+		if strings.Contains(bundleText(res.Bundle), sentinelAuditNotes) {
+			t.Errorf("a heading spelled with %s let an excluded section travel", what)
+		}
+	}
+}
+
+// TestIndentedFrontmatterBlockIsRecognised: a block whose keys all carry one
+// space of indent is valid YAML, and both the field reader and the column-0 key
+// pattern look straight past it.
+func TestIndentedFrontmatterBlockIsRecognised(t *testing.T) {
+	root := fixtureRepo(t)
+	writeFile(t, root, ".abcd/development/specs/open/spc-12-indented.md",
+		"---\n id: spc-12\n origin: "+sentinelOrigin+"\n---\n\n# A spec\n\nProse.\n")
+	gitCommitAll(t, root)
+
+	res, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	if err == nil && strings.Contains(bundleText(res.Bundle), sentinelOrigin) {
+		t.Error("an indented frontmatter block let an excluded key travel")
+	}
+}

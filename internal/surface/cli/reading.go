@@ -113,6 +113,13 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return &exitError{Code: 2, Msg: "reading assemble: " + scrubPaths(err)}
 			}
+			// The core was handed the resolved path so it could write there; the
+			// operator is shown the string they typed. A resolved absolute path on
+			// the success surface is a local path leaving the machine the moment
+			// the plugin page's "report out_dir" instruction is followed.
+			if outDir != "" {
+				res.OutDir = outDir
+			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				renderAssembleResult(w, res)
 			})

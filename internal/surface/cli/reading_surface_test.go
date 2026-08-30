@@ -309,7 +309,13 @@ func TestRelativeOutResolvesAgainstTheWorkingDirectory(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(fromRepoRoot, reading.BundleFileName)); err == nil {
 		t.Error("the artefacts landed against the repository root instead")
 	}
-	if !filepath.IsAbs(res.OutDir) {
-		t.Errorf("the result echoes %q rather than the resolved path", res.OutDir)
+	// The core is handed the resolved path; the operator is shown what they
+	// typed. An absolute path nobody asked for on the success surface is a local
+	// path leaving the machine the moment the host reports the field.
+	if res.OutDir != "../../outside-run" {
+		t.Errorf("out_dir is %q, want the operator's own string", res.OutDir)
+	}
+	if filepath.IsAbs(res.OutDir) {
+		t.Errorf("out_dir %q is an absolute path the operator did not type", res.OutDir)
 	}
 }

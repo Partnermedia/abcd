@@ -43,10 +43,12 @@ type AssembleRequest struct {
 // carried for a caller that wants them in memory, and the artefacts are named by
 // their basenames rather than by a full path.
 //
-// OutDir is the one field that can hold an absolute path, and only because the
-// operator supplied one to --out; it is echoed back verbatim so a caller can
-// find what it asked for. Neither ARTEFACT carries it: no path the operator did
-// not type reaches this result, and nothing committed reaches it at all.
+// OutDir is whatever the CALLER passed in, echoed back so it can find what it
+// asked for. The core takes a relative one against the repository root, which
+// suits the default it computes itself; the CLI resolves an operator's relative
+// --out against the working directory before calling in, and then puts the
+// operator's own string back on the result, so no absolute path nobody typed
+// reaches the success surface. Neither ARTEFACT carries an output path at all.
 type AssembleResult struct {
 	RunID            string   `json:"run_id"`
 	Position         Position `json:"position"`
@@ -554,8 +556,13 @@ var artefactTags = []string{BundleType, ManifestType}
 // carries, wherever it sits and whatever the file is called, so the tag is
 // looked for in the bytes before anything is parsed.
 //
-// The parse stays on behind it, and earns its keep on exactly one shape a byte
-// scan cannot see: a tag spelled with a JSON unicode escape.
+// The parse stays on behind the scan, and its reach is narrower than the scan's:
+// it runs only on a `.json` name and reads only a TOP-LEVEL `_type`. What it
+// adds is a tag spelled with a JSON unicode escape at that one position. An
+// escaped tag inside a `.yaml` or `.toml` file, or nested in an object or an
+// array, is caught by neither — a hand-rewritten artefact, which is a different
+// threat from a run committed by accident, and the shape ruling (18) is actually
+// about.
 func refuseOwnArtefact(rel string, raw []byte) error {
 	for _, tag := range artefactTags {
 		if bytes.Contains(raw, []byte(tag)) {

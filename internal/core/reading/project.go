@@ -129,10 +129,16 @@ func redactExcluded(rel, doc string, exclusions []Exclusion) (string, error) {
 }
 
 var (
-	// excludedKeyLineRe matches an excluded key still at column 0. YAML permits
-	// the key to be quoted, and a quoted key is the same key — the field reader
-	// does not report it, so redaction leaves it and this is what notices.
-	excludedKeyLineRe = regexp.MustCompile(`^(?:"([A-Za-z_][A-Za-z0-9_-]*)"|'([A-Za-z_][A-Za-z0-9_-]*)'|([A-Za-z_][A-Za-z0-9_-]*))\s*:`)
+	// excludedKeyLineRe matches an excluded key inside a frontmatter block.
+	//
+	// Two spellings the field reader does not report, and so does not redact,
+	// are matched here instead. A QUOTED key is the same key. And a block whose
+	// keys all carry leading indent is valid YAML that the reader — which wants
+	// a key at column 0 — looks straight past, so `origin` would travel intact.
+	// Matching the indent means a nested mapping's key is matched too; that is
+	// the fail-closed direction, and an excluded name nested under another key
+	// is not a shape any record in this corpus has.
+	excludedKeyLineRe = regexp.MustCompile(`^\s*(?:"([A-Za-z_][A-Za-z0-9_-]*)"|'([A-Za-z_][A-Za-z0-9_-]*)'|([A-Za-z_][A-Za-z0-9_-]*))\s*:`)
 	// atxCloseRe matches an ATX heading's optional closing sequence. `## X ##`
 	// and `## X` are one heading, and the section scan reports the closing hashes
 	// as part of the title, so they are normalised away before any comparison.
@@ -150,6 +156,20 @@ var (
 	// own rule so the two agree about what is inside a fence.
 	fenceOpenRe = regexp.MustCompile("^[ \t]*```")
 )
+
+// sameRendering reports whether two heading titles come out as the same heading
+// on the page. `## **Audit Notes**`, "## `Audit Notes`" and a title carrying a
+// non-breaking space differ in bytes and are the same heading to every reader,
+// so a byte comparison is the wrong test for what the floor is trying to name.
+//
+// The site's own anchor slug is the comparison: it drops emphasis and code
+// marks, lower-cases, and collapses every other run of non-alphanumerics to a
+// hyphen — which is exactly the equivalence "renders as the same heading" needs,
+// and it is one function rather than a table of markup shapes to keep current.
+func sameRendering(a, b string) bool {
+	slug := site.Slug(a)
+	return slug != "" && slug == site.Slug(b)
+}
 
 // normaliseHeadingTitle reduces a heading to the text it names: surrounding
 // whitespace and the optional ATX closing sequence removed.
@@ -230,7 +250,7 @@ func verifyRedaction(rel, original, redacted string, keys, headings map[string]b
 		}
 		title := normaliseHeadingTitle(sec.Title)
 		for want := range headings {
-			if strings.EqualFold(title, want) {
+			if strings.EqualFold(title, want) || sameRendering(title, want) {
 				return fmt.Errorf("reading: %s still carries the excluded heading %q at line %d after "+
 					"redaction; the floor names %q, and a heading is excluded however it is spelled",
 					rel, sec.Title, sec.Line, want)
