@@ -1,7 +1,7 @@
 ---
 name: capture
-description: Capture issues to the structured per-repo ledger and query them, by invoking the abcd binary. Bare invocation is a read-only status render; list/promote/resolve/wontfix act on the ledger.
-argument-hint: "[text] | list --open|--resolved|--wontfix|--all | promote <iss-N|rdi-N> [--intent <itd-N>] | resolve <iss-N> <note> --impact <additive|breaking|fix|internal> [--intent <itd-N>] [--spec <spc-N>] [--commit <sha>] | wontfix <iss-N> <reason>"
+description: Capture issues to the structured per-repo ledger and query them, by invoking the abcd binary. Bare invocation is a read-only status render; disposition/list/promote/resolve/wontfix act on the ledger.
+argument-hint: "[text] | list --open|--resolved|--wontfix|--all | promote <iss-N|rdi-N> [--intent <itd-N>] | resolve <iss-N> <note> --impact <additive|breaking|fix|internal> [--intent <itd-N>] [--spec <spc-N>] [--commit <sha>] | wontfix <iss-N> <reason> | disposition <rdi-N> --state <accepted|rejected|declined|held>"
 ---
 
 # `/abcd:capture` — issue ledger
@@ -114,6 +114,40 @@ With no provenance flags the record is byte-identical to a
 plain resolve: provenance is optional, never guessed. The written members come
 back in the JSON as `resolved_by`. `wontfix` takes no provenance — a non-action
 points at nothing.
+
+## Answer a reading item
+
+A reading record is what an instrument returned; the researcher's answer to one
+is a **separate record**, keyed to the item:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/abcd" capture disposition <rdi-N> --state accepted --grounds "<why>" --json
+```
+
+The two are never one write, so the ledger can always show that a finding
+existed before it was answered. Report the `id`, `item`, `state`, `position` and
+`path` from the JSON.
+
+Four states ship: `accepted` (at the widening position, acceptance IS
+admission), `rejected` (asserts a purpose a later run tests), `declined` (the
+widening position's own: the proposal was admissible and the researcher chose
+otherwise), and `held` (directional, and requires `--exit-condition`). Which
+states are available depends on the item's **position**, which the verb reads
+off the keyed reading record — never from a flag, because a caller-supplied
+position would let a disposition assert the rule it has to satisfy.
+
+`--grounds` is required on every state except `held`. A second answer to one
+item must cite the standing one with `--supersedes <dsp-N>`: the standing
+disposition of an item is the one no sibling supersedes, and the superseded
+record stays in place, because a hold that vanished when it was answered would
+take its own exit condition with it. `--recurs` cites prior item ids — the
+recorded form of a warm recognition that something has come back, never a
+mechanical join and never a state of its own.
+
+`--hold-frame-location` and `--hold-moscow` are **reserved and dormant**: the
+grammars are stated and a populated value is refused until activation is ruled.
+Nothing means "already covered" — an item nobody has answered is reported as
+outstanding by `abcd lint`, never named as a state.
 
 ## Promote an issue into an intent
 

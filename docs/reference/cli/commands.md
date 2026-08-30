@@ -171,6 +171,24 @@ Capture issues to the ledger; bare invocation is read-only status
       --source string         surfacing channel (default user-observation)
 ```
 
+#### `abcd capture disposition`
+
+Answer one reading item (a separate record, keyed to the item)
+
+**Usage:** `abcd capture disposition <rdi-N> --state <accepted|rejected|declined|held> [--grounds <text>] [--exit-condition <text>] [--supersedes <dsp-N>] [--recurs <rdi-N,...>] [flags]`
+
+**Flags:**
+
+```
+      --exit-condition string        what would end a held disposition (required on held; a hold exits only through a superseding disposition that cites it)
+      --grounds string               disposition_grounds: why this answer (free text; required on every state except held)
+      --hold-frame-location string   RESERVED (dormant): the frame element a hold sits at; a populated value is refused until activation is ruled
+      --hold-moscow string           RESERVED (dormant): must | should | could | wont; a populated value is refused until activation is ruled
+      --recurs string                comma-separated prior rdi-ids this item recurs from — the recorded form of a warm recognition, never a mechanical join
+      --state string                 the answer: accepted | rejected | declined | held (availability varies by the item's position)
+      --supersedes string            the standing dsp-N this answer replaces; required once an item already carries one
+```
+
 #### `abcd capture list`
 
 List issues by state (one of --open/--resolved/--wontfix/--all required)

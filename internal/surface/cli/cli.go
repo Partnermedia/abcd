@@ -2536,6 +2536,63 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	promoteCmd.Flags().StringVar(&promoteIntent, "intent", "", "stamp-only mode: link this existing itd-N instead of minting a draft")
 	captureCmd.AddCommand(promoteCmd)
 
+	// disposition — the researcher's answer to ONE reading item, written as a
+	// separate record keyed to that item (spc-58). It is a distinct verb rather
+	// than a flag on anything else because the reading and the answer are two
+	// acts: collapsing them into one write would leave nothing able to show that
+	// a finding existed before it was answered.
+	var dispState, dispGrounds, dispExit, dispSupersedes, dispRecurs string
+	var dispHoldFrame, dispHoldMoscow string
+	dispositionCmd := &cobra.Command{
+		Use:   "disposition <rdi-N> --state <accepted|rejected|declined|held> [--grounds <text>] [--exit-condition <text>] [--supersedes <dsp-N>] [--recurs <rdi-N,...>]",
+		Short: "Answer one reading item (a separate record, keyed to the item)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			recurs, err := parseRecurs(dispRecurs)
+			if err != nil {
+				return err
+			}
+			res, err := capture.Disposition(capture.DispositionRequest{
+				RepoRoot: cwd, Item: args[0], State: dispState,
+				Grounds: dispGrounds, ExitCondition: dispExit,
+				Supersedes: dispSupersedes, Recurs: recurs,
+				HoldFrameLocation: dispHoldFrame, HoldMoscow: dispHoldMoscow,
+			})
+			if err != nil {
+				return err
+			}
+			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				fmt.Fprintf(w, "%s  %s %s (%s) — %s\n",
+					res.ID, res.Item, res.State, res.Position, termsafe.Sanitize(res.Path))
+				if res.Redacted > 0 {
+					fmt.Fprintf(w, "  redacted %d span(s) before writing (home paths and identifiers are never committed)\n", res.Redacted)
+				}
+				if res.Degraded != "" {
+					fmt.Fprintf(w, "  WARNING: %s\n", termsafe.Sanitize(res.Degraded))
+				}
+			})
+		},
+	}
+	// --state carries no default. Which answer a researcher gave is the whole
+	// content of the record, and a defaulted judgement is a judgement nobody
+	// made; the core refuses an empty state rather than inventing one. It stays
+	// unmarked as cobra-required to keep the tree's no-required-flags invariant.
+	dispositionCmd.Flags().StringVar(&dispState, "state", "", "the answer: accepted | rejected | declined | held (availability varies by the item's position)")
+	dispositionCmd.Flags().StringVar(&dispGrounds, "grounds", "", "disposition_grounds: why this answer (free text; required on every state except held)")
+	dispositionCmd.Flags().StringVar(&dispExit, "exit-condition", "", "what would end a held disposition (required on held; a hold exits only through a superseding disposition that cites it)")
+	dispositionCmd.Flags().StringVar(&dispSupersedes, "supersedes", "", "the standing dsp-N this answer replaces; required once an item already carries one")
+	dispositionCmd.Flags().StringVar(&dispRecurs, "recurs", "", "comma-separated prior rdi-ids this item recurs from — the recorded form of a warm recognition, never a mechanical join")
+	// The two-axis hold field is RESERVED and dormant. The flags exist so the
+	// reservation is a behaviour a caller meets rather than a comment nobody
+	// reads: a populated value is refused, and the refusal states the grammar.
+	dispositionCmd.Flags().StringVar(&dispHoldFrame, "hold-frame-location", "", "RESERVED (dormant): the frame element a hold sits at; a populated value is refused until activation is ruled")
+	dispositionCmd.Flags().StringVar(&dispHoldMoscow, "hold-moscow", "", "RESERVED (dormant): must | should | could | wont; a populated value is refused until activation is ruled")
+	captureCmd.AddCommand(dispositionCmd)
+
 	// wontfix — open -> wontfix with a reason.
 	captureCmd.AddCommand(&cobra.Command{
 		Use:   "wontfix <iss-N> <reason>",
@@ -2609,6 +2666,10 @@ func listState(open, resolved, wontfix, all bool) (capture.State, error) {
 // issIDRe validates a --blocked-by token at the CLI boundary (mirrors the core
 // ^iss-[0-9]+$ schema constraint).
 var issIDRe = regexp.MustCompile(`^iss-[0-9]+$`)
+
+// readingItemIDRe validates a --recurs token at the CLI boundary (mirrors the
+// core ^rdi-[0-9]+$ schema constraint).
+var readingItemIDRe = regexp.MustCompile(`^rdi-[0-9]+$`)
 
 // recordIDRe matches any abcd record id (issue, intent, or spec). It is used
 // only by suspectedTypoedSubcommand's shape check — distinct from issIDRe, which
@@ -2744,6 +2805,29 @@ func parseBlockedBy(raw string) ([]string, error) {
 		}
 		if !issIDRe.MatchString(tok) {
 			return nil, fmt.Errorf("capture: --blocked-by token %q must match iss-N", tok)
+		}
+		ids = append(ids, tok)
+	}
+	return ids, nil
+}
+
+// parseRecurs splits the comma-separated --recurs list into prior reading-item
+// ids. Shape is checked here so a typo is a usage error rather than a refusal
+// from deep inside the ledger writer; membership (does the item exist) is
+// deliberately NOT checked, because a recurrence may cite an item from a run
+// this ledger no longer carries.
+func parseRecurs(raw string) ([]string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	var ids []string
+	for _, tok := range strings.Split(raw, ",") {
+		tok = strings.TrimSpace(tok)
+		if tok == "" {
+			continue
+		}
+		if !readingItemIDRe.MatchString(tok) {
+			return nil, fmt.Errorf("capture: --recurs token %q must match rdi-N", tok)
 		}
 		ids = append(ids, tok)
 	}
