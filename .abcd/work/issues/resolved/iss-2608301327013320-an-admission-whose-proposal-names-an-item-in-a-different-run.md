@@ -7,6 +7,11 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-189-round-2-ruthless"
 found_at: "internal/core/lint/schema.go"
+resolution: "checkRecordJoins gains a sameBucket obligation, declared on the admission store's proposal join: a target the corpus holds in another bucket is now a finding naming both buckets. The comment in readingoutstanding.go that claimed the run-field agreement enforced it is corrected to state what the walk actually establishes."
+impact: fix
+resolved_by:
+  intent: "itd-189"
+  spec: "spc-67"
 ---
 
 an admission whose proposal names an item in a different run passes the gate silently and admits nothing

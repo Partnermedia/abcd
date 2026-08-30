@@ -7,6 +7,11 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-189-round-2-ruthless"
 found_at: "internal/core/lint/schema.go"
+resolution: "checkRecordJoins takes the retired set checkRecordSchema already builds and resolves a pruned handle through the successor's declaration, exactly as the cross-reference loop does, so one rule gives one answer about one pruned handle."
+impact: fix
+resolved_by:
+  intent: "itd-189"
+  spec: "spc-67"
 ---
 
 checkRecordJoins does not consult the retired set so one rule gives two answers about one pruned handle

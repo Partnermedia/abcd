@@ -188,6 +188,18 @@ type recordStore struct {
 type recordJoin struct {
 	field string
 	why   string
+	// sameBucket requires the target to sit in the SAME bucket as the record that
+	// joins it. An admission is meaningful only against the run whose proposals it
+	// admits, and reading ids are minted per run and collide across runs by
+	// construction — so an admission filed under one run naming an item that
+	// belongs to another is keyed on a pair nothing ever queries. It admits
+	// nothing, the proposal it names goes on being reported as unadmitted, and no
+	// line says an answer was written.
+	//
+	// checkRecordBucketField does NOT cover this and never did. That check enforces
+	// FIELD == DIRECTORY; this is DIRECTORY == THE TARGET'S OWN BUCKET, and a
+	// record satisfies the first while failing the second (iss-2608301327013320).
+	sameBucket bool
 }
 
 // bucketed reports whether the store holds its records in lifecycle
@@ -282,6 +294,7 @@ var recordStores = []recordStore{
 			field: "proposal",
 			why: "an admission is keyed to the proposal it admits, and one naming no record admits nothing in particular — " +
 				"the candidate set it claims to have joined cannot be reconstructed from it",
+			sameBucket: true,
 		}}},
 	{prefix: "srp", noun: "surprise", nodeType: "surprise",
 		fileNumRe: surpriseFileNumRe, fileFamily: "srp", filename: "srp-<N>.md",
@@ -456,7 +469,7 @@ func checkRecordSchema(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 		out = append(out, checkIssueRecordShape(r, cfg.Severity, judged)...)
 		out = append(out, checkRecordRequiredFields(r, cfg.Severity, judged)...)
 		out = append(out, checkRecordUnknownFields(r, cfg.Severity)...)
-		out = append(out, checkRecordJoins(r, index, cfg)...)
+		out = append(out, checkRecordJoins(r, index, retired, cfg)...)
 		out = append(out, checkRecordBucketField(r, cfg.Severity)...)
 
 		// Cross-references: a named record must be in the corpus, or declared
@@ -759,10 +772,19 @@ func checkRecordUnknownFields(r schemaRecord, severity string) []Finding {
 // keying field nothing resolved while the surprise's `occasioned_by` was
 // (iss-2608300935215868).
 //
+// Resolution has two halves, because a join can fail in two ways. A target that
+// is NOT IN THE CORPUS joins nothing at all. A target that is in the corpus but
+// in ANOTHER BUCKET joins something nobody will ever look for: a store whose ids
+// are minted per bucket collides across them, so the pair the joining record is
+// keyed on is one no reader queries. The second half is opt-in per join
+// (sameBucket), because only some joins carry that obligation.
+//
 // Prose is legitimate and stays silent. A surprise is keyed to WHATEVER
 // occasioned it — a detection, an admission, or a consequence that has no id — so
-// only a value that is a record handle of a store this scan reads is resolved.
-func checkRecordJoins(r schemaRecord, index map[recordRef]schemaRecord, cfg RuleConfig) []Finding {
+// only a value that is a record handle of a store this scan reads is resolved. A
+// handle a record declares it PRUNED is resolved too, on the same terms the
+// cross-reference loop resolves it, so one rule gives one answer about it.
+func checkRecordJoins(r schemaRecord, index map[recordRef]schemaRecord, retired map[recordRef]bool, cfg RuleConfig) []Finding {
 	var out []Finding
 	for _, join := range r.store.joins {
 		f := r.fields[join.field]
@@ -785,17 +807,42 @@ func checkRecordJoins(r schemaRecord, index map[recordRef]schemaRecord, cfg Rule
 		if err != nil {
 			continue
 		}
-		if _, ok := index[recordRef{prefix, num}]; ok {
-			continue
-		}
 		line := f.line
 		if line == 0 {
 			line = 1
 		}
+		ref := recordRef{prefix, num}
+		target, ok := index[ref]
+		if !ok {
+			// A handle a record declares it PRUNED resolves to that declaration rather
+			// than to a file, exactly as the cross-reference loop in checkRecordSchema
+			// reads it. Without this the one rule gives two answers about one pruned
+			// handle — accepting it in related_adrs and blocking on it in a join
+			// (iss-2608301327012166).
+			if retired[ref] {
+				continue
+			}
+			out = append(out, Finding{
+				File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: cfg.Severity,
+				Message: join.field + " names '" + ref.String() +
+					"', which is not a record in the corpus; " + join.why,
+			})
+			continue
+		}
+		// A join declared sameBucket must not reach out of its own bucket. A record
+		// outside every bucket is the WALK's finding (it already reports one), and
+		// comparing against an empty bucket here would put a second and confidently
+		// wrong finding on it, so a missing bucket on either side stands this leg down.
+		if !join.sameBucket || r.bucket == "" || target.bucket == "" || target.bucket == r.bucket {
+			continue
+		}
 		out = append(out, Finding{
 			File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: cfg.Severity,
-			Message: join.field + " names '" + prefix + "-" + m[2] +
-				"', which is not a record in the corpus; " + join.why,
+			Message: join.field + " names '" + ref.String() + "', which is filed under '" + target.bucket +
+				"' while this " + r.noun() + " is filed under '" + r.bucket +
+				"'; ids in that family are minted per bucket and collide across them, so the pair this " +
+				r.noun() + " is keyed on is one nothing ever queries — it counts for nothing, and the " +
+				target.noun() + " it names goes on being reported as unanswered with no sign that an answer was written",
 		})
 	}
 	return out
