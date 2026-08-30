@@ -46,3 +46,22 @@ scope honestly in the doc comment AND in the refusal message, so an operator is
 not told to add words to a language that has no word breaks.
 
 Do NOT raise or lower 3: for Latin script the value is well judged.
+
+CORROBORATED INDEPENDENTLY by the round-3 security review, which reached it by
+a different route (a 36-case injection harness plus route enumeration) and
+graded it a correctness/availability defect rather than a security one --
+declining to launder it into a block, and putting the fix-or-record call to the
+orchestrator.
+
+Its added detail, which raises the severity of the consequence:
+
+- The argument is MANDATORY since round 1. So a Chinese- or Japanese-writing
+  operator cannot `promote` or `resolve` ANY issue, and cannot satisfy the
+  `intent ready` gate. There is no flag and no waiver.
+- The failure is ASYMMETRIC: `capture wontfix <id> "<CJK reason>"` still
+  succeeds, because the reason-derived path skips ValidateText. So the same
+  operator can decline work but cannot pursue it.
+- The remedy the gate PRINTS on refusal will itself refuse the same text.
+
+Verified not to be a wedge on this corpus: all 10 populated records are Latin
+script and the measured figures are identical before and after the floor.
