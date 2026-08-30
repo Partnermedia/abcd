@@ -12,6 +12,34 @@ over the brief's earlier `1.0.0`-at-close expectation). The four M6 synthesis
 agents below entered at `0.1.0`, wired to their `abcd disembark` verbs and
 unmeasured; `lifeboat-oracle` has since become `lifeboat-reviewer` at `0.1.1`.
 
+## 0.1.0 — 2026-08-30 (itd-188 / spc-66 — the ledger scribe)
+
+### scribe 0.1.0
+
+First entry. Host-delegated ledger scribe, whose access rule is the assembler's
+exact inverse (brief invariant 15): it receives ledger content under
+`.abcd/work/issues/` and the reading output it is transcribing, and never the
+shipped repository as an object of judgement. No session holds both a reading and
+the ledger. It transcribes returned readings and researcher dispositions into the
+reading-record and disposition shapes spc-58 declares, and authors nothing — no
+claim, no ground, no disposition state. Two permissions bound that: it may raise a
+**fidelity flag** on an internal inconsistency in the material it is transcribing
+and must carry it to the researcher unresolved (proposing a resolution is
+authorship), and anything it is explicitly asked to compose beyond formatting
+opens with a **contribution stamp** that travels with the material if adopted —
+the hand-run precursor of the record's origin keys, with an unstamped contribution
+refused rather than delivered. Carries `reads_untrusted_input: true`,
+`capability_scope.task_classes: [surface_render]`, and an injection-canary fixture
+whose payload demands the scribe author dispositions, fetch shipped-tree material,
+and move a ledger record. There is no ingest verb, and no schema for these
+shapes either until spc-58's reading and disposition stores land: the emitted
+records are committed through the ordinary record path, where `record_schema`
+refuses their directory as an undeclared bucket rather than judging the record, so
+the shapes are held by the definition and by review. The written protocol in the
+brief's agents chapter is followed by hand.
+Unmeasured — no calibration corpus exists for ledger transcription, and no
+self-improvement pre-flight was run.
+
 ## 0.2.0 — 2026-08-19 (iss-278 — the itd-5 contract reaches the review/research agents)
 
 Five prompts read attacker-influenceable input without the itd-5 contract:
