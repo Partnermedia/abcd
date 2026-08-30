@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/intentdriven/abcd/internal/core/issueschema"
 	"github.com/intentdriven/abcd/internal/core/recordid"
 	"github.com/intentdriven/abcd/internal/fsutil"
 )
@@ -31,8 +32,10 @@ var lockTimeout = 5 * time.Second
 // interleaving deterministically.
 var beforeOrphanRemoveHook func(cand string)
 
-// ensureLedgerDirs provisions issuesRoot and the three status sub-directories,
-// refusing symlinked leaves. Idempotent.
+// ensureLedgerDirs provisions issuesRoot and its status sub-directories, refusing
+// symlinked leaves. The list is issueschema.StatusDirs — the same value the
+// readers scan and the deterministic gates scope to, so a folder can never be
+// provisioned that one of them does not look in. Idempotent.
 func ensureLedgerDirs(issuesRoot string) error {
 	if !filepath.IsAbs(issuesRoot) {
 		return fmt.Errorf("issuesRoot must be absolute, got %q", issuesRoot)
@@ -43,7 +46,7 @@ func ensureLedgerDirs(issuesRoot string) error {
 	if err := safeMkdirLeaf(issuesRoot); err != nil {
 		return err
 	}
-	for _, sub := range []string{"open", "resolved", "wontfix"} {
+	for _, sub := range issueschema.StatusDirs {
 		if err := safeMkdirLeaf(filepath.Join(issuesRoot, sub)); err != nil {
 			return err
 		}
@@ -182,11 +185,13 @@ func createPlaceholder(target string) (int, error) {
 	return fd, nil
 }
 
-// issPresent reports whether issID exists in any status dir.
+// issPresent reports whether issID exists in any status dir. It walks
+// issueschema.StatusDirs rather than a literal: a status folder this scan does
+// not visit is one the mint would happily re-issue an id into.
 func issPresent(issuesRoot, issID string) bool {
 	prefix := issID + "-"
 	exact := issID + ".md"
-	for _, sub := range []string{"open", "resolved", "wontfix"} {
+	for _, sub := range issueschema.StatusDirs {
 		entries, err := os.ReadDir(filepath.Join(issuesRoot, sub))
 		if err != nil {
 			continue

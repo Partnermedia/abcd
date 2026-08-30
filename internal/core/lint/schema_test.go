@@ -630,9 +630,12 @@ func TestRecordSchemaGuardsTheRealRecord(t *testing.T) {
 	if rc.Severity != severityBlocker {
 		t.Errorf("record_schema severity = %q, want blocker", rc.Severity)
 	}
-	for _, prefix := range []string{"adr", "itd", "spc", "iss"} {
-		if rc.RecordStores[prefix] == "" {
-			t.Errorf("record_schema declares no store for %q", prefix)
+	// Derived from the code's own store list rather than a literal: a store added
+	// to recordStores and forgotten in the config is scanned nowhere, which is the
+	// silent half of exactly the drift this rule exists to catch.
+	for _, store := range recordStores {
+		if rc.RecordStores[store.prefix] == "" {
+			t.Errorf("record_schema declares no store for %q", store.prefix)
 		}
 	}
 }
@@ -708,5 +711,265 @@ func TestRecordSchemaFilenameSlugAgrees(t *testing.T) {
 	// generator on the committed tree.
 	if n := countRule(fs, ruleRecordSchema); n != 2 {
 		t.Fatalf("expected exactly 2 record_schema findings (the two drifted records), got %d: %+v", n, fs)
+	}
+}
+
+// readingStores is schemaStores plus the three reading families, laid out as
+// they are in a real ledger: two of them NESTED inside the issue store's own
+// root, which is the arrangement the first change below exists for.
+func readingStores() map[string]string {
+	stores := schemaStores()
+	stores["rdi"] = "work/issues/readings"
+	stores["dsp"] = "work/issues/dispositions"
+	stores["rdg"] = "rec/readings"
+	return stores
+}
+
+func readingSchemaConfig() Config {
+	return Config{
+		Roots: []string{"rec"},
+		Rules: map[string]RuleConfig{
+			ruleRecordSchema: {Enabled: true, Severity: severityBlocker, RecordStores: readingStores()},
+		},
+	}
+}
+
+// The reading families sit INSIDE the issue store's root, so without this the
+// day they appear is the day record_schema calls each of them an undeclared
+// issue bucket — a blocker over a directory the configuration itself declares.
+//
+// The fix is general rather than a special case: a directory that is itself a
+// configured store root is not an undeclared bucket of its parent. The set is
+// derived from the configuration, so the config stays the single declaration of
+// what a store is.
+func TestNestedStoreRootIsNotAnUndeclaredBucket(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/.keep", "")
+	writeFile(t, root, "work/issues/open/iss-1-a-finding.md",
+		"---\nschema_version: 1\nid: iss-1\nslug: a-finding\nseverity: minor\ncategory: bug\nsource: user-observation\nfound_during: t\n---\n\nan issue\n")
+	writeFile(t, root, "work/issues/readings/rdg-1/rdi-2.md",
+		"---\nschema_version: 1\nid: rdi-2\nrun: rdg-1\nmanifest: sha256:beef\nposition: detection\nregime: registrative\npattern: a stated constraint\ntension: t\nconstraint_in_play: c\nwhy_a_tension: w\n---\n\n")
+	writeFile(t, root, "work/issues/dispositions/rdi-2/dsp-3.md",
+		"---\nschema_version: 1\nid: dsp-3\nitem: rdi-2\nstate: accepted\ndisposition_grounds: worth acting on\n---\n\n")
+
+	fs, err := Lint(readingSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 0 {
+		t.Fatalf("a configured store root nested in another store must not be an undeclared bucket, got %d finding(s): %+v", n, fs)
+	}
+
+	// The check must stay a check: a directory that is NOT a configured store
+	// root is still an undeclared bucket, or the fix would have disarmed the
+	// escape it was protecting.
+	writeFile(t, root, "work/issues/scratch/notes.md", "notes\n")
+	fs, err = Lint(readingSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingWith(fs, filepath.Join("work", "issues", "scratch"), ruleRecordSchema, "undeclared") {
+		t.Fatalf("an undeclared sibling directory must still be reported: %+v", fs)
+	}
+}
+
+// A store whose buckets are MINTED rather than enumerated declares them by
+// grammar. A run directory and an item-keyed disposition directory are both that
+// shape: nobody can list them ahead of time, and a store that could not say so
+// would have to leave its whole tree undeclared.
+func TestReadingRunBucketDeclaredByGrammar(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/.keep", "")
+	writeFile(t, root, "work/issues/readings/rdg-1/rdi-2.md",
+		"---\nschema_version: 1\nid: rdi-2\nrun: rdg-1\nmanifest: sha256:beef\nposition: detection\nregime: registrative\npattern: a stated constraint\ntension: t\nconstraint_in_play: c\nwhy_a_tension: w\n---\n\n")
+
+	fs, err := Lint(readingSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 0 {
+		t.Fatalf("a minted run bucket must be declared by grammar, got %d finding(s): %+v", n, fs)
+	}
+
+	// A bucket the grammar does not describe is still undeclared: declaring by
+	// grammar widens what a store can say, it does not stop it saying anything.
+	writeFile(t, root, "work/issues/readings/draft-run/rdi-3.md", "---\nid: rdi-3\n---\n\n")
+	fs, err = Lint(readingSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingWith(fs, filepath.Join("work", "issues", "readings", "draft-run"), ruleRecordSchema, "undeclared") {
+		t.Fatalf("a bucket outside the declared grammar must be reported: %+v", fs)
+	}
+}
+
+// The run's manifest is JSON, and the record scan reads markdown. It must pass
+// through untouched rather than be reported as a malformed record filename —
+// otherwise committing the manifest, which is what makes a run re-runnable and
+// diffable, would trip the gate.
+func TestManifestJSONIsSkippedByTheRecordScan(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/.keep", "")
+	writeFile(t, root, "rec/readings/rdg-1/rdg-1.md",
+		"---\nschema_version: 1\nid: rdg-1\n---\n\n# the run\n")
+	writeFile(t, root, "rec/readings/rdg-1/manifest.json", "{\"items\": []}\n")
+
+	fs, err := Lint(readingSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 0 {
+		t.Fatalf("manifest.json must be skipped by the record scan, got %d finding(s): %+v", n, fs)
+	}
+}
+
+// The nested-store-root exemption must be derived from the stores the SCANNER
+// knows, never from every value in the config map. Otherwise a committed config
+// line naming no store at all — a prefix the code has never heard of, pointed at
+// a directory inside a real store — exempts that directory from the
+// undeclared-bucket blocker while nothing scans it: a lifecycle state no rule
+// reads, which is the exact escape this rule exists to close. The file's own
+// comment already says which lifecycle states exist is code, not config, "and a
+// config that could add a bucket could also hide one".
+func TestUnknownRecordStoreKeyCannotHideADirectory(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/.keep", "")
+	writeFile(t, root, "work/issues/open/iss-1-a-finding.md",
+		"---\nschema_version: 1\nid: iss-1\nslug: a-finding\nseverity: minor\ncategory: bug\nsource: user-observation\nfound_during: t\n---\n\nan issue\n")
+	writeFile(t, root, "work/issues/anything/notes.md", "notes\n")
+
+	stores := readingStores()
+	stores["zzz"] = "work/issues/anything"
+	cfg := Config{
+		Roots: []string{"rec"},
+		Rules: map[string]RuleConfig{
+			ruleRecordSchema: {Enabled: true, Severity: severityBlocker, RecordStores: stores},
+		},
+	}
+	fs, err := Lint(cfg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingWith(fs, filepath.Join("work", "issues", "anything"), ruleRecordSchema, "undeclared") {
+		t.Fatalf("a record_stores key naming no store must not exempt its directory: %+v", fs)
+	}
+}
+
+// The same hole closed at the other end: a config carrying such a key is refused
+// at parse, so it cannot reach the scanner at all. Two ends because they fail
+// differently — a hand-built Config (this package's own callers, and its tests)
+// never passes through the loader.
+func TestConfigRefusesAnUnknownRecordStoreKey(t *testing.T) {
+	_, err := parseConfig([]byte(`{
+	  "roots": ["rec"],
+	  "rules": {
+	    "record_schema": {
+	      "enabled": true,
+	      "severity": "blocker",
+	      "record_stores": {"iss": ".abcd/work/issues", "zzz": ".abcd/work/issues/anything"}
+	    }
+	  }
+	}`))
+	if err == nil {
+		t.Fatal("a record_stores key naming no store must be refused at parse")
+	}
+	if !strings.Contains(err.Error(), "zzz") {
+		t.Fatalf("the refusal must name the offending key; got %v", err)
+	}
+}
+
+// malformedIssueRecord is a record missing every required property but one, so a
+// store that actually scans it produces several findings and a store that skips
+// it produces none. The gap between those two is what the exemption can hide.
+const malformedIssueRecord = "---\nid: iss-1\n---\n\nan issue nobody validates\n"
+
+// The nested-store-root exemption still blinded the gate through a KNOWN prefix.
+// Pointing rdi at .abcd/work/issues/open passes the unknown-key check — rdi is a
+// real store — marks `open` a nested root so the issue store skips it, and then
+// the misdirected store ignores every file that is not rdi-N.md. A malformed
+// issue record with five missing properties yields zero findings, and the config
+// line that did it reads as ordinary configuration.
+//
+// The exemption exists to say "something else scans this directory". A bucket the
+// parent ALREADY declares is scanned by the parent, so there is nothing to
+// exempt: granting it there only ever removes coverage.
+func TestAKnownPrefixCannotHideADeclaredBucket(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/.keep", "")
+	writeFile(t, root, "work/issues/open/iss-1-a-finding.md", malformedIssueRecord)
+
+	stores := readingStores()
+	stores["rdi"] = "work/issues/open"
+	cfg := Config{
+		Roots: []string{"rec"},
+		Rules: map[string]RuleConfig{
+			ruleRecordSchema: {Enabled: true, Severity: severityBlocker, RecordStores: stores},
+		},
+	}
+	fs, err := Lint(cfg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingWith(fs, filepath.Join("work", "issues", "open", "iss-1-a-finding.md"), ruleRecordSchema, "required property") {
+		t.Fatalf("a store root aimed at another store's declared bucket must not exempt it from its parent: %+v", fs)
+	}
+}
+
+// The same hole closed at parse, where it can be refused outright rather than
+// merely survived. Three shapes, each a way for one line to remove a store's
+// coverage without naming anything that looks wrong.
+func TestConfigRefusesAStoreRootInsideAnotherStoresBucket(t *testing.T) {
+	cases := []struct {
+		name, stores, want string
+	}{
+		{
+			name:   "a list-declared bucket",
+			stores: `{"iss": ".abcd/work/issues", "rdi": ".abcd/work/issues/open"}`,
+			want:   ".abcd/work/issues/open",
+		},
+		{
+			name:   "inside a list-declared bucket",
+			stores: `{"iss": ".abcd/work/issues", "rdi": ".abcd/work/issues/open/deeper"}`,
+			want:   ".abcd/work/issues/open",
+		},
+		{
+			name:   "a grammar-declared bucket",
+			stores: `{"rdi": ".abcd/work/issues/readings", "itd": ".abcd/work/issues/readings/rdg-1"}`,
+			want:   ".abcd/work/issues/readings/rdg-1",
+		},
+		{
+			name:   "two prefixes on one path",
+			stores: `{"iss": ".abcd/work/issues", "rdi": ".abcd/work/issues"}`,
+			want:   ".abcd/work/issues",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := parseConfig([]byte(`{
+			  "roots": ["rec"],
+			  "rules": {"record_schema": {"enabled": true, "severity": "blocker", "record_stores": ` + c.stores + `}}
+			}`))
+			if err == nil {
+				t.Fatal("a store root that removes another store's coverage must be refused at parse")
+			}
+			if !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("the refusal must name the offending path %q; got %v", c.want, err)
+			}
+		})
+	}
+}
+
+// And the legitimate arrangement still loads: the reading families sit inside the
+// issue store's root but beside its buckets, not in one.
+func TestConfigAcceptsASiblingNestedStoreRoot(t *testing.T) {
+	if _, err := parseConfig([]byte(`{
+	  "roots": ["rec"],
+	  "rules": {"record_schema": {"enabled": true, "severity": "blocker", "record_stores": {
+	    "iss": ".abcd/work/issues",
+	    "rdi": ".abcd/work/issues/readings",
+	    "dsp": ".abcd/work/issues/dispositions"
+	  }}}
+	}`)); err != nil {
+		t.Fatalf("the shipped layout must load: %v", err)
 	}
 }

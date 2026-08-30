@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/intentdriven/abcd/internal/core/intent"
+	"github.com/intentdriven/abcd/internal/core/issueschema"
 )
 
 // promoteFixture captures one issue into a fresh ledger and returns the roots
@@ -265,5 +266,193 @@ func TestPromoteSerializesOnLedgerLock(t *testing.T) {
 	_, err = Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: issID})
 	if !errors.Is(err, ErrAllocatorContention) {
 		t.Fatalf("promote must serialize on the ledger lock, got err=%v", err)
+	}
+}
+
+// dispositionedReadingFixture ingests one detection item and answers it, so the
+// promote path has an item that has actually been dispositioned.
+func dispositionedReadingFixture(t *testing.T) (repo, ir, item string) {
+	t.Helper()
+	repo, ir, item = readingFixture(t, "detection")
+	if _, err := Disposition(DispositionRequest{
+		RepoRoot: repo, IssuesRoot: ir, Item: item,
+		State: issueschema.DispositionAccepted, Grounds: "the tension is real and worth acting on",
+	}); err != nil {
+		t.Fatalf("Disposition: %v", err)
+	}
+	return repo, ir, item
+}
+
+// Item-to-intent without a disposition is the collapse this record family exists
+// to prevent: it would make the action the answer, and leave nothing able to show
+// that the finding was ever weighed. promote refuses, and names the collapse.
+func TestPromoteRefusesUndispositionedReadingItem(t *testing.T) {
+	repo, ir, item := readingFixture(t, "detection")
+	before := draftCount(t, repo)
+
+	_, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: item})
+	if err == nil {
+		t.Fatal("promoting an undispositioned reading item must be refused")
+	}
+	if !strings.Contains(err.Error(), item) || !strings.Contains(err.Error(), "disposition") {
+		t.Fatalf("the refusal must name the item and the collapse it prevents; got %v", err)
+	}
+	if after := draftCount(t, repo); after != before {
+		t.Fatalf("a refused promote minted a draft (%d -> %d); the probe runs before anything is minted", before, after)
+	}
+}
+
+// Acceptance is one record; the action is a separate admission, joined by the
+// item id stamped forward on promoted_to and back in the draft's promoted_from.
+func TestPromoteStampsReadingItemPromotedTo(t *testing.T) {
+	repo, ir, item := dispositionedReadingFixture(t)
+
+	res, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: item})
+	if err != nil {
+		t.Fatalf("Promote(%s): %v", item, err)
+	}
+	if res.IntentID == "" {
+		t.Fatal("promote must mint an intent draft")
+	}
+
+	path, err := findReadingItem(ir, item)
+	if err != nil {
+		t.Fatalf("findReadingItem: %v", err)
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fm, _, err := parseFrontmatterAndBody(string(content))
+	if err != nil {
+		t.Fatalf("parse reading record: %v", err)
+	}
+	if got := asString(fm["promoted_to"]); got != res.IntentID {
+		t.Fatalf("reading record promoted_to = %q, want %q", got, res.IntentID)
+	}
+
+	draft, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(res.IntentPath)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(draft), "promoted_from: "+item) {
+		t.Fatalf("the minted draft must carry the back edge promoted_from: %s\n%s", item, draft)
+	}
+
+	// A second promote is refused with the existing id, exactly as it is for an
+	// issue: the join is one-to-one in both directions.
+	if _, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: item}); err == nil {
+		t.Fatal("a second promote of one reading item must be refused")
+	}
+}
+
+// A rejected or declined item has been answered — and the answer was "no". The
+// spec's rule is that acceptance is one record and the action it licenses is a
+// separate admission; promoting an item whose standing answer refuses it would
+// let the action contradict the record it is supposed to follow from, and the
+// ledger would then hold both a refusal and the admission it refused. The
+// undispositioned refusal exists to stop an action outrunning the answer; this is
+// the same rule where the answer has arrived and says no.
+func TestPromoteRefusesARefusedReadingItem(t *testing.T) {
+	for _, tc := range []struct{ position, state string }{
+		{"detection", issueschema.DispositionRejected},
+		{"widening", issueschema.DispositionDeclined},
+	} {
+		t.Run(tc.state, func(t *testing.T) {
+			repo, ir, item := readingFixture(t, tc.position)
+			if _, err := Disposition(DispositionRequest{
+				RepoRoot: repo, IssuesRoot: ir, Item: item,
+				State: tc.state, Grounds: "the constraint already covers it",
+			}); err != nil {
+				t.Fatalf("Disposition: %v", err)
+			}
+			before := draftCount(t, repo)
+
+			_, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: item})
+			if err == nil {
+				t.Fatalf("promoting a %s item must be refused", tc.state)
+			}
+			if !strings.Contains(err.Error(), tc.state) {
+				t.Fatalf("the refusal must name the standing answer; got %v", err)
+			}
+			if after := draftCount(t, repo); after != before {
+				t.Fatalf("a refused promote minted a draft (%d -> %d)", before, after)
+			}
+		})
+	}
+}
+
+// A held item is directional, not refused: it is still open, and the answer that
+// ends it is a superseding disposition. Promoting it would settle by action what
+// the hold left open, so it is refused too — and the refusal names the exit
+// condition, which is the thing that would have to happen first.
+func TestPromoteRefusesAHeldReadingItem(t *testing.T) {
+	repo, ir, item := readingFixture(t, "detection")
+	if _, err := Disposition(DispositionRequest{
+		RepoRoot: repo, IssuesRoot: ir, Item: item,
+		State: issueschema.DispositionHeld, ExitCondition: "the closing run returns it again",
+	}); err != nil {
+		t.Fatalf("Disposition: %v", err)
+	}
+
+	_, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: item})
+	if err == nil {
+		t.Fatal("promoting a held item must be refused")
+	}
+	if !strings.Contains(err.Error(), "held") {
+		t.Fatalf("the refusal must name the standing answer; got %v", err)
+	}
+}
+
+// The standing answer is read in the pre-flight, but the pre-flight is not where
+// the stamp lands. A disposition arriving between the two — a colleague
+// superseding an acceptance with a rejection while the mint runs — would leave a
+// standing `rejected` beside a `promoted_to`: a ledger holding both a refusal and
+// the admission it refused, which is the state the refusal exists to prevent.
+//
+// So the state is recomputed inside the locked closure, where nothing can land
+// after it. The hook below is that window, forced open.
+func TestPromoteRechecksTheStandingStateUnderTheLock(t *testing.T) {
+	repo, ir, item := dispositionedReadingFixture(t)
+	standing, err := standingDispositions(filepath.Join(ir, issueschema.DispositionsDir, item))
+	if err != nil || len(standing) != 1 {
+		t.Fatalf("fixture: standing = %v, err = %v", standing, err)
+	}
+
+	// Between the pre-flight and the stamp, the acceptance is superseded by a
+	// rejection.
+	orig := beforeStampHook
+	beforeStampHook = func() {
+		beforeStampHook = nil
+		if _, err := Disposition(DispositionRequest{
+			RepoRoot: repo, IssuesRoot: ir, Item: item,
+			State: issueschema.DispositionRejected, Grounds: "the constraint already covers it",
+			Supersedes: standing[0],
+		}); err != nil {
+			t.Errorf("superseding disposition: %v", err)
+		}
+	}
+	t.Cleanup(func() { beforeStampHook = orig })
+
+	_, err = Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: item})
+	if err == nil {
+		t.Fatal("a promote whose standing answer became a rejection must be refused")
+	}
+	if !strings.Contains(err.Error(), issueschema.DispositionRejected) {
+		t.Fatalf("the refusal must name the standing answer it read under the lock; got %v", err)
+	}
+
+	// And nothing was stamped: the record must not carry a promoted_to it was
+	// refused for.
+	path, err := findReadingItem(ir, item)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(content), "promoted_to") {
+		t.Fatalf("the reading record was stamped despite the refusal:\n%s", content)
 	}
 }

@@ -586,7 +586,7 @@ func idSet(issues []Issue) map[string]bool {
 func scanLedger(issuesRoot string, state State) ([]Issue, []SkipRecord) {
 	var targets []State
 	if state == StateAll {
-		targets = statusDirs[:]
+		targets = statusDirs
 	} else {
 		targets = []State{state}
 	}
