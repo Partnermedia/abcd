@@ -196,13 +196,16 @@ func TestRecordSchemaFlagsIssueEnumAndSlug(t *testing.T) {
 // refuse the defect and nothing else.
 func TestIssueRecordShapeFlagsLapseWithoutLapsedAt(t *testing.T) {
 	issues := "work/issues"
-	lapse := func(id, slug, lapsedAt string) string {
+	record := func(id, slug, category, lapsedAt string) string {
 		rec := "---\nschema_version: 1\nid: " + id + "\nslug: " + slug +
-			"\nseverity: minor\ncategory: lapse\nsource: user-observation\nfound_during: preparation\n"
+			"\nseverity: minor\ncategory: " + category + "\nsource: user-observation\nfound_during: preparation\n"
 		if lapsedAt != "" {
 			rec += "lapsed_at: " + lapsedAt + "\n"
 		}
-		return rec + "---\n\na lapse\n"
+		return rec + "---\n\na record\n"
+	}
+	lapse := func(id, slug, lapsedAt string) string {
+		return record(id, slug, "lapse", lapsedAt)
 	}
 
 	cases := []struct {
@@ -215,6 +218,14 @@ func TestIssueRecordShapeFlagsLapseWithoutLapsedAt(t *testing.T) {
 		{"date only", "iss-6-lapse-b.md", lapse("iss-6", "lapse-b", "2026-08-28"), "is not an RFC 3339 instant"},
 		{"free text", "iss-7-lapse-c.md", lapse("iss-7", "lapse-c", "yesterday"), "is not an RFC 3339 instant"},
 		{"well-formed", "iss-8-lapse-d.md", lapse("iss-8", "lapse-d", `"2026-08-28T00:00:00Z"`), ""},
+		// A quoted all-whitespace value, hand-authored. capture's reader trims
+		// before judging, so it reads as ABSENT: on a lapse record that is the
+		// missing-instant refusal, and on every other category it is a clean record
+		// with an optional property left unset. This gate must reach the same two
+		// verdicts, or it reports a reader refusal that does not happen
+		// (iss-2608300212513349).
+		{"padded on a lapse", "iss-9-lapse-e.md", lapse("iss-9", "lapse-e", `"   "`), "lapse record carries no 'lapsed_at'"},
+		{"padded on a non-lapse", "iss-10-obs-a.md", record("iss-10", "obs-a", "observation", `"   "`), ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -228,7 +239,7 @@ func TestIssueRecordShapeFlagsLapseWithoutLapsedAt(t *testing.T) {
 			rel := filepath.Join(issues, "open", c.file)
 			if c.substr == "" {
 				if findingWith(fs, rel, ruleRecordSchema, "") {
-					t.Fatalf("a well-formed lapse record must stay clean: %+v", fs)
+					t.Fatalf("a record the reader accepts must stay clean: %+v", fs)
 				}
 				return
 			}

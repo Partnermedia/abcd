@@ -78,6 +78,11 @@ resolved_by:               # optional structured pointer to what resolved it
 Enum values above mirror the issue ledger schema in `internal/core`
 exactly; the schema is the single source of truth.
 
+`lapsed_at` is transcribed from what the source states, never derived from the
+clock at write-up. Where that source names only a day, the stamp is midnight UTC
+of that day — the day is the whole of the claim, and midnight is what makes it an
+instant without inventing an hour nobody recorded.
+
 **Verify a `--commit` stamp is reachable before writing it.** The flag is
 shape-checked and nothing more: `^[0-9a-f]{7,64}$` proves the value looks
 like a sha, not that the commit exists or that it is reachable from the

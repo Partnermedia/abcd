@@ -535,10 +535,17 @@ func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
 	// core/issueschema, the same one capture's validateStrict reads, so this gate
 	// refuses exactly the record the reader refuses (and therefore skips, making it
 	// invisible to every capture surface while it still sits in the ledger).
+	// The value is trimmed AFTER issueScalar strips the quotes, because a quoted
+	// all-whitespace value (`lapsed_at: "   "`) still carries its padding once the
+	// quotes are gone. capture's reader trims before judging, so it reads that as
+	// ABSENT: a clean record with an optional property left unset, or — on a lapse
+	// — the missing-instant refusal. Reading it here as a present malformed value
+	// would report a reader refusal that does not happen, on a record the reader
+	// accepts (iss-2608300212513349).
 	lapseField, hasLapseField := r.fields["lapsed_at"]
 	lapsedAt := ""
 	if hasLapseField && !isAbsentValue(lapseField.value) {
-		lapsedAt = issueScalar(lapseField.value)
+		lapsedAt = strings.TrimSpace(issueScalar(lapseField.value))
 	}
 	if f, present := r.fields["category"]; present && !isAbsentValue(f.value) &&
 		issueschema.LapsedAtRequired(issueScalar(f.value)) && lapsedAt == "" {
