@@ -165,6 +165,25 @@ type recordStore struct {
 	// their own rules judge, and refusing them against a list this rule invented
 	// would be a blocker over a schema nobody declared.
 	knownFields map[string]bool
+	// joins are the frontmatter properties that key this record to another
+	// record, and whose targets must therefore be in the corpus. They are
+	// distinct from recordRefFields, which is the fixed cross-reference
+	// vocabulary every store shares: a join is the ONE value that makes a record
+	// a record about something else, and each store spells its own.
+	joins []recordJoin
+	// bucketField is the frontmatter property that must name the bucket the
+	// record sits in, for a store that states its bucket twice. An admission is
+	// filed under the run whose candidate set it joins AND carries that run as a
+	// field, so a disagreement is the record contradicting itself about which set
+	// it joined. Empty means the store makes no such double claim.
+	bucketField string
+}
+
+// recordJoin is one keying field a store declares, with what the join is FOR —
+// so a dangling target tells the reader what broke, not merely which key did.
+type recordJoin struct {
+	field string
+	why   string
 }
 
 // bucketed reports whether the store holds its records in lifecycle
@@ -245,12 +264,28 @@ var recordStores = []recordStore{
 	// Both lists come from core/issueschema's ONE declaration rather than from a
 	// literal here, for the reason the issue store's does: a hand-copied set
 	// drifts the moment one side gains a field.
+	//
+	// Both declare a JOIN, and the admission declares its bucket twice. The
+	// admission's `proposal` used to be the one keying field the rule left
+	// unresolved while it resolved the surprise's `occasioned_by` — the same
+	// defect (a join naming nothing joins nothing) asked in one store and not the
+	// other, which is exactly how two answers to one question start.
 	{prefix: "adm", noun: "admission", nodeType: "admission", bucketRe: readingRunBucketRe,
 		fileNumRe: admissionFileNumRe, fileFamily: "adm", filename: "adm-<N>.md",
-		requiredFields: issueschema.AdmissionRequired, knownFields: issueschema.AdmissionKnown},
+		requiredFields: issueschema.AdmissionRequired, knownFields: issueschema.AdmissionKnown,
+		bucketField: "run",
+		joins: []recordJoin{{
+			field: "proposal",
+			why: "an admission is keyed to the proposal it admits, and one naming no record admits nothing in particular — " +
+				"the candidate set it claims to have joined cannot be reconstructed from it",
+		}}},
 	{prefix: "srp", noun: "surprise", nodeType: "surprise",
 		fileNumRe: surpriseFileNumRe, fileFamily: "srp", filename: "srp-<N>.md",
-		requiredFields: issueschema.SurpriseRequired, knownFields: issueschema.SurpriseKnown},
+		requiredFields: issueschema.SurpriseRequired, knownFields: issueschema.SurpriseKnown,
+		joins: []recordJoin{{
+			field: "occasioned_by",
+			why:   "a surprise is keyed to whatever occasioned it, and a join naming nothing joins nothing",
+		}}},
 }
 
 // storeByPrefix returns the code-side store for a prefix.
@@ -408,7 +443,8 @@ func checkRecordSchema(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 		out = append(out, checkRecordRequiredFields(r, cfg.Severity)...)
 		out = append(out, checkRecordUnknownFields(r, cfg.Severity)...)
 		out = append(out, checkIssueRecordShape(r, cfg.Severity)...)
-		out = append(out, checkSurpriseJoin(r, index, cfg)...)
+		out = append(out, checkRecordJoins(r, index, cfg)...)
+		out = append(out, checkRecordBucketField(r, cfg.Severity)...)
 
 		// Cross-references: a named record must be in the corpus, or declared
 		// retired by the record that replaced it.
@@ -649,43 +685,87 @@ func checkRecordUnknownFields(r schemaRecord, severity string) []Finding {
 	return out
 }
 
-// checkSurpriseJoin asserts that a surprise entry's `occasioned_by` resolves,
+// checkRecordJoins asserts that every KEYING field a store declares resolves,
 // where it names a record at all.
 //
-// The join is the whole of what makes a surprise a SEPARATE record rather than a
-// field on the thing that occasioned it: the reading's output, the researcher's
-// answer and the surprise that occasions abduction are three acts, and the only
-// thing tying the third back to the first two is this value. A join naming a
-// record the corpus does not hold joins nothing.
+// A join is the whole of what makes a record a record about something else: a
+// surprise entry is a separate record rather than a field on the thing that
+// occasioned it, and an admission is an answer to one proposal rather than a note
+// in a drawer. In both cases the only thing tying it back is this value, and a
+// join naming a record the corpus does not hold joins nothing.
 //
-// Prose is legitimate here and stays silent. A surprise is keyed to WHATEVER
-// occasioned it — a detection, an admission, or a consequence that has no id —
-// so only a value that is a record handle of a store this scan reads is resolved.
-func checkSurpriseJoin(r schemaRecord, index map[recordRef]schemaRecord, cfg RuleConfig) []Finding {
-	if r.store.prefix != issueschema.SurpriseFamily {
+// The check is STORE-DECLARED rather than written per family, because the
+// question is identical wherever a record is keyed to another. Asking it in one
+// store and not the next is how the admission's `proposal` came to be the one
+// keying field nothing resolved while the surprise's `occasioned_by` was
+// (iss-2608300935215868).
+//
+// Prose is legitimate and stays silent. A surprise is keyed to WHATEVER
+// occasioned it — a detection, an admission, or a consequence that has no id — so
+// only a value that is a record handle of a store this scan reads is resolved.
+func checkRecordJoins(r schemaRecord, index map[recordRef]schemaRecord, cfg RuleConfig) []Finding {
+	var out []Finding
+	for _, join := range r.store.joins {
+		f := r.fields[join.field]
+		value := issueScalar(f.value)
+		if isAbsentValue(value) {
+			continue
+		}
+		m := anyHandleFullRe.FindStringSubmatch(value)
+		if m == nil {
+			continue
+		}
+		prefix := strings.ToLower(m[1])
+		// A family this scan does not read supports no verdict either way: the
+		// record might be perfectly present in a store nobody configured, and
+		// reporting it missing would be a confident false statement.
+		if _, known := storeByPrefix(prefix); !known || cfg.RecordStores[prefix] == "" {
+			continue
+		}
+		num, err := strconv.Atoi(m[2])
+		if err != nil {
+			continue
+		}
+		if _, ok := index[recordRef{prefix, num}]; ok {
+			continue
+		}
+		line := f.line
+		if line == 0 {
+			line = 1
+		}
+		out = append(out, Finding{
+			File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: cfg.Severity,
+			Message: join.field + " names '" + prefix + "-" + m[2] +
+				"', which is not a record in the corpus; " + join.why,
+		})
+	}
+	return out
+}
+
+// checkRecordBucketField asserts that a record whose store states its bucket
+// TWICE says the same thing both times.
+//
+// An admission is filed under the run whose candidate set it joins and carries
+// that run as a frontmatter property, so a disagreement is the record
+// contradicting itself about which set it joined. The outstanding report keys the
+// admitted set on the (run, proposal) pair and can honour neither claim, so the
+// admission silently admits nothing — and a record that quietly stops counting is
+// the shape this whole rule exists to make loud.
+//
+// It is scoped to the stores that DECLARE a bucketField. The disposition store
+// makes the same double claim (`item` beside its item-keyed directory) and is not
+// declared here, because that store declares no frontmatter schema at all this
+// cycle; adding one field of it would be a schema half-stated in a second place.
+func checkRecordBucketField(r schemaRecord, severity string) []Finding {
+	if r.store.bucketField == "" || r.bucket == "" {
 		return nil
 	}
-	f := r.fields["occasioned_by"]
-	value := strings.Trim(strings.TrimSpace(f.value), `"'`)
-	if isAbsentValue(value) {
-		return nil
+	f, present := r.fields[r.store.bucketField]
+	if !present {
+		return nil // absence is checkRecordRequiredFields' business, not this one's
 	}
-	m := anyHandleFullRe.FindStringSubmatch(value)
-	if m == nil {
-		return nil
-	}
-	prefix := strings.ToLower(m[1])
-	// A family this scan does not read supports no verdict either way: the record
-	// might be perfectly present in a store nobody configured, and reporting it
-	// missing would be a confident false statement.
-	if _, known := storeByPrefix(prefix); !known || cfg.RecordStores[prefix] == "" {
-		return nil
-	}
-	num, err := strconv.Atoi(m[2])
-	if err != nil {
-		return nil
-	}
-	if _, ok := index[recordRef{prefix, num}]; ok {
+	got := issueScalar(f.value)
+	if isAbsentValue(got) || got == r.bucket {
 		return nil
 	}
 	line := f.line
@@ -693,9 +773,10 @@ func checkSurpriseJoin(r schemaRecord, index map[recordRef]schemaRecord, cfg Rul
 		line = 1
 	}
 	return []Finding{{
-		File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: cfg.Severity,
-		Message: "occasioned_by names '" + prefix + "-" + m[2] +
-			"', which is not a record in the corpus; a surprise is keyed to whatever occasioned it, and a join naming nothing joins nothing",
+		File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: severity,
+		Message: r.store.bucketField + " declares '" + got + "' but the " + r.store.noun + " is filed under '" + r.bucket +
+			"'; the directory and the field are one value written twice, and a record that contradicts " +
+			"itself about which one it belongs to counts under neither",
 	}}
 }
 

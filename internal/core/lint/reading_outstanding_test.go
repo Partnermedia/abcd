@@ -598,3 +598,79 @@ func TestAPartlyUnreadableAdmissionTreeStillAdmitsWhatItRead(t *testing.T) {
 		t.Fatalf("the unreadable run directory must still be named; findings: %+v", fs)
 	}
 }
+
+// An admission answers ONE proposal in ONE run. Keying the admitted set on the
+// proposal alone made a proposal id a global silencer: an admission filed under
+// run A naming an id that belongs to run B answered B's item, and the report
+// then said nothing about a proposal nobody had admitted. Reading ids are minted
+// per run and collide across them by construction (iss-2608300227228575), so the
+// pair is the only key that identifies what was admitted.
+func TestAnAdmissionAdmitsOnlyWithinItsOwnRun(t *testing.T) {
+	runA, itemA := "rdg-2608300000000001", "rdi-2608300000000002"
+	root := readingLedger(t, runA, itemA, "widening")
+	runB, itemB := "rdg-2608300000000007", "rdi-2608300000000008"
+	writeFile(t, root, ".abcd/work/issues/readings/"+runB+"/"+itemB+".md",
+		"---\nschema_version: 1\nid: \""+itemB+"\"\nrun: \""+runB+"\"\nmanifest: \"sha256:beef\"\n"+
+			"position: \"widening\"\nregime: \""+issueschema.ReadingRegime("widening")+"\"\n"+
+			"pattern: \"a stated constraint\"\n---\n\n")
+	// Filed under run A, naming run B's proposal. It admits nothing in run B.
+	admissionRecord(t, root, runA, "adm-2608300000000004", itemB)
+
+	fs, err := Lint(readingOutstandingConfig(severityBlocker), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range []string{itemA, itemB} {
+		var named bool
+		for _, f := range fs {
+			if f.RuleID == ruleReadingOutstanding && strings.Contains(f.Message, item) {
+				named = true
+			}
+		}
+		if !named {
+			t.Errorf("%s carries no admission in its own run and must still be reported: %+v", item, fs)
+		}
+	}
+	if n := countRule(fs, ruleReadingOutstanding); n != 2 {
+		t.Fatalf("expected both proposals outstanding, got %d finding(s): %+v", n, fs)
+	}
+}
+
+// The control on the pair: an admission filed under the run its proposal belongs
+// to still answers it. A key watched only refusing is a key that might refuse
+// everything.
+func TestAnAdmissionInItsOwnRunStillAdmits(t *testing.T) {
+	run, item := "rdg-2608300000000001", "rdi-2608300000000002"
+	root := readingLedger(t, run, item, "widening")
+	admissionRecord(t, root, run, "adm-2608300000000004", item)
+
+	fs, err := Lint(readingOutstandingConfig(severityBlocker), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleReadingOutstanding); n != 0 {
+		t.Fatalf("an admission under its proposal's own run must admit it, got %d finding(s): %+v", n, fs)
+	}
+}
+
+// An admission whose `run` field contradicts the directory it sits in makes two
+// claims about which candidate set it joined, and the report cannot honour both.
+// It admits under neither: keying on the bucket alone would let the field lie,
+// and keying on the field alone would make the bucket decorative. The gate names
+// the contradiction separately (record_schema); this pins that the report does
+// not act on it.
+func TestAnAdmissionWhoseRunFieldContradictsItsBucketAdmitsNothing(t *testing.T) {
+	run, item := "rdg-2608300000000001", "rdi-2608300000000002"
+	root := readingLedger(t, run, item, "widening")
+	writeFile(t, root, ".abcd/work/issues/admissions/"+run+"/adm-2608300000000004.md",
+		"---\nschema_version: 1\nid: \"adm-2608300000000004\"\nrun: \"rdg-2608300000000009\"\n"+
+			"proposal: \""+item+"\"\ngrounds: \"the frame does not already hold it\"\n---\n\n")
+
+	fs, err := Lint(readingOutstandingConfig(severityBlocker), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleReadingOutstanding); n != 1 {
+		t.Fatalf("an admission contradicting its own bucket admits nothing, got %d finding(s): %+v", n, fs)
+	}
+}
