@@ -7,6 +7,11 @@ category: "documentation"
 source: "user-observation"
 found_during: "itd-179-round-2-ruthless"
 found_at: "internal/core/intent/ready.go"
+resolution: "the comment at internal/core/intent/ready.go and spc-57's Staging paragraph now state the measured flip — 10 of 66 planned records carry an entry, 56 fail the check, 36 were READY before and are NOT READY after"
+impact: internal
+grounds: "pursued: we expect a justification that describes the corpus wrongly to be read as licence for a near-free change, and a maintainer reading spent staging where a third of the planned bucket flips is what would show it"
+resolved_by:
+  intent: "itd-179"
 ---
 
 the comment authorising the promoted grounds refusal misstates the corpus state it rests on

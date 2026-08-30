@@ -104,10 +104,15 @@ the ADR family's Alternatives Considered. This spec adds the finer grain beside
 them and takes no position on the coarser one.
 
 **Staging.** The recording path, the vocabulary and the stamping land first with
-the `grounds` check reporting `OK`; the refusal is promoted in a second commit
-once the `planned/` bucket carries entries, so the gate does not arrive as a
-wall of pre-existing failures. Promote and resolve refuse from the first commit,
-because they mint the grounds in the same call and have no corpus to fix.
+the `grounds` check reporting `OK`; the refusal is promoted in a second commit.
+The promotion is deliberately forward-only rather than staged behind a populated
+corpus: measured at the branch tip, 10 of the 66 `planned/` records carry an
+entry, 56 fail the grounds check, and 36 of those were READY before this change
+and are NOT READY after it. Each records its grounds when it is next picked up,
+which is the moment the conjecture is still known — the cost this buys is that a
+third of the planned bucket answers the gate before it can be implemented.
+Promote and resolve refuse from the first commit, because they mint the grounds
+in the same call and have no corpus to fix.
 
 ## Acceptance criteria mapping
 

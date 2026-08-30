@@ -282,11 +282,13 @@ func scopeConditionsCheck(it Intent, claims Claims) ReadyCheck {
 // it is the only check about why the work is being done at all rather than about
 // whether the record is well formed.
 //
-// It REFUSES. The staging that put recording before refusing is spent: the
-// planned/ bucket carries entries, so the gate no longer arrives as a wall of
-// pre-existing failures — which is how a gate gets routed around instead of
-// answered. Records planned before the argument existed fail it, and that is the
-// finding, not a defect: an unrecorded conjecture is exactly what this reports.
+// It REFUSES, forward-only, and the flip is not free: measured at the branch
+// tip, 10 of the 66 planned/ records carry an entry, 56 fail this check, and 36
+// of those were READY before the promotion and are NOT READY after it. Records
+// planned before the argument existed fail it, and that is the finding, not a
+// defect: an unrecorded conjecture is exactly what this reports, and each of the
+// 36 records its grounds when it is next picked up — the moment the conjecture
+// is still known, which is the only moment it can be recorded honestly.
 //
 // Only a well-formed entry counts. Prose under the heading is prose: putting a
 // gate verdict on a sentence somebody wrote for a human is a judgement no parser
