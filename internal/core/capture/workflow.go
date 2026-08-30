@@ -150,12 +150,18 @@ func commitCapture(issuesRoot string, req CaptureRequest, issID, slug, placehold
 		fields = append(fields, kv{"found_at", req.FoundAt})
 		fm["found_at"] = req.FoundAt
 	}
-	// lapsed_at is written verbatim and never defaulted: the value is the instant
-	// the discipline gave way, and inventing one at write-up would be the
-	// reconstruction the lapse log exists to measure (spc-60).
-	if req.LapsedAt != "" {
-		fields = append(fields, kv{"lapsed_at", req.LapsedAt})
-		fm["lapsed_at"] = req.LapsedAt
+	// lapsed_at is never defaulted: the value is the instant the discipline gave
+	// way, and inventing one at write-up would be the reconstruction the lapse log
+	// exists to measure (spc-60). It IS trimmed, and the trim is what keeps the two
+	// gates agreeing: the reader trims before judging, so an all-whitespace value
+	// reads as absent and passes, while the committed-ledger gate reads the same
+	// bytes as a present value that is no RFC 3339 instant and blocks. Writing the
+	// padding would therefore commit a record capture goes on reading while its own
+	// record_schema blocker says it refuses and skips it. Nothing else is
+	// normalised — a value that survives the trim is written exactly as given.
+	if lapsedAt := strings.TrimSpace(req.LapsedAt); lapsedAt != "" {
+		fields = append(fields, kv{"lapsed_at", lapsedAt})
+		fm["lapsed_at"] = lapsedAt
 	}
 	if req.RelatedIntents != nil {
 		fields = append(fields, kv{"related_intents", req.RelatedIntents})
