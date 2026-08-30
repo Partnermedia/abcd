@@ -24,7 +24,7 @@ func draftSeeded(id, slug string) string {
 // never leaves, but the gate must report it rather than trust it).
 func plannedUnlinked(id, slug string) string {
 	return "---\nid: " + id + "\nslug: " + slug + "\nspec_id: null\nkind: standalone\n---\n" +
-		"# " + slug + "\n\n## Acceptance Criteria\n\n- ok\n"
+		"# " + slug + "\n\n## Scope Conditions\n\n" + NullityToken + "\n\n## Acceptance Criteria\n\n- ok\n"
 }
 
 // specStub is an open spec still carrying the minted _Draft: placeholder.
@@ -301,28 +301,139 @@ func TestReadyChecksOrderAndCount(t *testing.T) {
 	assertShape(t, res)
 }
 
-// TestReadyClaimChecksAreReportOnly pins the staged rung: the format, the mint
-// and the render land before the refusal does, so the gate arrives calibrated
-// rather than as a wall of pre-existing failures. Both checks report what is
-// missing and pass.
-func TestReadyClaimChecksAreReportOnly(t *testing.T) {
-	root := t.TempDir()
-	writeFile(t, root, plannedDir+"/itd-10-alpha.md",
-		"---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n"+
-			"# alpha\n\n## Mechanism\n\n## Acceptance Criteria\n\n- ok\n")
-	writeFile(t, root, specsOpen+"/spc-1-alpha.md", specNaming("spc-1", "alpha", "itd-10"))
+// plannedWithClaims is a planned, linked intent whose claim sections carry the
+// given bodies verbatim — the fixture the five gradient cases vary.
+func plannedWithClaims(mechanism, conditions string) string {
+	return "---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n" +
+		mechanism + conditions + "## Acceptance Criteria\n\n- ok\n"
+}
 
+// readyWithClaims runs the gate over a planned record carrying the given claim
+// sections, against a written spec, so only the claim checks can fail.
+func readyWithClaims(t *testing.T, mechanism, conditions string) ReadyResult {
+	t.Helper()
+	root := t.TempDir()
+	writeFile(t, root, plannedDir+"/itd-10-alpha.md", plannedWithClaims(mechanism, conditions))
+	writeFile(t, root, specsOpen+"/spc-1-alpha.md", specNaming("spc-1", "alpha", "itd-10"))
 	res, err := Ready(root, "itd-10")
 	if err != nil {
 		t.Fatal(err)
 	}
-	mech := checkByName(t, res, "mechanism_claim")
-	if !mech.OK || !strings.Contains(mech.Detail, "empty") {
-		t.Fatalf("mechanism_claim = %+v, want OK naming the empty section", mech)
+	return res
+}
+
+// TestReadyScopeConditionsAbsent is itd-177's first criterion: no conditions and
+// no explicit nullity exits the gate non-zero, naming the missing field.
+func TestReadyScopeConditionsAbsent(t *testing.T) {
+	res := readyWithClaims(t, "", "")
+	if res.Ready {
+		t.Fatal("an intent with no context claim must not be ready")
 	}
-	cond := checkByName(t, res, "scope_conditions")
-	if !cond.OK || !strings.Contains(cond.Detail, "## Scope Conditions") {
-		t.Fatalf("scope_conditions = %+v, want OK naming the absent section", cond)
+	c := checkByName(t, res, "scope_conditions")
+	if c.OK || !strings.Contains(c.Detail, "## Scope Conditions") {
+		t.Fatalf("scope_conditions = %+v, want fail naming the section", c)
+	}
+	if !strings.Contains(c.Remedy, NullityToken) {
+		t.Fatalf("remedy must name the nullity token, got %q", c.Remedy)
+	}
+}
+
+// TestReadyScopeConditionsEmptyFails: a heading with nothing under it is the
+// gate fault the gradient distinguishes from an absent section.
+func TestReadyScopeConditionsEmptyFails(t *testing.T) {
+	res := readyWithClaims(t, "", "## Scope Conditions\n\n")
+	if c := checkByName(t, res, "scope_conditions"); c.OK || !strings.Contains(c.Detail, "empty") {
+		t.Fatalf("scope_conditions = %+v, want fail on the empty section", c)
+	}
+}
+
+// TestReadyScopeConditionsNullityPasses: the recorded decline is a pass.
+func TestReadyScopeConditionsNullityPasses(t *testing.T) {
+	res := readyWithClaims(t, "", "## Scope Conditions\n\n"+NullityToken+"\n\n")
+	c := checkByName(t, res, "scope_conditions")
+	if !c.OK || !strings.Contains(c.Detail, "nullity recorded") {
+		t.Fatalf("scope_conditions = %+v, want OK reporting the recorded nullity", c)
+	}
+	if !res.Ready {
+		t.Fatalf("a recorded nullity must leave the intent ready: %+v", res.Checks)
+	}
+}
+
+// TestReadyMechanismNullityPasses is itd-177's third criterion.
+func TestReadyMechanismNullityPasses(t *testing.T) {
+	res := readyWithClaims(t, "## Mechanism\n\n"+NullityToken+"\n\n", "## Scope Conditions\n\n"+NullityToken+"\n\n")
+	c := checkByName(t, res, "mechanism_claim")
+	if !c.OK || !strings.Contains(c.Detail, "declined (nullity recorded)") {
+		t.Fatalf("mechanism_claim = %+v, want OK reporting the recorded nullity", c)
+	}
+	if !res.Ready {
+		t.Fatalf("a declined mechanism must leave the intent ready: %+v", res.Checks)
+	}
+}
+
+// TestReadyMechanismEmptyFails is itd-177's fourth criterion: present but empty
+// exits non-zero and names the section — write the claim or the token.
+func TestReadyMechanismEmptyFails(t *testing.T) {
+	res := readyWithClaims(t, "## Mechanism\n\n", "## Scope Conditions\n\n"+NullityToken+"\n\n")
+	if res.Ready {
+		t.Fatal("an empty mechanism section must not be ready")
+	}
+	c := checkByName(t, res, "mechanism_claim")
+	if c.OK || !strings.Contains(c.Detail, "## Mechanism") {
+		t.Fatalf("mechanism_claim = %+v, want fail naming the section", c)
+	}
+	if !strings.Contains(c.Remedy, NullityToken) {
+		t.Fatalf("remedy must offer the claim or the token, got %q", c.Remedy)
+	}
+}
+
+// TestReadyMechanismAbsentPasses: prompted is not required — an absent section
+// is a claim not carried, which the gradient never conflates with a fault.
+func TestReadyMechanismAbsentPasses(t *testing.T) {
+	res := readyWithClaims(t, "", "## Scope Conditions\n\n"+NullityToken+"\n\n")
+	if c := checkByName(t, res, "mechanism_claim"); !c.OK {
+		t.Fatalf("mechanism_claim = %+v, want OK for an absent prompted claim", c)
+	}
+}
+
+// TestReadyConditionMarkerMissing is itd-177's fifth criterion, missing half.
+func TestReadyConditionMarkerMissing(t *testing.T) {
+	res := readyWithClaims(t, "", "## Scope Conditions\n\n"+
+		"- stamped <!-- cond: cond-2608300102030405 -->\n- unstamped\n\n")
+	if res.Ready {
+		t.Fatal("an unidentified condition must not be ready")
+	}
+	c := checkByName(t, res, "scope_conditions")
+	if c.OK || !strings.Contains(c.Detail, "2") {
+		t.Fatalf("scope_conditions = %+v, want fail naming condition 2", c)
+	}
+	if !strings.Contains(c.Remedy, "abcd intent plan itd-10") {
+		t.Fatalf("remedy must name the write-capable verb, got %q", c.Remedy)
+	}
+}
+
+// TestReadyConditionMarkerDuplicated is the fifth criterion's duplicate half:
+// two conditions sharing an identity is named by the repeated cond- id.
+func TestReadyConditionMarkerDuplicated(t *testing.T) {
+	const id = "cond-2608300102030405"
+	res := readyWithClaims(t, "", "## Scope Conditions\n\n"+
+		"- one <!-- cond: "+id+" -->\n- two <!-- cond: "+id+" -->\n\n")
+	if res.Ready {
+		t.Fatal("a duplicated identity must not be ready")
+	}
+	c := checkByName(t, res, "scope_conditions")
+	if c.OK || !strings.Contains(c.Detail, id) {
+		t.Fatalf("scope_conditions = %+v, want fail naming %s", c, id)
+	}
+}
+
+// TestReadyScopeConditionsProseWithoutBulletsFails: a condition that is not a
+// top-level bullet has nothing to carry an identity, so prose alone — the
+// create-path scaffold's own prompt line included — is not a recorded claim.
+func TestReadyScopeConditionsProseWithoutBulletsFails(t *testing.T) {
+	res := readyWithClaims(t, "", "## Scope Conditions\n\nIt holds wherever a POSIX shell exists.\n\n")
+	if c := checkByName(t, res, "scope_conditions"); c.OK || !strings.Contains(c.Detail, "bullet") {
+		t.Fatalf("scope_conditions = %+v, want fail on prose without bullets", c)
 	}
 }
 

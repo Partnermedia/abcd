@@ -350,7 +350,8 @@ func TestIntentReadyGreenExit0(t *testing.T) {
 	repo := t.TempDir()
 	t.Chdir(repo)
 	writeRepoFile(t, repo, cliPlanned+"/itd-10-alpha.md",
-		"---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n## Acceptance Criteria\n\n- ok\n")
+		"---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n"+
+			"## Scope Conditions\n\nNone stated.\n\n## Acceptance Criteria\n\n- ok\n")
 	writeRepoFile(t, repo, cliSpecsOpen+"/spc-1-alpha.md",
 		"---\nid: spc-1\nslug: alpha\nintent: itd-10\n---\n# alpha\n\n## Summary\n\nA written design record.\n")
 

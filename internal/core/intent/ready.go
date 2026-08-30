@@ -160,11 +160,6 @@ func acCheck(acCount int) ReadyCheck {
 // absent section passes (the claim was never carried) and the exact nullity
 // token passes as a claim considered and declined. A heading with nothing under
 // it is neither, and is the section's one fault.
-//
-// STAGED (spc-55): the fault reports rather than refuses on this rung. The
-// format, the mint and the render land first, and the refusal is promoted once
-// the planned/ corpus carries its claims — a gate that arrives as a wall of
-// pre-existing failures is a gate everyone learns to ignore.
 func mechanismCheck(it Intent, claims Claims) ReadyCheck {
 	c := ReadyCheck{Name: CheckMechanismClaim, OK: true}
 	if it.Bucket == BucketDisciplines {
@@ -177,7 +172,9 @@ func mechanismCheck(it Intent, claims Claims) ReadyCheck {
 	case ClaimStated:
 		c.Detail = "mechanism claim stated"
 	case ClaimEmpty:
+		c.OK = false
 		c.Detail = "'## Mechanism' is present but empty — neither a claim nor a recorded decline"
+		c.Remedy = "write the falsifiable claim (\"we expect X because Y\") under '## Mechanism', or record the exact token `" + NullityToken + "` alone on its line to decline it"
 	default:
 		c.Detail = "no '## Mechanism' section — the mechanism claim is prompted, not required"
 	}
@@ -189,9 +186,6 @@ func mechanismCheck(it Intent, claims Claims) ReadyCheck {
 // must enumerate its conditions as top-level bullets, because a bullet is what
 // carries an identity — the same rule acCheck already holds the criteria to.
 // Each condition must carry exactly one identity, and no two may share one.
-//
-// STAGED (spc-55): the faults report rather than refuse on this rung; see
-// mechanismCheck.
 func scopeConditionsCheck(it Intent, claims Claims) ReadyCheck {
 	c := ReadyCheck{Name: CheckScopeConditions, OK: true}
 	if it.Bucket == BucketDisciplines {
@@ -203,25 +197,30 @@ func scopeConditionsCheck(it Intent, claims Claims) ReadyCheck {
 		c.Detail = "scope conditions declined (nullity recorded)"
 		return c
 	case ClaimEmpty:
+		c.OK = false
 		c.Detail = "'## Scope Conditions' is present but empty — write the conditions or the nullity token"
 		c.Remedy = scopeConditionsRemedy
 		return c
 	case ClaimAbsent:
+		c.OK = false
 		c.Detail = "no '## Scope Conditions' section — the context claim is unrecorded"
 		c.Remedy = scopeConditionsRemedy
 		return c
 	}
 	if len(claims.Conditions) == 0 {
+		c.OK = false
 		c.Detail = "'## Scope Conditions' carries prose but no top-level bullet — a condition without a bullet has nothing to identify"
 		c.Remedy = scopeConditionsRemedy
 		return c
 	}
 	if unmarked := UnmarkedConditionOrdinals(claims.Conditions); len(unmarked) > 0 {
+		c.OK = false
 		c.Detail = fmt.Sprintf("condition(s) %s carry no identity marker", joinInts(unmarked))
 		c.Remedy = fmt.Sprintf("run `abcd intent plan %s` — the write-capable verb stamps every unmarked condition; markers are never hand-typed", it.ID)
 		return c
 	}
 	if dupes := DuplicateConditionIDs(claims.Conditions); len(dupes) > 0 {
+		c.OK = false
 		c.Detail = fmt.Sprintf("identity %s is carried by more than one condition", strings.Join(dupes, ", "))
 		c.Remedy = "delete the duplicated marker from the condition that copied it, then re-stamp it with `abcd intent plan`"
 		return c
