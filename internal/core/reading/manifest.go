@@ -88,6 +88,12 @@ func EncodeManifest(m Manifest) ([]byte, error) { return encode(m) }
 // DecodeManifest reads a manifest strictly: unknown fields, trailing content
 // and a schema-version mismatch are all refused. All three are fail-closed on
 // purpose, because a manifest is the evidence a reader judges contamination by.
+//
+// It has NO front door yet, and that is deliberate rather than an oversight: the
+// verb that reads a manifest back is the ingest, which spc-63 owns and which is
+// not in this delivery. It is exported and tested here because the writer and
+// the reader of one format belong together — a decoder written later, against
+// the file rather than against the encoder, is how the two drift.
 func DecodeManifest(data []byte) (Manifest, error) {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()

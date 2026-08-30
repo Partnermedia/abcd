@@ -2,6 +2,7 @@ package reading
 
 import (
 	"fmt"
+	"path"
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/frontmatter"
@@ -31,6 +32,15 @@ import (
 // it would ride along inside them. The floor names those keys and headings
 // precisely so the signal is mechanical, and this is where the signal is read.
 func redactExcluded(rel, doc string, exclusions []Exclusion) (string, error) {
+	// Both signals are RECORD shapes, and only a markdown file can carry one. A
+	// Go file has no frontmatter and no Audit Notes heading; what it can have is
+	// a raw string literal opening a fence at the left margin, which the section
+	// scan rightly refuses as an unterminated block — and refusing it there would
+	// let one unrelated source file stop every assembly the repository can run.
+	// The scope of the signal is the scope of the parse.
+	if !strings.EqualFold(path.Ext(rel), ".md") {
+		return doc, nil
+	}
 	keys := map[string]bool{}
 	headings := map[string]bool{}
 	for _, e := range exclusions {
@@ -98,7 +108,8 @@ func redactExcluded(rel, doc string, exclusions []Exclusion) (string, error) {
 	return strings.Join(kept, "\n"), nil
 }
 
-// projectField extracts one named field from a record's text.
+// projectField extracts one named field from a record's text. Only a record is
+// ever projected, and a record is markdown, so the same scope holds here.
 func projectField(rel, doc, field string) (string, bool, error) {
 	body, offset := site.StripFrontmatter(doc)
 	sections, err := site.Sections(rel, body, offset)

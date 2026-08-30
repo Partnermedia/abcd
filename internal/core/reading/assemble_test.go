@@ -343,17 +343,20 @@ func itoa(n int64) string {
 // TestSourceFileWithAnUnterminatedFenceDoesNotAbortTheAssembly holds the scope
 // of the two record-shaped signals. A heading and a frontmatter key are things a
 // RECORD carries; a Go file carries neither, and parsing one as markdown makes a
-// stray fence in a comment able to stop every assembly the repository can run.
+// raw string literal holding a fence able to stop every assembly the repository
+// can run.
 func TestSourceFileWithAnUnterminatedFenceDoesNotAbortTheAssembly(t *testing.T) {
 	root := fixtureRepo(t)
-	writeFile(t, root, "fence.go", "package main\n\n// Usage:\n//\n//\t```\n//\t# Audit Notes\n\nvar x = 1\n")
+	// A raw string literal whose content opens a fence at the left margin. The
+	// site scan reads it as an unterminated fenced block and refuses.
+	writeFile(t, root, "fence.go", "package main\n\nconst usage = `\n```sh\nabcd reading\n`\n")
 	gitCommitAll(t, root)
 
 	res, err := Assemble(AssembleRequest{
 		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
 	})
 	if err != nil {
-		t.Fatalf("an unterminated fence in a Go comment aborted the assembly: %v", err)
+		t.Fatalf("a fence inside a Go raw string aborted the assembly: %v", err)
 	}
 	found := false
 	for _, m := range res.Manifest.Items {
@@ -384,5 +387,98 @@ func TestAssembleRefusesADeletedIncludedPath(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "README.md") {
 		t.Errorf("the refusal does not name the deleted path: %v", err)
+	}
+}
+
+// TestIgnoredFilesNeverEnterTheAssembly closes the gap between the filesystem
+// and the commit. A gitignored file is not part of the target commit and `git
+// status` says nothing about it, so a filesystem walk would pass content the
+// dirty gate cannot see and the manifest would name a commit whose content it
+// did not read. Build output, a virtual environment and a vendored tree all
+// land in this class.
+func TestIgnoredFilesNeverEnterTheAssembly(t *testing.T) {
+	root := fixtureRepo(t)
+	writeFile(t, root, ".gitignore", "build/\nignored.json\n")
+	gitCommitAll(t, root)
+
+	const canary = "SENTINEL-IGNORED-BUILD-OUTPUT"
+	writeFile(t, root, "ignored.json", "{\"note\": \""+canary+"\"}\n")
+	writeFile(t, root, "build/generated.go", "package build\n\n// "+canary+"\n")
+
+	res, err := Assemble(AssembleRequest{
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+	})
+	if err != nil {
+		t.Fatalf("assemble: %v", err)
+	}
+	if strings.Contains(bundleText(res.Bundle), canary) {
+		t.Error("an ignored file reached the bundle; it is not part of the commit the manifest names")
+	}
+	for _, m := range res.Manifest.Items {
+		if m.Path == "ignored.json" || strings.HasPrefix(m.Path, "build/") {
+			t.Errorf("the manifest names the ignored path %s", m.Path)
+		}
+	}
+}
+
+// TestUntrackedIncludedFileRefusesTheAssembly is the other side of the same
+// boundary: a file that is NOT ignored and not yet committed is a genuine
+// divergence from the target commit, so it refuses rather than being quietly
+// dropped.
+func TestUntrackedIncludedFileRefusesTheAssembly(t *testing.T) {
+	root := fixtureRepo(t)
+	writeFile(t, root, "docs/newcomer.md", "# A newcomer\n\nUncommitted.\n")
+
+	_, err := Assemble(AssembleRequest{
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+	})
+	if err == nil {
+		t.Fatal("an untracked included file did not refuse the assembly")
+	}
+	if !strings.Contains(err.Error(), "docs/newcomer.md") {
+		t.Errorf("the refusal does not name the untracked path: %v", err)
+	}
+}
+
+// TestAssembleRefusesAnUnconfiguredRecordScan holds the fail-closed stance at
+// the one place a silent success is worse than a refusal. Record enumeration
+// runs through the record-lint configuration; without it every record row
+// contributes nothing, and the run reports a clean assembly of a reading that
+// saw none of the record it exists to read against.
+func TestAssembleRefusesAnUnconfiguredRecordScan(t *testing.T) {
+	root := fixtureRepo(t)
+	if err := os.Remove(filepath.Join(root, filepath.FromSlash(LintConfigPath))); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	gitCommitAll(t, root)
+
+	_, err := Assemble(AssembleRequest{
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+	})
+	if err == nil {
+		t.Fatal("an unconfigured record scan assembled silently")
+	}
+	if !strings.Contains(err.Error(), LintConfigPath) {
+		t.Errorf("the refusal does not name the missing configuration: %v", err)
+	}
+}
+
+// TestAssembleRefusesAStoreTheConfigurationDoesNotName is the same refusal one
+// level in: a configuration present but silent about a store the include table
+// names is the same silent nothing, arriving by a different route.
+func TestAssembleRefusesAStoreTheConfigurationDoesNotName(t *testing.T) {
+	root := fixtureRepo(t)
+	writeFile(t, root, LintConfigPath, `{"schema_version": 1, "rules": {"record_schema":
+  {"enabled": true, "severity": "blocker", "record_stores": {"itd": ".abcd/development/intents"}}}}`)
+	gitCommitAll(t, root)
+
+	_, err := Assemble(AssembleRequest{
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+	})
+	if err == nil {
+		t.Fatal("an include row naming an unconfigured store assembled silently")
+	}
+	if !strings.Contains(err.Error(), "spc") {
+		t.Errorf("the refusal does not name the unconfigured store: %v", err)
 	}
 }

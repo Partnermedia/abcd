@@ -38,9 +38,13 @@ type AssembleRequest struct {
 }
 
 // AssembleResult is what one assembly produced. The bundle and the manifest are
-// carried for a caller that wants them in memory; the artefacts are named by
-// their basenames beside the output directory the operator asked for, so no
-// absolute path enters the result.
+// carried for a caller that wants them in memory, and the artefacts are named by
+// their basenames rather than by a full path.
+//
+// OutDir is the one field that can hold an absolute path, and only because the
+// operator supplied one to --out; it is echoed back verbatim so a caller can
+// find what it asked for. Neither ARTEFACT carries it: no path the operator did
+// not type reaches this result, and nothing committed reaches it at all.
 type AssembleResult struct {
 	RunID            string   `json:"run_id"`
 	Position         Position `json:"position"`
@@ -76,6 +80,9 @@ const MaxFileBytes = 4 << 20
 // stores from. Enumeration comes from that scan and nowhere else: there is one
 // parser of the record's shape in this binary.
 const LintConfigPath = ".abcd/record-lint.json"
+
+// lintRecordSchemaRule is the rule whose configuration names the record stores.
+const lintRecordSchemaRule = "record_schema"
 
 var (
 	// targetRe is the whole grammar of the second operand besides "HEAD".
@@ -348,6 +355,10 @@ func collect(repoRoot string, position Position) ([]candidate, error) {
 	if err != nil {
 		return nil, err
 	}
+	tracked, err := trackedSet(repoRoot)
+	if err != nil {
+		return nil, err
+	}
 	claimed := map[string]bool{}
 	var out []candidate
 
@@ -361,7 +372,7 @@ func collect(repoRoot string, position Position) ([]candidate, error) {
 			return nil, err
 		}
 		for _, rel := range paths {
-			if claimed[rel] {
+			if claimed[rel] || !tracked[rel] {
 				continue
 			}
 			claimed[rel] = true
@@ -398,6 +409,53 @@ func collect(repoRoot string, position Position) ([]candidate, error) {
 	return out, nil
 }
 
+// requireConfiguredStores refuses a configuration that is silent about a store
+// the include table names. It is the same refusal as an absent configuration,
+// arriving one level in: an unnamed store contributes nothing to the record
+// scan, and a row enumerating nothing is a hole the run would not report.
+func requireConfiguredStores(cfg lint.Config) error {
+	configured := cfg.Rules[lintRecordSchemaRule].RecordStores
+	for _, row := range Table {
+		if row.Store == "" {
+			continue
+		}
+		if _, ok := configured[row.Store]; !ok {
+			return fmt.Errorf("reading: %s names no %q record store, so the include row %q would "+
+				"enumerate nothing", LintConfigPath, row.Store, row.Source)
+		}
+	}
+	return nil
+}
+
+// trackedSet is the file set the target commit actually carries, read from git
+// rather than from the filesystem.
+//
+// The walk and the dirty gate ask two different sources, and the gap between
+// them is exactly the class of file the manifest's re-runnability rests on: a
+// GITIGNORED file matching an include row is on disk, so a filesystem walk
+// passes it, and `git status` says nothing about it, so the dirty gate cannot
+// refuse it. Build output, a virtual environment and a vendored tree all land
+// there, and an auditor re-running the assembly in a clean clone would get a
+// different bundle under a different hash.
+//
+// Intersecting the walk with the tracked set closes that, and closes a
+// submodule's inner content with it: git reports a gitlink, never the files
+// beneath it, so they are absent from the tracked set by construction. An
+// untracked file that is NOT ignored stays a refusal rather than a silent
+// omission — the dirty gate sees it, and a genuine divergence from the target
+// commit must be said out loud.
+func trackedSet(repoRoot string) (map[string]bool, error) {
+	files, err := gitutil.TrackedFiles(repoRoot)
+	if err != nil {
+		return nil, fmt.Errorf("reading: listing the tracked files: %w", err)
+	}
+	set := make(map[string]bool, len(files))
+	for _, f := range files {
+		set[f] = true
+	}
+	return set, nil
+}
+
 // loadGraph reads the record corpus once, through the record_schema rule's own
 // scan. A second parser of the record's shape would drift the moment a store
 // gained a bucket, so there is not one.
@@ -408,11 +466,23 @@ func loadGraph(repoRoot string) (lint.RecordGraph, error) {
 	}
 	cfg, err := lint.LoadConfigInRoot(lintRoot, LintConfigPath)
 	closeErr := lintRoot.Close()
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil {
+		// A missing configuration is a REFUSAL, not an empty result. Without it
+		// every record row contributes nothing and the run reports a clean
+		// assembly of a reading that saw none of the record it exists to read
+		// against — a silence indistinguishable from a repository with no record
+		// at all.
+		if os.IsNotExist(err) {
+			return lint.RecordGraph{}, fmt.Errorf("reading: %s is absent, so the record scan enumerates "+
+				"nothing and every record the include table names would be silently missing", LintConfigPath)
+		}
 		return lint.RecordGraph{}, fmt.Errorf("reading: loading %s: %w", LintConfigPath, err)
 	}
 	if closeErr != nil {
 		return lint.RecordGraph{}, fmt.Errorf("reading: closing the repository root: %w", closeErr)
+	}
+	if err := requireConfiguredStores(cfg); err != nil {
+		return lint.RecordGraph{}, err
 	}
 	graph, err := lint.LoadRecordGraph(cfg, repoRoot)
 	if err != nil {
