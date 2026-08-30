@@ -188,18 +188,29 @@ type recordStore struct {
 type recordJoin struct {
 	field string
 	why   string
-	// sameBucket requires the target to sit in the SAME bucket as the record that
-	// joins it. An admission is meaningful only against the run whose proposals it
-	// admits, and reading ids are minted per run and collide across runs by
-	// construction — so an admission filed under one run naming an item that
-	// belongs to another is keyed on a pair nothing ever queries. It admits
-	// nothing, the proposal it names goes on being reported as unadmitted, and no
-	// line says an answer was written.
+	// sameBucketAs names the FAMILY whose targets must sit in the same bucket as
+	// the record that joins them. Empty means the join carries no such obligation.
+	//
+	// An admission is meaningful only against the run whose proposals it admits,
+	// and reading ids are minted per run and collide across runs by construction —
+	// so an admission filed under one run naming an item that belongs to another is
+	// keyed on a pair nothing ever queries. It admits nothing, the proposal it
+	// names goes on being reported as unadmitted, and no line says an answer was
+	// written (iss-2608301327013320).
+	//
+	// It names a family rather than being a bare flag because that reason is a
+	// PROPERTY OF THE FAMILY, and the message says so. An issue id is minted from a
+	// timestamp, globally, and survives a move between status directories; the
+	// outstanding report walks reading items and never names an issue at all. So a
+	// target outside the declared family is left to the silence it had: its value
+	// is wrong for some other reason, and inventing a collision the operator then
+	// goes looking for is the confident false statement this rule must not make
+	// (iss-2608301411017768).
 	//
 	// checkRecordBucketField does NOT cover this and never did. That check enforces
 	// FIELD == DIRECTORY; this is DIRECTORY == THE TARGET'S OWN BUCKET, and a
-	// record satisfies the first while failing the second (iss-2608301327013320).
-	sameBucket bool
+	// record satisfies the first while failing the second.
+	sameBucketAs string
 }
 
 // bucketed reports whether the store holds its records in lifecycle
@@ -294,7 +305,7 @@ var recordStores = []recordStore{
 			field: "proposal",
 			why: "an admission is keyed to the proposal it admits, and one naming no record admits nothing in particular — " +
 				"the candidate set it claims to have joined cannot be reconstructed from it",
-			sameBucket: true,
+			sameBucketAs: issueschema.ReadingItemFamily,
 		}}},
 	{prefix: "srp", noun: "surprise", nodeType: "surprise",
 		fileNumRe: surpriseFileNumRe, fileFamily: "srp", filename: "srp-<N>.md",
@@ -774,10 +785,11 @@ func checkRecordUnknownFields(r schemaRecord, severity string) []Finding {
 //
 // Resolution has two halves, because a join can fail in two ways. A target that
 // is NOT IN THE CORPUS joins nothing at all. A target that is in the corpus but
-// in ANOTHER BUCKET joins something nobody will ever look for: a store whose ids
-// are minted per bucket collides across them, so the pair the joining record is
-// keyed on is one no reader queries. The second half is opt-in per join
-// (sameBucket), because only some joins carry that obligation.
+// in ANOTHER BUCKET joins something nobody will ever look for: a family whose
+// ids are minted per bucket collides across them, so the pair the joining record
+// is keyed on is one no reader queries. The second half is declared per join AND
+// per target family (sameBucketAs), because that collision is a property of the
+// family and the message names it.
 //
 // Prose is legitimate and stays silent. A surprise is keyed to WHATEVER
 // occasioned it — a detection, an admission, or a consequence that has no id — so
@@ -829,11 +841,12 @@ func checkRecordJoins(r schemaRecord, index map[recordRef]schemaRecord, retired 
 			})
 			continue
 		}
-		// A join declared sameBucket must not reach out of its own bucket. A record
-		// outside every bucket is the WALK's finding (it already reports one), and
-		// comparing against an empty bucket here would put a second and confidently
-		// wrong finding on it, so a missing bucket on either side stands this leg down.
-		if !join.sameBucket || r.bucket == "" || target.bucket == "" || target.bucket == r.bucket {
+		// The bucket obligation, where the join declares one AND the target is of the
+		// family it declares it for. Neither bucket can be empty here: both sides are
+		// then records of a bucketed store, and a record sitting outside every bucket
+		// is reported by the walk and never enters the index at all — so it reaches
+		// this leg as a target that is not in the corpus, above.
+		if join.sameBucketAs == "" || target.store.prefix != join.sameBucketAs || target.bucket == r.bucket {
 			continue
 		}
 		out = append(out, Finding{
