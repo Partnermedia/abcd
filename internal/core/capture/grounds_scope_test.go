@@ -188,3 +188,34 @@ func TestVerbPrefixIsTheVerbNotTheState(t *testing.T) {
 		t.Fatalf("the append refusal is prefixed with the state, not the verb: %v", err)
 	}
 }
+
+// TestAFrontmatterCommentMarkerDoesNotBlindTheRecord measures what body scope
+// actually changed. capture writes operator text into FRONTMATTER fields —
+// --found-at here, and the transition's own note, which is set before the
+// append — and such text can carry an unclosed `<!--`. Judged over the whole
+// file the comment mask ran from that frontmatter line to end of file, the
+// appended bullet landed inside it, and every triage route refused permanently
+// (iss-2608301803423101). Judged over the body it is not an opener the append
+// ever sees.
+func TestAFrontmatterCommentMarkerDoesNotBlindTheRecord(t *testing.T) {
+	repo, ir := ledger(t)
+	res, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir,
+		Text:     "the loader drops rules silently when the config is stale",
+		Severity: SeverityMinor, Category: "observation", Source: "user-observation",
+		FoundDuring: "t", FoundAt: "internal/core/lint (the <!-- marker scan)",
+		Slug: "a-promotable-observation",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Resolve(ResolveRequest{
+		RepoRoot: repo, IssuesRoot: ir, ID: res.ID,
+		Resolution: "closed by the fix under review", Impact: "fix", Grounds: testGrounds,
+	}); err != nil {
+		t.Fatalf("a `<!--` in a frontmatter field blocked the resolve: %v", err)
+	}
+	if got := theGround(t, ir, res.ID); got != strings.TrimSpace(testGrounds) {
+		t.Fatalf("the recorded ground = %q, want %q", got, testGrounds)
+	}
+}
