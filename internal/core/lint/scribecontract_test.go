@@ -82,7 +82,11 @@ var scribePercentRe = regexp.MustCompile(`%[0-9A-Fa-f]{2}`)
 
 // scribeResidualEncodingRe matches an encoding shape that survived the fixpoint —
 // a truncated octet, or an entity that decodes to nothing. The definition has no
-// reason to carry either, so a residual is refused rather than puzzled over.
+// reason to carry either, so a residual is refused rather than puzzled over. It
+// also refuses a bare ampersand followed by a letter, which costs `Q&A` and `AT&T`
+// as prose: that is deliberate. An entity is exactly an ampersand followed by
+// letters, so a pattern that spared the innocent spelling would spare the hostile
+// one too, and prose has the easier repair — write "and".
 var scribeResidualEncodingRe = regexp.MustCompile(`%[0-9A-Fa-f]|&[A-Za-z#][A-Za-z0-9]{0,30};?`)
 
 // scribeSpacedSeparatorRe collapses horizontal whitespace around a separator, so
@@ -181,6 +185,18 @@ func scribeAccessFindings(prompt string) []string {
 
 	seen := 0
 	for _, raw := range scribePathRe.FindAllString(folded, -1) {
+		// The traversal check runs on the RAW match, before any trimming. Trailing
+		// sentence punctuation includes the full stop, and trimming it first ate the
+		// second dot of a path whose final segment is `..` — so
+		// `.abcd/work/issues/..` arrived at the prefix check as
+		// `.abcd/work/issues`, passed it, and admitted the whole of `.abcd/work/`,
+		// which is exactly what narrowing the root was for. A dot pair is never
+		// punctuation here: no sentence in this definition ends a path with one.
+		if strings.Contains(raw, "..") {
+			seen++
+			out = append(out, "names "+raw+": a traversal segment escapes whatever prefix a reader checks")
+			continue
+		}
 		// Trailing sentence punctuation is not part of the path; a LEADING dot is
 		// (`.abcd/...`), so the two ends are trimmed with different sets.
 		tok := strings.TrimLeft(strings.TrimRight(raw, `.,;:!?)]"'`), `([`)
@@ -188,10 +204,6 @@ func scribeAccessFindings(prompt string) []string {
 			continue
 		}
 		seen++
-		if strings.Contains(tok, "..") {
-			out = append(out, "names "+tok+": a traversal segment escapes whatever prefix a reader checks")
-			continue
-		}
 		if !strings.HasPrefix(path.Clean(tok)+"/", scribeLedgerRoot) {
 			out = append(out, "names "+tok+", outside "+scribeLedgerRoot)
 		}
@@ -200,6 +212,19 @@ func scribeAccessFindings(prompt string) []string {
 		out = append(out, "names no repository path at all; an allow list with nothing on it proves nothing")
 	}
 	return out
+}
+
+// scribeFindingClasses names the branch each bypass case is meant to pin. The
+// table asserts the CLASS of the finding, not merely that some finding appeared:
+// several of these inputs trip two branches at once, so a case that asked only
+// for "any finding" would let the branch it exists to cover stop firing without
+// anything going red.
+var scribeFindingClasses = map[string]string{
+	"path":      ", outside ",
+	"traversal": "a traversal segment",
+	"non-ascii": "the non-ASCII code point",
+	"format":    "the format code point",
+	"encoding":  "carries the encoded shape",
 }
 
 // scribeConformingBase is a minimal definition that satisfies the access rule.
@@ -216,43 +241,59 @@ const scribeConformingBase = "---\nname: scribe\n---\n\n" +
 // only the first heading, only inline code, or only an ASCII solidus is a guard
 // whose allow list is advisory.
 func TestScribeAccessCheckRefusesEveryBypass(t *testing.T) {
-	cases := []struct{ name, smuggled string }{
-		{"a second Inputs heading", "\n## Inputs (continued)\n\n- `internal/core/lint/agentcontract.go` — the rule.\n"},
-		{"a bare path in prose", "\nRead internal/core/lint/agentcontract.go before transcribing.\n"},
-		{"a path inside a fence", "\n```\ninternal/core/lint/agentcontract.go\n```\n"},
-		{"a fullwidth solidus", "\n- `internal／core／lint／agentcontract.go` — the rule.\n"},
-		{"a backslash separator", "\n- `internal\\core\\lint\\agentcontract.go` — the rule.\n"},
-		{"a traversal out of the ledger", "\n- `.abcd/work/issues/../../development/readings/` — the run record.\n"},
-		{"the shared decision log", "\n- `.abcd/work/DECISIONS.md` — the decisions.\n"},
-		{"a session-transcript store path", "\n- `~/.abcd/history/aaaa/transcripts/` — prior sessions.\n"},
-		{"a bare shipped-tree directory", "\n- `internal/core` — where the rule lives.\n"},
-		{"a bare docs directory", "\n- `docs/` — the user-facing tree.\n"},
-		{"a directory-and-file pair with no extension", "\n- `internal/README` — the package map.\n"},
-		{"a spaced separator", "\n- `internal / core / lint / agentcontract.go` — the rule.\n"},
-		{"an HTML-escaped separator", "\n- `internal&#47;core&#47;lint&#47;agentcontract.go` — the rule.\n"},
-		{"a percent-encoded separator", "\n- `internal%2Fcore%2Flint%2Fagentcontract.go` — the rule.\n"},
-		{"a box-drawing solidus", "\n- `internal╱core╱lint╱agentcontract.go` — the rule.\n"},
-		{"a big solidus", "\n- `internal⧸core⧸lint⧸agentcontract.go` — the rule.\n"},
-		{"a fullwidth reverse solidus", "\n- `internal＼core＼lint＼agentcontract.go` — the rule.\n"},
-		{"a small reverse solidus", "\n- `internal﹨core﹨lint﹨agentcontract.go` — the rule.\n"},
-		{"a stray percent sign beside an encoded path", "\nProgress is 50% complete.\n- `internal%2Fcore%2Flint%2Fagentcontract.go` — the rule.\n"},
-		{"a double-encoded separator", "\n- `internal%252Fcore%252Flint%252Fagentcontract.go` — the rule.\n"},
-		{"a double-escaped HTML separator", "\n- `internal&amp;#x2F;core&amp;#x2F;lint&amp;#x2F;agentcontract.go` — the rule.\n"},
-		{"a percent-encoded HTML entity separator", "\n- `internal%26sol;core%26sol;lint%26sol;agentcontract.go` — the rule.\n"},
-		{"a reverse solidus lookalike", "\n- `internal╲core╲lint╲agentcontract.go` — the rule.\n"},
-		{"a big reverse solidus", "\n- `internal⧹core⧹lint⧹agentcontract.go` — the rule.\n"},
-		{"a set-minus separator", "\n- `internal∖core∖lint∖agentcontract.go` — the rule.\n"},
-		{"a reverse solidus operator", "\n- `internal⧵core⧵lint⧵agentcontract.go` — the rule.\n"},
-		{"a Cyrillic lookalike inside a ledger path", "\n- `.abcd/work/issues/readingс` — the ledger.\n"},
-		{"a residual percent fragment", "\n- `.abcd/work/issues/%2` — the ledger.\n"},
-		{"a format code point in the prose", "\nThe allow list above is exhaustive.\u202E\n"},
-		{"a zero-width joiner splicing a path", "\n- `internal/core/li\u200dnt/agentcontract.go` — the rule.\n"},
+	cases := []struct{ name, smuggled, class string }{
+		{"a second Inputs heading", "\n## Inputs (continued)\n\n- `internal/core/lint/agentcontract.go` — the rule.\n", "path"},
+		{"a bare path in prose", "\nRead internal/core/lint/agentcontract.go before transcribing.\n", "path"},
+		{"a path inside a fence", "\n```\ninternal/core/lint/agentcontract.go\n```\n", "path"},
+		{"a fullwidth solidus", "\n- `internal／core／lint／agentcontract.go` — the rule.\n", "non-ascii"},
+		{"a backslash separator", "\n- `internal\\core\\lint\\agentcontract.go` — the rule.\n", "path"},
+		{"a traversal out of the ledger", "\n- `.abcd/work/issues/../../development/readings/` — the run record.\n", "traversal"},
+		{"the shared decision log", "\n- `.abcd/work/DECISIONS.md` — the decisions.\n", "path"},
+		{"a session-transcript store path", "\n- `~/.abcd/history/aaaa/transcripts/` — prior sessions.\n", "path"},
+		{"a bare shipped-tree directory", "\n- `internal/core` — where the rule lives.\n", "path"},
+		{"a bare docs directory", "\n- `docs/` — the user-facing tree.\n", "path"},
+		{"a directory-and-file pair with no extension", "\n- `internal/README` — the package map.\n", "path"},
+		{"a spaced separator", "\n- `internal / core / lint / agentcontract.go` — the rule.\n", "path"},
+		{"an HTML-escaped separator", "\n- `internal&#47;core&#47;lint&#47;agentcontract.go` — the rule.\n", "path"},
+		{"a percent-encoded separator", "\n- `internal%2Fcore%2Flint%2Fagentcontract.go` — the rule.\n", "path"},
+		{"a box-drawing solidus", "\n- `internal╱core╱lint╱agentcontract.go` — the rule.\n", "non-ascii"},
+		{"a big solidus", "\n- `internal⧸core⧸lint⧸agentcontract.go` — the rule.\n", "non-ascii"},
+		{"a fullwidth reverse solidus", "\n- `internal＼core＼lint＼agentcontract.go` — the rule.\n", "non-ascii"},
+		{"a small reverse solidus", "\n- `internal﹨core﹨lint﹨agentcontract.go` — the rule.\n", "non-ascii"},
+		{"a stray percent sign beside an encoded path", "\nProgress is 50% complete.\n- `internal%2Fcore%2Flint%2Fagentcontract.go` — the rule.\n", "path"},
+		{"a double-encoded separator", "\n- `internal%252Fcore%252Flint%252Fagentcontract.go` — the rule.\n", "path"},
+		{"a double-escaped HTML separator", "\n- `internal&amp;#x2F;core&amp;#x2F;lint&amp;#x2F;agentcontract.go` — the rule.\n", "path"},
+		{"a percent-encoded HTML entity separator", "\n- `internal%26sol;core%26sol;lint%26sol;agentcontract.go` — the rule.\n", "path"},
+		{"a reverse solidus lookalike", "\n- `internal╲core╲lint╲agentcontract.go` — the rule.\n", "non-ascii"},
+		{"a big reverse solidus", "\n- `internal⧹core⧹lint⧹agentcontract.go` — the rule.\n", "non-ascii"},
+		{"a set-minus separator", "\n- `internal∖core∖lint∖agentcontract.go` — the rule.\n", "non-ascii"},
+		{"a reverse solidus operator", "\n- `internal⧵core⧵lint⧵agentcontract.go` — the rule.\n", "non-ascii"},
+		{"a Cyrillic lookalike inside a ledger path", "\n- `.abcd/work/issues/readingс` — the ledger.\n", "non-ascii"},
+		{"a residual percent fragment", "\n- `.abcd/work/issues/%2` — the ledger.\n", "encoding"},
+		{"a bare trailing traversal", "\n- .abcd/work/issues/.. — the ledger.\n", "traversal"},
+		{"a trailing traversal in inline code", "\n- `.abcd/work/issues/..` — the ledger.\n", "traversal"},
+		{"an entity-encoded trailing traversal", "\n- `.abcd/work/issues/&#46;&#46;` — the ledger.\n", "traversal"},
+		{"a format code point in the prose", "\nThe allow list above is exhaustive.\u202E\n", "format"},
+		{"a zero-width joiner splicing a path", "\n- `internal/core/li\u200dnt/agentcontract.go` — the rule.\n", "format"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if fs := scribeAccessFindings(scribeConformingBase + tc.smuggled); len(fs) == 0 {
+			marker, ok := scribeFindingClasses[tc.class]
+			if !ok {
+				t.Fatalf("case declares the unknown finding class %q", tc.class)
+			}
+			fs := scribeAccessFindings(scribeConformingBase + tc.smuggled)
+			if len(fs) == 0 {
 				t.Fatalf("the access check admits %s; a definition edited that way passes this gate", tc.name)
 			}
+			for _, f := range fs {
+				if strings.Contains(f, marker) {
+					return
+				}
+			}
+			t.Fatalf("%s was reported, but as %v rather than a %s finding; each case pins the branch that is "+
+				"supposed to catch it, so a branch that stops firing cannot hide behind a sibling's finding",
+				tc.name, fs, tc.class)
 		})
 	}
 }

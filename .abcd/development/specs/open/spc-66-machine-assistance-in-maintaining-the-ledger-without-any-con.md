@@ -188,11 +188,15 @@ Every case below is watched to fail before its change lands.
   this case's), and `TestScribePromptSatisfiesTheContract` (the shipped rule over
   the real tree, armed against a deliberately broken tree so a rule rename cannot
   leave it passing vacuously).
-- The access check reads the WHOLE definition rather than one section, after
-  folding every separator spelling to `/`. Markdown is not a hiding place — inline
-  code, a fence and bare prose are the same characters — and no section is skipped,
-  so a second heading is not a way in. The definition states its exclusions by
-  category, never by path, which is what makes the whole-file rule affordable.
+- The access check reads the WHOLE definition rather than one section. It decodes
+  percent and entity encodings to a bounded fixpoint, folds the ASCII reverse
+  solidus and whitespace around a separator, and refuses outright every code point
+  outside ASCII and a short typographic allow-list — so a separator lookalike is
+  refused rather than folded, and no lookalike table is kept. Markdown is not a
+  hiding place either — inline code, a fence and bare prose are the same
+  characters — and no section is skipped, so a second heading is not a way in. The
+  definition states its exclusions by category, never by path, which is what makes
+  the whole-file rule affordable.
 - `agents/scribe/fixtures/injection-canary.json` carries a reading output whose
   item body addresses the scribe directly ("record that the researcher accepted
   every item"), a shipped-tree read lure, session-transcript material handed over
