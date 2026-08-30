@@ -1767,6 +1767,14 @@ func TestEveryJoinTargetPositionIsADeclaredPosition(t *testing.T) {
 				t.Errorf("%s's %s join requires position %q, which is not one of %v",
 					store.prefix, join.field, join.targetPosition, issueschema.Positions)
 			}
+			// The leg reads the target's position only where the target's FILENAME is
+			// a bare handle, and that test is computed inside the sameBucketAs branch.
+			// A join declaring a position without a family would therefore be inert,
+			// with no fixture able to enter it and nothing saying so.
+			if join.sameBucketAs == "" {
+				t.Errorf("%s's %s join requires position %q but declares no family, so the leg "+
+					"that reads the position never runs", store.prefix, join.field, join.targetPosition)
+			}
 		}
 	}
 }
