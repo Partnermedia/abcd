@@ -178,8 +178,11 @@ func sectionIsPrompt(lines []string, headRe *regexp.Regexp) bool {
 // parseConditions enumerates the top-level bullets of `## Scope Conditions` in
 // order, each with its identity marker (wherever in the bullet it sits) and its
 // prose. Continuation lines — the wrap of a long bullet — are folded into the
-// prose; an indented sub-bullet is detail of its parent and ends it, exactly as
-// mdrecord.IsAnyBullet already rules for acceptance criteria.
+// prose; an indented sub-bullet is detail of its parent and ends its text, which
+// is mdrecord.BulletBlocks's rule. The same positional reading counts the
+// intent's acceptance criteria: countAcceptanceCriteria asks
+// mdrecord.IsTopLevelBullet, so an indented sub-bullet is never a criterion of
+// its own there either.
 func parseConditions(lines []string) []ScopeCondition {
 	mask := mdrecord.Mask(lines)
 	start, end, ok := mdrecord.SectionLineRangeIn(lines, mask, scopeHeadingRe)

@@ -2,12 +2,14 @@
 // three values, the `<token>: <text>` grammar, the parser, the renderer, and the
 // substance floor that refuses a degenerate text.
 //
-// It is a leaf for the same reason core/issueschema and core/changelog are: three
-// writers record grounds — the intent record writer (core/intent), the issue
-// ledger writer (core/capture), and the committed-record gate that reads them
-// back (core/lint) — and a vocabulary spelled three times is a vocabulary the
-// three can disagree about, which is how a value one surface writes becomes a
-// value another refuses. It imports core/mdrecord — the record-body machinery the
+// It is a leaf for the same reason core/issueschema and core/changelog are: two
+// record families record grounds — the intent record (core/intent) and the issue
+// ledger (core/capture) — and the CLI parses a caller's operand before either of
+// them is reached. A vocabulary spelled three times is a vocabulary the three can
+// disagree about, which is how a value one surface writes becomes a value another
+// refuses. The committed-record gate (core/lint) is deliberately NOT among them:
+// it blocks a frontmatter `grounds:` key without judging its value, so it needs
+// no reading of the grammar and imports nothing from here. It imports core/mdrecord — the record-body machinery the
 // `## Grounds` section is read and written through — and core/frontmatter, for
 // the one rule about where a record's frontmatter stops and its body begins;
 // otherwise only the standard library: no filesystem, no transport, no record
@@ -47,8 +49,14 @@ const (
 	Declined Token = "declined"
 )
 
-// Vocabulary is the closed set, in the order a surface should offer it. It is
-// the ONE copy every gate and every flag description reads.
+// Vocabulary is the closed set, in the order a surface should offer it. Every
+// refusal this package raises renders it (vocabularyList), so the values a
+// caller is TOLD about are the values ParseToken accepts.
+//
+// It is not yet what the surfaces read: the CLI's flag descriptions and usage
+// strings, and the ledger's own missing-grounds refusal, each spell the three
+// values as literal text (iss-2608301836222858). The comment here used to claim
+// otherwise, which is the shape that makes a fourth value look like one edit.
 var Vocabulary = []Token{Pursued, Deferred, Declined}
 
 // Grounds is one recorded ground: the disposition plus the free-text conjecture.

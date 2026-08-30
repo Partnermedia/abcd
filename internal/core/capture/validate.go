@@ -324,14 +324,16 @@ func asStrList(v any) []string {
 	return l
 }
 
-// groundsEntries reads the record's `## Grounds` section — core/grounds's own
-// reader, the same one the intent half asks, so a bullet one writer appends is
-// an entry the other finds.
+// groundsEntries reads the record's `## Grounds` section through core/grounds's
+// own reader, so what an ENTRY is has one definition and a bullet one writer
+// appends is a bullet the other finds.
 //
-// It stops at the GRAMMAR and does not apply the substance floor. A wontfix
-// stamps its grounds from a reason whose own contract is merely non-empty, so a
-// floor here would drop entries the ledger has always accepted and leave a
-// surface reporting no recorded grounds about a record that visibly carries one.
+// It asks ParseSection where the intent half asks ParseSectionAboveFloor: the
+// two families read the same section by the same rules and part company on the
+// FLOOR alone. A wontfix stamps its grounds from a reason whose own contract is
+// merely non-empty, so applying the floor here would drop entries the ledger has
+// always accepted and leave a surface reporting no recorded grounds about a
+// record that visibly carries one.
 func groundsEntries(body string) []string {
 	entries := grounds.ParseSection(body)
 	if len(entries) == 0 {
