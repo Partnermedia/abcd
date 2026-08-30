@@ -1657,7 +1657,8 @@ func TestABucketJoinDoesNotDescribeThePairMechanismOverAnotherFamily(t *testing.
 	}
 }
 
-// The six spellings a NUMERIC resolution let through. checkRecordJoins parsed the
+// The six spellings a NUMERIC resolution let through, and the padded one that
+// only the target file can judge. checkRecordJoins parsed the
 // value with a case-insensitive handle pattern and compared it as a number, while
 // the report that reads the same field keys it as the string it is written as — so
 // an upper-cased, mixed-cased or zero-padded proposal resolved and matched its
@@ -1673,21 +1674,28 @@ func TestABucketJoinDoesNotDescribeThePairMechanismOverAnotherFamily(t *testing.
 // TestABucketJoinDoesNotDescribeThePairMechanismOverAnotherFamily reads for its
 // wording.
 func TestABucketJoinRefusesEverySpellingButTheFamilysOwn(t *testing.T) {
-	spellings := map[string]string{
+	// The value alone settles these: no prefix of the family, or something around
+	// it.
+	malformed := map[string]string{
 		"adm-3": "RDI-2",
 		"adm-4": "Rdi-2",
-		"adm-5": "rdi-02",
 		"adm-6": "\"rdi-2 \"",
 		"adm-7": "\" rdi-2\"",
 		"adm-8": "the item we discussed",
 		"adm-9": "iss-42",
 	}
+	// And this one the target's FILE settles: rdi-2.md carries no padding, so the
+	// padded spelling is not a name the family's reader ever matches.
+	const padded = "adm-5"
 	root := admissionCorpus(t)
 	writeFile(t, root, "work/issues/open/iss-42-a-finding.md", validIssue("iss-42", "a-finding"))
 	// The control every case is read against: the family's own spelling is silent,
 	// so the leg is a spelling check and not a refusal of everything.
 	writeFile(t, root, "work/issues/admissions/rdg-1/adm-2.md", wellFormedAdmission)
-	for id, proposal := range spellings {
+	writeFile(t, root, "work/issues/admissions/rdg-1/"+padded+".md",
+		"---\nschema_version: 1\nid: "+padded+"\nrun: rdg-1\nproposal: rdi-02\n"+
+			"grounds: the frame does not already hold it\n---\n\n")
+	for id, proposal := range malformed {
 		writeFile(t, root, "work/issues/admissions/rdg-1/"+id+".md",
 			"---\nschema_version: 1\nid: "+id+"\nrun: rdg-1\nproposal: "+proposal+"\n"+
 				"grounds: the frame does not already hold it\n---\n\n")
@@ -1697,14 +1705,18 @@ func TestABucketJoinRefusesEverySpellingButTheFamilysOwn(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for id, proposal := range spellings {
+	for id, proposal := range malformed {
 		if !findingWith(fs, filepath.Join("work", "issues", "admissions", "rdg-1", id+".md"),
 			ruleRecordSchema, "not a reading item handle") {
 			t.Errorf("proposal spelled %s admits nothing and must be a finding on %s.md: %+v", proposal, id, fs)
 		}
 	}
-	if n := countRule(fs, ruleRecordSchema); n != len(spellings) {
-		t.Fatalf("expected exactly %d findings (one per spelling), got %d: %+v", len(spellings), n, fs)
+	if !findingWith(fs, filepath.Join("work", "issues", "admissions", "rdg-1", padded+".md"),
+		ruleRecordSchema, "is filed as 'rdi-2.md'") {
+		t.Errorf("a padded proposal against an unpadded file must be a finding naming that file: %+v", fs)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != len(malformed)+1 {
+		t.Fatalf("expected exactly %d findings (one per spelling), got %d: %+v", len(malformed)+1, n, fs)
 	}
 }
 
@@ -1864,5 +1876,71 @@ func TestAJoinIsSilentOnAFamilyThisScanDoesNotRead(t *testing.T) {
 	}
 	if n := countRule(fs, ruleRecordSchema); n != 0 {
 		t.Fatalf("a family this scan does not read supports no verdict either way, got %d finding(s): %+v", n, fs)
+	}
+}
+
+// The reader of the family keys on the FILENAME, not on the record's `id`
+// property: the outstanding report captures the item name out of `rdi-<N>.md` and
+// never opens the item's frontmatter id. And this rule's own filename <-> id leg
+// compares those two numerically, so a zero-padded FILE is lint-green.
+//
+// So which spelling of a padded item admits is decided by the file. Refusing a
+// leading zero on the value alone refuses the one spelling that admits and passes
+// the one that does not, which inverts the defect the spelling leg exists to
+// close.
+func TestABucketJoinReadsPaddingOffTheTargetsFilename(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/.keep", "")
+	writeFile(t, root, "work/issues/readings/rdg-1/rdi-02.md",
+		"---\nschema_version: 1\nid: rdi-2\nrun: rdg-1\nmanifest: sha256:beef\nposition: widening\n"+
+			"regime: constitutive\npattern: a stated constraint\n---\n\n")
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-3.md",
+		"---\nschema_version: 1\nid: adm-3\nrun: rdg-1\nproposal: rdi-02\n"+
+			"grounds: the frame does not already hold it\n---\n\n")
+
+	fs, err := Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 0 {
+		t.Fatalf("the proposal is spelled exactly as the item's file names it and admits, got %d finding(s): %+v", n, fs)
+	}
+
+	// And the unpadded spelling, which the report cannot match against that file,
+	// is the finding.
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-3.md",
+		"---\nschema_version: 1\nid: adm-3\nrun: rdg-1\nproposal: rdi-2\n"+
+			"grounds: the frame does not already hold it\n---\n\n")
+	fs, err = Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingWith(fs, filepath.Join("work", "issues", "admissions", "rdg-1", "adm-3.md"),
+		ruleRecordSchema, "rdi-02.md") {
+		t.Fatalf("a spelling the item's file does not carry admits nothing and must name that file: %+v", fs)
+	}
+}
+
+// A target whose filename is not a bare handle is one the reader of the family
+// does not read at all, so no spelling of this join admits it and none is more
+// right than another. The gate says nothing rather than issuing a blocker whose
+// remedy the spelling leg would itself refuse. The divergence between this rule's
+// filename grammar and the report's is iss-2608300929274006's to close.
+func TestABucketJoinIsSilentOnATargetTheFamilysReaderDoesNotRead(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/.keep", "")
+	writeFile(t, root, "work/issues/readings/rdg-1/rdi-2-widen-the-frame.md",
+		"---\nschema_version: 1\nid: rdi-2\nrun: rdg-1\nmanifest: sha256:beef\nposition: widening\n"+
+			"regime: constitutive\npattern: a stated constraint\n---\n\n")
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-3.md",
+		"---\nschema_version: 1\nid: adm-3\nrun: rdg-1\nproposal: rdi-2\n"+
+			"grounds: the frame does not already hold it\n---\n\n")
+
+	fs, err := Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 0 {
+		t.Fatalf("no spelling admits a file the family's reader never reads, got %d finding(s): %+v", n, fs)
 	}
 }
