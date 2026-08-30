@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"unicode"
 )
 
 // Token is one of the three recorded dispositions a ground may carry. The set is
@@ -62,25 +63,56 @@ type Grounds struct {
 // which records less than a short honest sentence does.
 const MinTextLen = 20
 
-// MinTextWords is the same floor measured in LETTER-RUNS, and it is the half
+// MinTextWords is the same floor measured in LEXICAL UNITS, and it is the half
 // that does the work. Counting runes alone made the floor answerable with
 // nothing at all: twenty zero-width spaces, twenty dots or twenty digits each
-// cleared MinTextLen while wordRe found no words, and a refusal a caller can
+// cleared MinTextLen while carrying no letters, and a refusal a caller can
 // satisfy with characters that render as emptiness is not a floor
 // (iss-2608301206034359). Three is the lowest count that can carry a subject, a
 // verb and an object — the shape of a claim somebody could later find wrong —
 // and the corpus's shortest real entry runs to thirty-two words, so nothing
 // honest is anywhere near it.
+//
+// What a unit IS depends on the script, and that is the whole of the fix for
+// iss-2608301301044588: a letter-run is a word only where the script separates
+// words, and counting runs made a Chinese or Japanese text of any length exactly
+// one word. See textUnits for the counting and scriptioContinua for the scripts.
 const MinTextWords = 3
 
-var (
-	// wordRe picks the letter-runs out of a text for the degeneracy check, so
-	// punctuation and digits cannot pad a text past it.
-	wordRe = regexp.MustCompile(`[\p{L}]+`)
-	// spaceRunRe folds a multi-line operand into the single line both carriers
-	// hold: a YAML scalar in the ledger, a Markdown bullet on the intent record.
-	spaceRunRe = regexp.MustCompile(`\s+`)
-)
+// spaceRunRe folds a multi-line operand into the single line both carriers hold:
+// a YAML scalar in the ledger, a Markdown bullet on the intent record.
+var spaceRunRe = regexp.MustCompile(`\s+`)
+
+// scriptioContinua names the scripts written WITHOUT inter-word spaces, whose
+// LETTERS each count as one unit. A letter-run in such a script is the whole
+// text however much it says, so counting runs put every one of them at one word
+// and — the argument being mandatory — refused an operator writing in them from
+// promoting or resolving anything (iss-2608301301044588).
+//
+// These are Unicode SCRIPT tables, which are not letter tables: six of the nine
+// carry their script's own digits, punctuation or combining marks alongside its
+// letters. Only isScriptioContinuaLetter's members are counted, and the letter
+// test there is load-bearing rather than tidy.
+//
+// The list is deliberately PARTIAL, and stated rather than implied, because a
+// complete-looking list that is wrong is worse than a short one that is honest.
+// Han, Hiragana and Katakana are the measured cases; Thai, Lao, Khmer, Myanmar,
+// Tibetan and Javanese are here because they share the property, not because any
+// record exercised them. Two limits follow. A scriptio-continua script NOT named
+// here still reads as one word and is still refused — this list is where that is
+// fixed, one script at a time. And a script written WITH spaces stays out even
+// where it looks adjacent: Hangul is spaced, so Korean is judged by its words
+// like any other spaced script, and counting its syllables would let two Korean
+// words clear a three-word floor.
+//
+// One character is not one word in any of these scripts. The floor does not
+// claim it is: MinTextLen already demands twenty runes of any text, and what
+// this adds is that those runes carry letters rather than padding.
+var scriptioContinua = []*unicode.RangeTable{
+	unicode.Han, unicode.Hiragana, unicode.Katakana,
+	unicode.Thai, unicode.Lao, unicode.Khmer,
+	unicode.Myanmar, unicode.Tibetan, unicode.Javanese,
+}
 
 // degenerateWords are the words a text may not consist SOLELY of: the vocabulary
 // itself, and the names of the verbs that ask for it. A text made only of these
@@ -158,11 +190,19 @@ func Fold(text string) string {
 
 // ValidateText is the substance floor over an already-folded text. It refuses
 // the empty text, the text below either half of the floor — the character count
-// and the WORD count, the second being the one a text of zero-width spaces
+// and the UNIT count, the second being the one a text of zero-width spaces
 // cannot satisfy — and the text made only of the vocabulary's own words or the
 // asking verb's name, and the text carrying a control character no record field
 // can hold. Everything else passes: what this cannot do is tell a conjecture
 // from a restatement of the decision, and it does not claim to.
+//
+// A unit is a word where the script separates words and a character where it
+// does not (textUnits, scriptioContinua), so the floor is a property of the TEXT
+// rather than of the writing system. Both halves of the feature inherit it from
+// here — the writing verbs through New, and the record reader through
+// intent.ParseGrounds — which is why the fix belongs at this one place: a floor
+// the writer and the reader disagree about is a gate reporting no recorded
+// grounds about a record that visibly carries one.
 func ValidateText(text string) error {
 	if text == "" {
 		return fmt.Errorf("grounds text is empty; name the conjecture being acted on, not the route taken")
@@ -187,19 +227,29 @@ func ValidateText(text string) error {
 			"grounds text %q is shorter than the %d-character floor; name the conjecture being acted on, not the route taken",
 			text, MinTextLen)
 	}
-	words := wordRe.FindAllString(strings.ToLower(text), -1)
-	// The floor is measured in words, not in characters: a character count is
+	units := textUnits(text)
+	// The floor is measured in lexical units, not in runes: a rune count is
 	// satisfied by anything that occupies a rune, and the texts worth refusing
 	// are precisely the ones that occupy runes and say nothing. The character
 	// floor above stays because it refuses the terse-but-lettered shrug ("no
 	// time now") that clears three words.
-	if len(words) < MinTextWords {
+	if len(units) < MinTextWords {
+		// The refusal must be true of the text that was refused. Telling somebody
+		// writing a script with no word breaks to add words names a remedy their
+		// language cannot supply, and this message is the only instruction they
+		// get.
+		if scriptioContinuaOnly(units) {
+			return fmt.Errorf(
+				"grounds text %q carries %d letter(s), and the floor asks for %d where the script "+
+					"has no word breaks; name the conjecture being acted on, not the route taken",
+				text, len(units), MinTextWords)
+		}
 		return fmt.Errorf(
 			"grounds text %q carries %d word(s), below the %d-word floor; name the conjecture being acted on, not the route taken",
-			text, len(words), MinTextWords)
+			text, len(units), MinTextWords)
 	}
 	onlyDegenerate := true
-	for _, w := range words {
+	for _, w := range units {
 		if !degenerateWords[w] {
 			onlyDegenerate = false
 			break
@@ -210,6 +260,69 @@ func ValidateText(text string) error {
 			"grounds text %q only repeats the vocabulary or the verb's own name; name the conjecture being acted on, not the route taken", text)
 	}
 	return nil
+}
+
+// textUnits splits a text into the units MinTextWords counts: one unit per
+// maximal run of letters in a script that separates words, and one unit per
+// LETTER in a script that does not. Anything that is not a letter separates
+// units and is never a unit itself — in EITHER branch, a script's own digits and
+// punctuation included — which is what keeps the floor unanswerable by
+// punctuation, by digits, or by characters that render as emptiness: a
+// zero-width run beside a single ideograph still counts one, an ideographic
+// comma counts nothing, and neither does a Thai digit or a Tibetan tsheg.
+//
+// Units are lower-cased, because the degeneracy check reads them back against
+// the vocabulary's own words.
+func textUnits(text string) []string {
+	var out []string
+	var run []rune
+	flush := func() {
+		if len(run) > 0 {
+			out = append(out, strings.ToLower(string(run)))
+			run = run[:0]
+		}
+	}
+	for _, r := range text {
+		switch {
+		case isScriptioContinuaLetter(r):
+			flush()
+			out = append(out, string(r))
+		case unicode.IsLetter(r):
+			run = append(run, r)
+		default:
+			flush()
+		}
+	}
+	flush()
+	return out
+}
+
+// isScriptioContinuaLetter reports whether the rune is a LETTER of a script
+// written without word breaks. The letter test is not redundant: a Unicode
+// SCRIPT table is not a letter table, and Thai, Lao, Khmer, Myanmar, Tibetan and
+// Javanese each carry their own digits, punctuation and combining marks in
+// theirs. Counting a script table's members would have made twenty Thai digits,
+// or twenty Tibetan tsheg — which are twenty dots — a twenty-unit text, reopening
+// the padding class of iss-2608301206034359 once per script.
+func isScriptioContinuaLetter(r rune) bool {
+	return unicode.IsLetter(r) && unicode.IsOneOf(scriptioContinua, r)
+}
+
+// scriptioContinuaOnly reports whether every unit the floor counted is a
+// character of a script written without word breaks. It is what selects the
+// refusal message, and it asks for ALL of them rather than any: a text carrying
+// a word alongside an ideograph has words, and can be told to add one.
+func scriptioContinuaOnly(units []string) bool {
+	if len(units) == 0 {
+		return false
+	}
+	for _, u := range units {
+		rs := []rune(u)
+		if len(rs) != 1 || !isScriptioContinuaLetter(rs[0]) {
+			return false
+		}
+	}
+	return true
 }
 
 // String renders the canonical `<token>: <text>` value — what a frontmatter
