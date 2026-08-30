@@ -131,6 +131,53 @@ func TestTheAssemblersOwnOutputIsNeverItsInput(t *testing.T) {
 			}
 		}
 	}
+
+	// The path half is not the whole of ruling (18). An artefact COMMITTED where
+	// a root row reaches it — the plugin page's own `--out ./run-dir` example,
+	// resolved against the repository root — is admitted by shape, so the
+	// artefacts have to be recognised by what they are. They self-identify: both
+	// carry a top-level `_type`.
+	root := fixtureRepo(t)
+	priorBundle, err := EncodeBundle(Bundle{
+		Type: BundleType, SchemaVersion: SchemaVersion, Position: PositionWidening,
+		Items: []BundleItem{{ItemKey: "itm-0001", Kind: KindDoc, Text: "a prior run's passed item"}},
+	})
+	if err != nil {
+		t.Fatalf("encode a prior bundle: %v", err)
+	}
+	writeFile(t, root, "run-dir/bundle.json", string(priorBundle))
+	gitCommitAll(t, root)
+
+	if _, err := Assemble(AssembleRequest{
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+	}); err == nil {
+		t.Fatal("a prior run's assembled input committed under an admitted root was passed as config")
+	} else if !strings.Contains(err.Error(), "run-dir/bundle.json") {
+		t.Errorf("the refusal does not name the prior artefact: %v", err)
+	}
+}
+
+// TestAssembleRefusesAnOutputDirectoryTheTableAdmits closes the same breach at
+// its source: an operator who writes a run where the table can reach it has
+// committed the next run's contamination, and the refusal belongs at the moment
+// the directory is named rather than one run later.
+func TestAssembleRefusesAnOutputDirectoryTheTableAdmits(t *testing.T) {
+	root := fixtureRepo(t)
+	for _, out := range []string{"run-dir", "./run-dir", "docs/runs", filepath.Join(root, "run-dir")} {
+		_, err := Assemble(AssembleRequest{
+			RepoRoot: root, Position: PositionWidening, Target: "HEAD", OutDir: out,
+		})
+		if err == nil {
+			t.Errorf("--out %q was accepted; the table admits the artefacts it would write there", out)
+		}
+	}
+	for _, out := range []string{DefaultRunDir + "/rdg-2608301200000001", filepath.Join(t.TempDir(), "run")} {
+		if _, err := Assemble(AssembleRequest{
+			RepoRoot: root, Position: PositionWidening, Target: "HEAD", OutDir: out,
+		}); err != nil {
+			t.Errorf("--out %q was refused: %v", out, err)
+		}
+	}
 }
 
 // TestWideningExcludesDraftsAndPlannedEntailmentIncludesThem holds the one

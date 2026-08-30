@@ -57,7 +57,8 @@ Report from the JSON: `run_id`, `position`, `target_commit`, `item_count`,
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/abcd" reading assemble \
-  --position entailment --target HEAD --out ./run-dir --json
+  --position entailment --target HEAD \
+  --out .abcd/.work.local/scratch/reading-runs/manual --json
 ```
 
 With `--out`, the assembled input (`bundle.json`) and the manifest
@@ -65,6 +66,14 @@ With `--out`, the assembled input (`bundle.json`) and the manifest
 Without it, they land in the local-tier run directory
 `.abcd/.work.local/scratch/reading-runs/<run-id>/`. With `--dry-run` and no
 `--out`, nothing is written anywhere and the result is rendered only.
+
+An output directory the include table can reach is refused, and the refusal
+names the item that would be admitted. Writing a run where the table reaches it
+commits the next run's contamination: the artefacts land as ordinary files, a
+later commit puts them in the tree, and the instrument reads its own output.
+Write outside the repository, or under the local tier. Both artefacts are also
+refused as INPUT wherever they are found, by their `_type` tag, so a run
+committed before this was true cannot ride in either.
 
 ### The host obligation this binary cannot discharge
 

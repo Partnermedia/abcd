@@ -1,6 +1,7 @@
 package reading
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -124,6 +125,9 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 	if err != nil {
 		return AssembleResult{}, err
 	}
+	if err := refuseSelfAdmittingOutDir(req.RepoRoot, req.OutDir); err != nil {
+		return AssembleResult{}, err
+	}
 
 	cands, err := collect(req.RepoRoot, position)
 	if err != nil {
@@ -233,6 +237,43 @@ func writeArtefacts(repoRoot, outDir string, b Bundle, m Manifest) error {
 	}
 	if err := os.WriteFile(filepath.Join(dir, ManifestFileName), manifestRaw, 0o644); err != nil {
 		return fmt.Errorf("reading: writing the manifest: %w", err)
+	}
+	return nil
+}
+
+// refuseSelfAdmittingOutDir refuses an output directory the include table can
+// reach. Writing a run where the table admits it is committing the NEXT run's
+// contamination: the artefacts land as ordinary files, a later commit puts them
+// in the tree, and ruling (18) is breached by a path the operator chose one run
+// earlier. The refusal belongs at the moment the directory is named.
+//
+// Only a directory inside the repository can be reached, so an output path that
+// resolves outside it is always fine.
+func refuseSelfAdmittingOutDir(repoRoot, outDir string) error {
+	if outDir == "" {
+		return nil
+	}
+	abs := outDir
+	if !filepath.IsAbs(abs) {
+		abs = filepath.Join(repoRoot, filepath.FromSlash(outDir))
+	}
+	rel, err := filepath.Rel(repoRoot, abs)
+	if err != nil {
+		return nil // not expressible against the repository, so not inside it
+	}
+	rel = filepath.ToSlash(rel)
+	if rel == ".." || strings.HasPrefix(rel, "../") {
+		return nil
+	}
+	for _, name := range []string{BundleFileName, ManifestFileName} {
+		candidate := path.Join(rel, name)
+		for _, p := range Positions() {
+			if Admits(p, candidate) {
+				return fmt.Errorf("reading: the output directory %s is inside the include table's reach "+
+					"(%s would be admitted at the %s position), so a committed run would become a later "+
+					"run's input; write outside the repository, or under %s", outDir, candidate, p, DefaultRunDir)
+			}
+		}
 	}
 	return nil
 }
@@ -380,6 +421,9 @@ func collect(repoRoot string, position Position) ([]candidate, error) {
 			if err != nil {
 				return nil, fmt.Errorf("reading: %s: %w", rel, err)
 			}
+			if err := refuseOwnArtefact(rel, raw); err != nil {
+				return nil, err
+			}
 			doc, err := redactExcluded(rel, string(raw), exclusions)
 			if err != nil {
 				return nil, err
@@ -407,6 +451,33 @@ func collect(repoRoot string, position Position) ([]candidate, error) {
 		return out[i].fieldIdx < out[j].fieldIdx
 	})
 	return out, nil
+}
+
+// refuseOwnArtefact refuses an admitted file that IS one of this assembler's own
+// artefacts. Ruling (18) says the instrument's own output never becomes its
+// input, and the path deny alone cannot keep that promise: a run written to a
+// directory the table reaches, then committed, arrives as an ordinary config
+// item, its manifest's repository paths riding into the bundle text while the
+// current run's manifest still asserts the exclusion.
+//
+// The artefacts self-identify, which is what makes this checkable rather than
+// guessed at: both carry a top-level `_type`. A file that is not JSON, or whose
+// JSON carries neither tag, is not one of ours and passes untouched.
+func refuseOwnArtefact(rel string, raw []byte) error {
+	if !strings.EqualFold(path.Ext(rel), ".json") {
+		return nil
+	}
+	var probe struct {
+		Type string `json:"_type"`
+	}
+	if err := json.Unmarshal(raw, &probe); err != nil {
+		return nil // not a JSON object this assembler wrote
+	}
+	if probe.Type != BundleType && probe.Type != ManifestType {
+		return nil
+	}
+	return fmt.Errorf("reading: %s is this assembler's own output (_type %s), and the instrument's own "+
+		"output never becomes its input; move it outside the include table's reach", rel, probe.Type)
 }
 
 // requireConfiguredStores refuses a configuration that is silent about a store

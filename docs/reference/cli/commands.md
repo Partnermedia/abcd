@@ -755,7 +755,7 @@ or a tag moves and the manifest's re-runnability rests on a reference that canno
 **Flags:**
 
 ```
-      --dry-run           write nothing into the repository; with --out the two artefacts still land there
+      --dry-run           write nothing; with --out the two artefacts still land in that directory
       --out string        the directory the assembled input and the manifest are written to (default: the local-tier run directory)
       --position string   the reading position: widening, entailment, comparative, detection
       --target string     the commit the assembly describes: HEAD, or a hexadecimal sha of 7 to 40 digits
@@ -765,7 +765,8 @@ or a tag moves and the manifest's re-runnability rests on a reference that canno
 
 ```
 abcd reading assemble --position widening --target HEAD --dry-run
-  abcd reading assemble --position entailment --target HEAD --out ./run --json
+  abcd reading assemble --position entailment --target HEAD \
+    --out .abcd/.work.local/scratch/reading-runs/manual --json
 ```
 
 ### `abcd rules`

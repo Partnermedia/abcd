@@ -64,8 +64,16 @@ reader detects it.
 `assemble` writes the assembled input (`bundle.json`) and the manifest
 (`manifest.json`) as two separate files: the input goes to a reader, the
 manifest stays with the auditor. `--out <dir>` names the directory; without it
-they land in `.abcd/.work.local/scratch/reading-runs/<run-id>/`. With
-`--dry-run` and no `--out`, nothing is written and the result is rendered only.
+they land in
+`.abcd/.work.local/scratch/reading-runs/<run-id>/`. With `--dry-run` and no
+`--out`, nothing is written and the result is rendered only.
+
+Ruling (18) is held on both sides of the run. An output directory the include
+table can reach is refused when it is named, because writing a run where the
+table reaches it commits the next run's contamination. And both artefacts are
+refused as input wherever an admitted path holds one, recognised by the
+top-level `_type` tag they carry, so a run committed before that refusal existed
+cannot ride in either.
 
 A run identifier is `rdg-<yymmddHHMMSS><rrrr>`, minted per adr-45: the mint
 reads no maximum, so two checkouts assembling in the same window cannot

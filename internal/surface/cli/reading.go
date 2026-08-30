@@ -65,7 +65,8 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 			"--target takes HEAD or a hexadecimal commit sha of 7 to 40 digits, because a branch\n" +
 			"or a tag moves and the manifest's re-runnability rests on a reference that cannot.",
 		Example: "  abcd reading assemble --position widening --target HEAD --dry-run\n" +
-			"  abcd reading assemble --position entailment --target HEAD --out ./run --json",
+			"  abcd reading assemble --position entailment --target HEAD \\\n" +
+			"    --out .abcd/.work.local/scratch/reading-runs/manual --json",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) > 0 {
 				return &exitError{Code: 2, Msg: "reading assemble: this verb takes no positional argument; " +
@@ -112,7 +113,7 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 	assembleCmd.Flags().StringVar(&outDir, "out", "",
 		"the directory the assembled input and the manifest are written to (default: the local-tier run directory)")
 	assembleCmd.Flags().BoolVar(&dryRun, "dry-run", false,
-		"write nothing into the repository; with --out the two artefacts still land there")
+		"write nothing; with --out the two artefacts still land in that directory")
 
 	readingCmd.AddCommand(assembleCmd)
 	return readingCmd
