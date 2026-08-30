@@ -46,11 +46,11 @@ func checkByName(t *testing.T, res ReadyResult, name string) ReadyCheck {
 	return ReadyCheck{}
 }
 
-// assertShape enforces the machine-shape contract: always exactly six rows in
+// assertShape enforces the machine-shape contract: always exactly seven rows in
 // fixed order, whatever the intent's state.
 func assertShape(t *testing.T, res ReadyResult) {
 	t.Helper()
-	want := []string{"bucket", "acceptance_criteria", "mechanism_claim", "scope_conditions", "spec_link", "spec_body"}
+	want := []string{"bucket", "acceptance_criteria", "mechanism_claim", "scope_conditions", "spec_link", "spec_body", "grounds"}
 	if len(res.Checks) != len(want) {
 		t.Fatalf("expected %d checks, got %d: %+v", len(want), len(res.Checks), res.Checks)
 	}
@@ -639,5 +639,65 @@ func TestReadyNamesADuplicateHiddenBehindANullity(t *testing.T) {
 	c := checkByName(t, res, "scope_conditions")
 	if c.OK || !strings.Contains(c.Detail, "more than one") {
 		t.Fatalf("scope_conditions = %+v, want fail naming the duplicated heading", c)
+	}
+}
+
+// TestReadyGroundsReportsEntries: a record carrying a well-formed entry passes
+// the grounds check, and the report says how many are recorded.
+func TestReadyGroundsReportsEntries(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, plannedDir+"/itd-10-alpha.md",
+		plannedUnlinked("itd-10", "alpha")+
+			"\n## Grounds\n\n- pursued: we expect a stamped identity to survive rewording\n")
+
+	res, err := Ready(root, "itd-10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertShape(t, res)
+	g := checkByName(t, res, CheckGrounds)
+	if !g.OK {
+		t.Fatalf("grounds check = %+v, want OK on a record carrying an entry", g)
+	}
+	if !strings.Contains(g.Detail, "1 recorded ground") {
+		t.Fatalf("grounds detail = %q, want the entry count", g.Detail)
+	}
+}
+
+// TestReadyGroundsIgnoresMalformedEntry: prose under the heading is prose. Only
+// a well-formed entry counts, and the gate never puts a verdict on a sentence
+// somebody wrote for a human.
+func TestReadyGroundsIgnoresMalformedEntry(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, plannedDir+"/itd-10-alpha.md",
+		plannedUnlinked("itd-10", "alpha")+
+			"\n## Grounds\n\nSome prose about why this matters.\n\n- planned: not a vocabulary value\n")
+
+	res, err := Ready(root, "itd-10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g := checkByName(t, res, CheckGrounds); strings.Contains(g.Detail, "1 recorded ground") {
+		t.Fatalf("grounds detail = %q, want no entry counted", g.Detail)
+	}
+}
+
+// TestReadyGroundsExemptInTerminalBuckets: population is forward-only, so a
+// shipped or superseded record and a discipline are reported as not applicable
+// rather than told to record work nobody may do.
+func TestReadyGroundsExemptInTerminalBuckets(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, shippedDir+"/itd-10-alpha.md", plannedUnlinked("itd-10", "alpha"))
+	writeFile(t, root, disciplinesDir+"/itd-11-beta.md", plannedUnlinked("itd-11", "beta"))
+
+	for _, id := range []string{"itd-10", "itd-11"} {
+		res, err := Ready(root, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		g := checkByName(t, res, CheckGrounds)
+		if !g.OK || !strings.Contains(g.Detail, "not applicable") {
+			t.Fatalf("%s grounds check = %+v, want the not-applicable exemption", id, g)
+		}
 	}
 }

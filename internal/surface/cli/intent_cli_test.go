@@ -372,7 +372,7 @@ func TestIntentReadyUnknownExit2(t *testing.T) {
 }
 
 // TestIntentReadyJSON proves the machine seam: --json emits the full ReadyResult
-// (6 fixed checks) even on the not-ready path, alongside exit 1.
+// (7 fixed checks) even on the not-ready path, alongside exit 1.
 func TestIntentReadyJSON(t *testing.T) {
 	repo := t.TempDir()
 	t.Chdir(repo)
@@ -393,8 +393,8 @@ func TestIntentReadyJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
 		t.Fatalf("ready --json not JSON: %v\n%s", err, out)
 	}
-	if got.Ready || len(got.Checks) != 6 {
-		t.Fatalf("ready --json = %+v, want ready=false with 6 checks", got)
+	if got.Ready || len(got.Checks) != 7 {
+		t.Fatalf("ready --json = %+v, want ready=false with 7 checks", got)
 	}
 	if got.Checks[0].Name != "bucket" || got.Checks[0].OK || got.Checks[0].Remedy == "" {
 		t.Fatalf("bucket check = %+v, want fail with remedy", got.Checks[0])
@@ -520,5 +520,60 @@ func TestIntentPlanStampOnlyJSONNamesTheLinkedSpec(t *testing.T) {
 	}
 	if got.Spec.ID != "spc-1" {
 		t.Fatalf("spec.id = %q, want the intent's linked spec\n%s", got.Spec.ID, out)
+	}
+}
+
+// TestIntentReadyGroundsFlagRecordsThenReports: `--grounds` is wired as two
+// calls — RecordGrounds, then the unchanged read-only Ready. The write is the
+// flag's whole effect; the report is unchanged by it, and the exit code is the
+// gate's own.
+func TestIntentReadyGroundsFlagRecordsThenReports(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+	writeRepoFile(t, repo, cliPlanned+"/itd-10-alpha.md",
+		"---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n"+
+			"## Scope Conditions\n\nNone stated.\n\n## Acceptance Criteria\n\n- ok\n")
+	writeRepoFile(t, repo, cliSpecsOpen+"/spc-1-alpha.md",
+		"---\nid: spc-1\nslug: alpha\nintent: itd-10\n---\n# alpha\n\n## Summary\n\nA written design record.\n")
+
+	const text = "we expect a stamped identity to survive rewording, which nothing else does"
+	out, errb, err := runCLISplit(t, "intent", "ready", "itd-10", "--grounds", "pursued: "+text)
+	if exitCodeOf(err) != 0 {
+		t.Fatalf("exit = %d (%v), want 0\n%s\n%s", exitCodeOf(err), err, out, errb)
+	}
+	if !strings.Contains(out, "READY") {
+		t.Fatalf("the report is unchanged by the flag:\n%s", out)
+	}
+	body, rerr := os.ReadFile(filepath.Join(repo, cliPlanned, "itd-10-alpha.md"))
+	if rerr != nil {
+		t.Fatal(rerr)
+	}
+	if !strings.Contains(string(body), "- pursued: "+text) {
+		t.Fatalf("the grounds entry was not written:\n%s", body)
+	}
+}
+
+// TestIntentReadyGroundsWriteFailureExits2: a failed grounds write is a
+// structural fault, never the gate's own "not ready" verdict — a caller that
+// maps exit 1 to SKIP must not read a lost write as a skipped item.
+func TestIntentReadyGroundsWriteFailureExits2(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+	writeRepoFile(t, repo, cliDrafts+"/itd-10-alpha.md", cliDraftWithAC("itd-10", "alpha"))
+
+	// An unknown intent: the write cannot happen, and the gate is never reached.
+	if _, err := runCLIErr(t, "intent", "ready", "itd-999", "--grounds", "pursued: a conjecture nobody can record"); exitCodeOf(err) != 2 {
+		t.Fatalf("unknown intent exit = %d (%v), want 2", exitCodeOf(err), err)
+	}
+	// A malformed operand: refused at the flag, with nothing written.
+	if _, err := runCLIErr(t, "intent", "ready", "itd-10", "--grounds", "planned: out of vocabulary"); exitCodeOf(err) != 2 {
+		t.Fatalf("bad token exit = %d (%v), want 2", exitCodeOf(err), err)
+	}
+	body, rerr := os.ReadFile(filepath.Join(repo, cliDrafts, "itd-10-alpha.md"))
+	if rerr != nil {
+		t.Fatal(rerr)
+	}
+	if strings.Contains(string(body), "## Grounds") {
+		t.Fatalf("a refused operand still wrote to the record:\n%s", body)
 	}
 }

@@ -19,11 +19,12 @@ const (
 	CheckScopeConditions    = "scope_conditions"
 	CheckSpecLink           = "spec_link"
 	CheckSpecBody           = "spec_body"
+	CheckGrounds            = "grounds"
 )
 
 // ReadyCheck is one finding of the implement-readiness gate.
 type ReadyCheck struct {
-	Name   string `json:"name"` // bucket | acceptance_criteria | mechanism_claim | scope_conditions | spec_link | spec_body
+	Name   string `json:"name"` // bucket | acceptance_criteria | mechanism_claim | scope_conditions | spec_link | spec_body | grounds
 	OK     bool   `json:"ok"`
 	Detail string `json:"detail"`           // why it passed or failed
 	Remedy string `json:"remedy,omitempty"` // the exact next command/action when !OK
@@ -38,7 +39,7 @@ type ReadyResult struct {
 	Bucket   string       `json:"bucket"` // directory-as-truth state
 	SpecID   string       `json:"spec_id"`
 	Ready    bool         `json:"ready"`
-	Checks   []ReadyCheck `json:"checks"` // always exactly 6, fixed order
+	Checks   []ReadyCheck `json:"checks"` // always exactly 7, fixed order
 	// Conditions is the record's scope conditions with their minted identities —
 	// the observable surface the identity criteria assert against. Empty for a
 	// record whose conditions are absent, or recorded as the nullity token.
@@ -97,6 +98,7 @@ func Ready(repoRoot, intentID string) (ReadyResult, error) {
 		return ReadyResult{}, err
 	}
 	res.Checks = append(res.Checks, bodyCheck)
+	res.Checks = append(res.Checks, groundsCheck(it, content))
 
 	res.Ready = true
 	for _, c := range res.Checks {
@@ -271,6 +273,38 @@ func scopeConditionsCheck(it Intent, claims Claims) ReadyCheck {
 		return c
 	}
 	c.Detail = fmt.Sprintf("%d scope condition(s), each identified", len(claims.Conditions))
+	return c
+}
+
+// groundsCheck reports the record's recorded grounds — the reasoning behind
+// what is being pursued, at the conjecture granularity the ADR family's
+// Alternatives Considered does not reach (spc-57). It is reported LAST, because
+// it is the only check about why the work is being done at all rather than about
+// whether the record is well formed.
+//
+// It is staged. Recording lands before refusing: promoting the refusal while the
+// planned/ bucket carried no entries would turn the gate into a wall of
+// pre-existing failures, which is how a gate gets routed around instead of
+// answered. Until the bucket is populated the check REPORTS and never fails, and
+// the detail says which state the record is in either way.
+//
+// Only a well-formed entry counts. Prose under the heading is prose: putting a
+// gate verdict on a sentence somebody wrote for a human is a judgement no parser
+// can make, and the substance floor is deliberately the whole of the machine's
+// claim.
+func groundsCheck(it Intent, content string) ReadyCheck {
+	c := ReadyCheck{Name: CheckGrounds, OK: true}
+	if detail, exempt := claimCheckExemption(it); exempt {
+		c.Detail = detail
+		return c
+	}
+	entries := ParseGrounds(content)
+	if len(entries) == 0 {
+		c.Detail = "no recorded grounds — the conjecture behind pursuing " + it.ID + " is unrecorded"
+		return c
+	}
+	last := entries[len(entries)-1]
+	c.Detail = fmt.Sprintf("%d recorded ground(s), most recent %s", len(entries), last.Token)
 	return c
 }
 
