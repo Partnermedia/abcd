@@ -7,6 +7,10 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-179-round-5-ruthless"
 found_at: "commands/intent.md"
+resolution: "The surface claim and the RecordGrounds doc now say what the refusal establishes — that no grounds this tool writes can land on a terminal record — instead of asserting the corpus carries none, and both name the migration exception: itd-177, itd-182 and itd-188 carry a section relocated by hand from the pre-tooling `## Grounds (pursued)` section on the matching spec. A DECISIONS entry draws the relocation-versus-backfill line. The enforcement is unchanged and stays maximally strict, because nothing in it can tell relocated text from invented text."
+impact: internal
+resolved_by:
+  intent: "itd-179"
 ---
 
 the plugin surface claims the grounds verb refuses a shipped record so no terminal bucket carries grounds while three shipped intents do
@@ -35,3 +39,7 @@ relocation from invention.
 Remedy: one sentence naming the migration exception, in the surface claim and
 in the doc, or a DECISIONS entry that draws the relocation/backfill line. Not a
 silent contradiction.
+
+## Grounds
+
+- pursued: we expect a claim about the tool to survive where a claim about the corpus cannot, because the corpus changes under a hand-written migration while the refusal does not, and a fourth terminal record acquiring a section without falsifying the sentence is what would show it
