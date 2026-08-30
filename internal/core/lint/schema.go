@@ -442,11 +442,20 @@ func checkRecordSchema(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 	}
 
 	for _, r := range records {
-		out = append(out, checkRecordFilename(r, cfg.Severity)...)
-		out = append(out, checkRecordFilenameSlug(r, cfg.Severity)...)
-		out = append(out, checkRecordRequiredFields(r, cfg.Severity)...)
+		// judged names the properties a leg that judges CONTENT has already reported
+		// for this record. What a reader does with a BLANK required property is a
+		// property of the field, not of the store — capture refuses a blank severity
+		// and reads a blank found_during — so the required-fields leg, which can only
+		// speak store-wide, must leave the consequence to the leg that established it
+		// (iss-2608301308369559). The content legs therefore run FIRST and mark what
+		// they spoke about, so nobody has to keep a second list of which fields those
+		// are, and a leg added later is covered by having said something.
+		judged := map[string]bool{}
+		out = append(out, checkRecordFilename(r, cfg.Severity, judged)...)
+		out = append(out, checkRecordFilenameSlug(r, cfg.Severity, judged)...)
+		out = append(out, checkIssueRecordShape(r, cfg.Severity, judged)...)
+		out = append(out, checkRecordRequiredFields(r, cfg.Severity, judged)...)
 		out = append(out, checkRecordUnknownFields(r, cfg.Severity)...)
-		out = append(out, checkIssueRecordShape(r, cfg.Severity)...)
 		out = append(out, checkRecordJoins(r, index, cfg)...)
 		out = append(out, checkRecordBucketField(r, cfg.Severity)...)
 
@@ -527,7 +536,7 @@ func checkRecordSchema(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 // ids — and the rules that key on the filename and the rules that key on the
 // field then lint two different records. An absent id is a different (and larger)
 // schema question than this rule's, so only a present one is compared.
-func checkRecordFilename(r schemaRecord, severity string) []Finding {
+func checkRecordFilename(r schemaRecord, severity string, judged map[string]bool) []Finding {
 	f := r.fields["id"]
 	// Absence here means NOT WRITTEN, which is why it is isNull and not
 	// isAbsentValue: an EMPTY id is a value that disagrees with the filename, and
@@ -553,11 +562,22 @@ func checkRecordFilename(r schemaRecord, severity string) []Finding {
 	if line == 0 {
 		line = 1
 	}
+	mark(judged, "id")
 	return []Finding{{
 		File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: severity,
 		Message: "filename claims id '" + want + "' but frontmatter declares '" + got +
 			"'; a " + r.noun() + " filename is " + r.store.filename,
 	}}
+}
+
+// mark records that a leg of this rule has reported on field for the record
+// being checked, so the required-fields leg does not add a second and weaker
+// finding about the same value. It tolerates a nil set, so a leg stays callable
+// without one.
+func mark(judged map[string]bool, field string) {
+	if judged != nil {
+		judged[field] = true
+	}
 }
 
 // checkRecordFilenameSlug asserts that a record's frontmatter slug agrees with
@@ -597,7 +617,7 @@ func checkRecordFilename(r schemaRecord, severity string) []Finding {
 // so the ledger at least reports the name it cannot read. Tightening this rule's
 // filename grammar to match belongs on that record, because it changes what the
 // gate refuses across all four stores.
-func checkRecordFilenameSlug(r schemaRecord, severity string) []Finding {
+func checkRecordFilenameSlug(r schemaRecord, severity string, judged map[string]bool) []Finding {
 	f := r.fields["slug"]
 	// isNull, not isAbsentValue, for checkRecordFilename's reason: an empty slug
 	// is a value that disagrees, and the stores that would otherwise catch it
@@ -617,6 +637,7 @@ func checkRecordFilenameSlug(r schemaRecord, severity string) []Finding {
 	if line == 0 {
 		line = 1
 	}
+	mark(judged, "slug")
 	return []Finding{{
 		File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: severity,
 		Message: "filename carries slug '" + fnSlug + "' but frontmatter declares '" + got +
@@ -638,23 +659,37 @@ func checkRecordFilenameSlug(r schemaRecord, severity string) []Finding {
 // A record nobody can read is not a lax record, it is a lost one.
 //
 // A property present but EMPTY is a finding too, on different grounds, and the
-// two say so differently. The reader's required-property check tests presence and
-// type and never judges content (capture's validateStrict), so it refuses an
-// omitted property and ACCEPTS a blank one — telling the author of a blank that
-// their record is being skipped would send them to look for a refusal that never
-// happens, which is the confident false statement this rule must not make. A
-// blank is refused on its own honest grounds: a required property exists because
-// the record has to state something, and a blank states nothing while every
-// surface renders it as answered.
+// two say so differently. An OMITTED property is refused by the reader's
+// required-property check whatever it names, so that message's account of the
+// consequence — skipped, invisible to every surface — holds for every store and
+// every field.
+//
+// A BLANK one has no such store-wide account, and this leg must not invent one.
+// The reader's required-property loop type-checks without judging content, but
+// the checks either side of it DO judge: capture refuses `severity: ""` on its
+// enum, `slug: ""` on its grammar, `id: ""` on its pattern and `schema_version:
+// ""` on its version, and accepts a found_during written as a bare single-quote
+// pair, because its decoder leaves those two apostrophes intact. Twenty of the twenty-one required-issue-field ×
+// blank-spelling combinations are refusals and one is an acceptance, so a single
+// sentence about "what the reader does with a blank" is a confident false
+// statement in whichever set it does not match — first claiming a refusal that
+// never happens, then, once that was fixed, an acceptance that never happens
+// (iss-2608301308369559). So this leg states only what a blank IS, which is true
+// of all twenty-one; the consequence is stated by the leg that judges the field,
+// and where such a leg has already spoken (judged) this one stays silent rather
+// than adding a second, weaker finding on the same line.
 //
 // "Empty" is judged on the value the YAML scalar carries rather than on its bytes
 // — see isAbsentValue for the quoted spellings, and blockScalarIndicatorRe for the
 // one shape whose value is not on the key's own line at all.
-func checkRecordRequiredFields(r schemaRecord, severity string) []Finding {
+func checkRecordRequiredFields(r schemaRecord, severity string, judged map[string]bool) []Finding {
 	var out []Finding
 	for _, field := range r.store.requiredFields {
 		f, present := r.fields[field]
 		if present && !r.valueEmpty(field, f) {
+			continue
+		}
+		if present && judged[field] {
 			continue
 		}
 		line := f.line
@@ -666,9 +701,7 @@ func checkRecordRequiredFields(r schemaRecord, severity string) []Finding {
 			r.store.noun + " surface while it still sits in the store"
 		if present {
 			msg = "required property '" + field + "' carries no value once its YAML scalar is read; " +
-				"the schema declares it required because the record has to state it, and a blank states nothing — " +
-				"the " + r.store.noun + " reader type-checks a present property without judging it, so this record " +
-				"is read and every surface renders the property as answered"
+				"the schema declares it required because the record has to state it, and a blank states nothing"
 		}
 		out = append(out, Finding{
 			File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: severity, Message: msg,
@@ -825,15 +858,16 @@ func checkRecordBucketField(r schemaRecord, severity string) []Finding {
 //
 // An ABSENT required value is the required-fields check's business, not this
 // one's, so each value check skips a missing/null value rather than double-report.
-func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
+func checkIssueRecordShape(r schemaRecord, severity string, judged map[string]bool) []Finding {
 	if r.store.prefix != "iss" {
 		return nil
 	}
 	var out []Finding
-	add := func(line int, msg string) {
+	add := func(field string, line int, msg string) {
 		if line == 0 {
 			line = 1
 		}
+		mark(judged, field)
 		out = append(out, Finding{
 			File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: severity, Message: msg,
 		})
@@ -851,22 +885,32 @@ func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
 		{"category", issueschema.Categories},
 		{"source", issueschema.Sources},
 	}
+	//
+	// A BLANK is judged here rather than deferred, and that is why the skip is
+	// isNull on the trimmed raw value and not isAbsentValue: `severity: ""` is a
+	// value capture puts to the enum and refuses, so it belongs to the leg that can
+	// say so. Standing down on it left the required-fields leg as the only voice,
+	// and that leg can only speak store-wide — so it told the author of a blank
+	// severity that their record was being read and rendered as answered, about a
+	// record capture refuses and skips (iss-2608301308369559). isNull draws the
+	// line at NOT WRITTEN, the same distinction checkRecordFilename already draws.
 	for _, e := range enums {
 		f, present := r.fields[e.field]
-		if !present || isAbsentValue(f.value) {
+		if !present || isNull(strings.TrimSpace(f.value)) {
 			continue
 		}
 		v := issueScalar(f.value)
 		if !inSet(v, e.set) {
-			add(f.line, "invalid "+e.field+" '"+v+"'; capture refuses a value outside {"+strings.Join(e.set, ", ")+"} and skips the record")
+			add(e.field, f.line, "invalid "+e.field+" '"+v+"'; capture refuses a value outside {"+strings.Join(e.set, ", ")+"} and skips the record")
 		}
 	}
 
-	// Kebab-slug: the slug becomes a filename, and capture refuses any other shape.
-	if f, present := r.fields["slug"]; present && !isAbsentValue(f.value) {
+	// Kebab-slug: the slug becomes a filename, and capture refuses any other shape
+	// — a blank one included, for the reason the enums above are judged blank.
+	if f, present := r.fields["slug"]; present && !isNull(strings.TrimSpace(f.value)) {
 		v := issueScalar(f.value)
 		if !issueschema.SlugRe.MatchString(v) {
-			add(f.line, "invalid slug '"+v+"'; a slug is kebab-case (lower-case alphanumerics joined by single hyphens) and capture refuses any other shape")
+			add("slug", f.line, "invalid slug '"+v+"'; a slug is kebab-case (lower-case alphanumerics joined by single hyphens) and capture refuses any other shape")
 		}
 	}
 
@@ -912,7 +956,7 @@ func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
 	}
 	if f, present := r.fields["category"]; present && !isAbsentValue(f.value) &&
 		issueschema.LapsedAtRequired(issueScalar(f.value)) && lapsedAt == "" {
-		add(f.line, "lapse record carries no 'lapsed_at'; capture refuses a lapse entry with no instant at which the discipline gave way and skips the record")
+		add("lapsed_at", f.line, "lapse record carries no 'lapsed_at'; capture refuses a lapse entry with no instant at which the discipline gave way and skips the record")
 	}
 	switch {
 	case fromBlock:
@@ -925,9 +969,9 @@ func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
 		// joined block to ValidLapsedAt would pass exactly the spelling that reads
 		// like an instant and is not one, which is the gap the look-ahead exists to
 		// close (iss-2608300244489638).
-		add(lapseField.line, "lapsed_at is spelled as an indented block; capture reads a block-spelled value as a mapping rather than a string, refuses the record and skips it — a lapse time is an RFC 3339 instant on the key's own line")
+		add("lapsed_at", lapseField.line, "lapsed_at is spelled as an indented block; capture reads a block-spelled value as a mapping rather than a string, refuses the record and skips it — a lapse time is an RFC 3339 instant on the key's own line")
 	case lapsedAt != "" && !issueschema.ValidLapsedAt(lapsedAt):
-		add(lapseField.line, "lapsed_at '"+lapsedAt+"' is not an RFC 3339 instant (want 2026-08-28T00:00:00Z); capture refuses the record and skips it")
+		add("lapsed_at", lapseField.line, "lapsed_at '"+lapsedAt+"' is not an RFC 3339 instant (want 2026-08-28T00:00:00Z); capture refuses the record and skips it")
 	}
 	return out
 }

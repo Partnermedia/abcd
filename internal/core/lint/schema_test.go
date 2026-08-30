@@ -1460,11 +1460,18 @@ func TestQuotedPaddingIsNotTrimmedOutOfAValueTheReaderRefuses(t *testing.T) {
 // An ABSENT property and an EMPTY one are both findings, and they are not the
 // same finding. The reader refuses a record that omits a required property
 // outright (capture's validateStrict: `missing required property`) and skips it,
-// so that message's account of the consequence is true. It type-checks a present
-// one WITHOUT judging its content, so it accepts `found_during: ""` — and telling
-// the author their record is being skipped sends them to look for a refusal that
-// never happens. The blank is still a finding, on its own honest grounds: a
-// required property exists to state something, and a blank states nothing.
+// so that message's account of the consequence is true for every store and every
+// field.
+//
+// A BLANK has no such store-wide account, because the reader's required-property
+// loop type-checks a present value without judging it while the checks either
+// side of it DO judge — so what a blank does to the record is a property of the
+// FIELD. `grounds` is one no leg judges, so the finding here states what a blank
+// IS and claims nothing about the reader in either direction: neither the refusal
+// that would send the author looking for a record that is being read, nor the
+// acceptance that would send them looking for one that is not. The parity across
+// all twenty-eight combinations is pinned against the reader itself in
+// core/capture (TestBlankRequiredPropertyFindingsMatchTheReadersVerdict).
 func TestAbsentAndEmptyRequiredPropertiesGiveDifferentReasons(t *testing.T) {
 	root := admissionCorpus(t)
 	writeFile(t, root, "work/issues/admissions/rdg-1/adm-3.md",
@@ -1482,7 +1489,10 @@ func TestAbsentAndEmptyRequiredPropertiesGiveDifferentReasons(t *testing.T) {
 		t.Errorf("an omitted property IS refused by the reader, and the finding should say so: %+v", fs)
 	}
 	if findingWith(fs, empty, ruleRecordSchema, "skipped") {
-		t.Errorf("the reader accepts a present-but-empty property, so the finding must not claim it is skipped: %+v", fs)
+		t.Errorf("no leg judges a blank grounds, so the finding must not claim the record is skipped: %+v", fs)
+	}
+	if findingWith(fs, empty, ruleRecordSchema, "this record is read") {
+		t.Errorf("no leg judges a blank grounds, so the finding must not claim the record is read either: %+v", fs)
 	}
 	if !findingWith(fs, empty, ruleRecordSchema, "'grounds'") {
 		t.Errorf("a blank required property is still a finding: %+v", fs)
