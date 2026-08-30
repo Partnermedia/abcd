@@ -877,3 +877,99 @@ func TestConfigRefusesAnUnknownRecordStoreKey(t *testing.T) {
 		t.Fatalf("the refusal must name the offending key; got %v", err)
 	}
 }
+
+// malformedIssueRecord is a record missing every required property but one, so a
+// store that actually scans it produces several findings and a store that skips
+// it produces none. The gap between those two is what the exemption can hide.
+const malformedIssueRecord = "---\nid: iss-1\n---\n\nan issue nobody validates\n"
+
+// The nested-store-root exemption still blinded the gate through a KNOWN prefix.
+// Pointing rdi at .abcd/work/issues/open passes the unknown-key check — rdi is a
+// real store — marks `open` a nested root so the issue store skips it, and then
+// the misdirected store ignores every file that is not rdi-N.md. A malformed
+// issue record with five missing properties yields zero findings, and the config
+// line that did it reads as ordinary configuration.
+//
+// The exemption exists to say "something else scans this directory". A bucket the
+// parent ALREADY declares is scanned by the parent, so there is nothing to
+// exempt: granting it there only ever removes coverage.
+func TestAKnownPrefixCannotHideADeclaredBucket(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/.keep", "")
+	writeFile(t, root, "work/issues/open/iss-1-a-finding.md", malformedIssueRecord)
+
+	stores := readingStores()
+	stores["rdi"] = "work/issues/open"
+	cfg := Config{
+		Roots: []string{"rec"},
+		Rules: map[string]RuleConfig{
+			ruleRecordSchema: {Enabled: true, Severity: severityBlocker, RecordStores: stores},
+		},
+	}
+	fs, err := Lint(cfg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingWith(fs, filepath.Join("work", "issues", "open", "iss-1-a-finding.md"), ruleRecordSchema, "required property") {
+		t.Fatalf("a store root aimed at another store's declared bucket must not exempt it from its parent: %+v", fs)
+	}
+}
+
+// The same hole closed at parse, where it can be refused outright rather than
+// merely survived. Three shapes, each a way for one line to remove a store's
+// coverage without naming anything that looks wrong.
+func TestConfigRefusesAStoreRootInsideAnotherStoresBucket(t *testing.T) {
+	cases := []struct {
+		name, stores, want string
+	}{
+		{
+			name:   "a list-declared bucket",
+			stores: `{"iss": ".abcd/work/issues", "rdi": ".abcd/work/issues/open"}`,
+			want:   ".abcd/work/issues/open",
+		},
+		{
+			name:   "inside a list-declared bucket",
+			stores: `{"iss": ".abcd/work/issues", "rdi": ".abcd/work/issues/open/deeper"}`,
+			want:   ".abcd/work/issues/open",
+		},
+		{
+			name:   "a grammar-declared bucket",
+			stores: `{"rdi": ".abcd/work/issues/readings", "itd": ".abcd/work/issues/readings/rdg-1"}`,
+			want:   ".abcd/work/issues/readings/rdg-1",
+		},
+		{
+			name:   "two prefixes on one path",
+			stores: `{"iss": ".abcd/work/issues", "rdi": ".abcd/work/issues"}`,
+			want:   ".abcd/work/issues",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := parseConfig([]byte(`{
+			  "roots": ["rec"],
+			  "rules": {"record_schema": {"enabled": true, "severity": "blocker", "record_stores": ` + c.stores + `}}
+			}`))
+			if err == nil {
+				t.Fatal("a store root that removes another store's coverage must be refused at parse")
+			}
+			if !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("the refusal must name the offending path %q; got %v", c.want, err)
+			}
+		})
+	}
+}
+
+// And the legitimate arrangement still loads: the reading families sit inside the
+// issue store's root but beside its buckets, not in one.
+func TestConfigAcceptsASiblingNestedStoreRoot(t *testing.T) {
+	if _, err := parseConfig([]byte(`{
+	  "roots": ["rec"],
+	  "rules": {"record_schema": {"enabled": true, "severity": "blocker", "record_stores": {
+	    "iss": ".abcd/work/issues",
+	    "rdi": ".abcd/work/issues/readings",
+	    "dsp": ".abcd/work/issues/dispositions"
+	  }}}
+	}`)); err != nil {
+		t.Fatalf("the shipped layout must load: %v", err)
+	}
+}

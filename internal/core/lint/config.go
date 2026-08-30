@@ -459,6 +459,70 @@ func (c Config) validateRecordStores() error {
 		return &configError{"rule " + id + ": record_stores names no such store: " +
 			strings.Join(unknown, ", ") + "; which record stores exist is code, not configuration — only their locations are configurable"}
 	}
+	for id, rc := range c.Rules {
+		if err := validateStoreLayout(id, rc.RecordStores); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateStoreLayout refuses a configured store root that would remove another
+// store's coverage.
+//
+// Refusing an UNKNOWN prefix was only half of it: a known one does the same
+// damage and looks like ordinary configuration. Aim rdi at the issue store's
+// open/ and that bucket becomes a nested store root — the issue store skips it,
+// while rdi ignores every file that is not rdi-N.md — so a malformed issue
+// record sitting in it is judged by nobody. Two prefixes on one path is the same
+// trick without the nesting: whichever store's grammar the files do not match
+// stops seeing them.
+//
+// Two shapes are refused, and both are about coverage rather than tidiness: a
+// root that IS or sits INSIDE a bucket another store declares (by list, or by the
+// grammar a minted-bucket store declares), and two prefixes resolving to one
+// path. A root that merely sits inside another store's root, beside its buckets,
+// is the shipped layout and stays legal.
+func validateStoreLayout(ruleID string, stores map[string]string) error {
+	type entry struct{ prefix, path string }
+	// Built in recordStores order so a config with several faults always reports
+	// the same one.
+	var entries []entry
+	for _, s := range recordStores {
+		if p := stores[s.prefix]; p != "" {
+			entries = append(entries, entry{s.prefix, strings.Trim(filepath.ToSlash(p), "/")})
+		}
+	}
+	for i, a := range entries {
+		for j, b := range entries {
+			if i == j {
+				continue
+			}
+			if a.path == b.path {
+				if a.prefix > b.prefix {
+					continue // report the pair once
+				}
+				return &configError{"rule " + ruleID + ": record_stores points both " + a.prefix +
+					" and " + b.prefix + " at " + quote(a.path) +
+					"; two stores on one path means whichever store's filename grammar a file does not match is scanned by nobody"}
+			}
+			if !strings.HasPrefix(b.path, a.path+"/") {
+				continue
+			}
+			segment := b.path[len(a.path)+1:]
+			if k := strings.Index(segment, "/"); k >= 0 {
+				segment = segment[:k]
+			}
+			store, ok := storeByPrefix(a.prefix)
+			if !ok || !store.declaresBucket(segment) {
+				continue
+			}
+			return &configError{"rule " + ruleID + ": record_stores puts the " + b.prefix +
+				" store at or inside " + quote(a.path+"/"+segment) + ", which is a declared " + store.noun +
+				" bucket; the " + a.prefix + " store would then skip that bucket as a nested store root while the " +
+				b.prefix + " store ignores every file its own filename grammar does not match, so the records in it are scanned by nobody"}
+		}
+	}
 	return nil
 }
 

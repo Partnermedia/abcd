@@ -7,7 +7,7 @@ category: "security"
 source: "impl-review"
 found_during: "itd-180 adversarial security review, 2026-08-30"
 found_at: "internal/core/lint/schema.go (nestedStoreRoots), internal/core/lint/config.go"
-resolution: "The nested-store-root exemption is now derived from the code-side recordStores looked up in the config, and parseConfig refuses a record_stores key naming no store, so a committed config line can no longer exempt a directory nothing scans."
+resolution: "The nested-store-root exemption is now derived from the code-side recordStores looked up in the config, and parseConfig refuses a record_stores key naming no store — which closed the unknown-prefix half only: a KNOWN prefix aimed at another store's declared bucket did the same damage until iss-2608300320001985."
 impact: fix
 ---
 

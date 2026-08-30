@@ -219,6 +219,16 @@ var recordStores = []recordStore{
 		fileNumRe: dispositionFileNumRe, fileFamily: "dsp", filename: "dsp-<N>.md"},
 }
 
+// storeByPrefix returns the code-side store for a prefix.
+func storeByPrefix(prefix string) (recordStore, bool) {
+	for _, s := range recordStores {
+		if s.prefix == prefix {
+			return s, true
+		}
+	}
+	return recordStore{}, false
+}
+
 // recordStorePrefixes is the set of store prefixes the scanner knows, derived
 // from recordStores so the configuration validator and the walk cannot disagree
 // about what a store is.
@@ -759,7 +769,15 @@ func scanRecordStores(repoRoot string, cfg RuleConfig) ([]schemaRecord, []Findin
 				if strings.HasPrefix(e.Name(), ".") {
 					continue
 				}
-				if nestedRoots[e.Name()] {
+				// The exemption says "something else scans this directory". A bucket
+				// the parent ALREADY declares is scanned by the parent, so there is
+				// nothing to exempt and granting it can only remove coverage — which
+				// is exactly what a config line aiming a real store prefix at
+				// another store's bucket did: the parent skipped the bucket, the
+				// misdirected store ignored every file not matching its own filename
+				// grammar, and a record missing five required properties produced no
+				// finding at all.
+				if nestedRoots[e.Name()] && !store.declaresBucket(e.Name()) {
 					continue
 				}
 				if !store.declaresBucket(e.Name()) {
