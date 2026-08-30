@@ -839,3 +839,80 @@ func TestCaptureBlankLapsedAtIsNotWritten(t *testing.T) {
 		})
 	}
 }
+
+// TestTransitionRestampsProductionMode proves a mutation that ADDS TEXT may
+// restamp the production mode: a resolution note is new text with its own mode,
+// so the key is not a fact frozen at mint. It is restamped only when the caller
+// declares one — an absent flag leaves the record's existing value alone rather
+// than overwriting it with a default.
+func TestTransitionRestampsProductionMode(t *testing.T) {
+	repo, ir := ledger(t)
+	res, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir, Text: "b", Severity: SeverityMinor,
+		Category: "bug", Source: "user-observation", FoundDuring: "t", Slug: "note",
+		ProductionMode: "dictated-and-formatted",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Resolve(ResolveRequest{
+		RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "fixed", Impact: "fix",
+		ProductionMode: "scribe-transcribed",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	fm := readLedgerFrontmatter(t, ir, res.ID)
+	if fm["production_mode"] != "scribe-transcribed" {
+		t.Errorf("production_mode = %v, want the restamped scribe-transcribed", fm["production_mode"])
+	}
+
+	// A transition that declares no mode leaves the stamp alone.
+	res2, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir, Text: "c", Severity: SeverityMinor,
+		Category: "bug", Source: "user-observation", FoundDuring: "t", Slug: "other",
+		ProductionMode: "dictated-and-formatted",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Wontfix(WontfixRequest{RepoRoot: repo, IssuesRoot: ir, ID: res2.ID, Reason: "no"}); err != nil {
+		t.Fatal(err)
+	}
+	fm = readLedgerFrontmatter(t, ir, res2.ID)
+	if fm["production_mode"] != "dictated-and-formatted" {
+		t.Errorf("an undeclared mode overwrote the stamp: %v", fm["production_mode"])
+	}
+
+	// An out-of-vocabulary mode is refused and the issue does not move.
+	if _, err := Resolve(ResolveRequest{
+		RepoRoot: repo, IssuesRoot: ir, ID: res2.ID, Resolution: "x", Impact: "fix",
+		ProductionMode: "typed",
+	}); err == nil {
+		t.Error("an out-of-vocabulary production mode must be refused")
+	}
+}
+
+// TestTransitionLeavesOriginAlone proves the asymmetry the design rests on: a
+// record's arrival path is a fact about how it came to exist, and resolving it
+// does not change where it came from. Only production_mode is a running claim
+// about the text; origin is stamped at mint and never rewritten.
+func TestTransitionLeavesOriginAlone(t *testing.T) {
+	repo, ir := ledger(t)
+	res, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir, Text: "b", Severity: SeverityMinor,
+		Category: "bug", Source: "user-observation", FoundDuring: "t", Slug: "note",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Resolve(ResolveRequest{
+		RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "fixed", Impact: "fix",
+		ProductionMode: "scribe-transcribed",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	fm := readLedgerFrontmatter(t, ir, res.ID)
+	if fm["origin"] != "researcher-authored" {
+		t.Errorf("origin = %v after a transition, want it unmoved at researcher-authored", fm["origin"])
+	}
+}

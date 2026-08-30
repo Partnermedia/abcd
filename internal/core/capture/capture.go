@@ -138,6 +138,12 @@ type CaptureRequest struct {
 	RelatedSpecs   []string
 	BlockedBy      []string // iss-N dependency edges; each must match ^iss-[0-9]+$
 	ForceID        string   // migrator-only; "" = auto-allocate
+	// ProductionMode is how the issue's text was produced (itd-178): one of the
+	// closed provenance vocabulary, or empty for the vocabulary's default. There
+	// is no free-text form. The record's `origin` has no request member at all —
+	// it is derived from which command ran, and a capture is researcher-authored
+	// by construction.
+	ProductionMode string
 }
 
 // CaptureResult is the outcome of a successful Capture. The timestamp-numeric
@@ -183,6 +189,13 @@ type ResolveRequest struct {
 	ByIntent string // itd-N
 	BySpec   string // spc-N
 	ByCommit string // 7–64 hex chars (64 covers a SHA-256 repo)
+	// ProductionMode RESTAMPS the record's production_mode (itd-178). A
+	// resolution note is new text with its own mode, so the key is not frozen at
+	// mint — but an empty value leaves the existing stamp alone rather than
+	// overwriting it with a default, because a transition that declares nothing
+	// has made no claim about how the note was produced. `origin` is never
+	// rewritten: where a record came from does not change when it is resolved.
+	ProductionMode string
 }
 
 // WontfixRequest moves an open issue to wontfix/.
@@ -191,6 +204,9 @@ type WontfixRequest struct {
 	IssuesRoot string
 	ID         string
 	Reason     string
+	// ProductionMode restamps production_mode on the same terms as
+	// ResolveRequest's: declared restamps, absent leaves the stamp alone.
+	ProductionMode string
 }
 
 // TransitionResult is the outcome of a Resolve or Wontfix. ResolvedBy echoes

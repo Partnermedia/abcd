@@ -9,6 +9,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/intentdriven/abcd/internal/core/frontmatter"
 )
 
 const (
@@ -65,7 +67,7 @@ func TestNextIDMaxAcrossSpecsAndIntents(t *testing.T) {
 
 func TestCreateRoundTrip(t *testing.T) {
 	root := t.TempDir()
-	sp, _, err := Create(root, "itd-9", "my-feature")
+	sp, _, err := Create(root, "itd-9", "my-feature", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,20 +99,20 @@ func TestCreateRoundTrip(t *testing.T) {
 
 func TestCreateRejectsBadIntent(t *testing.T) {
 	root := t.TempDir()
-	if _, _, err := Create(root, "itd-../../etc", "slug"); err == nil {
+	if _, _, err := Create(root, "itd-../../etc", "slug", ""); err == nil {
 		t.Fatal("Create with traversal intent id must fail")
 	}
-	if _, _, err := Create(root, "spc-1", "slug"); err == nil {
+	if _, _, err := Create(root, "spc-1", "slug", ""); err == nil {
 		t.Fatal("Create with non-itd intent id must fail")
 	}
 }
 
 func TestCreateRejectsBadSlug(t *testing.T) {
 	root := t.TempDir()
-	if _, _, err := Create(root, "itd-9", "../../etc"); err == nil {
+	if _, _, err := Create(root, "itd-9", "../../etc", ""); err == nil {
 		t.Fatal("Create with traversal slug must fail")
 	}
-	if _, _, err := Create(root, "itd-9", "Bad Slug"); err == nil {
+	if _, _, err := Create(root, "itd-9", "Bad Slug", ""); err == nil {
 		t.Fatal("Create with non-kebab slug must fail")
 	}
 }
@@ -146,7 +148,7 @@ func TestLoadRejectsTraversalID(t *testing.T) {
 
 func TestCloseMovesOpenToClosed(t *testing.T) {
 	root := t.TempDir()
-	if _, _, err := Create(root, "itd-9", "my-feature"); err != nil {
+	if _, _, err := Create(root, "itd-9", "my-feature", ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -179,7 +181,7 @@ func TestCloseMovesOpenToClosed(t *testing.T) {
 // clobbering a same-name spec already sitting in closed/.
 func TestCloseRefusesWhenClosedTargetExists(t *testing.T) {
 	root := t.TempDir()
-	if _, _, err := Create(root, "itd-9", "my-feature"); err != nil {
+	if _, _, err := Create(root, "itd-9", "my-feature", ""); err != nil {
 		t.Fatal(err)
 	}
 	// A same-name spec already occupies closed/.
@@ -277,7 +279,7 @@ func TestCreateConcurrentMintsDistinctIDs(t *testing.T) {
 		go func(i int) {
 			defer wg.Done()
 			<-start // release all goroutines together to maximise the collision window
-			sp, _, err := Create(root, "itd-1", fmt.Sprintf("slug-%d", i))
+			sp, _, err := Create(root, "itd-1", fmt.Sprintf("slug-%d", i), "")
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
@@ -300,5 +302,48 @@ func TestCreateConcurrentMintsDistinctIDs(t *testing.T) {
 		if count != 1 {
 			t.Errorf("id %s minted %d times", id, count)
 		}
+	}
+}
+
+// TestSpecCreateStampsProvenance proves the spec store's mint carries the same
+// disclosure pair as every other write path. A spec is minted by a verb a person
+// invoked, so its arrival path is researcher-authored — the value is derived from
+// which command ran, never asked for.
+func TestSpecCreateStampsProvenance(t *testing.T) {
+	root := t.TempDir()
+	sp, _, err := Create(root, "itd-9", "my-feature", "scribe-transcribed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(root, sp.Path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := frontmatter.Fields(strings.Split(string(data), "\n"))
+	if got := fields["origin"].Value; got != "researcher-authored" {
+		t.Errorf("origin = %q, want researcher-authored", got)
+	}
+	if got := fields["production_mode"].Value; got != "scribe-transcribed" {
+		t.Errorf("production_mode = %q, want scribe-transcribed", got)
+	}
+
+	// An unset mode takes the default rather than writing no line: a record
+	// written through a command carries BOTH keys.
+	sp2, _, err := Create(root, "itd-10", "second-feature", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err = os.ReadFile(filepath.Join(root, sp2.Path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields = frontmatter.Fields(strings.Split(string(data), "\n"))
+	if got := fields["production_mode"].Value; got != "hand-written" {
+		t.Errorf("defaulted production_mode = %q, want hand-written", got)
+	}
+
+	// An out-of-vocabulary mode is refused before the id is minted.
+	if _, _, err := Create(root, "itd-11", "third-feature", "typed"); err == nil {
+		t.Error("an out-of-vocabulary production mode must be refused")
 	}
 }

@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/intentdriven/abcd/internal/core/provenance"
 	"github.com/intentdriven/abcd/internal/core/recordid"
 )
 
@@ -185,12 +186,16 @@ func BodyIsStub(content string) bool {
 
 // renderSpec is the minimal spec-file body: frontmatter carrying the id, slug,
 // and the load-bearing intent link, plus a title and a Summary placeholder.
-func renderSpec(id, slug, intentID string) string {
+func renderSpec(id, slug, intentID string, stamp provenance.Stamp) string {
 	var b strings.Builder
 	b.WriteString("---\n")
 	fmt.Fprintf(&b, "id: %s\n", id)
 	fmt.Fprintf(&b, "slug: %s\n", slug)
 	fmt.Fprintf(&b, "intent: %s\n", intentID)
+	// The disclosure pair (itd-178), bare like every other scalar in this block
+	// and written together — a lone key is a state no write path produces.
+	fmt.Fprintf(&b, "%s: %s\n", provenance.KeyOrigin, stamp.OriginValue())
+	fmt.Fprintf(&b, "%s: %s\n", provenance.KeyProductionMode, stamp.ModeValue())
 	b.WriteString("---\n")
 	fmt.Fprintf(&b, "# %s\n\n", slug)
 	b.WriteString("## Summary\n\n")

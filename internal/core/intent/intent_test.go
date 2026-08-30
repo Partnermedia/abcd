@@ -89,7 +89,7 @@ func TestPlanHappyPath(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, draftsDir+"/itd-10-alpha.md", draftWithAC("itd-10", "alpha"))
 
-	res, err := Plan(root, "itd-10")
+	res, err := Plan(root, "itd-10", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func TestPlanHappyPath(t *testing.T) {
 func TestPlanResidualPassesRecordLint(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, draftsDir+"/itd-10-alpha.md", draftWithAC("itd-10", "alpha"))
-	if _, err := Plan(root, "itd-10"); err != nil {
+	if _, err := Plan(root, "itd-10", ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -158,7 +158,7 @@ func TestPlanRefusesNoAcceptanceCriteria(t *testing.T) {
 	writeFile(t, root, draftsDir+"/itd-10-alpha.md",
 		"---\nid: itd-10\nslug: alpha\nspec_id: null\nkind: null\n---\n# alpha\n\nNo AC section here.\n")
 
-	if _, err := Plan(root, "itd-10"); err == nil {
+	if _, err := Plan(root, "itd-10", ""); err == nil {
 		t.Fatal("Plan must refuse an intent with no Acceptance Criteria")
 	}
 	// Nothing moved, no spec minted.
@@ -174,7 +174,7 @@ func TestPlanRefusesEmptyAcceptanceCriteria(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, draftsDir+"/itd-10-alpha.md",
 		"---\nid: itd-10\nslug: alpha\nspec_id: null\nkind: null\n---\n# alpha\n\n## Acceptance Criteria\n\n## Next Section\n\nbody\n")
-	if _, err := Plan(root, "itd-10"); err == nil {
+	if _, err := Plan(root, "itd-10", ""); err == nil {
 		t.Fatal("Plan must refuse an intent whose Acceptance Criteria section is empty")
 	}
 }
@@ -188,7 +188,7 @@ func TestPlanRefusesBulletlessAcceptanceCriteria(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, draftsDir+"/itd-10-alpha.md",
 		"---\nid: itd-10\nslug: alpha\nspec_id: null\nkind: null\n---\n# alpha\n\n## Acceptance Criteria\n\nThe system should just work well.\n")
-	if _, err := Plan(root, "itd-10"); err == nil {
+	if _, err := Plan(root, "itd-10", ""); err == nil {
 		t.Fatal("Plan must refuse an Acceptance Criteria section with no top-level bullet")
 	}
 	if _, err := os.Stat(filepath.Join(root, draftsDir, "itd-10-alpha.md")); err != nil {
@@ -205,7 +205,7 @@ func TestPlanRefusesNonDraft(t *testing.T) {
 			root := t.TempDir()
 			writeFile(t, root, dir+"/itd-10-alpha.md",
 				"---\nid: itd-10\nslug: alpha\nspec_id: null\nkind: standalone\n---\n# alpha\n\n## Acceptance Criteria\n\n- ok\n")
-			if _, err := Plan(root, "itd-10"); err == nil {
+			if _, err := Plan(root, "itd-10", ""); err == nil {
 				t.Fatal("Plan must refuse an intent that is not in drafts/")
 			}
 		})
@@ -220,12 +220,12 @@ func TestPlanReusesExistingSpecForIntent(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, draftsDir+"/itd-10-alpha.md", draftWithAC("itd-10", "alpha"))
 	// Pre-create the spec for this intent; the draft is still an unlinked draft.
-	sp, _, err := spec.Create(root, "itd-10", "alpha")
+	sp, _, err := spec.Create(root, "itd-10", "alpha", "")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	res, err := Plan(root, "itd-10")
+	res, err := Plan(root, "itd-10", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,7 +259,7 @@ func TestPlanRefusesDraftWithSpecID(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, draftsDir+"/itd-10-alpha.md",
 		"---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n## Acceptance Criteria\n\n- ok\n")
-	if _, err := Plan(root, "itd-10"); err == nil {
+	if _, err := Plan(root, "itd-10", ""); err == nil {
 		t.Fatal("Plan must refuse a draft that already has a non-null spec_id")
 	}
 }
@@ -271,7 +271,7 @@ func TestPlanRefusesWhenPlannedTargetExists(t *testing.T) {
 	writeFile(t, root, draftsDir+"/itd-10-alpha.md", draftWithAC("itd-10", "alpha"))
 	writeFile(t, root, plannedDir+"/itd-10-alpha.md",
 		"---\nid: itd-10\nslug: alpha\nspec_id: null\nkind: standalone\n---\n# pre-existing\n")
-	if _, err := Plan(root, "itd-10"); err == nil {
+	if _, err := Plan(root, "itd-10", ""); err == nil {
 		t.Fatal("Plan must refuse to overwrite an existing planned target")
 	}
 	// The pre-existing planned file is untouched.
@@ -286,7 +286,7 @@ func TestPlanRefusesWhenPlannedTargetExists(t *testing.T) {
 
 func TestPlanRejectsBadID(t *testing.T) {
 	root := t.TempDir()
-	if _, err := Plan(root, "itd-../../etc"); err == nil {
+	if _, err := Plan(root, "itd-../../etc", ""); err == nil {
 		t.Fatal("Plan must reject a traversal id")
 	}
 }
@@ -539,7 +539,7 @@ func TestFullCycle(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, draftsDir+"/itd-10-alpha.md", draftWithAC("itd-10", "alpha"))
 
-	pr, err := Plan(root, "itd-10")
+	pr, err := Plan(root, "itd-10", "")
 	if err != nil {
 		t.Fatalf("Plan: %v", err)
 	}

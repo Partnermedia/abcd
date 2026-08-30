@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/changelog"
+	"github.com/intentdriven/abcd/internal/core/provenance"
 	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
@@ -128,6 +129,14 @@ func captureBlockers(issuesRoot string, blockedBy []string) error {
 }
 
 func commitCapture(issuesRoot string, req CaptureRequest, issID, slug, placeholder string) (CaptureResult, error) {
+	// The disclosure pair (itd-178). origin is DERIVED — a capture is a person
+	// filing an observation, so it is researcher-authored and no request member
+	// carries it — while the production mode is the closed choice the caller
+	// declared, defaulted here so a captured record always carries both keys.
+	stamp, err := provenance.NewStamp(provenance.KindResearcherAuthored, req.ProductionMode)
+	if err != nil {
+		return CaptureResult{}, fmt.Errorf("capture: %w", err)
+	}
 	fields := []kv{
 		{"schema_version", 1},
 		{"id", issID},
@@ -146,6 +155,13 @@ func commitCapture(issuesRoot string, req CaptureRequest, issID, slug, placehold
 		"source":         string(req.Source),
 		"found_during":   req.FoundDuring,
 	}
+	// Written bare, like every other machine-read scalar: a quoted value reads as
+	// a different string to the line scanner the gate compares against.
+	fields = append(fields,
+		kv{provenance.KeyOrigin, rawScalar(stamp.OriginValue())},
+		kv{provenance.KeyProductionMode, rawScalar(stamp.ModeValue())})
+	fm[provenance.KeyOrigin] = stamp.OriginValue()
+	fm[provenance.KeyProductionMode] = stamp.ModeValue()
 	if req.FoundAt != "" {
 		fields = append(fields, kv{"found_at", req.FoundAt})
 		fm["found_at"] = req.FoundAt
@@ -245,7 +261,11 @@ func Resolve(req ResolveRequest) (TransitionResult, error) {
 		return TransitionResult{}, fmt.Errorf(
 			"resolve: --shipped-in %q is not a release tag (want vMAJOR.MINOR.PATCH); nothing written", req.ShippedIn)
 	}
-	extras := []kv{{"impact", rawScalar(string(impact))}}
+	modeExtras, err := productionModeExtras(req.ProductionMode)
+	if err != nil {
+		return TransitionResult{}, fmt.Errorf("resolve: %w", err)
+	}
+	extras := append([]kv{{"impact", rawScalar(string(impact))}}, modeExtras...)
 	if req.ShippedIn != "" {
 		// rawScalar, like impact above: a plain string is double-quoted by
 		// yamlScalar, and the derivation reads the RAW scalar, so a quoted value
@@ -325,7 +345,30 @@ var reShippedIn = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
 // wontfix/ carries no impact (issue_impact_valid gates resolved/ only), so no
 // judgement is stamped.
 func Wontfix(req WontfixRequest) (TransitionResult, error) {
-	return transition(req.RepoRoot, req.IssuesRoot, req.ID, "wontfix_reason", req.Reason, nil, StateWontfix)
+	modeExtras, err := productionModeExtras(req.ProductionMode)
+	if err != nil {
+		return TransitionResult{}, fmt.Errorf("wontfix: %w", err)
+	}
+	return transition(req.RepoRoot, req.IssuesRoot, req.ID, "wontfix_reason", req.Reason, modeExtras, StateWontfix)
+}
+
+// productionModeExtras is the ONE place a transition's production-mode restamp
+// is decided, so the two transitions cannot come to differ about the rule.
+//
+// A declared mode is validated against the closed vocabulary and restamped; an
+// undeclared one writes nothing at all, leaving the record's existing stamp
+// alone. Defaulting here would be wrong in a way that is invisible afterwards: a
+// transition that says nothing about how its note was produced would silently
+// overwrite a dictated record's stamp with hand-written.
+func productionModeExtras(mode string) ([]kv, error) {
+	if mode == "" {
+		return nil, nil
+	}
+	m, err := provenance.ParseMode(mode)
+	if err != nil {
+		return nil, err
+	}
+	return []kv{{provenance.KeyProductionMode, rawScalar(string(m))}}, nil
 }
 
 // transition moves an open issue to target, setting the defining note field and

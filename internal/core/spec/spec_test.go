@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/intentdriven/abcd/internal/core/provenance"
 )
 
 // TestSpecNumIgnoresOverflow proves an over-int64 spec number is treated as no
@@ -35,7 +37,7 @@ func writeFile(t *testing.T, root, rel, content string) {
 // never drift: a freshly rendered spec body is a stub, and a body whose
 // placeholder was replaced with real content is not.
 func TestBodyIsStubLockstep(t *testing.T) {
-	minted := renderSpec("spc-1", "a-slug", "itd-9")
+	minted := renderSpec("spc-1", "a-slug", "itd-9", mustStamp(t))
 	if !BodyIsStub(minted) {
 		t.Errorf("BodyIsStub(renderSpec(...)) = false, want true (template and detector drifted)")
 	}
@@ -114,4 +116,14 @@ func TestLookupResolvesBySpecNumber(t *testing.T) {
 	if sp, ok := both.Lookup("spc-9"); !ok || sp.ID != "spc-9" {
 		t.Errorf("Lookup(spc-9) = %+v, %v; want the exact-match record", sp, ok)
 	}
+}
+
+// mustStamp is the default disclosure pair, built through the one constructor.
+func mustStamp(t *testing.T) provenance.Stamp {
+	t.Helper()
+	s, err := provenance.NewStamp(provenance.KindResearcherAuthored, "")
+	if err != nil {
+		t.Fatalf("NewStamp: %v", err)
+	}
+	return s
 }
