@@ -13,6 +13,8 @@ package issueschema
 // committed tree (core/lint) must agree about what a well-formed record carries,
 // and two hand-kept copies drift the moment one side gains a field.
 
+import "regexp"
+
 // The three record families this design adds. Each mints through
 // recordid.Minter.Mint, which validates any lowercase family and consults no
 // maximum (adr-45): an id is a UTC stamp plus four random digits and is never
@@ -205,6 +207,10 @@ func DispositionStateAvailable(position, state string) (available, ruled bool) {
 	available, ruled = row[state]
 	return available, ruled
 }
+
+// dispositionIDRe is the disposition id grammar, used by the standing-answer
+// reader below and by every writer that mints one.
+var dispositionIDRe = regexp.MustCompile(`^` + DispositionFamily + `-[0-9]+$`)
 
 // ReservedHoldFields are the two-axis hold field: reserved, grammar stated, and
 // DORMANT. frame-location is free text naming the frame element; MoSCoW is one

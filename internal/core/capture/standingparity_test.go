@@ -9,17 +9,19 @@ import (
 	"github.com/intentdriven/abcd/internal/core/lint"
 )
 
-// "Which answer is in force" is asked by two packages with two readers, because
-// core/lint cannot import this one (this package's own tests import lint, so the
-// edge back would be a cycle). Two readers are tolerable; two ANSWERS are not —
-// the verb would refuse a second disposition the board says is not needed, or
-// promote an item the board still shows as held.
+// "Which answer is in force" is asked by two packages, because core/lint cannot
+// import this one (this package's own tests import lint, so the edge back would
+// be a cycle). Two WALKS are unavoidable; two ANSWERS were not — the verb would
+// refuse a second disposition the board says is not needed, or promote an item
+// the board still shows as held.
 //
-// So the two are held to one answer over the same fixtures. This is the test the
-// review asked for, and the malformed-sibling row is the one that found a real
-// divergence: capture's strict parser skipped such a file before reading its
-// supersession edge, while lint's line scanner read the edge regardless — so a
-// single malformed record made the board say "answered" and the verb say "not".
+// The judgement now lives in issueschema, which both packages call, and this
+// table is what holds the two walks to it. Each row was a real divergence before
+// it was a row: the malformed-sibling case (capture's strict parser skipped the
+// file before reading its supersession edge while lint's line scanner read the
+// edge regardless), then the comment-led and blank-line-led cases (the same
+// split, one preamble earlier). Every one made the board say "answered" and the
+// verb say "not".
 func TestStandingDispositionAgreesAcrossBothReaders(t *testing.T) {
 	type file struct {
 		name, body string
@@ -55,6 +57,26 @@ func TestStandingDispositionAgreesAcrossBothReaders(t *testing.T) {
 			want: "", // more than one standing: neither reader may pick a winner
 		},
 		{
+			// A comment before the opening delimiter is the shape a hand-edited
+			// record most easily acquires, and it parted the two readers: the
+			// lenient line scanner read straight past it to the supersession edge
+			// while the strict parser refused the file outright.
+			name: "a comment-led sibling retires nothing",
+			files: []file{
+				{"dsp-1.md", disp("dsp-1", "held", "")},
+				{"dsp-2.md", "<!-- written by hand -->\n" + disp("dsp-2", "accepted", "dsp-1")},
+			},
+			want: "",
+		},
+		{
+			name: "a blank-line-led sibling retires nothing",
+			files: []file{
+				{"dsp-1.md", disp("dsp-1", "held", "")},
+				{"dsp-2.md", "\n" + disp("dsp-2", "accepted", "dsp-1")},
+			},
+			want: "",
+		},
+		{
 			name: "a file that is not a disposition is not an answer",
 			files: []file{
 				{"dsp-1.md", disp("dsp-1", "accepted", "")},
@@ -83,18 +105,30 @@ func TestStandingDispositionAgreesAcrossBothReaders(t *testing.T) {
 			if err != nil {
 				t.Fatalf("capture.standingDispositions: %v", err)
 			}
-			theirs, err := lint.StandingDispositions(repo, LedgerRelPath, "rdi-9")
-			if err != nil {
-				t.Fatalf("lint.StandingDispositions: %v", err)
-			}
-
 			got := one(mine)
-			if other := one(theirs); got != other {
-				t.Fatalf("the two readers disagree: capture says %q (%v), lint says %q (%v)",
-					got, mine, other, theirs)
-			}
 			if got != c.want {
 				t.Fatalf("standing = %q (%v), want %q", got, mine, c.want)
+			}
+
+			// lint walks the same directory for its own report, and the OBSERVABLE
+			// consequence must follow the same answer: an item is reported
+			// outstanding exactly when nothing stands, and held exactly when the
+			// single standing record is a hold. A walk that saw a different set
+			// would land on the other side of one of these.
+			writeReadingFor(t, repo, "rdi-9")
+			report, err := lint.ReadReadingOutstanding(repo, LedgerRelPath)
+			if err != nil {
+				t.Fatalf("lint.ReadReadingOutstanding: %v", err)
+			}
+			wantOutstanding := len(mine) == 0
+			if gotOutstanding := len(report.Undispositioned) == 1; gotOutstanding != wantOutstanding {
+				t.Fatalf("lint reports outstanding=%v, capture stands %v — the two walks disagree",
+					gotOutstanding, mine)
+			}
+			wantHeld := got != "" && stateOf(t, itemDir, got) == issueschema.DispositionHeld
+			if gotHeld := len(report.OpenHolds) == 1 && report.OpenHolds[0].Disposition == got; gotHeld != wantHeld {
+				t.Fatalf("lint reports held=%v for standing %q, want %v — the two walks disagree",
+					gotHeld, got, wantHeld)
 			}
 		})
 	}
@@ -121,4 +155,31 @@ func disp(id, state, supersedes string) string {
 		s += "supersedes_disposition: \"" + supersedes + "\"\n"
 	}
 	return s + "---\n\n"
+}
+
+// writeReadingFor lays down the reading record the item answers, so lint's walk
+// has something to report on: its report is keyed on reading items, not on
+// disposition directories.
+func writeReadingFor(t *testing.T, repo, item string) {
+	t.Helper()
+	dir := filepath.Join(repo, LedgerRelPath, issueschema.ReadingsDir, "rdg-1")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := "---\nschema_version: 1\nid: \"" + item + "\"\nrun: \"rdg-1\"\n" +
+		"manifest: \"sha256:beef\"\nposition: \"detection\"\nregime: \"registrative\"\n" +
+		"pattern: \"a stated constraint\"\ntension: \"t\"\nconstraint_in_play: \"c\"\nwhy_a_tension: \"w\"\n---\n\n"
+	if err := os.WriteFile(filepath.Join(dir, item+".md"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// stateOf reads one disposition's state through the shared reader.
+func stateOf(t *testing.T, itemDir, id string) string {
+	t.Helper()
+	content, err := os.ReadFile(filepath.Join(itemDir, id+".md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return issueschema.ParseDisposition(id, string(content)).State
 }

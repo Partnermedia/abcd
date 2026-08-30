@@ -17,7 +17,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/issueschema"
@@ -659,7 +658,23 @@ func readingItemPaths(issuesRoot, item string) ([]string, error) {
 // standingDispositions lists the dispositions of one item that no sibling
 // supersedes — the answers currently in force. An empty result means the item is
 // undispositioned, which the outstanding report says out loud and no state names.
+//
+// The WALK is here; the JUDGEMENT is not. Which records stand is decided by
+// issueschema.StandingDispositionIDs, the one reader core/lint calls too. Two
+// readers of that question diverged twice in review — first on a duplicated key,
+// then on a file led by a comment or a blank line — and each time the board said
+// "answered" while this verb said "two standing", over the same bytes.
 func standingDispositions(itemDir string) ([]string, error) {
+	records, err := readDispositions(itemDir)
+	if err != nil {
+		return nil, err
+	}
+	return issueschema.StandingDispositionIDs(records), nil
+}
+
+// readDispositions reads one item's disposition directory into the shared record
+// shape. A directory that does not exist is an unanswered item, not a fault.
+func readDispositions(itemDir string) ([]issueschema.DispositionRecord, error) {
 	entries, err := os.ReadDir(itemDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -667,40 +682,19 @@ func standingDispositions(itemDir string) ([]string, error) {
 		}
 		return nil, err
 	}
-	present := map[string]bool{}
-	superseded := map[string]bool{}
+	var records []issueschema.DispositionRecord
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+		id, ok := issueschema.DispositionFileID(e.Name())
+		if e.IsDir() || !ok {
 			continue
 		}
-		id := strings.TrimSuffix(e.Name(), ".md")
-		if !reDispositionID.MatchString(id) {
-			continue
-		}
-		present[id] = true
 		content, err := os.ReadFile(filepath.Join(itemDir, e.Name()))
 		if err != nil {
 			return nil, err
 		}
-		fm, _, err := parseFrontmatterAndBody(string(content))
-		if err != nil {
-			// A malformed sibling cannot be read as superseding anything, and it
-			// must not silently license a second standing answer either — so it
-			// counts as present and the caller is told to supersede it.
-			continue
-		}
-		if s := asString(fm["supersedes_disposition"]); s != "" {
-			superseded[s] = true
-		}
+		records = append(records, issueschema.ParseDisposition(id, string(content)))
 	}
-	var out []string
-	for id := range present {
-		if !superseded[id] {
-			out = append(out, id)
-		}
-	}
-	sort.Strings(out)
-	return out, nil
+	return records, nil
 }
 
 // mintUnusedItemID draws an item id that neither this batch nor the LEDGER has

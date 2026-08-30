@@ -21,7 +21,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
-	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/issueschema"
 )
@@ -36,8 +35,6 @@ const severityInfo = "info"
 var (
 	readingRunDirRe   = regexp.MustCompile(`^` + issueschema.ReadingRunFamily + `-[0-9]+$`)
 	readingItemFileRe = regexp.MustCompile(`^(` + issueschema.ReadingItemFamily + `-[0-9]+)\.md$`)
-	dispositionFileRe = regexp.MustCompile(`^(` + issueschema.DispositionFamily + `-[0-9]+)\.md$`)
-	dispositionIDRe   = regexp.MustCompile(`^` + issueschema.DispositionFamily + `-[0-9]+$`)
 )
 
 // OutstandingItem is one reading item nobody has answered.
@@ -137,110 +134,52 @@ type standingRecord struct {
 	rel           string
 }
 
-// StandingDispositions returns the ids of the dispositions of item that no
-// sibling supersedes — the answers currently in force, which is exactly one in a
-// healthy ledger.
-//
-// It is exported for ONE reason: core/capture asks the same question with its own
-// reader (it cannot import this package — this package is imported by capture's
-// own tests, so the edge back would be a cycle), and two readers of one question
-// must be held to one answer by a test. The verb refusing a second disposition
-// the board says is not needed, or promoting an item the board still shows as
-// held, are the divergences that test exists to prevent.
-func StandingDispositions(repoRoot, issuesDir, item string) ([]string, error) {
-	return standingDispositionIDs(filepath.Join(repoRoot, filepath.FromSlash(issuesDir)), item)
-}
-
 // standingDisposition returns the disposition of item that no sibling
-// supersedes, or nil when the item is unanswered. The superseded records stay in
-// place — a hold that vanished when it was answered would take its own exit
-// condition with it — so "standing" is computed from the supersession edges
-// rather than from what is present.
+// supersedes, or nil when the item is unanswered.
 func standingDisposition(issuesRoot, issuesDir, item string) (*standingRecord, error) {
-	records, standing, err := dispositionsOf(issuesRoot, issuesDir, item)
-	if err != nil || len(standing) == 0 {
-		return nil, err
-	}
-	// More than one standing answer is a ledger fault the write path refuses.
-	// Reporting the FIRST by id keeps this report deterministic; naming the fault
-	// belongs to the writer, which is where it can still be prevented.
-	return records[standing[0]], nil
-}
-
-// standingDispositionIDs is the standing set alone, sorted — the value both this
-// package and core/capture must agree on.
-func standingDispositionIDs(issuesRoot, item string) ([]string, error) {
-	_, standing, err := dispositionsOf(issuesRoot, "", item)
-	return standing, err
-}
-
-// dispositionsOf reads one item's dispositions and computes which of them stand.
-//
-// standing = present minus superseded, and the second set is where the two
-// readers of this question have to agree. A record that is not well-formed cannot
-// be trusted to RETIRE another — it may say anything — but it cannot be dropped
-// either, because then a malformed record would silently remove the answer it
-// claims to replace. So it stands, and whoever looks is told there is something
-// here to deal with. core/capture reaches the same verdict through its own strict
-// parser; TestStandingDispositionAgreesAcrossBothReaders holds the two together.
-func dispositionsOf(issuesRoot, issuesDir, item string) (map[string]*standingRecord, []string, error) {
 	itemDir := filepath.Join(issuesRoot, issueschema.DispositionsDir, item)
 	entries, err := os.ReadDir(itemDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil, nil
+			return nil, nil
 		}
-		return nil, nil, err
+		return nil, err
 	}
-	records := map[string]*standingRecord{}
-	superseded := map[string]bool{}
+	var records []issueschema.DispositionRecord
+	rel := map[string]string{}
 	for _, e := range entries {
-		m := dispositionFileRe.FindStringSubmatch(e.Name())
-		if e.IsDir() || m == nil {
+		id, ok := issueschema.DispositionFileID(e.Name())
+		if e.IsDir() || !ok {
 			continue
 		}
 		content, err := os.ReadFile(filepath.Join(itemDir, e.Name()))
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
-		lines := strings.Split(string(content), "\n")
-		fields := frontmatterFields(lines)
-		id := m[1]
-		records[id] = &standingRecord{
-			id:            id,
-			state:         fieldScalar(fields, "state"),
-			exitCondition: fieldScalar(fields, "exit_condition"),
-			rel:           filepath.Join(issuesDir, issueschema.DispositionsDir, item, e.Name()),
-		}
-		// A duplicated top-level key is malformed to every record reader here: the
-		// strict parser refuses the file outright while this lenient scanner keeps
-		// only the first value, so a second line can hide the value the first
-		// shows. Such a record retires nothing.
-		if len(frontmatterDuplicates(lines)) > 0 {
+		records = append(records, issueschema.ParseDisposition(id, string(content)))
+		rel[id] = filepath.Join(issuesDir, issueschema.DispositionsDir, item, e.Name())
+	}
+
+	// The WALK is here; the JUDGEMENT is not. Which records stand is decided by
+	// issueschema.StandingDispositionIDs, the one reader core/capture calls too:
+	// a record neither can read retires nothing and does not vanish either, so
+	// the board and the verb cannot disagree about what is in force.
+	standing := issueschema.StandingDispositionIDs(records)
+	if len(standing) == 0 {
+		return nil, nil
+	}
+	// More than one standing answer is a ledger fault the write path refuses.
+	// Reporting the FIRST by id keeps this report deterministic; naming the fault
+	// belongs to the writer, which is where it can still be prevented.
+	for _, r := range records {
+		if r.ID != standing[0] {
 			continue
 		}
-		if s := fieldScalar(fields, "supersedes_disposition"); dispositionIDRe.MatchString(s) {
-			superseded[s] = true
-		}
+		return &standingRecord{
+			id: r.ID, state: r.State, exitCondition: r.ExitCondition, rel: rel[r.ID],
+		}, nil
 	}
-	var standing []string
-	for id := range records {
-		if !superseded[id] {
-			standing = append(standing, id)
-		}
-	}
-	sort.Strings(standing)
-	return records, standing, nil
-}
-
-// fieldScalar reads a frontmatter value with its surrounding quotes stripped, so
-// a quoted state compares as the writer's own enum member.
-func fieldScalar(fields map[string]fmField, key string) string {
-	f, ok := fields[key]
-	if !ok {
-		return ""
-	}
-	return strings.Trim(strings.TrimSpace(f.value), `"'`)
+	return nil, nil
 }
 
 // checkReadingOutstanding renders the report as findings, every one of them at
