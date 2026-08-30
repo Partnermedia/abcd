@@ -1,6 +1,7 @@
 package grounds
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -320,6 +321,33 @@ func TestGroundsNoWordBreaksRefusalIsOnlyForScriptsWithout(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), "word floor") {
 			t.Fatalf("%s: refusal of %q = %q, want the word floor named", name, text, err)
+		}
+	}
+}
+
+// TestScriptioContinuaRefusalNamesBothFloors is iss-2608301620346560. The
+// no-word-breaks refusal named the unit floor alone, and for a script with no
+// word breaks that is never the floor that binds: every unit is one letter, so
+// twenty letters is twenty units and the three-unit floor is cleared long
+// before the letter floor is. An author told "the floor asks for 3" who adds an
+// ideograph is refused a second time, by a number the first refusal did not
+// mention, in the same noun it had just counted.
+//
+// A refusal states a number so the author knows what would be enough. Stating
+// one that would not be enough is the cycle's standing class reached by
+// omission rather than by assertion.
+func TestScriptioContinuaRefusalNamesBothFloors(t *testing.T) {
+	_, err := New(Pursued, "字文")
+	if err == nil {
+		t.Fatalf("New(%q) = nil error, want a refusal", "字文")
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "no word breaks") {
+		t.Fatalf("refusal of a two-ideograph text = %q, want the no-word-breaks refusal", msg)
+	}
+	for _, want := range []string{strconv.Itoa(MinTextWords), strconv.Itoa(MinTextLetters)} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("refusal %q does not name the floor %q; an author satisfying only the floor it names is refused again", msg, want)
 		}
 	}
 }

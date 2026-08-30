@@ -243,10 +243,18 @@ func ValidateText(text string) error {
 		// language cannot supply, and this message is the only instruction they
 		// get.
 		if scriptioContinuaOnly(units) {
+			// Both floors, because for this script neither number is the whole
+			// answer and the unit floor is never the binding one: every unit here
+			// is a single letter, so twenty letters is twenty units and the unit
+			// floor falls first. Naming it alone told the author a number that
+			// cannot be enough, and an author who supplied exactly it was refused
+			// a second time by a floor this message had not mentioned
+			// (iss-2608301620346560).
 			return fmt.Errorf(
-				"grounds text %q carries %d letter(s), and the floor asks for %d where the script "+
-					"has no word breaks; name the conjecture being acted on, not the route taken",
-				text, len(units), MinTextWords)
+				"grounds text %q carries %d letter(s), and where the script has no word breaks each "+
+					"letter is one unit, so it must clear both floors: %d units and %d letters; "+
+					"name the conjecture being acted on, not the route taken",
+				text, len(units), MinTextWords, MinTextLetters)
 		}
 		return fmt.Errorf(
 			"grounds text %q carries %d word(s), below the %d-word floor; name the conjecture being acted on, not the route taken",
