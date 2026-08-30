@@ -1831,3 +1831,34 @@ func TestClosedSchemaAndDuplicateKeyClaimNoReaderWhereTheStoreHasNone(t *testing
 		}
 	}
 }
+
+// A join names a family this scan does not read, in both the ways a value can:
+// a prefix no store declares at all, and a store this configuration does not
+// point at. Neither supports a verdict — the record might be perfectly present in
+// a store nobody configured — so reporting it missing would be a confident false
+// statement, and `occasioned_by`, which declares no family, keeps the prose
+// tolerance its leg is built on.
+//
+// The stand-down was correct code no test killed: deleting it left the suite
+// green while `occasioned_by: spike-3` drew a blocker saying it is not a record
+// in the corpus (iss-2608301519254240).
+func TestAJoinIsSilentOnAFamilyThisScanDoesNotRead(t *testing.T) {
+	root := admissionCorpus(t)
+	writeFile(t, root, "work/issues/surprises/srp-4.md",
+		"---\nschema_version: 1\nid: srp-4\noccasioned_by: spike-3\n---\n\n")
+	writeFile(t, root, "work/issues/surprises/srp-5.md",
+		"---\nschema_version: 1\nid: srp-5\noccasioned_by: adr-9999\n---\n\n")
+
+	cfg := admissionSchemaConfig()
+	rule := cfg.Rules[ruleRecordSchema]
+	delete(rule.RecordStores, "adr")
+	cfg.Rules[ruleRecordSchema] = rule
+
+	fs, err := Lint(cfg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 0 {
+		t.Fatalf("a family this scan does not read supports no verdict either way, got %d finding(s): %+v", n, fs)
+	}
+}
