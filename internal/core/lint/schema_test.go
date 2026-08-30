@@ -1667,7 +1667,11 @@ func TestABucketJoinDoesNotDescribeThePairMechanismOverAnotherFamily(t *testing.
 //
 // A join that declares sameBucketAs is one whose value the schema says IS a handle
 // of that family, so the spelling is judged before anything is resolved: the
-// family's own prefix, lower case, unpadded, and nothing around it.
+// family's own prefix, lower case, unpadded, and nothing around it. The seventh
+// case carried here is the cross-family handle, which is not one of the six but
+// falls in the same set and is refused on the same terms — the case
+// TestABucketJoinDoesNotDescribeThePairMechanismOverAnotherFamily reads for its
+// wording.
 func TestABucketJoinRefusesEverySpellingButTheFamilysOwn(t *testing.T) {
 	spellings := map[string]string{
 		"adm-3": "RDI-2",
