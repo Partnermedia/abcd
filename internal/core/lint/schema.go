@@ -1645,12 +1645,21 @@ func isEmptyFlowCollection(v string, open, close byte) bool {
 // all-whitespace value still carries its padding once the quotes are gone (the
 // lesson lapsed_at already learned in iss-2608300212513349).
 //
-// Two things it does NOT decide, both recorded rather than hidden. A trailing
-// comment defeats every test here at once, because the shared same-line scanner
-// strips no comments and each test anchors on the last byte — a scanner question,
-// and iss-2608301744268001's to close. And the supersession leg's silence on an
-// empty collection is not shared by record.describeADR, which renders `[]` and
-// `{}` as a successor link (iss-2608301744300631).
+// What it does NOT decide is not a closed list, and three of its gaps are
+// recorded rather than hidden. A trailing comment defeats every test here at
+// once, because the shared same-line scanner strips no comments and each test
+// anchors on the last byte — a scanner question, and iss-2608301744268001's to
+// close. The supersession leg's silence on an empty collection is not shared by
+// record.describeADR, which renders `[]` and `{}` as a successor link
+// (iss-2608301744300631). And every test above is a SPELLING test rather than a
+// null test: `!!null null` and `!<tag:yaml.org,2002:null>` are the same YAML node
+// as the `!!null` this accepts and read as PRESENT here, as do a `!!str`-tagged
+// empty string, a bare `&anchor` and `!!seq []` — measured against this
+// predicate, and pinned by
+// TestIsAbsentValueIsASpellingTestNotANullTest so the enumeration above cannot
+// quietly grow a claim it does not carry. Chasing them one literal at a time
+// leaves the next one open, so the altitude is iss-2608301808198621's to rule on
+// rather than this predicate's to widen.
 //
 // It takes the RAW frontmatter value, never one issueScalar has already read:
 // stripping twice empties a value that is two apostrophes inside double quotes,

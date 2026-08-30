@@ -7,6 +7,10 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-189-delta-security"
 found_at: "commands/capture.md"
+resolution: "Both sentences are scoped to the spellings the predicate actually tests, and neither claims the enumeration is complete. commands/capture.md names the list as the set the gate reads rather than every way YAML can carry nothing, and says what still passes green: a trailing comment on the value, and spellings built from a tag, an anchor or an alias. The code comment beside isAbsentValue says the same at its own altitude -- every test there is a spelling test, not a null test, so the tagged and anchored nulls read as PRESENT. The predicate is deliberately NOT widened: that is iss-2608301808198621's altitude question, and an eleventh literal would leave a twelfth. TestIsAbsentValueIsASpellingTestNotANullTest pins the boundary both sentences now claim, in both directions, so a later widening cannot land while the prose still names which spellings pass."
+impact: fix
+resolved_by:
+  intent: "itd-189"
 ---
 
 the blank grounds enumeration claims the trailing comment is the last gap while eleven further nothing carrying spellings pass green
