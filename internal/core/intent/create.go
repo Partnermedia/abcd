@@ -282,6 +282,14 @@ func seedDraft(id string, opts DraftOptions) string {
 	b.WriteString("> " + seedNote(opts) + "\n\n")
 	b.WriteString("## Why This Matters\n\n")
 	b.WriteString(opts.SeedBody + "\n\n")
+	// The two claim sections the claim-recording gradient prompts for, each with
+	// its one-line contract. They sit above the criteria, matching the record
+	// template, and they arrive as a PROMPT: a seeded nullity token would record a
+	// decline nobody made, which is precisely the collapse the gradient forbids.
+	b.WriteString("## Mechanism\n\n")
+	b.WriteString("> _Prompted (the claim-recording gradient): why the authors expect this to work, as a falsifiable \"we expect X because Y\" — not the outcome restated. Replace this line with the claim, or with the exact token `None stated.` alone on its line to record the claim as considered and declined._\n\n")
+	b.WriteString("## Scope Conditions\n\n")
+	b.WriteString("> _Required (the claim-recording gradient): the population, platform, scale, or assumptions this claim holds under, one per top-level bullet — `abcd intent plan` stamps each with a persistent identity. Replace this line with those bullets, or with the exact token `None stated.` alone on its line._\n\n")
 	b.WriteString("## Acceptance Criteria\n\n")
 	b.WriteString("> _Required (the itd-1 discipline): add at least one Given-When-Then bullet describing the verifiable bar for \"shipped\" before this draft can be planned._\n\n")
 	b.WriteString("## Open Questions\n\n")

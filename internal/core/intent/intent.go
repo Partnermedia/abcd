@@ -194,6 +194,10 @@ type PlanResult struct {
 	Intent      Intent    `json:"intent"`
 	Spec        spec.Spec `json:"spec"`
 	MintWarning string    `json:"mint_warning,omitempty"`
+	// ConditionsStamped is how many scope-condition bullets this run gave an
+	// identity to. Zero on a re-plan, on a recorded nullity, and on a record
+	// carrying no `## Scope Conditions` section at all.
+	ConditionsStamped int `json:"conditions_stamped"`
 }
 
 // LinkResult reports a completed Link: the updated intent and the spec it now

@@ -1563,6 +1563,9 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 				fmt.Fprintf(w, "abcd intent plan — %s drafts -> planned, linked %s\n", res.Intent.ID, res.Spec.ID)
 				fmt.Fprintf(w, "  intent: %s\n", termsafe.Sanitize(res.Intent.Path))
 				fmt.Fprintf(w, "  spec:   %s\n", termsafe.Sanitize(res.Spec.Path))
+				if res.ConditionsStamped > 0 {
+					fmt.Fprintf(w, "  scope-condition identities stamped: %d\n", res.ConditionsStamped)
+				}
 			})
 		},
 	})

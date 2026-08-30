@@ -758,23 +758,17 @@ func renderEvidence(e verdictEvidence) string {
 // ---------------------------------------------------------------------------
 
 // sectionBody returns the text of the section introduced by the first heading
-// matching headRe, up to the next heading or end of file.
+// matching headRe, up to the next heading or end of file. It reads the section
+// through sectionLineRange (claims.go), the package's single notion of where a
+// section starts and stops; an absent section and an empty one both read as ""
+// here, and a caller that must tell them apart asks for the bounds directly.
 func sectionBody(content string, headRe *regexp.Regexp) string {
 	lines := strings.Split(content, "\n")
-	for i, ln := range lines {
-		if !headRe.MatchString(strings.TrimRight(ln, "\r")) {
-			continue
-		}
-		var body []string
-		for _, b := range lines[i+1:] {
-			if headingRe.MatchString(strings.TrimRight(b, "\r")) {
-				break
-			}
-			body = append(body, b)
-		}
-		return strings.Join(body, "\n")
+	start, end, ok := sectionLineRange(lines, headRe)
+	if !ok {
+		return ""
 	}
-	return ""
+	return strings.Join(lines[start:end], "\n")
 }
 
 // countAcceptanceCriteria counts the top-level list bullets in the intent's

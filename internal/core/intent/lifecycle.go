@@ -148,14 +148,22 @@ func Plan(repoRoot, intentID string) (PlanResult, error) {
 		}
 	}
 
-	// 2. Set the binding kind (default standalone) while still in drafts. A draft
-	// with (kind=standalone, spec_id=null) stays lint-valid, so a failure here
-	// leaves a consistent record (the spec exists but the intent is unlinked).
+	// 2. Stamp an identity onto every unmarked scope-condition bullet, and set the
+	// binding kind (default standalone), while still in drafts. Plan is the
+	// write-capable verb of the lifecycle, so it is where the identities are
+	// minted: the readiness gate reports a missing marker but never writes one, a
+	// reporter that writes being a reporter whose output depends on who ran it.
+	// A draft with (kind=standalone, spec_id=null) stays lint-valid, so a failure
+	// here leaves a consistent record (the spec exists but the intent is unlinked).
+	stampedContent, conditionsStamped, err := stampScopeConditions(content, recordid.Minter{})
+	if err != nil {
+		return PlanResult{}, err
+	}
 	kind := it.Kind
 	if frontmatter.IsNull(kind) {
 		kind = KindStandalone
 	}
-	withKind, err := setFrontmatterFields(content, map[string]string{"kind": kind})
+	withKind, err := setFrontmatterFields(stampedContent, map[string]string{"kind": kind})
 	if err != nil {
 		return PlanResult{}, err
 	}
@@ -187,7 +195,7 @@ func Plan(repoRoot, intentID string) (PlanResult, error) {
 	it.SpecID = sp.ID
 	it.Bucket = BucketPlanned
 	it.Path = plannedRel
-	return PlanResult{Intent: it, Spec: sp, MintWarning: mintWarning}, nil
+	return PlanResult{Intent: it, Spec: sp, MintWarning: mintWarning, ConditionsStamped: conditionsStamped}, nil
 }
 
 // Link retroactively writes the derived spec_id link on an existing planned
