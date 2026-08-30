@@ -35,6 +35,16 @@ plugin surface, and a future MCP server share one engine.
   a judgement: whether a text names a conjecture rather than restating the
   decision is a review property, carried by the interview prompts on the plugin
   surface, and this package claims nothing about it.
+- **`core/mdrecord/`** — the Markdown machinery a record BODY is read and written
+  through: which lines are live markdown and which lie inside a fence or an HTML
+  comment, where a section starts and stops, what a top-level bullet is, and
+  where a trailing run of link-reference definitions ends. A leaf on the
+  `core/grounds` precedent, because two record families carry the same
+  constructs — the intent record's scope conditions and audit notes
+  (`core/intent`), the issue record's grounds (`core/capture`) — and a body
+  reader spelled twice is one the two can disagree about, which is how a bullet
+  one writer appends becomes a bullet the other cannot find. It owns no heading's
+  meaning: a caller supplies the pattern it is looking for.
 - **`core/surface/`** — the compatibility surface as DATA: the snapshot of every
   command, flag, and manifest entry a consumer binds to, and the diff that names
   what a release narrowed. It shares a word with the `surface/` front-door tier

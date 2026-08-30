@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/intentdriven/abcd/internal/core/mdrecord"
 )
 
 // fencedShadow is the shadowing case of iss-2608300235388164: a fenced EXAMPLE
@@ -160,7 +162,7 @@ func fenceBlindSectionBody(content string, headRe *regexp.Regexp) string {
 		}
 		var body []string
 		for _, b := range lines[i+1:] {
-			if headingRe.MatchString(strings.TrimRight(b, "\r")) {
+			if mdrecord.IsHeading(strings.TrimRight(b, "\r")) {
 				break
 			}
 			body = append(body, b)
@@ -546,8 +548,8 @@ func TestOpensCommentIsALeftToRightCursor(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := opensComment(tt.line); got != tt.want {
-				t.Fatalf("opensComment(%q) = %v, want %v", tt.line, got, tt.want)
+			if got := mdrecord.OpensComment(tt.line); got != tt.want {
+				t.Fatalf("mdrecord.OpensComment(%q) = %v, want %v", tt.line, got, tt.want)
 			}
 		})
 	}
