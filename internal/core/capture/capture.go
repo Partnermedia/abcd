@@ -294,10 +294,35 @@ var (
 	// filename<->frontmatter slug agreement, which stays on the stricter
 	// recordid.SplitRecordFilename (validate.go) because that check EXTRACTS and
 	// compares the slug; detection only needs the ordinal.
-	issFileNumRe  = recordid.FilenameNumRe(issFamily)
-	reAbcdListID  = regexp.MustCompile(`^(itd|fn|iss)-[0-9]+$`)
-	reSortIssID   = regexp.MustCompile(`^iss-([0-9]+)(-|$|\.)`)
-	reScalarKey   = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
-	statusDirs    = [3]State{StateOpen, StateResolved, StateWontfix}
-	statusDirName = map[State]string{StateOpen: "open", StateResolved: "resolved", StateWontfix: "wontfix"}
+	issFileNumRe = recordid.FilenameNumRe(issFamily)
+	reAbcdListID = regexp.MustCompile(`^(itd|fn|iss)-[0-9]+$`)
+	reSortIssID  = regexp.MustCompile(`^iss-([0-9]+)(-|$|\.)`)
+	reScalarKey  = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+	// statusDirs is the ledger's status list projected into State, and
+	// statusDirName its inverse. Both are DERIVED from issueschema.StatusDirs —
+	// the one canonical list the allocator provisions, the readers scan and the
+	// deterministic gates scope to — rather than restated here, so the State
+	// projection and the directory names cannot disagree about what a status is.
+	statusDirs    = stateProjection()
+	statusDirName = dirNameProjection()
 )
+
+// stateProjection renders the canonical status list as States, in the same order.
+func stateProjection() []State {
+	out := make([]State, 0, len(issueschema.StatusDirs))
+	for _, d := range issueschema.StatusDirs {
+		out = append(out, State(d))
+	}
+	return out
+}
+
+// dirNameProjection is stateProjection's inverse: a State back to the directory
+// name it names. A State and its directory are the same string by construction,
+// which is the point — the two spellings cannot drift because there is only one.
+func dirNameProjection() map[State]string {
+	out := make(map[State]string, len(issueschema.StatusDirs))
+	for _, d := range issueschema.StatusDirs {
+		out[State(d)] = d
+	}
+	return out
+}

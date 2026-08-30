@@ -68,7 +68,8 @@ func CreateFromText(repoRoot, text, impact string) (Intent, string, error) {
 // DraftOptions parameterises CreateDraft: the explicit slug and title, the Why
 // This Matters seed body, an optional impact judgement, and — on the promote
 // path (spc-24) — the iss-N the draft graduated from, written as the
-// promoted_from back-edge.
+// promoted_from back-edge (an iss-N, or the rdi-N of a dispositioned reading
+// item).
 type DraftOptions struct {
 	Slug         string
 	Title        string
@@ -77,9 +78,13 @@ type DraftOptions struct {
 	PromotedFrom string
 }
 
-// promotedFromRe constrains the promote back-edge to an issue id before it is
-// written into frontmatter.
-var promotedFromRe = regexp.MustCompile(`^iss-[0-9]+$`)
+// promotedFromRe constrains the promote back-edge to a captured id before it is
+// written into frontmatter. Two families graduate into an intent: an issue
+// somebody noticed (iss-N) and a reading item an instrument returned and a
+// researcher dispositioned (rdi-N). Both are one act — an observation earning an
+// admission — so both write the same back edge, and the forward stamp on the
+// source record is what closes the join.
+var promotedFromRe = regexp.MustCompile(`^(iss|rdi)-[0-9]+$`)
 
 // CreateDraft is the one canonical draft-mint primitive: both the quoted-text
 // create (CreateFromText) and the capture-promote path (capture.Promote, which
@@ -98,7 +103,7 @@ func CreateDraft(repoRoot string, opts DraftOptions) (Intent, string, error) {
 		return Intent{}, "", fmt.Errorf("intent: refusing to create a draft with an empty seed body")
 	}
 	if opts.PromotedFrom != "" && !promotedFromRe.MatchString(opts.PromotedFrom) {
-		return Intent{}, "", fmt.Errorf("intent: promoted_from %q must match ^iss-[0-9]+$", opts.PromotedFrom)
+		return Intent{}, "", fmt.Errorf("intent: promoted_from %q must match ^(iss|rdi)-[0-9]+$", opts.PromotedFrom)
 	}
 	// impact is optional on a draft (intent_impact_valid gates the move into
 	// shipped/, not the seed), but when set it must be a legal, non-internal

@@ -525,3 +525,129 @@ func TestCaptureLapsedAtHasNoDefault(t *testing.T) {
 		t.Fatalf("the refused lapse capture wrote %d record(s); it must write nothing", n)
 	}
 }
+
+// writeReadingFixture lays down one committed reading record by hand, so the
+// disposition verb has an item to answer. Reading records are written by the
+// ingest path, which is the cold-reading output contract's front door, not this
+// surface's — a fixture is the honest stand-in here.
+func writeReadingFixture(t *testing.T, repo, run, item string) {
+	t.Helper()
+	dir := filepath.Join(repo, ".abcd", "work", "issues", "readings", run)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	record := "---\n" +
+		"schema_version: 1\n" +
+		"id: \"" + item + "\"\n" +
+		"run: \"" + run + "\"\n" +
+		"manifest: \"sha256:beef\"\n" +
+		"position: \"detection\"\n" +
+		"regime: \"registrative\"\n" +
+		"pattern: \"a stated constraint\"\n" +
+		"tension: \"the two sides disagree\"\n" +
+		"constraint_in_play: \"the stated invariant\"\n" +
+		"why_a_tension: \"one of them must give\"\n" +
+		"---\n\n"
+	if err := os.WriteFile(filepath.Join(dir, item+".md"), []byte(record), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The disposition verb is the front door of every refusal spc-58 specifies, so
+// it has to BE a front door: reachable from the CLI, refusing what the core
+// refuses, and writing nothing when it refuses.
+func TestCaptureDispositionRefusesEmptyGroundsAndWritesNothing(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+	writeReadingFixture(t, repo, "rdg-2608300000000001", "rdi-2608300000000002")
+
+	out, err := runCLIErr(t, "capture", "disposition", "rdi-2608300000000002", "--state", "accepted")
+	if err == nil {
+		t.Fatalf("a disposition with no grounds must be refused, got success:\n%s", out)
+	}
+	if !strings.Contains(err.Error(), "disposition_grounds") {
+		t.Fatalf("the refusal must name the rule it enforces; got %v", err)
+	}
+	dispositions := filepath.Join(repo, ".abcd", "work", "issues", "dispositions")
+	if entries, derr := os.ReadDir(filepath.Join(dispositions, "rdi-2608300000000002")); derr == nil && len(entries) > 0 {
+		t.Fatalf("a refused disposition wrote %d file(s); it must write nothing", len(entries))
+	}
+}
+
+// The happy path: one answer, one record, under a directory keyed by the item.
+func TestCaptureDispositionWritesTheKeyedRecord(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+	writeReadingFixture(t, repo, "rdg-2608300000000001", "rdi-2608300000000002")
+
+	out := runCLI(t, "capture", "disposition", "rdi-2608300000000002",
+		"--state", "accepted", "--grounds", "the tension is real and worth acting on", "--json")
+	var r struct {
+		ID       string `json:"id"`
+		Item     string `json:"item"`
+		State    string `json:"state"`
+		Position string `json:"position"`
+		Path     string `json:"path"`
+	}
+	if err := json.Unmarshal(out, &r); err != nil {
+		t.Fatalf("disposition output not JSON: %v\n%s", err, out)
+	}
+	if !regexp.MustCompile(`^dsp-[0-9]{16}$`).MatchString(r.ID) {
+		t.Fatalf("disposition id = %q, want a native timestamp-numeric dsp id", r.ID)
+	}
+	if r.Position != "detection" {
+		t.Fatalf("position = %q, want the position read off the keyed reading record", r.Position)
+	}
+	want := filepath.ToSlash(filepath.Join(".abcd/work/issues/dispositions", r.Item, r.ID+".md"))
+	if filepath.ToSlash(r.Path) != want {
+		t.Fatalf("path = %q, want %q", r.Path, want)
+	}
+	if _, err := os.Stat(filepath.Join(repo, filepath.FromSlash(r.Path))); err != nil {
+		t.Fatalf("the disposition record must exist on disk: %v", err)
+	}
+}
+
+// The outstanding-readings roster rides the bare status board. This is the
+// wiring assertion: the rule and the board call one function, so an item nobody
+// has answered is visible where a person actually looks, not only in a lint run
+// they have to remember to make.
+func TestCaptureBoardCarriesTheOutstandingRoster(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+	writeReadingFixture(t, repo, "rdg-2608300000000001", "rdi-2608300000000002")
+
+	out := runCLI(t, "capture", "--json")
+	var r struct {
+		Outstanding struct {
+			Undispositioned []struct {
+				Item string `json:"item"`
+			} `json:"undispositioned"`
+			OpenHolds []struct {
+				Item          string `json:"item"`
+				ExitCondition string `json:"exit_condition"`
+			} `json:"open_holds"`
+		} `json:"reading_outstanding"`
+	}
+	if err := json.Unmarshal(out, &r); err != nil {
+		t.Fatalf("capture board not JSON: %v\n%s", err, out)
+	}
+	if len(r.Outstanding.Undispositioned) != 1 || r.Outstanding.Undispositioned[0].Item != "rdi-2608300000000002" {
+		t.Fatalf("the board must carry the undispositioned item; got %+v\n%s", r.Outstanding, out)
+	}
+
+	// A held item renders on the board WITH its exit condition, which is the only
+	// thing that distinguishes a hold from a parking space.
+	if err := os.MkdirAll(filepath.Join(repo, ".abcd", "work", "issues", "dispositions", "rdi-2608300000000002"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(repo, ".abcd", "work", "issues", "dispositions", "rdi-2608300000000002", "dsp-2608300000000003.md"),
+		[]byte("---\nschema_version: 1\nid: \"dsp-2608300000000003\"\nitem: \"rdi-2608300000000002\"\n"+
+			"state: \"held\"\nexit_condition: \"the closing run returns it again\"\n---\n\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	text := string(runCLI(t, "capture"))
+	if !strings.Contains(text, "exits when: the closing run returns it again") {
+		t.Fatalf("the board must render an open hold with its exit condition:\n%s", text)
+	}
+}

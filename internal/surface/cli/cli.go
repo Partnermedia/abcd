@@ -2345,7 +2345,15 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 				if err != nil {
 					return err
 				}
-				return render(cmd.OutOrStdout(), *asJSON, st, func(w io.Writer) {
+				// The outstanding-readings report rides the same board. It is the
+				// SAME function the lint rule calls, not a second scan: an item
+				// nobody has answered has no state to sit in, and two readings of
+				// that one question would be two answers to it.
+				board, err := captureBoardOf(cwd, st)
+				if err != nil {
+					return err
+				}
+				return render(cmd.OutOrStdout(), *asJSON, board, func(w io.Writer) {
 					fmt.Fprintf(w, "abcd capture — open %d · resolved %d · wontfix %d\n",
 						st.OpenCount, st.ResolvedCount, st.WontfixCount)
 					if len(st.RecentOpen) > 0 {
@@ -2362,6 +2370,47 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 					// own name and bytes, so both are sanitised before the terminal.
 					for _, sk := range st.Skipped {
 						fmt.Fprintf(w, "  skipped %s: %s\n", termsafe.Sanitize(sk.Path), termsafe.Sanitize(sk.Error))
+					}
+					// Beside the skipped roster, and for the same reason it is
+					// there: a record the board does not name is one nobody is
+					// counting. An unanswered reading item is reported as
+					// outstanding because no state means "already covered", and an
+					// open hold renders WITH its exit condition, which is the only
+					// thing that distinguishes a hold from a parking space.
+					for _, o := range board.Outstanding.Undispositioned {
+						fmt.Fprintf(w, "  outstanding %s (run %s) — no disposition\n",
+							termsafe.Sanitize(o.Item), termsafe.Sanitize(o.Run))
+					}
+					// More than one standing answer is named in full, never resolved
+					// by picking one: which is in force is a judgement the ledger
+					// does not contain.
+					for _, c := range board.Outstanding.Contested {
+						fmt.Fprintf(w, "  contested %s (run %s) — %d standing answers: %s\n",
+							termsafe.Sanitize(c.Item), termsafe.Sanitize(c.Run),
+							len(c.Standing), termsafe.Sanitize(strings.Join(c.Standing, ", ")))
+					}
+					// An item answered twice and standing none is a fault, not an
+					// unanswered item, and saying "carries no disposition" about it
+					// would be a confident wrong statement.
+					for _, c := range board.Outstanding.Cyclic {
+						fmt.Fprintf(w, "  tangled %s (run %s) — its dispositions supersede one another, so none stands\n",
+							termsafe.Sanitize(c.Item), termsafe.Sanitize(c.Run))
+					}
+					// An answer that exists and cannot be read is not an absent one.
+					for _, u := range board.Outstanding.Unreadable {
+						fmt.Fprintf(w, "  illegible %s (run %s) — stands on %s, which no reader can read\n",
+							termsafe.Sanitize(u.Item), termsafe.Sanitize(u.Run), termsafe.Sanitize(u.Disposition))
+					}
+					// A tree the walk declined to enter is named, because a tree
+					// nobody walked looks exactly like a tree with nothing in it.
+					for _, u := range board.Outstanding.Unsafe {
+						fmt.Fprintf(w, "  unread %s — %s; what it holds is neither outstanding nor answered\n",
+							termsafe.Sanitize(u.Path), termsafe.Sanitize(u.Reason))
+					}
+					for _, h := range board.Outstanding.OpenHolds {
+						fmt.Fprintf(w, "  held %s (%s) — exits when: %s\n",
+							termsafe.Sanitize(h.Item), termsafe.Sanitize(h.Disposition),
+							termsafe.Sanitize(h.ExitCondition))
 					}
 					fmt.Fprint(w, ledgerDecisionRule)
 					fmt.Fprint(w, ideateRoutingRule)
@@ -2536,14 +2585,16 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	resolveCmd.Flags().StringVar(&resolveShippedIn, "shipped-in", "", "MIGRATION USE: the release that already carried this work (vX.Y.Z), leaving the record out of the current cut; unnecessary in a repo abcd managed from the start")
 	captureCmd.AddCommand(resolveCmd)
 
-	// promote — graduate an issue into an intent draft (spc-24, step 2 of the
-	// record walk). Default mode mints a draft and stamps the issue's
+	// promote — graduate an issue, or a dispositioned reading item, into an
+	// intent draft (spc-24, step 2 of the record walk; spc-58 for the reading
+	// item). Default mode mints a draft and stamps the source record's
 	// promoted_to in one invocation; --intent is the stamp-only repair/link
-	// mode. The issue keeps its status folder — promotion is not resolution.
+	// mode. The issue keeps its status folder — promotion is not resolution —
+	// and an undispositioned rdi-N is refused before anything is minted.
 	var promoteIntent string
 	promoteCmd := &cobra.Command{
-		Use:   "promote <iss-N>",
-		Short: "Graduate an issue into an intent draft (mints + stamps promoted_to)",
+		Use:   "promote <iss-N|rdi-N>",
+		Short: "Graduate an issue or a dispositioned reading item into an intent draft (mints + stamps promoted_to)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
@@ -2570,6 +2621,63 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	}
 	promoteCmd.Flags().StringVar(&promoteIntent, "intent", "", "stamp-only mode: link this existing itd-N instead of minting a draft")
 	captureCmd.AddCommand(promoteCmd)
+
+	// disposition — the researcher's answer to ONE reading item, written as a
+	// separate record keyed to that item (spc-58). It is a distinct verb rather
+	// than a flag on anything else because the reading and the answer are two
+	// acts: collapsing them into one write would leave nothing able to show that
+	// a finding existed before it was answered.
+	var dispState, dispGrounds, dispExit, dispSupersedes, dispRecurs string
+	var dispHoldFrame, dispHoldMoscow string
+	dispositionCmd := &cobra.Command{
+		Use:   "disposition <rdi-N> --state <accepted|rejected|declined|held> [--grounds <text>] [--exit-condition <text>] [--supersedes <dsp-N>] [--recurs <rdi-N,...>]",
+		Short: "Answer one reading item (a separate record, keyed to the item)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			recurs, err := parseRecurs(dispRecurs)
+			if err != nil {
+				return err
+			}
+			res, err := capture.Disposition(capture.DispositionRequest{
+				RepoRoot: cwd, Item: args[0], State: dispState,
+				Grounds: dispGrounds, ExitCondition: dispExit,
+				Supersedes: dispSupersedes, Recurs: recurs,
+				HoldFrameLocation: dispHoldFrame, HoldMoscow: dispHoldMoscow,
+			})
+			if err != nil {
+				return err
+			}
+			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				fmt.Fprintf(w, "%s  %s %s (%s) — %s\n",
+					res.ID, res.Item, res.State, res.Position, termsafe.Sanitize(res.Path))
+				if res.Redacted > 0 {
+					fmt.Fprintf(w, "  redacted %d span(s) before writing (home paths and identifiers are never committed)\n", res.Redacted)
+				}
+				if res.Degraded != "" {
+					fmt.Fprintf(w, "  WARNING: %s\n", termsafe.Sanitize(res.Degraded))
+				}
+			})
+		},
+	}
+	// --state carries no default. Which answer a researcher gave is the whole
+	// content of the record, and a defaulted judgement is a judgement nobody
+	// made; the core refuses an empty state rather than inventing one. It stays
+	// unmarked as cobra-required to keep the tree's no-required-flags invariant.
+	dispositionCmd.Flags().StringVar(&dispState, "state", "", "the answer: accepted | rejected | declined | held (availability varies by the item's position)")
+	dispositionCmd.Flags().StringVar(&dispGrounds, "grounds", "", "disposition_grounds: why this answer (free text; required on every state except held)")
+	dispositionCmd.Flags().StringVar(&dispExit, "exit-condition", "", "what would end a held disposition (required on held; a hold exits only through a superseding disposition that cites it)")
+	dispositionCmd.Flags().StringVar(&dispSupersedes, "supersedes", "", "the standing dsp-N this answer replaces; required once an item already carries one")
+	dispositionCmd.Flags().StringVar(&dispRecurs, "recurs", "", "comma-separated prior rdi-ids this item recurs from — the recorded form of a warm recognition, never a mechanical join")
+	// The two-axis hold field is RESERVED and dormant. The flags exist so the
+	// reservation is a behaviour a caller meets rather than a comment nobody
+	// reads: a populated value is refused, and the refusal states the grammar.
+	dispositionCmd.Flags().StringVar(&dispHoldFrame, "hold-frame-location", "", "RESERVED (dormant): the frame element a hold sits at; a populated value is refused until activation is ruled")
+	dispositionCmd.Flags().StringVar(&dispHoldMoscow, "hold-moscow", "", "RESERVED (dormant): must | should | could | wont; a populated value is refused until activation is ruled")
+	captureCmd.AddCommand(dispositionCmd)
 
 	// wontfix — open -> wontfix with a reason.
 	captureCmd.AddCommand(&cobra.Command{
@@ -2644,6 +2752,10 @@ func listState(open, resolved, wontfix, all bool) (capture.State, error) {
 // issIDRe validates a --blocked-by token at the CLI boundary (mirrors the core
 // ^iss-[0-9]+$ schema constraint).
 var issIDRe = regexp.MustCompile(`^iss-[0-9]+$`)
+
+// readingItemIDRe validates a --recurs token at the CLI boundary (mirrors the
+// core ^rdi-[0-9]+$ schema constraint).
+var readingItemIDRe = regexp.MustCompile(`^rdi-[0-9]+$`)
 
 // recordIDRe matches any abcd record id (issue, intent, or spec). It is used
 // only by suspectedTypoedSubcommand's shape check — distinct from issIDRe, which
@@ -2779,6 +2891,69 @@ func parseBlockedBy(raw string) ([]string, error) {
 		}
 		if !issIDRe.MatchString(tok) {
 			return nil, fmt.Errorf("capture: --blocked-by token %q must match iss-N", tok)
+		}
+		ids = append(ids, tok)
+	}
+	return ids, nil
+}
+
+// captureBoard is the bare status board: the ledger counts and the
+// outstanding-readings report, flattened into one envelope so the --json and
+// text renders answer the same question. The report is embedded rather than
+// re-derived — ReadReadingOutstanding is the one implementation, shared with the
+// reading_outstanding lint rule.
+type captureBoard struct {
+	capture.StatusResult
+	Outstanding lint.OutstandingReadings `json:"reading_outstanding"`
+}
+
+// captureBoardOf composes the board, normalising the report's collections to
+// empty slices: a collection is never null in this surface's envelope.
+func captureBoardOf(repoRoot string, st capture.StatusResult) (captureBoard, error) {
+	// repoRoot is the SAME value handed to capture.Status, so the two halves of
+	// one board can never resolve two different ledgers.
+	report, err := lint.ReadReadingOutstanding(repoRoot, capture.LedgerRelPath)
+	if err != nil {
+		return captureBoard{}, err
+	}
+	if report.Undispositioned == nil {
+		report.Undispositioned = []lint.OutstandingItem{}
+	}
+	if report.OpenHolds == nil {
+		report.OpenHolds = []lint.OpenHold{}
+	}
+	if report.Unsafe == nil {
+		report.Unsafe = []lint.UnsafePath{}
+	}
+	if report.Cyclic == nil {
+		report.Cyclic = []lint.OutstandingItem{}
+	}
+	if report.Contested == nil {
+		report.Contested = []lint.ContestedItem{}
+	}
+	if report.Unreadable == nil {
+		report.Unreadable = []lint.UnreadableAnswer{}
+	}
+	return captureBoard{StatusResult: st, Outstanding: report}, nil
+}
+
+// parseRecurs splits the comma-separated --recurs list into prior reading-item
+// ids. Shape is checked here so a typo is a usage error rather than a refusal
+// from deep inside the ledger writer; membership (does the item exist) is
+// deliberately NOT checked, because a recurrence may cite an item from a run
+// this ledger no longer carries.
+func parseRecurs(raw string) ([]string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	var ids []string
+	for _, tok := range strings.Split(raw, ",") {
+		tok = strings.TrimSpace(tok)
+		if tok == "" {
+			continue
+		}
+		if !readingItemIDRe.MatchString(tok) {
+			return nil, fmt.Errorf("capture: --recurs token %q must match rdi-N", tok)
 		}
 		ids = append(ids, tok)
 	}

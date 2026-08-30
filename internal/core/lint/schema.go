@@ -48,6 +48,14 @@ var (
 	recordHandleRe = regexp.MustCompile(`(?i)\b(adr|itd|iss|spc)-(\d+)\b`)
 	// The same handle, anchored: a whole frontmatter id value and nothing else.
 	recordHandleFullRe = regexp.MustCompile(`(?i)^(adr|itd|iss|spc)-(\d+)$`)
+	// A frontmatter id of ANY store, parsed by shape rather than against the
+	// cross-reference vocabulary above. The two are deliberately different sets:
+	// the vocabulary says which prefixes may appear in a cross-reference FIELD,
+	// while this says what an id looks like at all. The filename ↔ id agreement is
+	// a question every store has to answer, including the ones whose records are
+	// never cited — and checking it against the citation vocabulary would report a
+	// perfectly good rdi-N id as disagreeing with itself.
+	anyHandleFullRe = regexp.MustCompile(`(?i)^([a-z]+)-(\d+)$`)
 	// recordHandleKinds renders the legal prefixes for a message, composed from the
 	// stores rather than spelled as a literal so it cannot drift from the pattern.
 	recordHandleKinds = "adr-N, itd-N, spc-N, or iss-N"
@@ -67,6 +75,15 @@ var (
 	intentFileNumRe = recordid.FilenameNumRe("itd")
 	specFileNumRe   = recordid.FilenameNumRe("spc")
 	issueFileNumRe  = recordid.FilenameNumRe("iss")
+	// The reading families' filename and bucket grammars. A run directory is
+	// named for the run that minted it; a disposition directory is named for the
+	// ITEM it answers, which is what makes the status signal one directory probe
+	// rather than a folder-membership question.
+	readingItemFileNumRe = recordid.FilenameNumRe(issueschema.ReadingItemFamily)
+	readingRunFileNumRe  = recordid.FilenameNumRe(issueschema.ReadingRunFamily)
+	dispositionFileNumRe = recordid.FilenameNumRe(issueschema.DispositionFamily)
+	readingRunBucketRe   = regexp.MustCompile(`^` + issueschema.ReadingRunFamily + `-[0-9]+$`)
+	dispositionBucketRe  = regexp.MustCompile(`^` + issueschema.ReadingItemFamily + `-[0-9]+$`)
 	// The cross-reference frontmatter fields whose targets must resolve. They are
 	// the record's machine-readable claims that another record exists and is a
 	// live input — as distinct from prose, where naming a released or retired id
@@ -102,9 +119,17 @@ type recordStore struct {
 	// is the store's identity spelled for a consumer rather than for a message,
 	// and it lives here so the graph never re-declares which prefixes exist.
 	nodeType string
-	// buckets are the lifecycle directories the store declares. A nil buckets is
-	// a FLAT store (the ADR store): records sit directly in it.
+	// buckets are the lifecycle directories the store declares. A store with
+	// neither buckets nor bucketRe is FLAT (the ADR store): records sit directly
+	// in it.
 	buckets []string
+	// bucketRe declares the store's buckets by GRAMMAR instead of by list, for a
+	// store whose buckets are MINTED rather than enumerated — a reading run's
+	// directory and an item-keyed disposition directory are both that shape.
+	// Nobody can list them ahead of time, so a store that could not declare a
+	// grammar would have to leave its whole tree undeclared, which is exactly the
+	// escape the undeclared-bucket check exists to close.
+	bucketRe *regexp.Regexp
 	// fileNumRe extracts the id number from a filename (submatch 1).
 	fileNumRe *regexp.Regexp
 	// fileFamily is the family prefix a filename in this store carries, spelled
@@ -122,6 +147,32 @@ type recordStore struct {
 	// frontmatter other rules already judge (intent_lifecycle, spec_id_unique)
 	// must not be re-judged against the issue's shape.
 	requiredFields []string
+}
+
+// bucketed reports whether the store holds its records in lifecycle
+// directories, by list or by grammar, rather than directly in its root.
+func (s recordStore) bucketed() bool { return s.buckets != nil || s.bucketRe != nil }
+
+// declaresBucket reports whether name is one of the store's buckets.
+func (s recordStore) declaresBucket(name string) bool {
+	for _, b := range s.buckets {
+		if b == name {
+			return true
+		}
+	}
+	return s.bucketRe != nil && s.bucketRe.MatchString(name)
+}
+
+// bucketDesc renders the store's declared buckets for a finding message: the
+// list where there is one, the grammar where the buckets are minted.
+func (s recordStore) bucketDesc() string {
+	if len(s.buckets) > 0 {
+		return strings.Join(s.buckets, ", ")
+	}
+	if s.bucketRe != nil {
+		return "names matching " + s.bucketRe.String()
+	}
+	return ""
 }
 
 // recordStores is the closed set of identified record stores. It is code, not
@@ -146,6 +197,47 @@ var recordStores = []recordStore{
 	// this invariant exists to catch.
 	{prefix: "iss", noun: "issue", nodeType: "issue", buckets: issueStatusDirs, fileNumRe: issueFileNumRe, fileFamily: "iss", filename: "iss-<N>-<slug>.md",
 		requiredFields: issueschema.Required},
+	// The three reading families (spc-58). Each buckets by GRAMMAR because its
+	// buckets are minted: a reading item and a run record live under the run that
+	// produced them, and a disposition lives under the item it answers.
+	//
+	// Their required-field sets are absent, and that is a STATED GAP rather than a
+	// delegation. What this rule gives them is structural — the bucket grammar,
+	// the filename ↔ id agreement, no undeclared lifecycle directory — and their
+	// CONTENT is judged by the writer that refuses a malformed record at the
+	// boundary, and by review. So the guarantee the issue store has, that a record
+	// the reader would refuse is not lint-green, does not yet hold here: a record
+	// hand-written into these trees can carry a body no reader reads and pass this
+	// gate. Declaring their required fields is what closes it, and until that
+	// lands the gap belongs in writing rather than in the difference between two
+	// store entries.
+	{prefix: "rdi", noun: "reading item", nodeType: "reading", bucketRe: readingRunBucketRe,
+		fileNumRe: readingItemFileNumRe, fileFamily: "rdi", filename: "rdi-<N>.md"},
+	{prefix: "rdg", noun: "reading run", nodeType: "reading-run", bucketRe: readingRunBucketRe,
+		fileNumRe: readingRunFileNumRe, fileFamily: "rdg", filename: "rdg-<N>.md"},
+	{prefix: "dsp", noun: "disposition", nodeType: "disposition", bucketRe: dispositionBucketRe,
+		fileNumRe: dispositionFileNumRe, fileFamily: "dsp", filename: "dsp-<N>.md"},
+}
+
+// storeByPrefix returns the code-side store for a prefix.
+func storeByPrefix(prefix string) (recordStore, bool) {
+	for _, s := range recordStores {
+		if s.prefix == prefix {
+			return s, true
+		}
+	}
+	return recordStore{}, false
+}
+
+// recordStorePrefixes is the set of store prefixes the scanner knows, derived
+// from recordStores so the configuration validator and the walk cannot disagree
+// about what a store is.
+func recordStorePrefixes() map[string]bool {
+	out := make(map[string]bool, len(recordStores))
+	for _, s := range recordStores {
+		out[s.prefix] = true
+	}
+	return out
 }
 
 // schemaRecord is one record file as the schema rule sees it: which store and
@@ -354,7 +446,7 @@ func checkRecordFilename(r schemaRecord, severity string) []Finding {
 	// id written two ways (the rest of the rule already compares numerically), and
 	// a string comparison would report the record's own zero-padded spelling as a
 	// disagreement with itself.
-	if m := recordHandleFullRe.FindStringSubmatch(got); m != nil {
+	if m := anyHandleFullRe.FindStringSubmatch(got); m != nil {
 		if n, err := strconv.Atoi(m[2]); err == nil &&
 			strings.EqualFold(m[1], r.store.prefix) && n == r.num {
 			return nil
@@ -647,10 +739,13 @@ func scanRecordStores(repoRoot string, cfg RuleConfig) ([]schemaRecord, []Findin
 			return nil, nil, err
 		}
 
-		declared := make(map[string]bool, len(store.buckets))
-		for _, b := range store.buckets {
-			declared[b] = true
-		}
+		// A directory that is itself a CONFIGURED store root is not an undeclared
+		// bucket of its parent: the reading families live inside the issue store's
+		// own root, and without this the day they appear is the day the gate calls
+		// each of them an undeclared issue bucket — a blocker over a directory the
+		// configuration itself declares. The set is derived from cfg.RecordStores,
+		// so the config stays the single declaration of what a store is.
+		nestedRoots := nestedStoreRoots(cfg.RecordStores, dir)
 
 		// A flat store holds its records directly; a bucketed store holds only its
 		// declared lifecycle directories (plus the store README).
@@ -722,7 +817,7 @@ func scanRecordStores(repoRoot string, cfg RuleConfig) ([]schemaRecord, []Findin
 		}
 
 		storeRel := repoRel(repoRoot, storeAbs)
-		if store.buckets == nil {
+		if !store.bucketed() {
 			// A flat store declares NO buckets, so it holds its records directly and
 			// readBucket reports any subdirectory of it, exactly as it does for a
 			// declared bucket.
@@ -741,9 +836,20 @@ func scanRecordStores(repoRoot string, cfg RuleConfig) ([]schemaRecord, []Findin
 				if strings.HasPrefix(e.Name(), ".") {
 					continue
 				}
-				if !declared[e.Name()] {
+				// The exemption says "something else scans this directory". A bucket
+				// the parent ALREADY declares is scanned by the parent, so there is
+				// nothing to exempt and granting it can only remove coverage — which
+				// is exactly what a config line aiming a real store prefix at
+				// another store's bucket did: the parent skipped the bucket, the
+				// misdirected store ignored every file not matching its own filename
+				// grammar, and a record missing five required properties produced no
+				// finding at all.
+				if nestedRoots[e.Name()] && !store.declaresBucket(e.Name()) {
+					continue
+				}
+				if !store.declaresBucket(e.Name()) {
 					add(rel, "lifecycle directory '"+e.Name()+"' is not a declared "+store.noun+
-						" bucket ("+strings.Join(store.buckets, ", ")+"); an undeclared bucket is a lifecycle state no rule reads")
+						" bucket ("+store.bucketDesc()+"); an undeclared bucket is a lifecycle state no rule reads")
 					continue
 				}
 				if err := readBucket(filepath.Join(storeAbs, e.Name()), rel, e.Name()); err != nil {
@@ -756,13 +862,48 @@ func scanRecordStores(repoRoot string, cfg RuleConfig) ([]schemaRecord, []Findin
 			}
 			if store.fileNumRe.MatchString(e.Name()) {
 				add(rel, "record sits in the store root rather than a lifecycle bucket ("+
-					strings.Join(store.buckets, ", ")+"); the directory IS the lifecycle state")
+					store.bucketDesc()+"); the directory IS the lifecycle state")
 			}
 		}
 	}
 
 	sort.SliceStable(records, func(i, j int) bool { return records[i].rel < records[j].rel })
 	return records, out, nil
+}
+
+// nestedStoreRoots names the immediate children of dir that are themselves
+// configured record-store roots. Both arguments are repo-relative, slash-joined
+// store paths as the configuration spells them.
+//
+// It walks the CODE's store list and looks each prefix up in the configuration,
+// never the configuration's own values, and the difference is the whole point.
+// The exemption says "this directory is not an undeclared bucket because
+// something else scans it" — so it may only be granted to a directory the scanner
+// actually visits. Deriving it from every value in the map would let a committed
+// line naming no store at all (a prefix this code has never heard of, pointed
+// inside a real store) exempt a directory that nothing scans: a lifecycle state
+// no rule reads, which is precisely the escape this rule exists to close. Which
+// lifecycle states exist is code, not config, and a config that could add a
+// bucket could also hide one.
+func nestedStoreRoots(stores map[string]string, dir string) map[string]bool {
+	parent := strings.Trim(filepath.ToSlash(dir), "/")
+	out := map[string]bool{}
+	for _, store := range recordStores {
+		other := stores[store.prefix]
+		if other == "" {
+			continue
+		}
+		child := strings.Trim(filepath.ToSlash(other), "/")
+		if child == parent || !strings.HasPrefix(child, parent+"/") {
+			continue
+		}
+		// Only the IMMEDIATE child is a bucket-shaped name from this store's
+		// point of view; a deeper store root is a child of something else.
+		if rest := child[len(parent)+1:]; !strings.Contains(rest, "/") {
+			out[rest] = true
+		}
+	}
+	return out
 }
 
 // undeclaredSubdirMessage names a directory that sits where records should. A

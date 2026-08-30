@@ -20,6 +20,7 @@ import (
 
 	"github.com/intentdriven/abcd/internal/core/changelog"
 	"github.com/intentdriven/abcd/internal/core/frontmatter"
+	"github.com/intentdriven/abcd/internal/core/issueschema"
 	"github.com/intentdriven/abcd/internal/core/launch"
 	"github.com/intentdriven/abcd/internal/core/recordid"
 	"github.com/intentdriven/abcd/internal/fsutil"
@@ -119,7 +120,7 @@ var (
 	specBucketNames   = []string{"open", "closed"}
 	// issueStatusDirs are the issue ledger's status directories (issue_id_unique
 	// scans all three for a duplicated iss-N id).
-	issueStatusDirs = []string{"open", "resolved", "wontfix"}
+	issueStatusDirs = issueschema.StatusDirs
 	intentBuckets   = bucketSet(intentBucketNames)
 	// intentImpactValues and issueImpactValues render the legal impact set an
 	// error message offers. They are composed from the shared enum's constants
@@ -524,6 +525,19 @@ func LintAt(cfg Config, repoRoot string, now time.Time) ([]Finding, error) {
 			return nil, err
 		}
 		findings = append(findings, checkIssueIDUnique(repoRoot, ledger, iiCfg)...)
+	}
+
+	// reading_outstanding reads the same ledger root's SIBLING families
+	// (readings/, dispositions/), also outside cfg.Roots, so it runs once here.
+	// It is a report, never a gate: its severity is pinned in code and its
+	// findings are info, so it can never fail a push that has nothing to do with
+	// a reading.
+	if roCfg, ok := cfg.Rules[ruleReadingOutstanding]; ok && roCfg.Enabled {
+		ro, err := checkReadingOutstanding(repoRoot, roCfg)
+		if err != nil {
+			return nil, err
+		}
+		findings = append(findings, ro...)
 	}
 
 	if impactCfg, ok := cfg.Rules["issue_impact_valid"]; ok && impactCfg.Enabled {

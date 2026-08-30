@@ -18,6 +18,22 @@ import (
 	"time"
 )
 
+// StatusDirs is the issue ledger's status-directory list, in the order a
+// surface renders them. The directory a record sits in IS its status — there is
+// no status field — so this list is simultaneously the set of folders the writer
+// provisions, the set the readers scan, and the set the deterministic gates scope
+// their pathspecs to. Those three had four spellings between them (lint's own
+// list, two literals in capture's allocator, and the shell gate's pathspec), and
+// the day a SIBLING family joined the ledger tree was the day the fourth spelling
+// became a silent divergence: a record can only land somewhere every side agrees
+// to look.
+//
+// It lives here for the same reason the property allow-list does — the one leaf
+// both core/capture and core/lint already read the ledger's schema from. The
+// shell gate cannot import Go and therefore holds the second and last spelling,
+// pinned to this value by a test.
+var StatusDirs = []string{"open", "resolved", "wontfix"}
+
 // Required is every property the issue schema marks required, in the order a
 // record writes them. A record missing one is not a lax record: the ledger reader
 // refuses it and skips it, so it goes silently invisible to every capture surface
