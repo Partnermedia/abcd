@@ -5,6 +5,7 @@ import (
 	"html"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/frontmatter"
@@ -693,21 +694,46 @@ func rawHeadingTitleEnds(rest, name string) []int {
 // still read by the opener pattern, which recognises `role="heading"` by its
 // value, and a comment's text is still stripped when the title is rendered.
 //
-// Each masking is bounded by its own construct and skipped entirely when that
-// construct does not terminate. An attribute value ends ON THE LINE IT OPENS
-// ON: ending it at the next matching quote found anywhere in the document made
-// one unbalanced quote blank every angle bracket up to some unrelated quote
-// thousands of bytes later, which erased a raw HTML heading from the scan. The
-// tag's own `>` cannot serve as that bound, because a `>` written inside the
-// value is the very thing this mask exists to blank — so the line is the bound,
-// and a value that does not close on its own line masks nothing. A value the
-// mask therefore declines is a value the unmasked reading still reads in full.
+// Where an attribute value ENDS is genuinely ambiguous, so lineBound selects one
+// of the two honest answers and the caller takes both.
 //
-// The mask is only ever a SECOND reading: its caller scans the unmasked text as
-// well and refuses on either, so masking can add a reading and can never take
-// one away.
-func maskMarkupData(s string) string {
+// A browser's own tokenizer ends an unterminated value at the end of the input,
+// which is lineBound=false: the closing quote is the next matching quote
+// anywhere ahead. That reading is right about `<h2 title="a>` continued on the
+// next line — a shape every renderer shows as the excluded heading, and one the
+// opener pattern cannot parse at all until the `>` inside the value is blanked.
+// It is wrong about a stray quote, which then blanks every angle bracket up to
+// some unrelated quote thousands of bytes later.
+//
+// The conservative answer is lineBound=true: a value ends on the line it opens
+// on, and a value that does not close there masks nothing. That reading is right
+// about the stray quote, and about a legitimate value whose masking the stray
+// one would otherwise have consumed — and it is the reading that is wrong about
+// the value spanning a line.
+//
+// Neither is the document on its own, so neither may DECIDE. Both are handed to
+// the caller alongside the unmasked text, and a heading is refused if any
+// reading names an excluded one: masking can add a reading and can never take
+// one away. Substituting one of these maskings for the other, rather than adding
+// it, is precisely how the line-bounded reading arrived carrying a leak.
+func maskMarkupData(s string, lineBound bool) string {
 	out := []byte(s)
+	// A MONOTONE cursor onto the next newline, because the walk's own offsets
+	// only ever advance. Searching the whole remainder for one per attribute
+	// assignment is quadratic: a 4 MiB file of assignments on one line took 21
+	// seconds where the walk takes milliseconds, and the size cap bounds one
+	// file rather than the number of them.
+	nl := -1
+	nextNewline := func(from int) int {
+		if nl < from {
+			if n := strings.IndexByte(s[from:], '\n'); n < 0 {
+				nl = len(s)
+			} else {
+				nl = from + n
+			}
+		}
+		return nl
+	}
 	for i := 0; i < len(s); {
 		if strings.HasPrefix(s[i:], "<!--") {
 			end := strings.Index(s[i+4:], "-->")
@@ -733,15 +759,11 @@ func maskMarkupData(s string) string {
 				i++
 				continue
 			}
-			// The value's own LINE is the limit. The tag's own `>` cannot be the
-			// limit, because a `>` inside the value is the very thing this mask
-			// exists to blank; the line is the bound that separates a value from
-			// the document it was never part of.
-			lineEnd := len(s)
-			if n := strings.IndexByte(s[q+1:], '\n'); n >= 0 {
-				lineEnd = q + 1 + n
+			limit := len(s)
+			if lineBound {
+				limit = nextNewline(q + 1)
 			}
-			end := strings.IndexByte(s[q+1:lineEnd], s[q])
+			end := strings.IndexByte(s[q+1:limit], s[q])
 			if end < 0 {
 				i++
 				continue
@@ -806,8 +828,10 @@ func maskAngles(out []byte, from, to int) {
 func rawHTMLHeading(lines []string, fenced []bool, offset int, headings map[string]bool) (int, string, bool) {
 	raw := strings.Join(lines, "\n")
 	readings := []string{raw}
-	if masked := maskMarkupData(raw); masked != raw {
-		readings = append(readings, masked)
+	for _, masked := range []string{maskMarkupData(raw, true), maskMarkupData(raw, false)} {
+		if !slices.Contains(readings, masked) {
+			readings = append(readings, masked)
+		}
 	}
 
 	for _, text := range readings {

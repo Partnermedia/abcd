@@ -7,6 +7,10 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-183-round-10-security"
 found_at: "internal/core/reading/project.go"
+resolution: "The cursor onto the next newline advances with the walk instead of restarting, since the walk's own offsets only ever move forward."
+impact: fix
+resolved_by:
+  intent: "itd-183"
 ---
 
 maskMarkupData searches the whole remainder of the document for a newline once per attribute assignment making the mask quadratic in file size

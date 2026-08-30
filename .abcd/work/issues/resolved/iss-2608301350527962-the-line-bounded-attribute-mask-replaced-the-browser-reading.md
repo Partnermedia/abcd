@@ -7,6 +7,10 @@ category: "security"
 source: "user-observation"
 found_during: "itd-183-round-10-security"
 found_at: "internal/core/reading/project.go"
+resolution: "Both maskings are taken as readings alongside the unmasked text, so a mask adds a reading and never replaces one. Each is load-bearing against a document the other misreads."
+impact: fix
+resolved_by:
+  intent: "itd-183"
 ---
 
 the line-bounded attribute mask replaced the browser reading instead of adding to it so an attribute value carrying a greater-than and a line break hides the heading opener

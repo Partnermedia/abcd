@@ -52,7 +52,7 @@ func TestRenderedTextLeavesAnAutolinkAlone(t *testing.T) {
 // value — so the bound is asserted here, on the mask's own contract.
 func TestAttributeMaskStaysOnItsOwnLine(t *testing.T) {
 	const runaway = "<div id=\"\n\n<h2>Audit Notes</h2>\n\nprose\n\n\">\n"
-	got := maskMarkupData(runaway)
+	got := maskMarkupData(runaway, true)
 	if len(got) != len(runaway) {
 		t.Fatalf("the mask changed the document length from %d to %d", len(runaway), len(got))
 	}
@@ -62,7 +62,7 @@ func TestAttributeMaskStaysOnItsOwnLine(t *testing.T) {
 
 	// And it still masks the value it was built for, which closes on its own line.
 	const inline = "<h2 title=\"a>b\">Audit Notes</h2>"
-	if m := maskMarkupData(inline); !strings.Contains(m, "a b") {
+	if m := maskMarkupData(inline, true); !strings.Contains(m, "a b") {
 		t.Errorf("a greater-than inside a same-line attribute value was left as structure: %q", m)
 	}
 }
@@ -89,5 +89,28 @@ func TestRawHeadingScanStaysLinearInTheOpenerCount(t *testing.T) {
 	if elapsed := time.Since(start); elapsed > 10*time.Second {
 		t.Errorf("the raw heading scan took %s over %d openers; it materialises the whole "+
 			"bound list per opener", elapsed, 8000)
+	}
+}
+
+// TestMaskStaysLinearInTheAssignmentCount: the line bound searched the whole
+// remainder of the document for a newline once per attribute assignment, which
+// is quadratic — a 4 MiB file of assignments on one line took 21 seconds where
+// the walk takes milliseconds, and the size cap bounds one file rather than how
+// many of them a repository holds. The cursor onto the next newline only ever
+// advances. Measured: 7 ms with the cursor, 12.3 s without it.
+func TestMaskStaysLinearInTheAssignmentCount(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("# S\n\n<a ")
+	for range 800000 {
+		b.WriteString("=\"x\"")
+	}
+	doc := b.String()
+	start := time.Now()
+	if got := maskMarkupData(doc, true); len(got) != len(doc) {
+		t.Fatalf("the mask changed the document length from %d to %d", len(doc), len(got))
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Errorf("the mask took %s over 800000 assignments on one line; it searches the whole "+
+			"remainder for a newline per assignment", elapsed)
 	}
 }

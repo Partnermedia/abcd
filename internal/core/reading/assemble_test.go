@@ -1569,3 +1569,40 @@ func TestEscapedAndCarriageReturnedKeysAreRecognised(t *testing.T) {
 		refusesOrWithholds(t, root, what, sentinelOrigin)
 	}
 }
+
+// TestAttributeValueSpanningALineDoesNotHideTheOpener: where an attribute value
+// ends is ambiguous, and the two honest answers disagree about exactly this
+// document. A browser reads `<h2 title="a>` continued on the next line as one
+// tag and shows the excluded heading; the conservative reading, which ends a
+// value on its own line, declines to mask it — and the opener pattern cannot
+// cross the `>` inside the value, so the unmasked text reads a different
+// heading. Only taking both maskings sees it.
+func TestAttributeValueSpanningALineDoesNotHideTheOpener(t *testing.T) {
+	rows := map[string]string{
+		"a double-quoted value": "<h2 title=\"a>\nb\">Audit Notes</h2>\n\n" + sentinelAuditNotes + "\n",
+		"a single-quoted value": "<h2 title='a>\nb'>Audit Notes</h2>\n\n" + sentinelAuditNotes + "\n",
+		"a role element":        "<div role=\"heading\" title=\"a>\nb\">Audit Notes</div>\n\n" + sentinelAuditNotes + "\n",
+		"a harmless attribute first": "<h2 id=\"x\" title=\"a>\nb\">Audit Notes</h2>\n\n" +
+			sentinelAuditNotes + "\n",
+	}
+	for what, body := range rows {
+		root := fixtureRepo(t)
+		writeFile(t, root, ".abcd/development/specs/open/spc-42-spanning.md",
+			"---\nid: spc-42\n---\n\n# A spec\n\nProse.\n\n"+body)
+		gitCommitAll(t, root)
+		refusesOrWithholds(t, root, "an excluded heading behind "+what, sentinelAuditNotes)
+	}
+}
+
+// TestAStrayQuoteDoesNotConsumeALaterValuesMasking: the line-bounded reading is
+// load-bearing in the other direction. An unbalanced quote earlier in the file
+// pairs, under the browser reading, with the opening quote of a LATER legitimate
+// value, so that value is never masked and its `>` still truncates the opener.
+func TestAStrayQuoteDoesNotConsumeALaterValuesMasking(t *testing.T) {
+	root := fixtureRepo(t)
+	writeFile(t, root, ".abcd/development/specs/open/spc-43-stray.md",
+		"---\nid: spc-43\n---\n\n# A spec\n\n<div id=\"\n\nprose\n\n"+
+			"<h2 title=\"a>b\">Audit Notes</h2>\n\n"+sentinelAuditNotes+"\n")
+	gitCommitAll(t, root)
+	refusesOrWithholds(t, root, "a stray quote ahead of a legitimate attribute value", sentinelAuditNotes)
+}
