@@ -8,8 +8,10 @@
 // back (core/lint) — and a vocabulary spelled three times is a vocabulary the
 // three can disagree about, which is how a value one surface writes becomes a
 // value another refuses. It imports core/mdrecord — the record-body machinery the
-// `## Grounds` section is read and written through — and otherwise only the
-// standard library: no filesystem, no transport, no record store.
+// `## Grounds` section is read and written through — and core/frontmatter, for
+// the one rule about where a record's frontmatter stops and its body begins;
+// otherwise only the standard library: no filesystem, no transport, no record
+// store.
 //
 // The grounds name the CONJECTURE being acted on, not the route taken. "Planned
 // it because it is next" restates the decision; "planned it because we expect a

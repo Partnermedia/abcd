@@ -112,7 +112,7 @@ func RecordGrounds(repoRoot, intentID string, g grounds.Grounds) (GroundsResult,
 			return err
 		}
 		content := string(data)
-		updated, err := grounds.AppendToSection(content, validated)
+		updated, err := grounds.AppendToRecord(content, validated)
 		if err != nil {
 			return fmt.Errorf("intent: %w", err)
 		}
@@ -143,6 +143,13 @@ func RecordGrounds(repoRoot, intentID string, g grounds.Grounds) (GroundsResult,
 // The readiness gate CLAIMS the floor, so a reader that did not apply it would
 // let `- pursued: yes` satisfy a check that was then enforcing only a colon
 // (iss-2608300930057882).
+//
+// It reads the record BODY, which is the scope the writer appends into. Asked of
+// the whole file it would match a frontmatter `# Grounds` comment — a legal YAML
+// comment the block parser skips and an ATX heading pattern matches — as the
+// section, and report an empty pseudo-section about a record whose body carries
+// its entries (iss-2608301805069999). Callers pass whole records and bodies
+// alike; grounds.Body takes either.
 func ParseGrounds(content string) []grounds.Grounds {
-	return grounds.ParseSectionAboveFloor(content)
+	return grounds.ParseSectionAboveFloor(grounds.Body(content))
 }
