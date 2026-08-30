@@ -122,7 +122,7 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 	if err != nil {
 		return AssembleResult{}, err
 	}
-	if err := refuseDirtyIncludedPaths(req.RepoRoot, cands); err != nil {
+	if err := refuseDirtyIncludedPaths(req.RepoRoot, position, cands); err != nil {
 		return AssembleResult{}, err
 	}
 
@@ -258,7 +258,14 @@ func resolveTarget(repoRoot, target string) (string, error) {
 // refuseDirtyIncludedPaths refuses an assembly whose own input is uncommitted.
 // Dirtiness elsewhere in the tree is not the assembler's business: a reading
 // cannot see it, so it cannot contaminate the run.
-func refuseDirtyIncludedPaths(repoRoot string, cands []candidate) error {
+//
+// A path counts as included on either of two grounds, and it needs both. The
+// assembly's own item paths catch an edit or an untracked addition. The include
+// table's admissibility catches the case the item paths cannot: a file DELETED
+// in the working tree is in neither the assembly nor the walk, yet it is part of
+// the commit the manifest names, so a run over it would describe a target it
+// never read.
+func refuseDirtyIncludedPaths(repoRoot string, position Position, cands []candidate) error {
 	out, err := gitutil.RunCapped(repoRoot, 8<<20, "status", "--porcelain=v1", "-z")
 	if err != nil {
 		return fmt.Errorf("reading: reading the working-tree status: %w", err)
@@ -277,7 +284,7 @@ func refuseDirtyIncludedPaths(repoRoot string, cands []candidate) error {
 			}
 			continue
 		}
-		if included[entry] {
+		if included[entry] || Admits(position, entry) {
 			dirty = append(dirty, entry)
 		}
 	}
@@ -291,8 +298,12 @@ func refuseDirtyIncludedPaths(repoRoot string, cands []candidate) error {
 }
 
 // dirtyPaths parses `git status --porcelain=v1 -z` into the paths it reports.
-// A rename or copy entry carries its source as the following record, which is
-// consumed with it.
+//
+// The -z form is what makes this parseable: it emits each entry NUL-terminated
+// and never quotes or escapes a path, so a filename holding a space, a quote or
+// a newline arrives verbatim and core.quotepath cannot change the format under
+// the parser. A rename or copy entry carries its source as the following
+// record, which is consumed with it.
 func dirtyPaths(out string) []string {
 	records := strings.Split(out, "\x00")
 	var paths []string
@@ -302,7 +313,7 @@ func dirtyPaths(out string) []string {
 			continue
 		}
 		status := rec[:2]
-		paths = append(paths, strings.TrimPrefix(rec[3:], "\""))
+		paths = append(paths, rec[3:])
 		if status[0] == 'R' || status[0] == 'C' {
 			i++ // the source path of a rename or copy
 		}

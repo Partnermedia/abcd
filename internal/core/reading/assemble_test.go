@@ -339,3 +339,50 @@ func itoa(n int64) string {
 	}
 	return string(b)
 }
+
+// TestSourceFileWithAnUnterminatedFenceDoesNotAbortTheAssembly holds the scope
+// of the two record-shaped signals. A heading and a frontmatter key are things a
+// RECORD carries; a Go file carries neither, and parsing one as markdown makes a
+// stray fence in a comment able to stop every assembly the repository can run.
+func TestSourceFileWithAnUnterminatedFenceDoesNotAbortTheAssembly(t *testing.T) {
+	root := fixtureRepo(t)
+	writeFile(t, root, "fence.go", "package main\n\n// Usage:\n//\n//\t```\n//\t# Audit Notes\n\nvar x = 1\n")
+	gitCommitAll(t, root)
+
+	res, err := Assemble(AssembleRequest{
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+	})
+	if err != nil {
+		t.Fatalf("an unterminated fence in a Go comment aborted the assembly: %v", err)
+	}
+	found := false
+	for _, m := range res.Manifest.Items {
+		if m.Path == "fence.go" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("the source file did not reach the bundle")
+	}
+}
+
+// TestAssembleRefusesADeletedIncludedPath closes the hole a
+// collected-paths-only dirty check leaves. A file deleted in the working tree
+// but present at the target commit is absent from the assembly and absent from
+// the status intersection, so the manifest would name a commit whose content it
+// did not read — the exact promise the dirty gate exists to keep.
+func TestAssembleRefusesADeletedIncludedPath(t *testing.T) {
+	root := fixtureRepo(t)
+	if err := os.Remove(filepath.Join(root, "README.md")); err != nil {
+		t.Fatalf("remove: %v", err)
+	}
+	_, err := Assemble(AssembleRequest{
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+	})
+	if err == nil {
+		t.Fatal("an included path deleted in the working tree did not refuse the assembly")
+	}
+	if !strings.Contains(err.Error(), "README.md") {
+		t.Errorf("the refusal does not name the deleted path: %v", err)
+	}
+}
