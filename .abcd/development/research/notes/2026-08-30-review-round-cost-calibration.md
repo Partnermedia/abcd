@@ -98,4 +98,9 @@ its rate is the next thing worth measuring, and it is not measured here.
 
 The token figures are from one session's completed subagents. They exclude the
 session lost to a machine crash earlier the same day, so the cycle's true spend
-is higher than the number above and is not recoverable.
+is higher than the number above and is not recoverable. That irrecoverability is
+itself a gap in the record rather than an accident of this cycle: nothing here
+meters development acts, and the near-miss records estimate forward without ever
+measuring. Parked as
+[the token metering gap](2026-08-30-development-token-metering-gap.md) for the
+next phase to file or reject.
