@@ -68,6 +68,18 @@ plugin surface, and a future MCP server share one engine.
   the two agree. The table is a *hypothesis*: `abcd disembark probe` measures the
   same sections against real repositories in the same `grounded`/`partial`/`blank`
   vocabulary, and the evidence is expected to revise it (adr-35, itd-88).
+- **`core/reading/`** — the cold-reading input assembler (itd-183, spc-61). The name is
+  about what a READING may see, not about file I/O: it holds the positive include
+  table that decides, at field granularity, what travels into a reading's context,
+  the projection that takes named fields out of a record rather than copying the
+  file, and the hashed manifest that lets a reader check the result instead of
+  trusting a disclosure. The bundle it emits carries no repository path — the key is
+  an ordinal and the kind is a material class — and only the manifest maps a key back
+  to a path, which is what makes the blindness structural rather than instructed
+  (brief invariant 15). Its deny is `core/launch`'s shape, measured from each include
+  row's own source downward, so a record family added later is excluded by
+  construction. Record enumeration is `core/lint`'s `LoadRecordGraph`, never a second
+  parser. The package assembles input and never runs a reading.
 - **`core/glossary/`** — the brief glossary's index, derived. The term files under
   `.abcd/development/brief/glossary/` are the source of truth for what terms exist
   and in which bounded context; this package renders the directory tree and the
