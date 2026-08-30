@@ -723,6 +723,51 @@ Curator health-check over the whole memory store
 
 **Usage:** `abcd memory lint`
 
+### `abcd reading`
+
+Cold-reading input assembler: what a reading sees, and the manifest proving it
+
+**Usage:** `abcd reading`
+
+Assemble the input a cold reading is handed.
+
+Blindness is a property of the input, not a promise the reader makes: a positive include
+table names what may travel, fields are projected out of records rather than files copied
+whole, and a hashed manifest records what was passed so a reader can judge contamination
+rather than accept a disclosure on trust.
+
+Bare `abcd reading` renders the assembler's state and writes nothing.
+
+#### `abcd reading assemble`
+
+Assemble one reading's input and its manifest
+
+**Usage:** `abcd reading assemble --position <position> --target <HEAD|sha> [flags]`
+
+Walk the repository under the include table at one reading position and write two
+artefacts: the assembled input, which carries no repository path, and the manifest,
+which maps every passed item back to its path, its field and its hash.
+
+The invocation carries no free text. --position takes one of four closed tokens;
+--target takes HEAD or a hexadecimal commit sha of 7 to 40 digits, because a branch
+or a tag moves and the manifest's re-runnability rests on a reference that cannot.
+
+**Flags:**
+
+```
+      --dry-run           write nothing into the repository; with --out the two artefacts still land there
+      --out string        the directory the assembled input and the manifest are written to (default: the local-tier run directory)
+      --position string   the reading position: widening, entailment, comparative, detection
+      --target string     the commit the assembly describes: HEAD, or a hexadecimal sha of 7 to 40 digits
+```
+
+**Example:**
+
+```
+abcd reading assemble --position widening --target HEAD --dry-run
+  abcd reading assemble --position entailment --target HEAD --out ./run --json
+```
+
 ### `abcd rules`
 
 Render the active rule set; a positional DOMAIN scopes to one (read-only)

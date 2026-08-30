@@ -917,6 +917,45 @@
       "flags": []
     },
     {
+      "path": "abcd reading",
+      "hidden": false,
+      "flags": []
+    },
+    {
+      "path": "abcd reading assemble",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "dry-run",
+          "shorthand": "",
+          "type": "bool",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "out",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "position",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "target",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
       "path": "abcd rules",
       "hidden": false,
       "flags": []
