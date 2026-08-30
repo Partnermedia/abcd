@@ -33,3 +33,14 @@ record and does not take the lock.
 
 Remedy: wrap the readRepoFile -> appendGroundsBullet -> writeIntentFile
 sequence in `withIntentMintLock`, as `stampPlanned` does.
+
+CORROBORATED independently by the round-2 ruthless review, which graded it
+FIX-FIRST, reproduced it 20/20 with two goroutines (zero errors returned), and
+verified the remedy: applying `withIntentMintLock` around read -> append ->
+`groundsWriteIsReadable` -> `writeIntentFile` in a scratch copy takes the
+reproduction to 20/20 green with `go test` and `go test -race
+./internal/core/intent/` both staying green.
+
+Two adversarial reviewers, in fresh contexts and by different routes, landed on
+the same defect and the same one-line remedy. That is the strongest signal this
+cycle has produced for a single finding.
