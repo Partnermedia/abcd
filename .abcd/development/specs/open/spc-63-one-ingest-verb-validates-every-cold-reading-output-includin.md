@@ -61,7 +61,7 @@ orphan sweep; the manifest-reference check; refusal records; the
 **Out.** The definitions that state each regime (spc-62); the assembler and
 the manifest (spc-61); the reading-record and disposition record *schemas*,
 which belong to
-[itd-180](../../intents/planned/itd-180-a-cold-reading-s-findings-land-as-reading-records-and-the-re.md)
+[itd-180](../../intents/shipped/itd-180-a-cold-reading-s-findings-land-as-reading-records-and-the-re.md)
 and spc-58 (this verb validates against them and writes them, it does not
 define them); admission, which is
 [itd-189](../../intents/planned/itd-189-what-the-widening-reading-proposes-is-admitted-or-declined-o.md)'s.

@@ -57,7 +57,7 @@ charter.
 ([itd-186](../../intents/planned/itd-186-the-read-block-eval-falsifies-the-firewall-planted-warm-cont.md),
 [itd-187](../../intents/planned/itd-187-amnesia-is-a-repository-property-proven-by-an-eval-the-same.md));
 the reading-record and disposition schemas
-([itd-180](../../intents/planned/itd-180-a-cold-reading-s-findings-land-as-reading-records-and-the-re.md),
+([itd-180](../../intents/shipped/itd-180-a-cold-reading-s-findings-land-as-reading-records-and-the-re.md),
 spc-58); admission
 ([itd-189](../../intents/planned/itd-189-what-the-widening-reading-proposes-is-admitted-or-declined-o.md)).
 

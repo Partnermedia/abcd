@@ -55,7 +55,7 @@ and
 [itd-187](../../intents/planned/itd-187-amnesia-is-a-repository-property-proven-by-an-eval-the-same.md)'s
 evals; validating what a reading produced against its regime, which is
 spc-63's gate; the reading-record schema, which is
-[itd-180](../../intents/planned/itd-180-a-cold-reading-s-findings-land-as-reading-records-and-the-re.md)
+[itd-180](../../intents/shipped/itd-180-a-cold-reading-s-findings-land-as-reading-records-and-the-re.md)
 and spc-58's.
 
 ## Approach
