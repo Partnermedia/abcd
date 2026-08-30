@@ -6,8 +6,15 @@ assembly this repository performs.
 A run's artefacts live at `.abcd/development/readings/<run-id>/`, where
 `<run-id>` is minted as `rdg-<yymmddHHMMSS><rrrr>` (adr-45). The manifest
 enumerates the items an assembly passed, by path, by field and by hash. It
-carries no item content and no timestamp, so committing it needs no redaction
-and two assemblies of one repository state produce one manifest.
+carries no item content, so committing it needs no redaction.
+
+It carries no timestamp field, but it is not timestamp-free: the run identifier
+embeds a mint stamp by construction. What holds across two assemblies of one
+repository state at one commit is that the bundle is byte-identical and the
+manifest's items and exclusions are identical, the two manifests differing in
+the run identifier and in nothing else. That is the determinism a re-run is
+checked against, and it is why the manifest sits outside the amnesia eval's
+byte comparison rather than inside it.
 
 The manifest's content is cold, which is why committing it for reader audit is
 safe. The manifest as evidence is warm: it reveals run timing and target

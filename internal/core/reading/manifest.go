@@ -31,7 +31,8 @@ type BundleItem struct {
 //
 // It carries no run identifier and no timestamp, so two assemblies of one
 // repository state at one commit are byte-identical — the property itd-187's
-// eval falsifies independently.
+// eval falsifies independently, and the reason the run identifier lives on the
+// manifest alone.
 type Bundle struct {
 	Type          string       `json:"_type"`
 	SchemaVersion int          `json:"schema_version"`
@@ -50,9 +51,16 @@ type ManifestItem struct {
 }
 
 // Manifest enumerates what an assembly passed, by path, by field and by hash,
-// and asserts what it refused. It carries no item content and no timestamp of
-// any kind, so committing it needs no redaction and one repository state
-// produces one manifest.
+// and asserts what it refused. It carries no item content, so committing it
+// needs no redaction.
+//
+// It carries no timestamp FIELD, but it is not timestamp-free and must not be
+// described as such: RunID embeds a mint stamp by construction (adr-45). So two
+// assemblies of one repository state at one commit produce manifests that differ
+// in RunID and in nothing else — Items and Exclusions are identical, and the
+// bundle beside them is byte-identical. That, not manifest byte-identity, is the
+// determinism a re-run can be checked against, and it is why the manifest sits
+// outside the amnesia eval's comparison rather than inside it.
 type Manifest struct {
 	Type             string         `json:"_type"`
 	SchemaVersion    int            `json:"schema_version"`
