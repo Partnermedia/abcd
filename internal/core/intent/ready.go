@@ -3,6 +3,7 @@ package intent
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/frontmatter"
@@ -14,13 +15,15 @@ import (
 const (
 	CheckBucket             = "bucket"
 	CheckAcceptanceCriteria = "acceptance_criteria"
+	CheckMechanismClaim     = "mechanism_claim"
+	CheckScopeConditions    = "scope_conditions"
 	CheckSpecLink           = "spec_link"
 	CheckSpecBody           = "spec_body"
 )
 
 // ReadyCheck is one finding of the implement-readiness gate.
 type ReadyCheck struct {
-	Name   string `json:"name"` // bucket | acceptance_criteria | spec_link | spec_body
+	Name   string `json:"name"` // bucket | acceptance_criteria | mechanism_claim | scope_conditions | spec_link | spec_body
 	OK     bool   `json:"ok"`
 	Detail string `json:"detail"`           // why it passed or failed
 	Remedy string `json:"remedy,omitempty"` // the exact next command/action when !OK
@@ -35,7 +38,11 @@ type ReadyResult struct {
 	Bucket   string       `json:"bucket"` // directory-as-truth state
 	SpecID   string       `json:"spec_id"`
 	Ready    bool         `json:"ready"`
-	Checks   []ReadyCheck `json:"checks"` // always exactly 4, fixed order
+	Checks   []ReadyCheck `json:"checks"` // always exactly 6, fixed order
+	// Conditions is the record's scope conditions with their minted identities —
+	// the observable surface the identity criteria assert against. Empty for a
+	// record whose conditions are absent, or recorded as the nullity token.
+	Conditions []ScopeCondition `json:"conditions"`
 }
 
 // Ready reports whether an intent is ready to implement: planned
@@ -69,15 +76,20 @@ func Ready(repoRoot, intentID string) (ReadyResult, error) {
 	}
 	content := string(data)
 	acCount := countAcceptanceCriteria(content)
+	claims := ParseClaims(content)
 
 	res := ReadyResult{
 		IntentID: it.ID,
 		Path:     it.Path,
 		Bucket:   it.Bucket,
 		SpecID:   it.SpecID,
+
+		Conditions: claims.Conditions,
 	}
 	res.Checks = append(res.Checks, bucketCheck(it, acCount, content))
 	res.Checks = append(res.Checks, acCheck(acCount))
+	res.Checks = append(res.Checks, mechanismCheck(it, claims))
+	res.Checks = append(res.Checks, scopeConditionsCheck(it, claims))
 	linkOK, linked := specLinkCheck(it, store)
 	res.Checks = append(res.Checks, linkOK)
 	bodyCheck, err := specBodyCheck(repoRoot, it, linked, linkOK.OK)
@@ -142,6 +154,96 @@ func acCheck(acCount int) ReadyCheck {
 		c.Remedy = "add at least one Given-When-Then bullet — the planning interview walks this with the maintainer"
 	}
 	return c
+}
+
+// mechanismCheck reports the mechanism claim: prompted and nullable, so an
+// absent section passes (the claim was never carried) and the exact nullity
+// token passes as a claim considered and declined. A heading with nothing under
+// it is neither, and is the section's one fault.
+//
+// STAGED (spc-55): the fault reports rather than refuses on this rung. The
+// format, the mint and the render land first, and the refusal is promoted once
+// the planned/ corpus carries its claims — a gate that arrives as a wall of
+// pre-existing failures is a gate everyone learns to ignore.
+func mechanismCheck(it Intent, claims Claims) ReadyCheck {
+	c := ReadyCheck{Name: CheckMechanismClaim, OK: true}
+	if it.Bucket == BucketDisciplines {
+		c.Detail = disciplineClaimExemption
+		return c
+	}
+	switch claims.Mechanism {
+	case ClaimNullity:
+		c.Detail = "mechanism claim declined (nullity recorded)"
+	case ClaimStated:
+		c.Detail = "mechanism claim stated"
+	case ClaimEmpty:
+		c.Detail = "'## Mechanism' is present but empty — neither a claim nor a recorded decline"
+	default:
+		c.Detail = "no '## Mechanism' section — the mechanism claim is prompted, not required"
+	}
+	return c
+}
+
+// scopeConditionsCheck reports the context claim: mandatory, with the nullity
+// token as the explicit "none stated", and never left blank. A stated section
+// must enumerate its conditions as top-level bullets, because a bullet is what
+// carries an identity — the same rule acCheck already holds the criteria to.
+// Each condition must carry exactly one identity, and no two may share one.
+//
+// STAGED (spc-55): the faults report rather than refuse on this rung; see
+// mechanismCheck.
+func scopeConditionsCheck(it Intent, claims Claims) ReadyCheck {
+	c := ReadyCheck{Name: CheckScopeConditions, OK: true}
+	if it.Bucket == BucketDisciplines {
+		c.Detail = disciplineClaimExemption
+		return c
+	}
+	switch claims.ConditionsState {
+	case ClaimNullity:
+		c.Detail = "scope conditions declined (nullity recorded)"
+		return c
+	case ClaimEmpty:
+		c.Detail = "'## Scope Conditions' is present but empty — write the conditions or the nullity token"
+		c.Remedy = scopeConditionsRemedy
+		return c
+	case ClaimAbsent:
+		c.Detail = "no '## Scope Conditions' section — the context claim is unrecorded"
+		c.Remedy = scopeConditionsRemedy
+		return c
+	}
+	if len(claims.Conditions) == 0 {
+		c.Detail = "'## Scope Conditions' carries prose but no top-level bullet — a condition without a bullet has nothing to identify"
+		c.Remedy = scopeConditionsRemedy
+		return c
+	}
+	if unmarked := UnmarkedConditionOrdinals(claims.Conditions); len(unmarked) > 0 {
+		c.Detail = fmt.Sprintf("condition(s) %s carry no identity marker", joinInts(unmarked))
+		c.Remedy = fmt.Sprintf("run `abcd intent plan %s` — the write-capable verb stamps every unmarked condition; markers are never hand-typed", it.ID)
+		return c
+	}
+	if dupes := DuplicateConditionIDs(claims.Conditions); len(dupes) > 0 {
+		c.Detail = fmt.Sprintf("identity %s is carried by more than one condition", strings.Join(dupes, ", "))
+		c.Remedy = "delete the duplicated marker from the condition that copied it, then re-stamp it with `abcd intent plan`"
+		return c
+	}
+	c.Detail = fmt.Sprintf("%d scope condition(s), each identified", len(claims.Conditions))
+	return c
+}
+
+// The two strings both claim checks share, so the exemption and the remedy read
+// identically wherever they are reported.
+const (
+	disciplineClaimExemption = "discipline records carry no claim sections"
+	scopeConditionsRemedy    = "write the conditions this claim holds under as top-level bullets under '## Scope Conditions', or record the exact token `None stated.` alone on its line"
+)
+
+// joinInts renders condition ordinals for a finding.
+func joinInts(ns []int) string {
+	parts := make([]string, len(ns))
+	for i, n := range ns {
+		parts[i] = strconv.Itoa(n)
+	}
+	return strings.Join(parts, ", ")
 }
 
 // specLinkCheck reports the bidirectional intent↔spec link (the same agreement

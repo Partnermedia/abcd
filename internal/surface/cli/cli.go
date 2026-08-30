@@ -1576,7 +1576,7 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 	// structural fault.
 	intentCmd.AddCommand(&cobra.Command{
 		Use:   "ready <itd-N>",
-		Short: "Report whether an intent is ready to implement (planned + AC + written spec); exit 1 when not",
+		Short: "Report whether an intent is ready to implement (planned + AC + claims + written spec); exit 1 when not",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
@@ -1603,6 +1603,17 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 					if c.Remedy != "" {
 						fmt.Fprintf(w, "         remedy: %s\n", termsafe.Sanitize(c.Remedy))
 					}
+				}
+				// The scope conditions with their stamped identities: what a later
+				// fidelity disposition attaches to, shown so a human reading the
+				// report sees the same claims the machine seam carries.
+				for _, cond := range res.Conditions {
+					id := cond.ID
+					if id == "" {
+						id = "unstamped"
+					}
+					// The condition's prose is a human's, not a validated charset.
+					fmt.Fprintf(w, "  cond %d [%s] %s\n", cond.Ordinal, termsafe.Sanitize(id), termsafe.Sanitize(cond.Text))
 				}
 			}); rerr != nil {
 				return rerr

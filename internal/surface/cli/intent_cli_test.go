@@ -371,7 +371,7 @@ func TestIntentReadyUnknownExit2(t *testing.T) {
 }
 
 // TestIntentReadyJSON proves the machine seam: --json emits the full ReadyResult
-// (4 fixed checks) even on the not-ready path, alongside exit 1.
+// (6 fixed checks) even on the not-ready path, alongside exit 1.
 func TestIntentReadyJSON(t *testing.T) {
 	repo := t.TempDir()
 	t.Chdir(repo)
@@ -392,8 +392,8 @@ func TestIntentReadyJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
 		t.Fatalf("ready --json not JSON: %v\n%s", err, out)
 	}
-	if got.Ready || len(got.Checks) != 4 {
-		t.Fatalf("ready --json = %+v, want ready=false with 4 checks", got)
+	if got.Ready || len(got.Checks) != 6 {
+		t.Fatalf("ready --json = %+v, want ready=false with 6 checks", got)
 	}
 	if got.Checks[0].Name != "bucket" || got.Checks[0].OK || got.Checks[0].Remedy == "" {
 		t.Fatalf("bucket check = %+v, want fail with remedy", got.Checks[0])
@@ -413,5 +413,50 @@ func TestBareHelpsCarryDecisionRule(t *testing.T) {
 	captureOut := string(runCLI(t, "capture"))
 	if !strings.Contains(captureOut, "user-facing change") || !strings.Contains(captureOut, "nitpick") {
 		t.Fatalf("bare capture help missing decision rule:\n%s", captureOut)
+	}
+}
+
+// TestIntentReadyJSONRendersConditionIdentities is the identity's observable
+// surface: `abcd intent ready --json` carries every scope condition with the
+// marker `abcd intent plan` stamped on it, so a later disposition has something
+// stable to key on. `abcd intent` (bare) is a corpus-wide count-and-link status
+// with no per-record body, which is why the payload lives on the per-intent gate.
+func TestIntentReadyJSONRendersConditionIdentities(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+	writeRepoFile(t, repo, cliPlanned+"/itd-10-alpha.md",
+		"---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n"+
+			"## Scope Conditions\n\n"+
+			"- holds on a POSIX shell <!-- cond: cond-2608300102030405 -->\n"+
+			"- holds below 10k records <!-- cond: cond-2608300102030406 -->\n\n"+
+			"## Acceptance Criteria\n\n- ok\n")
+	writeRepoFile(t, repo, cliSpecsOpen+"/spc-1-alpha.md",
+		"---\nid: spc-1\nslug: alpha\nintent: itd-10\n---\n# alpha\n\n## Summary\n\nA written design record.\n")
+
+	out := runCLI(t, "intent", "ready", "itd-10", "--json")
+	var got struct {
+		Conditions []struct {
+			Ordinal int    `json:"ordinal"`
+			ID      string `json:"id"`
+			Text    string `json:"text"`
+		} `json:"conditions"`
+	}
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatalf("ready --json not JSON: %v\n%s", err, out)
+	}
+	if len(got.Conditions) != 2 {
+		t.Fatalf("conditions = %+v, want two", got.Conditions)
+	}
+	if got.Conditions[0].ID != "cond-2608300102030405" || got.Conditions[1].ID != "cond-2608300102030406" {
+		t.Fatalf("identities = %+v", got.Conditions)
+	}
+	if got.Conditions[0].Text != "holds on a POSIX shell" || got.Conditions[0].Ordinal != 1 {
+		t.Fatalf("condition 1 = %+v", got.Conditions[0])
+	}
+	// The text form carries the same identities, so a human reading the report
+	// sees what a disposition will attach to.
+	text := string(runCLI(t, "intent", "ready", "itd-10"))
+	if !strings.Contains(text, "cond-2608300102030405") || !strings.Contains(text, "holds below 10k records") {
+		t.Fatalf("text report missing the condition identities:\n%s", text)
 	}
 }

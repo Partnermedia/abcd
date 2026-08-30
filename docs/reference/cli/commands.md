@@ -631,7 +631,7 @@ Plan a draft intent: mint its spec, link both sides, move drafts -> planned
 
 #### `abcd intent ready`
 
-Report whether an intent is ready to implement (planned + AC + written spec); exit 1 when not
+Report whether an intent is ready to implement (planned + AC + claims + written spec); exit 1 when not
 
 **Usage:** `abcd intent ready <itd-N>`
 

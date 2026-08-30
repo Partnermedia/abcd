@@ -46,11 +46,11 @@ func checkByName(t *testing.T, res ReadyResult, name string) ReadyCheck {
 	return ReadyCheck{}
 }
 
-// assertShape enforces the machine-shape contract: always exactly four rows in
+// assertShape enforces the machine-shape contract: always exactly six rows in
 // fixed order, whatever the intent's state.
 func assertShape(t *testing.T, res ReadyResult) {
 	t.Helper()
-	want := []string{"bucket", "acceptance_criteria", "spec_link", "spec_body"}
+	want := []string{"bucket", "acceptance_criteria", "mechanism_claim", "scope_conditions", "spec_link", "spec_body"}
 	if len(res.Checks) != len(want) {
 		t.Fatalf("expected %d checks, got %d: %+v", len(want), len(res.Checks), res.Checks)
 	}
@@ -283,5 +283,89 @@ func TestReadySpecLinkToleratesSpecIDSpelling(t *testing.T) {
 				t.Fatalf("spec_link = %+v, want OK for the lint-green spec_id %q", link, specID)
 			}
 		})
+	}
+}
+
+// TestReadyChecksOrderAndCount pins the machine-shape contract itself: the two
+// claim checks report between the criterion claim and the spec link, and every
+// row is present whatever the record says.
+func TestReadyChecksOrderAndCount(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, plannedDir+"/itd-10-alpha.md", plannedLinked("itd-10", "alpha", "spc-1"))
+	writeFile(t, root, specsOpen+"/spc-1-alpha.md", specNaming("spc-1", "alpha", "itd-10"))
+
+	res, err := Ready(root, "itd-10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertShape(t, res)
+}
+
+// TestReadyClaimChecksAreReportOnly pins the staged rung: the format, the mint
+// and the render land before the refusal does, so the gate arrives calibrated
+// rather than as a wall of pre-existing failures. Both checks report what is
+// missing and pass.
+func TestReadyClaimChecksAreReportOnly(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, plannedDir+"/itd-10-alpha.md",
+		"---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n"+
+			"# alpha\n\n## Mechanism\n\n## Acceptance Criteria\n\n- ok\n")
+	writeFile(t, root, specsOpen+"/spc-1-alpha.md", specNaming("spc-1", "alpha", "itd-10"))
+
+	res, err := Ready(root, "itd-10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mech := checkByName(t, res, "mechanism_claim")
+	if !mech.OK || !strings.Contains(mech.Detail, "empty") {
+		t.Fatalf("mechanism_claim = %+v, want OK naming the empty section", mech)
+	}
+	cond := checkByName(t, res, "scope_conditions")
+	if !cond.OK || !strings.Contains(cond.Detail, "## Scope Conditions") {
+		t.Fatalf("scope_conditions = %+v, want OK naming the absent section", cond)
+	}
+}
+
+// TestReadyDisciplineExemptFromClaimChecks: a discipline record's template
+// carries no claim sections, so the gradient exempts it and both checks say so.
+func TestReadyDisciplineExemptFromClaimChecks(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, disciplinesDir+"/itd-10-alpha.md", plannedLinked("itd-10", "alpha", "spc-1"))
+
+	res, err := Ready(root, "itd-10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"mechanism_claim", "scope_conditions"} {
+		c := checkByName(t, res, name)
+		if !c.OK || !strings.Contains(c.Detail, "discipline records carry no claim sections") {
+			t.Fatalf("%s = %+v, want the exemption", name, c)
+		}
+	}
+}
+
+// TestReadyReportsConditionIdentities: ReadyResult carries the parsed conditions,
+// which is the payload the identity criteria assert against.
+func TestReadyReportsConditionIdentities(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, plannedDir+"/itd-10-alpha.md",
+		"---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n"+
+			"# alpha\n\n## Scope Conditions\n\n"+
+			"- holds on a POSIX shell <!-- cond: cond-2608300102030405 -->\n\n"+
+			"## Acceptance Criteria\n\n- ok\n")
+	writeFile(t, root, specsOpen+"/spc-1-alpha.md", specNaming("spc-1", "alpha", "itd-10"))
+
+	res, err := Ready(root, "itd-10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Conditions) != 1 {
+		t.Fatalf("Conditions = %+v, want one", res.Conditions)
+	}
+	if res.Conditions[0].ID != "cond-2608300102030405" {
+		t.Fatalf("condition id = %q", res.Conditions[0].ID)
+	}
+	if cond := checkByName(t, res, "scope_conditions"); !cond.OK {
+		t.Fatalf("scope_conditions = %+v, want OK for an identified condition", cond)
 	}
 }
