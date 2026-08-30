@@ -180,3 +180,7 @@ None stated.
 - **Given** a run's reading records, **when** the lint runs, **then** every
   record either carries a disposition or is reported as outstanding.
 
+## Audit Notes
+
+<!-- abcd-review: OWED receipt=rcp-6d6ab907bc1c -->
+Fidelity review OWED (receipt rcp-6d6ab907bc1c).
