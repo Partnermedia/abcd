@@ -822,3 +822,58 @@ func TestManifestJSONIsSkippedByTheRecordScan(t *testing.T) {
 		t.Fatalf("manifest.json must be skipped by the record scan, got %d finding(s): %+v", n, fs)
 	}
 }
+
+// The nested-store-root exemption must be derived from the stores the SCANNER
+// knows, never from every value in the config map. Otherwise a committed config
+// line naming no store at all — a prefix the code has never heard of, pointed at
+// a directory inside a real store — exempts that directory from the
+// undeclared-bucket blocker while nothing scans it: a lifecycle state no rule
+// reads, which is the exact escape this rule exists to close. The file's own
+// comment already says which lifecycle states exist is code, not config, "and a
+// config that could add a bucket could also hide one".
+func TestUnknownRecordStoreKeyCannotHideADirectory(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/.keep", "")
+	writeFile(t, root, "work/issues/open/iss-1-a-finding.md",
+		"---\nschema_version: 1\nid: iss-1\nslug: a-finding\nseverity: minor\ncategory: bug\nsource: user-observation\nfound_during: t\n---\n\nan issue\n")
+	writeFile(t, root, "work/issues/anything/notes.md", "notes\n")
+
+	stores := readingStores()
+	stores["zzz"] = "work/issues/anything"
+	cfg := Config{
+		Roots: []string{"rec"},
+		Rules: map[string]RuleConfig{
+			ruleRecordSchema: {Enabled: true, Severity: severityBlocker, RecordStores: stores},
+		},
+	}
+	fs, err := Lint(cfg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingWith(fs, filepath.Join("work", "issues", "anything"), ruleRecordSchema, "undeclared") {
+		t.Fatalf("a record_stores key naming no store must not exempt its directory: %+v", fs)
+	}
+}
+
+// The same hole closed at the other end: a config carrying such a key is refused
+// at parse, so it cannot reach the scanner at all. Two ends because they fail
+// differently — a hand-built Config (this package's own callers, and its tests)
+// never passes through the loader.
+func TestConfigRefusesAnUnknownRecordStoreKey(t *testing.T) {
+	_, err := parseConfig([]byte(`{
+	  "roots": ["rec"],
+	  "rules": {
+	    "record_schema": {
+	      "enabled": true,
+	      "severity": "blocker",
+	      "record_stores": {"iss": ".abcd/work/issues", "zzz": ".abcd/work/issues/anything"}
+	    }
+	  }
+	}`))
+	if err == nil {
+		t.Fatal("a record_stores key naming no store must be refused at parse")
+	}
+	if !strings.Contains(err.Error(), "zzz") {
+		t.Fatalf("the refusal must name the offending key; got %v", err)
+	}
+}

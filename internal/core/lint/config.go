@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -429,7 +430,36 @@ func parseConfig(data []byte) (Config, error) {
 	if err := cfg.validateSeverities(); err != nil {
 		return Config{}, err
 	}
+	if err := cfg.validateRecordStores(); err != nil {
+		return Config{}, err
+	}
 	return cfg, nil
+}
+
+// validateRecordStores refuses a record_stores key that names no store this
+// engine knows. Only the LOCATION of a store is configurable; which stores exist
+// is code, because a config that could add one could also hide a directory
+// behind it — the nested-store-root exemption is granted to a store's own root,
+// and an unknown key would be claiming an exemption for a directory nothing
+// scans. A silently-ignored key also fails the way misspellings always fail
+// here: the file still looks armed.
+func (c Config) validateRecordStores() error {
+	known := recordStorePrefixes()
+	for id, rc := range c.Rules {
+		var unknown []string
+		for prefix := range rc.RecordStores {
+			if !known[prefix] {
+				unknown = append(unknown, prefix)
+			}
+		}
+		if len(unknown) == 0 {
+			continue
+		}
+		sort.Strings(unknown)
+		return &configError{"rule " + id + ": record_stores names no such store: " +
+			strings.Join(unknown, ", ") + "; which record stores exist is code, not configuration — only their locations are configurable"}
+	}
+	return nil
 }
 
 // strictRuleAndTokenKeys re-decodes each rule and banned-token OBJECT with

@@ -211,6 +211,17 @@ var recordStores = []recordStore{
 		fileNumRe: dispositionFileNumRe, fileFamily: "dsp", filename: "dsp-<N>.md"},
 }
 
+// recordStorePrefixes is the set of store prefixes the scanner knows, derived
+// from recordStores so the configuration validator and the walk cannot disagree
+// about what a store is.
+func recordStorePrefixes() map[string]bool {
+	out := make(map[string]bool, len(recordStores))
+	for _, s := range recordStores {
+		out[s.prefix] = true
+	}
+	return out
+}
+
 // schemaRecord is one record file as the schema rule sees it: which store and
 // bucket hold it, the id number its FILENAME claims, and its frontmatter.
 type schemaRecord struct {
@@ -770,10 +781,25 @@ func scanRecordStores(repoRoot string, cfg RuleConfig) ([]schemaRecord, []Findin
 // nestedStoreRoots names the immediate children of dir that are themselves
 // configured record-store roots. Both arguments are repo-relative, slash-joined
 // store paths as the configuration spells them.
+//
+// It walks the CODE's store list and looks each prefix up in the configuration,
+// never the configuration's own values, and the difference is the whole point.
+// The exemption says "this directory is not an undeclared bucket because
+// something else scans it" — so it may only be granted to a directory the scanner
+// actually visits. Deriving it from every value in the map would let a committed
+// line naming no store at all (a prefix this code has never heard of, pointed
+// inside a real store) exempt a directory that nothing scans: a lifecycle state
+// no rule reads, which is precisely the escape this rule exists to close. Which
+// lifecycle states exist is code, not config, and a config that could add a
+// bucket could also hide one.
 func nestedStoreRoots(stores map[string]string, dir string) map[string]bool {
 	parent := strings.Trim(filepath.ToSlash(dir), "/")
 	out := map[string]bool{}
-	for _, other := range stores {
+	for _, store := range recordStores {
+		other := stores[store.prefix]
+		if other == "" {
+			continue
+		}
 		child := strings.Trim(filepath.ToSlash(other), "/")
 		if child == parent || !strings.HasPrefix(child, parent+"/") {
 			continue
