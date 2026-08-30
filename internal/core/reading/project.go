@@ -2,6 +2,7 @@ package reading
 
 import (
 	"fmt"
+	"html"
 	"path"
 	"regexp"
 	"strings"
@@ -161,7 +162,10 @@ var (
 	// htmlCommentRe and htmlTagRe strip the markup a title can carry without
 	// changing how it reads on the page.
 	htmlCommentRe = regexp.MustCompile(`(?s)<!--.*?-->`)
-	htmlTagRe     = regexp.MustCompile(`</?[A-Za-z][^>]*>`)
+	// The tag name is bounded so an AUTOLINK is left alone: `<https://x>` looks
+	// like a tag until the colon, and stripping it turns a heading carrying a URL
+	// into a different heading.
+	htmlTagRe = regexp.MustCompile(`</?[A-Za-z][A-Za-z0-9-]*(?:\s[^>]*)?/?>`)
 	// mdLinkRe unwraps `[text](target)` to the text a reader sees.
 	mdLinkRe = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)`)
 	// explicitYAMLKeyRe matches YAML's explicit-key form, `? origin`.
@@ -206,25 +210,21 @@ func sameRendering(a, b string) bool {
 }
 
 // renderedText reduces a heading title to the text a reader sees: HTML comments
-// and tags removed, link wrappers unwrapped to their label, and the entities a
-// title plausibly carries decoded. The slug then compares what the page shows
-// rather than what the source happens to spell.
+// and tags removed, link wrappers unwrapped to their label, and character
+// references decoded. The slug then compares what the page shows rather than
+// what the source happens to spell.
 //
-// The list of entities is short and deliberately so — the ones that change
-// whether two titles LOOK alike. An entity outside it leaves the title slugging
-// differently, which is a refusal this floor does not make rather than a leak it
-// permits: the section still has to get past the byte and fold comparisons too.
+// Decoding is html.UnescapeString, one pass over the whole string. A hand list
+// of entities applied by ranging a map was not merely incomplete — it was
+// NONDETERMINISTIC: `Audit&amp;nbsp;Notes` decoded to the excluded title or not
+// depending on whether `&amp;` was applied before `&nbsp;` that time round, so a
+// determinism instrument had a coin-flip refusal. One pass also covers the
+// numeric and hex character references a short list could never enumerate.
 func renderedText(title string) string {
 	out := htmlCommentRe.ReplaceAllString(title, "")
 	out = mdLinkRe.ReplaceAllString(out, "$1")
 	out = htmlTagRe.ReplaceAllString(out, "")
-	for entity, literal := range map[string]string{
-		"&nbsp;": "\u00a0", "&#160;": "\u00a0", "&#xa0;": "\u00a0",
-		"&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": `"`, "&#39;": "'",
-	} {
-		out = strings.ReplaceAll(out, entity, literal)
-	}
-	return strings.TrimSpace(out)
+	return strings.TrimSpace(html.UnescapeString(out))
 }
 
 // normaliseHeadingTitle reduces a heading to the text it names: surrounding
