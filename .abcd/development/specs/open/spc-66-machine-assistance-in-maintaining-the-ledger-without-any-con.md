@@ -78,10 +78,16 @@ repository as an object of judgement, any path outside that tree, and the
 session-transcript store, which it is not a consumer of.
 
 The declaration is machine-checked as far as a prompt file can be: a test reads
-the whole definition and refuses any repository path outside `.abcd/work/issues/`.
-It reads the whole file rather than one section because a section boundary is
-itself a bypass, and it folds every separator spelling it knows before it looks,
-because an obfuscated path is still a path. That is a real gate over a real
+the whole definition and refuses every repository path it can recognise that sits
+outside `.abcd/work/issues/`. It reads the whole file rather than one section
+because a section boundary is itself a bypass; it decodes percent and entity
+encodings to a fixpoint before it looks; and it refuses outright every code point
+outside ASCII and a short list of typographic marks, which closes the
+separator-lookalike and homoglyph classes without enumerating them. The limit is
+part of the claim: a path is recognised by its separator, so a separator-free
+filename — `Makefile`, a bare `go.mod` — is outside its reach. What is proved is
+that the definition names no shipped-tree directory or nested file, not that it
+names nothing from the shipped tree at all. That is a real gate over a real
 artefact, and it is honest about its reach: it proves the definition says the
 right thing, not that a host assembled the right context. Mechanical assembly is
 the ingest verb's job and the ingest verb is the next cycle's.

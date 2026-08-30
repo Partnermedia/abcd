@@ -162,5 +162,9 @@ know: until spc-58's reading and disposition stores land, they know nothing of
 these shapes, and the record lint refuses their directory as an undeclared bucket
 — a malformed record and a well-formed one are refused alike. Until then the
 shapes above are held by this definition and by whoever reviews the commit, not
-by a schema. Emit the records as they are to be filed, plus the `fidelity_flags`
-list when there is one, and nothing else. You never write files yourself.
+by a schema. Emit four things and nothing beyond them: the records as they are
+to be filed; the `fidelity_flags` list when there is one; every item you were
+given no disposition for, named as outstanding; and anything you refused, named
+with the reason you refused it. An item you say nothing about reads as an item
+nobody raised, and material you drop silently reads as material that never
+arrived — so silence is not one of your options. You never write files yourself.

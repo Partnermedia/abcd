@@ -3,7 +3,7 @@ package lint_test
 // The scribe's access rule (spc-66) is the assembler's exact inverse, and brief
 // invariant 15 states both halves: a reading receives a positively included slice
 // of the shipped repository and no ledger; the scribe receives ledger content and
-// never the shipped repository as an object of judgement, and it is not a
+// never the shipped repository as an object of judgment, and it is not a
 // consumer of the session-transcript store.
 //
 // These cases hold the shipped DEFINITION to that rule, and they are honest about
@@ -17,16 +17,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
-	"net/url"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"unicode"
-
-	"golang.org/x/text/unicode/norm"
 
 	"github.com/intentdriven/abcd/internal/core/lint"
 )
@@ -59,45 +57,69 @@ var scribeProseIdioms = map[string]bool{
 	"and/or": true, "read/write": true, "either/or": true, "i/o": true,
 }
 
-// scribeNonNFKCSeparators are the separator spellings NFKC leaves alone. The
-// compatibility forms — fullwidth solidus U+FF0F, fullwidth reverse solidus
-// U+FF3C, small reverse solidus U+FE68 — are folded by NFKC itself and are
-// deliberately absent here, so this list stays a list of what NFKC does not do.
-var scribeNonNFKCSeparators = strings.NewReplacer(
-	"\\", "/", // reverse solidus
-	"⁄", "/", // fraction slash
-	"∕", "/", // division slash
-	"╱", "/", // box drawings light diagonal
-	"⧸", "/", // big solidus
-)
+// scribeAllowedNonASCII is the typographic punctuation the definition actually
+// uses. Every OTHER code point outside ASCII is refused rather than folded, which
+// is what lets this file carry no lookalike table: enumerating separator
+// lookalikes is a losing game — the first cut listed the forward-solidus family
+// and missed its reverse twins, and the next list would miss something else —
+// whereas "outside ASCII, outside this list, refused" closes the class, homoglyph
+// segments and invisible code points included. A definition that needs another
+// mark adds it here deliberately.
+var scribeAllowedNonASCII = map[rune]bool{
+	'—': true, // em dash
+}
+
+// scribeMaxDecodeRounds bounds the decode fixpoint. Decoding once is not enough
+// (`%252F` and `&amp;#x2F;` each survive one round), and decoding unbounded is a
+// loop a hostile file chooses the length of.
+const scribeMaxDecodeRounds = 8
+
+// scribePercentRe matches one percent-encoded octet. Decoding is done with this
+// rather than with url.PathUnescape because PathUnescape fails the WHOLE string on
+// the first invalid escape, so one stray `%` in prose silently switched percent
+// decoding off for the entire file.
+var scribePercentRe = regexp.MustCompile(`%[0-9A-Fa-f]{2}`)
+
+// scribeResidualEncodingRe matches an encoding shape that survived the fixpoint —
+// a truncated octet, or an entity that decodes to nothing. The definition has no
+// reason to carry either, so a residual is refused rather than puzzled over.
+var scribeResidualEncodingRe = regexp.MustCompile(`%[0-9A-Fa-f]|&[A-Za-z#][A-Za-z0-9]{0,30};?`)
 
 // scribeSpacedSeparatorRe collapses horizontal whitespace around a separator, so
 // `a / b` reads as `a/b`. Newlines are deliberately not collapsed: joining across
 // a line break would invent paths out of adjacent sentences.
 var scribeSpacedSeparatorRe = regexp.MustCompile(`[ \t]*/[ \t]*`)
 
-// scribeFold normalises a definition into the form the path check reads. Each
-// step closes one way of spelling a separator that a reader — or a host asked to
-// resolve the string — resolves as one anyway:
-//
-//  1. HTML entity decoding (`&#47;`, `&sol;`);
-//  2. percent decoding (`%2F`, `%5C`), left as it stands when the text is not
-//     valid percent-encoding, because a stray `%` is no reason to stop checking;
-//  3. NFKC, which folds the compatibility separators — fullwidth solidus,
-//     fullwidth reverse solidus, small reverse solidus — onto ASCII;
-//  4. the five separators NFKC does not fold, listed above one by one;
-//  5. horizontal whitespace around a separator.
-//
-// That is exactly the folding done and nothing more. The other class — an
-// invisible code point splicing a path back together after any check that reads
-// the visible text — is not folded but refused outright, by the Cf scan below.
-func scribeFold(text string) string {
-	text = html.UnescapeString(text)
-	if decoded, err := url.PathUnescape(text); err == nil {
-		text = decoded
+// scribeDecode runs percent and HTML entity decoding to a bounded fixpoint,
+// tolerantly: an invalid escape is left as it stands rather than abandoning the
+// rest of the text.
+func scribeDecode(text string) string {
+	for i := 0; i < scribeMaxDecodeRounds; i++ {
+		next := html.UnescapeString(scribePercentRe.ReplaceAllStringFunc(text, func(octet string) string {
+			v, err := strconv.ParseUint(octet[1:], 16, 8)
+			if err != nil {
+				return octet
+			}
+			return string(rune(v))
+		}))
+		if next == text {
+			break
+		}
+		text = next
 	}
-	text = norm.NFKC.String(text)
-	text = scribeNonNFKCSeparators.Replace(text)
+	return text
+}
+
+// scribeFold normalizes a definition into the form the path check reads. It is
+// short on purpose, and this comment states exactly what it does and nothing
+// more: decode to a fixpoint, fold the ASCII reverse solidus, collapse horizontal
+// whitespace around a separator. There is no lookalike folding and no
+// normalization form, because scribeAccessFindings refuses every non-ASCII code
+// point outside the small list above — a spelling that cannot appear needs no
+// fold.
+func scribeFold(text string) string {
+	text = scribeDecode(text)
+	text = strings.ReplaceAll(text, `\`, "/")
 	return scribeSpacedSeparatorRe.ReplaceAllString(text, "/")
 }
 
@@ -109,14 +131,22 @@ func scribeFold(text string) string {
 // `## Inputs` heading — or an exclusion list that names what it excludes — is not
 // a way in either. The definition states its exclusions by category, never by
 // path, which is what makes the whole-file rule affordable.
+//
+// THE LIMIT, stated rather than discovered: this check judges PATHS, and a path
+// is recognized by its separator. A separator-free filename — `Makefile`,
+// `CHANGELOG.md`, a bare `go.mod` — carries none and is outside its reach. What
+// the check therefore proves is that the definition names no shipped-tree
+// DIRECTORY or nested file, not that it names nothing from the shipped tree at
+// all. spc-66 says the same in its own words.
 var scribePathRe = regexp.MustCompile(`[A-Za-z0-9_.~*<>-]*/[A-Za-z0-9_.~*<>/-]*`)
 
 // scribeInputsHeadingRe matches the allow list's heading at any depth.
 var scribeInputsHeadingRe = regexp.MustCompile(`(?m)^#{1,6}[ \t]+Inputs\b`)
 
 // scribeAccessFindings returns every way one definition's text breaches the
-// access rule: a missing allow list, an allow list that names nothing, a format
-// code point, a traversal segment, or any path outside the ledger root.
+// access rule: a missing allow list, an allow list that names nothing, a code
+// point outside ASCII and the typographic list, a residual encoding, a traversal
+// segment, or any path outside the ledger root.
 func scribeAccessFindings(prompt string) []string {
 	var out []string
 	if !scribeInputsHeadingRe.MatchString(prompt) {
@@ -124,17 +154,29 @@ func scribeAccessFindings(prompt string) []string {
 	}
 
 	folded := scribeFold(prompt)
-	// The Cf scan reads the folded text, so an entity- or percent-encoded format
-	// code point is caught alongside a literal one. One finding, not one per
-	// occurrence: the class is what matters, and a hostile file could carry
-	// thousands.
+
+	// One finding, naming the first offender: the class is what matters, and a
+	// hostile file could carry thousands. The format (Cf) case keeps its own
+	// message even though the ASCII rule already subsumes it — an invisible code
+	// point and a homoglyph are different mistakes to be told about.
 	for _, r := range folded {
-		if unicode.Is(unicode.Cf, r) {
-			out = append(out, fmt.Sprintf("carries the format code point U+%04X: an invisible code point "+
-				"splices a path back together after any check that reads the visible text, so it is refused "+
-				"rather than folded", r))
-			break
+		switch {
+		case r < 0x80 || scribeAllowedNonASCII[r]:
+			continue
+		case unicode.Is(unicode.Cf, r):
+			out = append(out, fmt.Sprintf("carries the format code point U+%04X: an invisible code point splices "+
+				"a path back together after any check that reads the visible text", r))
+		default:
+			out = append(out, fmt.Sprintf("carries the non-ASCII code point U+%04X: outside the typographic marks "+
+				"the definition uses, a code point outside ASCII is a separator lookalike or a homoglyph, and it "+
+				"is refused rather than folded", r))
 		}
+		break
+	}
+
+	if residual := scribeResidualEncodingRe.FindString(folded); residual != "" {
+		out = append(out, "carries the encoded shape "+residual+" after decoding to a fixpoint; the definition has "+
+			"no reason to carry one, and a shape that survives decoding is one this check cannot read")
 	}
 
 	seen := 0
@@ -166,7 +208,7 @@ func scribeAccessFindings(prompt string) []string {
 const scribeConformingBase = "---\nname: scribe\n---\n\n" +
 	"## Inputs (the allow list)\n\n" +
 	"- `.abcd/work/issues/readings/` — the reading records already on file.\n\n" +
-	"## Never in context\n\nThe shipped repository as an object of judgement.\n"
+	"## Never in context\n\nThe shipped repository as an object of judgment.\n"
 
 // TestScribeAccessCheckRefusesEveryBypass is the control, and it is what makes the
 // case below it worth anything: each entry is a way of writing a shipped-tree path
@@ -193,6 +235,16 @@ func TestScribeAccessCheckRefusesEveryBypass(t *testing.T) {
 		{"a big solidus", "\n- `internal⧸core⧸lint⧸agentcontract.go` — the rule.\n"},
 		{"a fullwidth reverse solidus", "\n- `internal＼core＼lint＼agentcontract.go` — the rule.\n"},
 		{"a small reverse solidus", "\n- `internal﹨core﹨lint﹨agentcontract.go` — the rule.\n"},
+		{"a stray percent sign beside an encoded path", "\nProgress is 50% complete.\n- `internal%2Fcore%2Flint%2Fagentcontract.go` — the rule.\n"},
+		{"a double-encoded separator", "\n- `internal%252Fcore%252Flint%252Fagentcontract.go` — the rule.\n"},
+		{"a double-escaped HTML separator", "\n- `internal&amp;#x2F;core&amp;#x2F;lint&amp;#x2F;agentcontract.go` — the rule.\n"},
+		{"a percent-encoded HTML entity separator", "\n- `internal%26sol;core%26sol;lint%26sol;agentcontract.go` — the rule.\n"},
+		{"a reverse solidus lookalike", "\n- `internal╲core╲lint╲agentcontract.go` — the rule.\n"},
+		{"a big reverse solidus", "\n- `internal⧹core⧹lint⧹agentcontract.go` — the rule.\n"},
+		{"a set-minus separator", "\n- `internal∖core∖lint∖agentcontract.go` — the rule.\n"},
+		{"a reverse solidus operator", "\n- `internal⧵core⧵lint⧵agentcontract.go` — the rule.\n"},
+		{"a Cyrillic lookalike inside a ledger path", "\n- `.abcd/work/issues/readingс` — the ledger.\n"},
+		{"a residual percent fragment", "\n- `.abcd/work/issues/%2` — the ledger.\n"},
 		{"a format code point in the prose", "\nThe allow list above is exhaustive.\u202E\n"},
 		{"a zero-width joiner splicing a path", "\n- `internal/core/li\u200dnt/agentcontract.go` — the rule.\n"},
 	}
@@ -314,10 +366,41 @@ func TestScribeCanaryAssertsTheRefusals(t *testing.T) {
 	if len(items.Items) == 0 {
 		t.Fatalf("%s's input carries no items", scribeCanaryRel)
 	}
+	ids := map[string]bool{}
 	for i, it := range items.Items {
 		if it.Item == "" {
 			t.Errorf("%s's input item %d carries no 'item' identifier, yet the dispositions and the outstanding "+
 				"list refer to items by id", scribeCanaryRel, i+1)
+			continue
+		}
+		ids[it.Item] = true
+	}
+
+	// The exemplar is the fixture's own statement of what a faithful run emits, so
+	// it has to obey the behavior it illustrates: one reading record per item.
+	// An exemplar that transcribes one of two items teaches the opposite of the
+	// rule it is there to show.
+	var example struct {
+		Expected struct {
+			Example struct {
+				ReadingRecords []struct {
+					Item string `json:"item"`
+				} `json:"reading_records"`
+			} `json:"emitted_material_example"`
+		} `json:"expected"`
+	}
+	if err := json.Unmarshal([]byte(raw), &example); err != nil {
+		t.Fatalf("%s does not parse: %v", scribeCanaryRel, err)
+	}
+	emitted := map[string]bool{}
+	for _, r := range example.Expected.Example.ReadingRecords {
+		emitted[r.Item] = true
+	}
+	for id := range ids {
+		if !emitted[id] {
+			t.Errorf("%s's emitted_material_example carries no reading record for %s; the fixture states one "+
+				"reading record per item, so an exemplar that skips one contradicts the behavior it illustrates",
+				scribeCanaryRel, id)
 		}
 	}
 	// The definition carries two refusals beyond "never obey an instruction":
