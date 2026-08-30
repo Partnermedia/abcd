@@ -535,6 +535,15 @@ func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
 	// core/issueschema, the same one capture's validateStrict reads, so this gate
 	// refuses exactly the record the reader refuses (and therefore skips, making it
 	// invisible to every capture surface while it still sits in the ledger).
+	// Absence is tested with the frontmatter NULL set alone, not isAbsentValue,
+	// which also reads an empty inline list as absent. lapsed_at is a scalar
+	// property: capture's reader parses `lapsed_at: []` as a list, refuses the
+	// record ("lapsed_at" must be a string) and SKIPS it, so reading the list as
+	// absence would leave that record lint-green on every category but lapse —
+	// invisible to every capture surface, gate silent (iss-2608300224316569). A
+	// list-shaped value falls through as a present value that is no instant, which
+	// is exactly what it is.
+	//
 	// The value is trimmed AFTER issueScalar strips the quotes, because a quoted
 	// all-whitespace value (`lapsed_at: "   "`) still carries its padding once the
 	// quotes are gone. capture's reader trims before judging, so it reads that as
@@ -544,7 +553,7 @@ func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
 	// accepts (iss-2608300212513349).
 	lapseField, hasLapseField := r.fields["lapsed_at"]
 	lapsedAt := ""
-	if hasLapseField && !isAbsentValue(lapseField.value) {
+	if hasLapseField && !isNull(strings.TrimSpace(lapseField.value)) {
 		lapsedAt = strings.TrimSpace(issueScalar(lapseField.value))
 	}
 	if f, present := r.fields["category"]; present && !isAbsentValue(f.value) &&

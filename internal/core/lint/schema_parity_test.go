@@ -226,6 +226,14 @@ func TestIssueRecordShapeFlagsLapseWithoutLapsedAt(t *testing.T) {
 		// (iss-2608300212513349).
 		{"padded on a lapse", "iss-9-lapse-e.md", lapse("iss-9", "lapse-e", `"   "`), "lapse record carries no 'lapsed_at'"},
 		{"padded on a non-lapse", "iss-10-obs-a.md", record("iss-10", "obs-a", "observation", `"   "`), ""},
+		// A list-shaped value. capture's reader parses it as []string and refuses the
+		// record outright ("lapsed_at" must be a string), skipping it — so it is
+		// invisible to every capture surface. Reading an empty inline list as ABSENT
+		// here would leave that record lint-green on any category but lapse, which is
+		// the split iss-2608300224316569 records. Both categories must be refused,
+		// and for the same reason: the value is present and is no instant.
+		{"list on a non-lapse", "iss-11-obs-b.md", record("iss-11", "obs-b", "observation", "[]"), "is not an RFC 3339 instant"},
+		{"list on a lapse", "iss-12-lapse-f.md", lapse("iss-12", "lapse-f", "[]"), "is not an RFC 3339 instant"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
