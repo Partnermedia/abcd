@@ -28,10 +28,24 @@ Note iss-2608301411017768 (major) closed the PREVIOUS spelling of this defect by
 SCOPING the claim to `rdi` — where it is equally false — rather than removing
 it. That is the pattern to break here.
 
-Four sites carry it: the message at schema.go:880, the doc comments at
-schema.go:210-216 and :812-816, and readingoutstanding.go:57 ("Reading ids are
-minted per run and collide"), which cites the very issue whose fix made it
-false.
+SEVEN sites carry it, not the four this record first named. The four found by
+review: the message at schema.go:880, the doc comments at schema.go:210-216 and
+:812-816, and readingoutstanding.go:57 ("Reading ids are minted per run and
+collide"), which cites the very issue whose fix made it false.
+
+The three more found by grepping the CLAIM rather than the line, and recorded
+here so the fix that removes them is covered by a detector rather than widening
+one silently: schema_test.go:1523 and :1588, and reading_outstanding_test.go:607
+— all three test comments, none of them reaching an operator. They matter
+because a test doc block is where the next author LEARNS the mechanism: leaving
+them is how a corrected message gets re-broken in good faith, which is the route
+by which this defect has now returned four times.
+
+One of them carries a second fault. The negative assertion at schema_test.go:1610
+is pinned to the substring "minted per bucket" — so deleting that phrase from the
+message makes the assertion vacuous, passing forever against any message at all.
+The sweep must re-anchor it, or closing this record silently disarms the guard on
+the record next to it.
 
 Remedy: state only what the walk establishes. `admittedProposals` keys the
 admitted set on (directory run, proposal), so an admission filed under another
