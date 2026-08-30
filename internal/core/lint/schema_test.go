@@ -1686,6 +1686,13 @@ func TestABucketJoinRefusesEverySpellingButTheFamilysOwn(t *testing.T) {
 		"adm-8": "the item we discussed",
 		"adm-9": "iss-42",
 	}
+	// And the family's own prefix with NOTHING after it. `rdi-` carries the prefix
+	// and the hyphen, so strings.CutPrefix succeeds and leaves an empty rest — which
+	// a digit loop over no bytes accepts. Without spellsHandleOf's own `rest == ""`
+	// the value spells a handle, resolves to nothing, and takes the silence prose is
+	// owed: the guard survived its own deletion until this case was carried here
+	// (iss-2608301656202623).
+	malformed["adm-10"] = "rdi-"
 	// And this one the target's FILE settles: rdi-2.md carries no padding, so the
 	// padded spelling is not a name the family's reader ever matches.
 	const padded = "adm-5"
@@ -2188,5 +2195,30 @@ func TestTheBucketBlockerClaimsAReportLineOnlyForAFileTheFamilyReads(t *testing.
 	if findingWith(fs, unread, ruleRecordSchema, tail) {
 		t.Errorf("nothing reads rdi-7-widen-the-frame.md, so no report line names it and the blocker "+
 			"must not say the item %s: %+v", tail, fs)
+	}
+}
+
+// checkRecordBucketField stands down on an ABSENT bucket field, so the blank is
+// reported once — by checkRecordRequiredFields, which is whose business absence
+// is — and not twice. Without that stand-down a blank `run` draws a second,
+// weaker finding beside the first, saying the record declares a bucket it does
+// not: a blank declares nothing, and the two findings then disagree about what
+// the record says. The guard survived its own deletion (iss-2608301656202623).
+func TestABlankBucketFieldIsReportedOnceByTheLegAbsenceBelongsTo(t *testing.T) {
+	root := admissionCorpus(t)
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-3.md",
+		"---\nschema_version: 1\nid: adm-3\nrun: \"\"\nproposal: rdi-2\n"+
+			"grounds: the configuration it admits is one the frame does not already hold\n---\n\n")
+
+	fs, err := Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rel := filepath.Join("work", "issues", "admissions", "rdg-1", "adm-3.md")
+	if !findingWith(fs, rel, ruleRecordSchema, "required property 'run' carries no value") {
+		t.Errorf("a blank required property is still a finding: %+v", fs)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 1 {
+		t.Fatalf("a blank bucket field is one finding, not two; got %d: %+v", n, fs)
 	}
 }

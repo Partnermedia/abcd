@@ -988,3 +988,96 @@ func TestAnAdmissionsRootThatCannotBeListedStandsDownEveryRun(t *testing.T) {
 			report.Undispositioned)
 	}
 }
+
+// The Unadmitted leg asks for a standing disposition that is WELL FORMED, and
+// that half of the condition is what keeps one item out of two lists at once. A
+// sole standing record no reader can read is reported as Unreadable — the switch
+// above says so — and an item whose answer is unknown supports no claim that it
+// was accepted and left unadmitted. Without the wellFormed half the same item is
+// named twice, once as an answer nobody can read and once as an acceptance
+// missing its grounds, and the second line rests on a state read out of a record
+// the first line says is unreadable. The guard survived its own deletion
+// (iss-2608301656202623).
+//
+// The control is the second item: a well-formed accepted disposition with no
+// admission IS the Unadmitted case, so the leg is not simply mute.
+func TestAnUnreadableAnswerIsNotAlsoReportedUnadmitted(t *testing.T) {
+	run := "rdg-2608300000000001"
+	unreadable, accepted := "rdi-2608300000000002", "rdi-2608300000000004"
+	root := readingLedger(t, run, unreadable, "widening")
+	writeFile(t, root, ".abcd/work/issues/readings/"+run+"/"+accepted+".md",
+		"---\nschema_version: 1\nid: \""+accepted+"\"\nrun: \""+run+"\"\n"+
+			"manifest: \"sha256:beef\"\nposition: \"widening\"\n"+
+			"regime: \""+issueschema.ReadingRegime("widening")+"\"\npattern: \"a stated constraint\"\n---\n\n")
+	// A duplicated top-level key: malformed to every reader of this ledger.
+	writeFile(t, root, ".abcd/work/issues/dispositions/"+unreadable+"/dsp-2608300000000003.md",
+		"---\nschema_version: 1\nid: \"dsp-2608300000000003\"\nid: \"dsp-2608300000000003\"\n"+
+			"item: \""+unreadable+"\"\nstate: \"accepted\"\ndisposition_grounds: \"a\"\n---\n\n")
+	writeFile(t, root, ".abcd/work/issues/dispositions/"+accepted+"/dsp-2608300000000005.md",
+		"---\nschema_version: 1\nid: \"dsp-2608300000000005\"\nitem: \""+accepted+"\"\n"+
+			"state: \"accepted\"\ndisposition_grounds: \"it holds\"\n---\n\n")
+
+	report, err := ReadReadingOutstanding(root, ".abcd/work/issues")
+	if err != nil {
+		t.Fatal(err)
+	}
+	named := func(items []OutstandingItem, item string) bool {
+		for _, i := range items {
+			if i.Item == item {
+				return true
+			}
+		}
+		return false
+	}
+	var reportedUnreadable bool
+	for _, u := range report.Unreadable {
+		if u.Item == unreadable {
+			reportedUnreadable = true
+		}
+	}
+	if !reportedUnreadable {
+		t.Fatalf("an item whose sole answer no reader can read is reported unreadable: %+v", report)
+	}
+	if named(report.Unadmitted, unreadable) {
+		t.Errorf("an answer nobody can read supports no claim that the item was accepted and left "+
+			"unadmitted, so %s must not be named twice: %+v", unreadable, report.Unadmitted)
+	}
+	if !named(report.Unadmitted, accepted) {
+		t.Errorf("a well-formed acceptance with no admission IS the unadmitted case: %+v", report.Unadmitted)
+	}
+}
+
+// admittedProposals refuses to key an admission that names NO proposal. The
+// refusal is unobservable through admits(), because every query comes from a file
+// matching readingItemFileRe and so is never the empty string — but that is a
+// property of the CALLER, not of this function, and the set is defined as the
+// proposals the store admits. An admission naming nothing admits nothing, so it
+// contributes no key; the guard is the definition rather than defensive
+// scaffolding, and it is pinned on the set itself rather than deleted for being
+// invisible one call site away (iss-2608301656202623).
+//
+// The control is the second admission, which names a proposal and is keyed.
+func TestAnAdmissionNamingNoProposalIsKeyedOnNothing(t *testing.T) {
+	run, item := "rdg-2608300000000001", "rdi-2608300000000002"
+	root := readingLedger(t, run, item, "widening")
+	writeFile(t, root, ".abcd/work/issues/admissions/"+run+"/adm-2608300000000003.md",
+		"---\nschema_version: 1\nid: \"adm-2608300000000003\"\nrun: \""+run+"\"\n"+
+			"proposal: \"\"\ngrounds: \"it widens the frame\"\n---\n\n")
+
+	issuesDir := ".abcd/work/issues"
+	tree, unsafe := admittedProposals(filepath.Join(root, filepath.FromSlash(issuesDir)), issuesDir)
+	if len(unsafe) != 0 {
+		t.Fatalf("the fixture tree is readable: %+v", unsafe)
+	}
+	if len(tree.admitted) != 0 {
+		t.Fatalf("an admission naming no proposal is keyed on nothing, got %+v", tree.admitted)
+	}
+
+	writeFile(t, root, ".abcd/work/issues/admissions/"+run+"/adm-2608300000000004.md",
+		"---\nschema_version: 1\nid: \"adm-2608300000000004\"\nrun: \""+run+"\"\n"+
+			"proposal: \""+item+"\"\ngrounds: \"it widens the frame\"\n---\n\n")
+	tree, _ = admittedProposals(filepath.Join(root, filepath.FromSlash(issuesDir)), issuesDir)
+	if len(tree.admitted) != 1 || !tree.admits(run, item) {
+		t.Fatalf("an admission that names its proposal is keyed on it, got %+v", tree.admitted)
+	}
+}

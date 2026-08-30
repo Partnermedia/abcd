@@ -7,6 +7,10 @@ category: "tech-debt"
 source: "user-observation"
 found_during: "itd-189-round-5-ruthless"
 found_at: "internal/core/lint/schema.go"
+resolution: "Each of the three stand-downs now has a test that fails when it is deleted, watched failing: spellsHandleOf's rest check is killed by carrying 'rdi-' into the spelling set (the finding becomes silence and the exact-count assertion drops from eight to seven); checkRecordBucketField's absence check is killed by a blank run drawing a second, weaker finding beside the required-property one; and the Unadmitted leg's wellFormed check is killed by one item being named both Unreadable and Unadmitted. admittedProposals' proposal check is JUDGED, not deleted: it is the set's definition rather than defensive scaffolding, because the set is the proposals the store admits and an admission naming nothing admits nothing. Its invisibility rests on readingItemFileRe at the CALLER, one call site away, not on anything this function does, so it is pinned on the set itself and the reasoning is carried beside it."
+impact: internal
+resolved_by:
+  intent: "itd-189"
 ---
 
 three guards in the join and the outstanding report survive their own deletion and one equality check is inert by construction

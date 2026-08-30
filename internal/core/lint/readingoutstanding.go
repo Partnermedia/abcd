@@ -482,6 +482,16 @@ func admittedProposals(issuesRoot, issuesDir string) (admissionTree, []UnsafePat
 			// which candidate set it joined. Honouring the bucket alone would let the
 			// field lie; honouring the field alone would make the bucket decorative.
 			// So it admits under neither, and record_schema names the contradiction.
+			//
+			// The `proposal == ""` half is the SET'S DEFINITION, not defence: this
+			// returns the proposals the store admits, and an admission naming nothing
+			// admits nothing, so it contributes no key. Its effect is invisible through
+			// admits(), because every query is an item name captured out of a filename
+			// matching readingItemFileRe and so is never empty — but that is a property
+			// of the caller, one call site away, and it is not what makes this set
+			// correct. It is pinned on the set itself
+			// (TestAnAdmissionNamingNoProposalIsKeyedOnNothing) rather than deleted for
+			// being unobservable (iss-2608301656202623).
 			if proposal == "" || issueScalar(fields["run"].value) != run.Name() {
 				continue
 			}
