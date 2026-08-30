@@ -225,3 +225,33 @@ func TestLapsedAtRoundTrips(t *testing.T) {
 		t.Fatalf("lapsed_at round-tripped as %q, want %q", iss.LapsedAt, lapsedAt)
 	}
 }
+
+// TestCaptureReaderAcceptsProvenanceKeys pins the issue schema against the two
+// disclosure keys, proved THROUGH the reader rather than asserted about the
+// allow-list map. Without them in issueschema.Known the reader refuses every
+// stamped record as carrying an unknown property and skips it — the record sits
+// in the ledger, invisible to every capture surface, which is exactly how an
+// earlier flag shipped unable to execute (spc-56).
+func TestCaptureReaderAcceptsProvenanceKeys(t *testing.T) {
+	text, err := buildIssueText([]kv{
+		{"schema_version", 1},
+		{"id", "iss-1"},
+		{"slug", "x"},
+		{"severity", "minor"},
+		{"category", "observation"},
+		{"source", "user-observation"},
+		{"found_during", "review"},
+		{"origin", rawScalar("researcher-authored")},
+		{"production_mode", rawScalar("hand-written")},
+	}, "a stamped record\n")
+	if err != nil {
+		t.Fatalf("buildIssueText: %v", err)
+	}
+	fm, _, err := parseFrontmatterAndBody(text)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if err := validateStrict(fm); err != nil {
+		t.Fatalf("a stamped record was refused by the ledger reader: %v", err)
+	}
+}
