@@ -89,6 +89,13 @@ type ReadingPosition struct {
 	Fields []string
 }
 
+// PositionWidening is the reading position whose items are PROPOSALS: the one
+// position where acceptance is admission into a candidate set, and therefore the
+// one whose answer set is wider than a disposition (spc-67). It is named because
+// two packages now branch on it, and a position spelled as a literal in a branch
+// is a position that can drift out of the table below without anything saying so.
+const PositionWidening = "widening"
+
 // ReadingPositions is the closed set of positions, each with its body.
 //
 // itd-180 offers a discriminated union and names a fallback; the FALLBACK is
@@ -97,7 +104,7 @@ type ReadingPosition struct {
 // types would be four places for one schema to drift. So: one record type, an
 // untyped body, and the per-position required-field set held here as data.
 var ReadingPositions = []ReadingPosition{
-	{Position: "widening", Regime: "generative", Fields: []string{"configuration", "what_admits_it"}},
+	{Position: PositionWidening, Regime: "generative", Fields: []string{"configuration", "what_admits_it"}},
 	{Position: "entailment", Regime: "explicative", Fields: []string{"claim_surfaced", "claim_type", "what_implies_it"}},
 	{Position: "comparative", Regime: "evaluative", Fields: []string{"candidate_id", "criterion", "characterisation"}},
 	{Position: "detection", Regime: "registrative", Fields: []string{"tension", "constraint_in_play", "why_a_tension"}},

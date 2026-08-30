@@ -651,3 +651,55 @@ func TestCaptureBoardCarriesTheOutstandingRoster(t *testing.T) {
 		t.Fatalf("the board must render an open hold with its exit condition:\n%s", text)
 	}
 }
+
+// A widening proposal's answers are an admission or a decline, so the board
+// gives it its own line: the disposition-only line would name the wrong remedy,
+// and the grounds an admission was made on are the whole point of the record.
+// This is the wiring assertion for spc-67's leg — the rule and the board call one
+// function, and the person who looks at the board is the one who has to act.
+func TestCaptureBoardNamesAnUnadmittedProposal(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+	run, item := "rdg-2608300000000001", "rdi-2608300000000002"
+	dir := filepath.Join(repo, ".abcd", "work", "issues", "readings", run)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, item+".md"), []byte("---\n"+
+		"schema_version: 1\nid: \""+item+"\"\nrun: \""+run+"\"\nmanifest: \"sha256:beef\"\n"+
+		"position: \"widening\"\nregime: \"generative\"\npattern: \"a stated constraint\"\n"+
+		"configuration: \"a third arrangement the frame does not hold\"\n"+
+		"what_admits_it: \"the constraint the record already states\"\n---\n\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Accepted, which at the widening position IS admission — and no admission
+	// record, so the grounds it was admitted on were never written.
+	dispDir := filepath.Join(repo, ".abcd", "work", "issues", "dispositions", item)
+	if err := os.MkdirAll(dispDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dispDir, "dsp-2608300000000003.md"), []byte("---\n"+
+		"schema_version: 1\nid: \"dsp-2608300000000003\"\nitem: \""+item+"\"\n"+
+		"state: \"accepted\"\ndisposition_grounds: \"weighed and answered\"\n---\n\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out := runCLI(t, "capture", "--json")
+	var r struct {
+		Outstanding struct {
+			Unadmitted []struct {
+				Item string `json:"item"`
+			} `json:"unadmitted"`
+		} `json:"reading_outstanding"`
+	}
+	if err := json.Unmarshal(out, &r); err != nil {
+		t.Fatalf("capture board not JSON: %v\n%s", err, out)
+	}
+	if len(r.Outstanding.Unadmitted) != 1 || r.Outstanding.Unadmitted[0].Item != item {
+		t.Fatalf("the board must carry the unadmitted proposal; got %+v\n%s", r.Outstanding, out)
+	}
+	text := string(runCLI(t, "capture"))
+	if !strings.Contains(text, "unadmitted "+item) {
+		t.Fatalf("the board must name the unadmitted proposal:\n%s", text)
+	}
+}
