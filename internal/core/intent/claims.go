@@ -203,12 +203,25 @@ func maskLines(lines []string) []uint8 {
 	return mask
 }
 
-// opensComment reports whether a line leaves an HTML comment open: its LAST
+// opensComment reports whether a line leaves an HTML comment open: its last LIVE
 // `<!--` has no `-->` after it. A well-formed identity marker closes on its own
-// line, so it never opens a span.
+// line, so it never opens a span — and an opener QUOTED in backticks is prose
+// about the syntax, not the syntax. Reading one as live ran the span to end of
+// file through every later heading, so a record whose prose explains the marker
+// idiom lost its Scope Conditions and its Acceptance Criteria both
+// (iss-2608300320418618). A genuinely unclosed opener still masks to EOF.
 func opensComment(ln string) bool {
-	i := strings.LastIndex(ln, "<!--")
-	return i >= 0 && !strings.Contains(ln[i+len("<!--"):], "-->")
+	spans := codeSpanRanges(ln)
+	for end := len(ln); ; {
+		i := strings.LastIndex(ln[:end], "<!--")
+		if i < 0 {
+			return false
+		}
+		if !inAnyRange(spans, i) {
+			return !strings.Contains(ln[i+len("<!--"):], "-->")
+		}
+		end = i
+	}
 }
 
 // masked reports whether a line is not live markdown, for any reason.
@@ -532,14 +545,10 @@ func stampScopeConditions(content string, minter recordid.Minter) (string, int, 
 	if stamped == 0 {
 		return content, 0, nil
 	}
-	out := strings.Join(lines, "\n")
-	// The writer must not produce a record its own reader refuses: readRepoFile
-	// caps every intent read, and a file written past that cap makes the next
-	// Load fail over the WHOLE corpus, not just this record.
-	if len(out) > maxIntentFileBytes {
-		return "", 0, fmt.Errorf("intent: stamping would grow the record to %d bytes, past the %d-byte cap its own reader enforces", len(out), maxIntentFileBytes)
-	}
-	return out, stamped, nil
+	// The byte cap is enforced by writeIntentFile, at the write itself: the stamp
+	// is only one of three steps that grow a record on the way to disk, and a
+	// guard on one producer left the others free to cross the line.
+	return strings.Join(lines, "\n"), stamped, nil
 }
 
 // mintConditionID draws a fresh identity, redrawing past one already used in

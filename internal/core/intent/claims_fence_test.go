@@ -333,3 +333,89 @@ func TestStampRefusesToWritePastTheReadCap(t *testing.T) {
 		t.Fatal("a refused stamp wrote anyway")
 	}
 }
+
+// TestPlanRefusesToGrowADraftPastTheReadCap is iss-2608300318192814: the
+// post-stamp guard sat before two further growth steps on the DRAFT face —
+// the kind and spec_id rewrites — so a draft within a few bytes of the read cap
+// was written past it, and every intent verb then refused the WHOLE corpus until
+// the file was hand-trimmed. The cap belongs at the write, not at one producer.
+func TestPlanRefusesToGrowADraftPastTheReadCap(t *testing.T) {
+	root := t.TempDir()
+	head := "---\nid: itd-10\nslug: alpha\nspec_id: null\nkind: null\n---\n# alpha\n\n" +
+		"## Scope Conditions\n\n- holds on POSIX\n\n## Why This Matters\n\n"
+	tail := "\n\n## Acceptance Criteria\n\n- ok\n"
+	record := head + strings.Repeat("x", 262106-len(head)-len(tail)) + tail
+	if len(record) != 262106 {
+		t.Fatalf("fixture is %d bytes, want 262106", len(record))
+	}
+	writeFile(t, root, draftsDir+"/itd-10-alpha.md", record)
+
+	if _, err := Plan(root, "itd-10"); err == nil {
+		t.Fatal("Plan must refuse rather than write a record past the read cap")
+	} else if !strings.Contains(err.Error(), "cap") {
+		t.Fatalf("the refusal must name the cap, got %q", err)
+	}
+	after, err := os.ReadFile(filepath.Join(root, draftsDir, "itd-10-alpha.md"))
+	if err != nil {
+		t.Fatal("the draft must still be in drafts/, untouched: " + err.Error())
+	}
+	if string(after) != record {
+		t.Fatalf("the draft was rewritten by a refused plan (%d bytes, was %d)", len(after), len(record))
+	}
+	// The corpus must still load: the whole point of the cap is that no verb is
+	// left refusing every record.
+	if _, err := Load(root); err != nil {
+		t.Fatalf("the corpus no longer loads: %v", err)
+	}
+}
+
+// TestQuotedCommentOpenerDoesNotMaskTheRecord is iss-2608300320418618: prose
+// that QUOTES the comment idiom in backticks is not a comment. Read as one, the
+// span ran to end of file and swallowed every heading below it — the record lost
+// its Scope Conditions AND its Acceptance Criteria, and the gate reported the
+// wrong fault about the wrong thing.
+func TestQuotedCommentOpenerDoesNotMaskTheRecord(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, draftsDir+"/itd-10-alpha.md",
+		"---\nid: itd-10\nslug: alpha\nspec_id: null\nkind: null\n---\n# alpha\n\n"+
+			"## Why This Matters\n\n"+
+			"An identity marker is an HTML comment: it opens with `<!--` and closes\n"+
+			"with the matching sequence.\n\n"+
+			"## Scope Conditions\n\n- holds only where a POSIX shell exists\n\n"+
+			"## Acceptance Criteria\n\n- **Given** x, **when** y, **then** z.\n")
+
+	data, err := os.ReadFile(filepath.Join(root, draftsDir, "itd-10-alpha.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := ParseClaims(string(data))
+	if c.ConditionsState != ClaimStated || len(c.Conditions) != 1 {
+		t.Fatalf("the quoted opener masked the section: state=%q conditions=%+v", c.ConditionsState, c.Conditions)
+	}
+	if c.ConditionsCommented {
+		t.Error("a quoted opener is not a comment span")
+	}
+	if countAcceptanceCriteria(string(data)) != 1 {
+		t.Fatal("the quoted opener swallowed the Acceptance Criteria")
+	}
+	// And the draft plans: the AC discipline sees its criterion, and the stamp runs.
+	res, err := Plan(root, "itd-10")
+	if err != nil {
+		t.Fatalf("Plan must succeed: %v", err)
+	}
+	if res.ConditionsStamped != 1 {
+		t.Fatalf("ConditionsStamped = %d, want 1", res.ConditionsStamped)
+	}
+}
+
+// A genuinely unclosed opener still masks to end of file.
+func TestUnclosedCommentOpenerStillMasksToEOF(t *testing.T) {
+	body := "- holds on POSIX\n\n<!-- we never closed this\n- parked\n"
+	c := ParseClaims(claimRecord(nil, str(body)))
+	if !c.ConditionsCommented {
+		t.Fatal("an unclosed opener must still mask")
+	}
+	if len(c.Conditions) != 1 {
+		t.Fatalf("got %d conditions, want 1: %+v", len(c.Conditions), c.Conditions)
+	}
+}

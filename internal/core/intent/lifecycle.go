@@ -175,8 +175,8 @@ func Plan(repoRoot, intentID string) (PlanResult, error) {
 	if err != nil {
 		return PlanResult{}, err
 	}
-	if err := fsutil.WriteFileAtomic(draftAbs, []byte(withKind), 0o644); err != nil {
-		return PlanResult{}, fmt.Errorf("intent: writing kind to %s: %w", draftRel, err)
+	if err := writeIntentFile(draftAbs, draftRel, withKind); err != nil {
+		return PlanResult{}, err
 	}
 
 	// 3. Move drafts/ → planned/ via the shared, trust-guarded move. The moved
@@ -195,8 +195,8 @@ func Plan(repoRoot, intentID string) (PlanResult, error) {
 	if err != nil {
 		return PlanResult{}, err
 	}
-	if err := fsutil.WriteFileAtomic(plannedAbs, []byte(withSpec), 0o644); err != nil {
-		return PlanResult{}, fmt.Errorf("intent: writing spec_id to %s: %w", plannedRel, err)
+	if err := writeIntentFile(plannedAbs, plannedRel, withSpec); err != nil {
+		return PlanResult{}, err
 	}
 
 	it.Kind = kind
@@ -235,8 +235,8 @@ func stampPlanned(repoRoot string, it Intent) (PlanResult, error) {
 		if n == 0 {
 			return fmt.Errorf("intent: %s is already planned and carries no unmarked scope condition; nothing to stamp", it.ID)
 		}
-		if err := fsutil.WriteFileAtomic(abs, []byte(stamped), 0o644); err != nil {
-			return fmt.Errorf("intent: writing scope-condition identities to %s: %w", rel, err)
+		if err := writeIntentFile(abs, rel, stamped); err != nil {
+			return err
 		}
 		stampedCount = n
 		return nil
@@ -302,8 +302,8 @@ func Link(repoRoot, intentID, specID string) (LinkResult, error) {
 	if err != nil {
 		return LinkResult{}, err
 	}
-	if err := fsutil.WriteFileAtomic(abs, []byte(updated), 0o644); err != nil {
-		return LinkResult{}, fmt.Errorf("intent: writing spec_id to %s: %w", rel, err)
+	if err := writeIntentFile(abs, rel, updated); err != nil {
+		return LinkResult{}, err
 	}
 
 	it.SpecID = specID
@@ -426,6 +426,26 @@ func Reconcile(repoRoot, specID string) (ReconcileResult, error) {
 		}
 	}
 	return res, nil
+}
+
+// writeIntentFile is the one way this package rewrites an intent record. It caps
+// the FINAL bytes before writing them, because the cap belongs at the write and
+// not at any one producer: readRepoFile refuses a record over the cap, and every
+// verb here loads the WHOLE corpus first, so one oversized record makes every
+// intent command refuse every record until a human trims the file by hand. Each
+// write is preceded by a growth step — an identity stamp, a `kind` rewrite, a
+// `spec_id` rewrite — and guarding only the first of them left the others free to
+// carry a record over the line (iss-2608300318192814).
+//
+// rel is repo-relative: an intent error never carries an absolute local path.
+func writeIntentFile(abs, rel, content string) error {
+	if len(content) > maxIntentFileBytes {
+		return fmt.Errorf("intent: writing %s would produce %d bytes, past the %d-byte cap its own reader enforces; refusing", rel, len(content), maxIntentFileBytes)
+	}
+	if err := fsutil.WriteFileAtomic(abs, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("intent: writing %s: %w", rel, err)
+	}
+	return nil
 }
 
 // moveIntentToBucket moves the intent file at srcRel into dstBucket via os.Rename
