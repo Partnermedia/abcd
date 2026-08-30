@@ -212,8 +212,15 @@ type recordStore struct {
 type recordJoin struct {
 	field string
 	why   string
-	// sameBucketAs names the FAMILY whose targets must sit in the same bucket as
-	// the record that joins them. Empty means the join carries no such obligation.
+	// sameBucketAs names the FAMILY this join's value is a handle of, and whose
+	// targets must sit in the same bucket as the record that joins them. Empty
+	// means the join carries neither obligation: its value may be prose.
+	//
+	// Naming the family is what makes the SPELLING judgeable. A join whose value
+	// may be prose can only be read leniently, and reading this one leniently is
+	// how six spellings of the proposal — cased, zero-padded, and spaced inside
+	// the quotes — resolved to the record while the reader that matches the value
+	// as a string admitted nothing (iss-2608301519255871).
 	//
 	// An admission is meaningful only against the run whose proposals it admits,
 	// and the outstanding report keys the admitted set on the PAIR — the run the
@@ -834,26 +841,60 @@ func checkRecordUnknownFields(r schemaRecord, severity string) []Finding {
 // keying field nothing resolved while the surprise's `occasioned_by` was
 // (iss-2608300935215868).
 //
-// Resolution has two halves, because a join can fail in two ways. A target that
-// is NOT IN THE CORPUS joins nothing at all. A target that is in the corpus but
-// in ANOTHER BUCKET joins something nobody will ever look for: what reads that
-// family keys what it finds on the PAIR — the bucket the record is filed under,
-// and the target it names — so a record reaching across buckets is keyed on a
-// pair no reader queries. The second half is declared per join AND per target
-// family (sameBucketAs), because that pair-keying is a property of the family
-// and the message names it.
+// Resolution has three halves, because a join can fail in three ways.
 //
-// Prose is legitimate and stays silent. A surprise is keyed to WHATEVER
-// occasioned it — a detection, an admission, or a consequence that has no id — so
-// only a value that is a record handle of a store this scan reads is resolved. A
-// handle a record declares it PRUNED is resolved too, on the same terms the
-// cross-reference loop resolves it, so one rule gives one answer about it.
+// The first is SPELLING, and it is asked only of a join that declares a family
+// (sameBucketAs): such a join's value is a handle of that family by declaration,
+// so it is judged verbatim — the family's own prefix in lower case, one hyphen,
+// an unpadded ordinal, and nothing around it. It is judged as a STRING because
+// what reads the family matches it as one: the outstanding report keys the
+// admitted set on the value as written (admittedProposals) while a handle pattern
+// resolves it as a number, so `RDI-2`, `Rdi-2`, `rdi-02` and a space surviving
+// the quotes all resolved to the record and matched its bucket while admitting
+// nothing at all (iss-2608301519255871).
+//
+// The second is PRESENCE: a target that is not in the corpus joins nothing.
+//
+// The third is the BUCKET. A target that is in the corpus but in ANOTHER BUCKET
+// joins something nobody will ever look for: what reads that family keys what it
+// finds on the PAIR — the bucket the record is filed under, and the target it
+// names — so a record reaching across buckets is keyed on a pair no reader
+// queries. It is declared per join AND per target family (sameBucketAs), because
+// that pair-keying is a property of the family and the message names it.
+//
+// Prose is legitimate and stays silent WHERE THE JOIN DECLARES NO FAMILY. A
+// surprise is keyed to whatever occasioned it — a detection, an admission, or a
+// consequence that has no id — so only a value that is a record handle of a store
+// this scan reads is resolved. A handle a record declares it PRUNED is resolved
+// too, on the same terms the cross-reference loop resolves it, so one rule gives
+// one answer about it.
 func checkRecordJoins(r schemaRecord, index map[recordRef]schemaRecord, retired map[recordRef]bool, cfg RuleConfig) []Finding {
 	var out []Finding
 	for _, join := range r.store.joins {
 		f := r.fields[join.field]
 		value := issueScalar(f.value)
 		if isAbsentValue(value) {
+			continue
+		}
+		line := f.line
+		if line == 0 {
+			line = 1
+		}
+		// The spelling, where the join declares the family its value belongs to.
+		// Asked before anything is resolved, because every later half reads the
+		// value as a parsed handle and the reader of the family reads it as a
+		// string: a value the two read differently is one the gate approves and no
+		// reader can act on.
+		if join.sameBucketAs != "" && !spellsHandleOf(join.sameBucketAs, value) {
+			noun := joinFamilyNoun(join.sameBucketAs)
+			out = append(out, Finding{
+				File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: cfg.Severity,
+				Message: join.field + " declares '" + value + "', which is not a " + noun + " handle (want " +
+					join.sameBucketAs + "-<N>, spelled as the " + noun + "'s own id is); what reads this " +
+					r.noun() + " matches the value as written against the " + noun +
+					"'s id, so a spelling that is not the " + noun + "'s own admits nothing and the " + noun +
+					" it names goes on being reported as unanswered",
+			})
 			continue
 		}
 		m := anyHandleFullRe.FindStringSubmatch(value)
@@ -870,10 +911,6 @@ func checkRecordJoins(r schemaRecord, index map[recordRef]schemaRecord, retired 
 		num, err := strconv.Atoi(m[2])
 		if err != nil {
 			continue
-		}
-		line := f.line
-		if line == 0 {
-			line = 1
 		}
 		ref := recordRef{prefix, num}
 		target, ok := index[ref]
@@ -893,12 +930,14 @@ func checkRecordJoins(r schemaRecord, index map[recordRef]schemaRecord, retired 
 			})
 			continue
 		}
-		// The bucket obligation, where the join declares one AND the target is of the
-		// family it declares it for. Neither bucket can be empty here: both sides are
-		// then records of a bucketed store, and a record sitting outside every bucket
-		// is reported by the walk and never enters the index at all — so it reaches
-		// this leg as a target that is not in the corpus, above.
-		if join.sameBucketAs == "" || target.store.prefix != join.sameBucketAs || target.bucket == r.bucket {
+		// The bucket obligation, where the join declares one. The target is of the
+		// declared family by construction: the spelling leg above refused every value
+		// that is not a handle of it, and the index is keyed on the parsed handle.
+		// Neither bucket can be empty here either: both sides are then records of a
+		// bucketed store, and a record sitting outside every bucket is reported by
+		// the walk and never enters the index at all — so it reaches this leg as a
+		// target that is not in the corpus, above.
+		if join.sameBucketAs == "" || target.bucket == r.bucket {
 			continue
 		}
 		out = append(out, Finding{
@@ -912,6 +951,33 @@ func checkRecordJoins(r schemaRecord, index map[recordRef]schemaRecord, retired 
 		})
 	}
 	return out
+}
+
+// spellsHandleOf reports whether value is VERBATIM one family's handle: the
+// family's own prefix, one hyphen, and an unpadded ordinal, with nothing around
+// it. It is deliberately narrower than anyHandleFullRe, which is case-insensitive
+// and pads freely because it exists to RESOLVE a handle to a record. This asks
+// the other question — is this the spelling the family's own reader matches — and
+// the two answers differed on six values (iss-2608301519255871).
+func spellsHandleOf(family, value string) bool {
+	rest, ok := strings.CutPrefix(value, family+"-")
+	if !ok || rest == "" || rest[0] == '0' {
+		return false
+	}
+	for i := 0; i < len(rest); i++ {
+		if rest[i] < '0' || rest[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// joinFamilyNoun renders the record kind a join's declared family holds, for the
+// message that names it. Every declared family is one of recordStores' own
+// prefixes, which TestEveryJoinFamilyNamesADeclaredStore pins.
+func joinFamilyNoun(family string) string {
+	s, _ := storeByPrefix(family)
+	return s.noun
 }
 
 // checkRecordBucketField asserts that a record whose store states its bucket

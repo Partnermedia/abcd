@@ -1626,13 +1626,14 @@ func TestJoinsResolveARetiredHandleTheWayCrossReferencesDo(t *testing.T) {
 // reaching into another run is keyed on a pair nothing queries. That is not true
 // of the issue ledger — no reader keys an issue on its status directory, and the
 // outstanding report walks reading items only and never reports an issue at all.
+// Inventing a consequence the operator then goes looking for is the confident
+// false statement this rule must not make (iss-2608301411017768).
 //
-// So the join is scoped to the family whose mechanism it describes, and a target
-// of any other family returns to the silence it had before the leg existed: the
-// value is wrong for a different reason, and inventing a consequence the operator
-// then goes looking for is the confident false statement this rule must not make
-// (iss-2608301411017768).
-func TestSameBucketJoinIsSilentOnACrossFamilyTarget(t *testing.T) {
+// So a cross-family target is not judged by THAT message. It is still a fault —
+// `proposal` names the reading item an admission admits, and an issue is not one
+// — and the spelling leg says so in the terms that are true of it: the value is
+// not the spelling the reader of that family matches.
+func TestABucketJoinDoesNotDescribeThePairMechanismOverAnotherFamily(t *testing.T) {
 	root := admissionCorpus(t)
 	writeFile(t, root, "work/issues/open/iss-42-a-finding.md", validIssue("iss-42", "a-finding"))
 	writeFile(t, root, "work/issues/admissions/rdg-1/adm-3.md",
@@ -1648,8 +1649,82 @@ func TestSameBucketJoinIsSilentOnACrossFamilyTarget(t *testing.T) {
 		t.Errorf("no reader keys an issue on its status directory, and the report never names an issue; "+
 			"the bucket leg must not describe that mechanism over a target of another family: %+v", fs)
 	}
-	if n := countRule(fs, ruleRecordSchema); n != 0 {
-		t.Fatalf("expected no findings on a cross-family target, got %d: %+v", n, fs)
+	if !findingWith(fs, rel, ruleRecordSchema, "not a reading item handle") {
+		t.Errorf("an issue is not the reading item a proposal names, and the spelling leg must say so: %+v", fs)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 1 {
+		t.Fatalf("expected exactly 1 finding (the spelling), got %d: %+v", n, fs)
+	}
+}
+
+// The six spellings a NUMERIC resolution let through. checkRecordJoins parsed the
+// value with a case-insensitive handle pattern and compared it as a number, while
+// the report that reads the same field keys it as the string it is written as — so
+// an upper-cased, mixed-cased or zero-padded proposal resolved and matched its
+// bucket, and a spaced or prose one fell through the "prose is legitimate" branch.
+// Either way the gate was green and the admission admitted nothing, permanently
+// and silently (iss-2608301519255871).
+//
+// A join that declares sameBucketAs is one whose value the schema says IS a handle
+// of that family, so the spelling is judged before anything is resolved: the
+// family's own prefix, lower case, unpadded, and nothing around it.
+func TestABucketJoinRefusesEverySpellingButTheFamilysOwn(t *testing.T) {
+	spellings := map[string]string{
+		"adm-3": "RDI-2",
+		"adm-4": "Rdi-2",
+		"adm-5": "rdi-02",
+		"adm-6": "\"rdi-2 \"",
+		"adm-7": "\" rdi-2\"",
+		"adm-8": "the item we discussed",
+		"adm-9": "iss-42",
+	}
+	root := admissionCorpus(t)
+	writeFile(t, root, "work/issues/open/iss-42-a-finding.md", validIssue("iss-42", "a-finding"))
+	// The control every case is read against: the family's own spelling is silent,
+	// so the leg is a spelling check and not a refusal of everything.
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-2.md", wellFormedAdmission)
+	for id, proposal := range spellings {
+		writeFile(t, root, "work/issues/admissions/rdg-1/"+id+".md",
+			"---\nschema_version: 1\nid: "+id+"\nrun: rdg-1\nproposal: "+proposal+"\n"+
+				"grounds: the frame does not already hold it\n---\n\n")
+	}
+
+	fs, err := Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id, proposal := range spellings {
+		if !findingWith(fs, filepath.Join("work", "issues", "admissions", "rdg-1", id+".md"),
+			ruleRecordSchema, "not a reading item handle") {
+			t.Errorf("proposal spelled %s admits nothing and must be a finding on %s.md: %+v", proposal, id, fs)
+		}
+	}
+	if n := countRule(fs, ruleRecordSchema); n != len(spellings) {
+		t.Fatalf("expected exactly %d findings (one per spelling), got %d: %+v", len(spellings), n, fs)
+	}
+}
+
+// The spelling leg names the target family's RECORD KIND, which it reads off the
+// store the family names. A join declaring a family no store declares would render
+// that message with an empty noun, so the lookup's success is pinned here rather
+// than guarded by a branch no fixture can enter.
+func TestEveryJoinFamilyNamesADeclaredStore(t *testing.T) {
+	for _, store := range recordStores {
+		for _, join := range store.joins {
+			if join.sameBucketAs == "" {
+				continue
+			}
+			target, ok := storeByPrefix(join.sameBucketAs)
+			if !ok {
+				t.Errorf("%s's %s join declares family %q, which no store declares",
+					store.prefix, join.field, join.sameBucketAs)
+				continue
+			}
+			if target.noun == "" {
+				t.Errorf("store %q declares no noun, so the %s join's message would name nothing",
+					target.prefix, join.field)
+			}
+		}
 	}
 }
 
