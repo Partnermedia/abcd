@@ -29,3 +29,11 @@ Four nits from the itd-189 fix-delta ruthless review, settled at the ship commit
    holding nothing, which the pin omits because it is `valueEmpty`'s business
    rather than `isAbsentValue`'s. The two lists the test claims to bind are not
    the same set.
+
+5. Added from the fix-delta SECURITY review, which offered it as a nit rather
+   than a finding: `commands/capture.md` does not name `Null`/`NULL` or U+00A0
+   among the refused spellings, although both ARE refused. It errs in the safe
+   direction -- an author using them gets a clear refusal rather than a silent
+   pass -- and the doc's category framing ("a YAML null", "whitespace")
+   arguably covers them. Folded here rather than given an id.
+
