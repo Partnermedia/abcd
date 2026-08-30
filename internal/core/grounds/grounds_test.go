@@ -180,3 +180,119 @@ func TestGroundsRefusesControlCharacters(t *testing.T) {
 		}
 	}
 }
+
+// TestGroundsFloorCountsScriptioContinuaCharacters is iss-2608301301044588: the
+// floor was measured in letter-RUNS, and a script written without inter-word
+// spaces has exactly one of them however much it says. A substantive Chinese or
+// Japanese conjecture was refused as "1 word", and because the reader applies
+// the same floor the bullet was then silently dropped — so the readiness gate
+// reported no recorded grounds about a record that visibly carried one. The
+// argument is mandatory, so that refused an operator writing in those scripts
+// from promoting or resolving anything at all.
+func TestGroundsFloorCountsScriptioContinuaCharacters(t *testing.T) {
+	for name, text := range map[string]string{
+		"chinese":  "我们预期带有戳记的身份能够在改写之后继续存活下来",
+		"japanese": "スタンプされた識別子は改名されても生き残ると予期している",
+		"mixed":    "識別子 ABCD は改名されても生き残ると予期している",
+		// Natural prose in most of these scripts is inert as a pin: its combining
+		// marks are Mn rather than L, so they broke the OLD letter-runs too and
+		// the text was never refused (the issue record calls this "Thai survives
+		// by accident"). Measured, prose leaves seven of the nine entries free to
+		// be deleted with the suite still green. A MARK-FREE run of a script's
+		// letters is one run under the old count and one unit per letter under
+		// this one, so each of these fails if its entry leaves the set — which is
+		// the only thing that pins the set. They are alphabet runs, not prose:
+		// what they assert is the counting, and readability is not the floor's
+		// claim.
+		"hiragana letter run": "あいうえおかきくけこさしすせそたちつてと",
+		"katakana letter run": "アイウエオカキクケコサシスセソタチツテト",
+		"thai letter run":     "กขคงจฉชซฌญฎฏฐฑฒณดตถทธน",
+		"lao letter run":      "ກຂຄງຈສຊຍດຕຖທນບປຜຝພຟມ",
+		"khmer letter run":    "កខគឃងចឆជឈញដឋឌឍណតថទធន",
+		"myanmar letter run":  "ကခဂဃငစဆဇဈဉညဋဌဍဎဏတထဒဓ",
+		"tibetan letter run":  "ཀཁགངཅཆཇཉཏཐདནཔཕབམཙཚཛཝ",
+		"javanese letter run": "ꦲꦤꦕꦫꦏꦢꦠꦱꦮꦭꦥꦝꦗꦪꦚꦩꦒꦧꦛꦔ",
+		// The prose cases stay as the shapes an operator would actually type.
+		"thai prose":    "เราคาดว่าตัวระบุที่ประทับตราไว้จะอยู่รอดหลังการเขียนใหม่",
+		"khmer prose":   "យើងរំពឹងថាអត្តសញ្ញាណដែលមានត្រាបោះនឹងនៅរស់រានក្រោយការសរសេរឡើងវិញ",
+		"lao prose":     "ພວກເຮົາຄາດວ່າຕົວລະບຸທີ່ມີຕາປະທັບຈະຢູ່ລອດຫຼັງການຂຽນຄືນໃໝ່",
+		"burmese prose": "တံဆိပ်ခတ်ထားသောအမှတ်အသားသည်ပြန်လည်ရေးသားပြီးနောက်ရှင်သန်နေမည်ဟုမျှော်လင့်သည်",
+		"tibetan prose": "ཐེལ་ཙེ་བརྒྱབ་པའི་ངོས་འཛིན་དེ་ཡང་བསྐྱར་འབྲི་རྗེས་གནས་ཐུབ་པར་རེ་བ་བྱེད",
+	} {
+		if _, err := New(Pursued, text); err != nil {
+			t.Fatalf("%s: New(%q) = %v, want the conjecture accepted", name, text, err)
+		}
+		// The reader inherits the same floor, so the bullet is read back rather
+		// than silently dropped under the record's `## Grounds` heading.
+		if err := ValidateText(Fold(text)); err != nil {
+			t.Fatalf("%s: ValidateText(%q) = %v, want it accepted", name, text, err)
+		}
+	}
+}
+
+// TestGroundsScriptioContinuaFloorRefusesPadding pins the half that must NOT
+// move: counting one character of a script without word breaks as one unit is
+// an admission, and an admission is where a closed hole reopens. A text padded
+// with characters that render as emptiness, or with punctuation, carries no
+// units however long it is; and appending one ideograph to a single long word
+// does not buy the two units it lacks.
+func TestGroundsScriptioContinuaFloorRefusesPadding(t *testing.T) {
+	for name, text := range map[string]string{
+		"zero-width padded ideograph":  strings.Repeat("​", 19) + "中",
+		"ideographic punctuation":      strings.Repeat("、。", 10),
+		"one long word plus ideograph": "supercalifragilistic 中",
+		"fullwidth digits":             "１２３４５６７８９０１２３４５６７８９０",
+		// A Unicode SCRIPT table is not a letter table: it carries the script's
+		// own digits, punctuation and combining marks too. Counting a script's
+		// characters therefore has to count its LETTERS, or the digit-and-dot
+		// padding iss-2608301206034359 closed reopens once per script — and the
+		// Tibetan tsheg case is twenty dots exactly.
+		"thai digits":            strings.Repeat("๐", 20),
+		"lao digits":             strings.Repeat("໐", 20),
+		"tibetan tsheg":          strings.Repeat("་", 20),
+		"khmer khan":             strings.Repeat("។", 20),
+		"myanmar section mark":   strings.Repeat("၊", 20),
+		"javanese pada":          strings.Repeat("꧈", 20),
+		"thai vowel signs":       strings.Repeat("่", 20),
+		"thai digits + one word": "supercalifragilistic ๐๐",
+		// Korean is written WITH inter-word spaces, so it is judged by the word
+		// count like any other spaced script: two words is two words.
+		"korean two words": "안녕하십니까여러분들 안녕하십니까여러분들",
+	} {
+		if _, err := New(Pursued, text); err == nil {
+			t.Fatalf("%s: New(%q) = nil error, want a refusal", name, text)
+		}
+		if err := ValidateText(Fold(text)); err == nil {
+			t.Fatalf("%s: ValidateText(%q) = nil error, want a refusal", name, text)
+		}
+	}
+}
+
+// TestGroundsFloorRefusalNamesTheUnitThatRefused: the message a caller is shown
+// must be true of the text that was refused. Telling an operator writing a
+// script with no word breaks to add words names a remedy their language cannot
+// supply, and the message the gate prints is the only instruction they get.
+func TestGroundsFloorRefusalNamesTheUnitThatRefused(t *testing.T) {
+	_, err := New(Pursued, strings.Repeat("​", 19)+"中")
+	if err == nil {
+		t.Fatal("New = nil error, want a refusal")
+	}
+	if strings.Contains(err.Error(), "word floor") || !strings.Contains(err.Error(), "letter(s)") {
+		t.Fatalf("refusal of a text without word breaks = %q, want it to ask for letters and not for words", err)
+	}
+	for _, text := range []string{
+		"supercalifragilistic ... 123",
+		// A text that carries a word ALONGSIDE an ideograph has words, and can
+		// honestly be told to add one — so the character message is wrong here,
+		// and would also report a twenty-letter word as one character.
+		"supercalifragilistic 中",
+	} {
+		_, err = New(Pursued, text)
+		if err == nil {
+			t.Fatalf("New(%q) = nil error, want a refusal", text)
+		}
+		if !strings.Contains(err.Error(), "word floor") {
+			t.Fatalf("refusal of %q = %q, want the word floor named", text, err)
+		}
+	}
+}

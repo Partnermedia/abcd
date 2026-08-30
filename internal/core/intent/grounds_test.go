@@ -367,3 +367,30 @@ func TestRecordGroundsRefusesAWriteTheRecordSwallows(t *testing.T) {
 		t.Fatalf("the refused write altered the record:\n--- got\n%s\n--- want\n%s", got, body)
 	}
 }
+
+// TestParseGroundsReadsAScriptWithoutWordBreaks is the reader half of
+// iss-2608301301044588. The floor counted letter-runs, so a Japanese bullet was
+// dropped by ParseGrounds and the readiness gate then reported "no recorded
+// grounds" about a record whose `## Grounds` section visibly carried one — the
+// gate/reader divergence this feature exists to close, re-entering through the
+// floor rather than through the grammar.
+func TestParseGroundsReadsAScriptWithoutWordBreaks(t *testing.T) {
+	const text = "スタンプされた識別子は改名されても生き残ると予期している"
+	content := plannedUnlinked("itd-10", "alpha") + "\n## Grounds\n\n- pursued: " + text + "\n"
+	got := ParseGrounds(content)
+	if len(got) != 1 {
+		t.Fatalf("ParseGrounds read %d entries from a bullet in a script without word breaks, want 1: %+v", len(got), got)
+	}
+	if got[0].Text != text {
+		t.Fatalf("entry text = %q, want %q", got[0].Text, text)
+	}
+	root := t.TempDir()
+	writeFile(t, root, plannedDir+"/itd-10-alpha.md", content)
+	res, err := Ready(root, "itd-10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g := checkByName(t, res, CheckGrounds); !g.OK {
+		t.Fatalf("grounds check = %+v, want it satisfied by the recorded entry", g)
+	}
+}
