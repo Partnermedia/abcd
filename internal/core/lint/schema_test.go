@@ -1501,3 +1501,80 @@ func TestAbsentAndEmptyRequiredPropertiesGiveDifferentReasons(t *testing.T) {
 		t.Fatalf("expected exactly 2 findings, got %d: %+v", n, fs)
 	}
 }
+
+// An admission is meaningful only against the run whose proposals it admits, and
+// the outstanding report keys the admitted set on the (run, proposal) pair — so an
+// admission filed under one run that names an item belonging to another is keyed
+// on a pair nothing ever queries. It admits nothing, the proposal it names goes on
+// being reported as unadmitted, and no line says an answer was written: exactly
+// the "record that quietly stops counting" this rule exists to make loud.
+//
+// The run-field agreement does not cover it. That check enforces FIELD ==
+// DIRECTORY; this is DIRECTORY == THE TARGET'S OWN RUN, and a record can satisfy
+// the first while failing the second — which is what the fixture below is
+// (iss-2608301327013320).
+func TestAdmissionNamingAnotherRunsProposalIsAFinding(t *testing.T) {
+	root := admissionCorpus(t)
+	// A second run with its own proposal. Reading ids are minted per run, so
+	// rdi-7 belongs to rdg-9 and to nothing else.
+	writeFile(t, root, "work/issues/readings/rdg-9/rdi-7.md",
+		"---\nschema_version: 1\nid: rdi-7\nrun: rdg-9\nmanifest: sha256:feed\nposition: widening\n"+
+			"regime: constitutive\npattern: a stated constraint\n---\n\n")
+	// The control: an admission naming the proposal in its OWN run stays silent.
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-2.md", wellFormedAdmission)
+	// The fault: filed under rdg-1, carrying run: rdg-1 (so the run-field
+	// agreement is satisfied), naming a proposal that lives under rdg-9.
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-3.md",
+		"---\nschema_version: 1\nid: adm-3\nrun: rdg-1\nproposal: rdi-7\n"+
+			"grounds: the configuration it admits is one the frame does not already hold\n---\n\n")
+
+	fs, err := Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	crossRun := filepath.Join("work", "issues", "admissions", "rdg-1", "adm-3.md")
+	if !findingWith(fs, crossRun, ruleRecordSchema, "rdg-9") {
+		t.Errorf("an admission naming another run's proposal must be a finding naming the run it reaches into: %+v", fs)
+	}
+	if findingWith(fs, filepath.Join("work", "issues", "admissions", "rdg-1", "adm-2.md"), ruleRecordSchema, "") {
+		t.Errorf("an admission naming a proposal in its own run must stay silent: %+v", fs)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 1 {
+		t.Fatalf("expected exactly 1 finding (the cross-run join), got %d: %+v", n, fs)
+	}
+}
+
+// One rule must give ONE answer about one pruned handle. The ADR lifecycle prunes
+// a superseded record once its successor lands and keeps the trace in the
+// successor's `supersedes`, so such a handle resolves to that declaration rather
+// than to a file — which the cross-reference loop has always read that way. The
+// join check did not, so `related_adrs: [adr-5]` was accepted on one record while
+// `occasioned_by: adr-5` was a blocker on the next (iss-2608301327012166).
+func TestJoinsResolveARetiredHandleTheWayCrossReferencesDo(t *testing.T) {
+	root := admissionCorpus(t)
+	// adr-25 declares it replaced adr-5, which is therefore pruned rather than
+	// missing. Its ordinal also puts adr-5 below the store's high-water mark, so
+	// the retirement is one the store could have issued.
+	writeFile(t, root, "rec/decisions/adrs/0025-host-delegated.md",
+		"---\nid: adr-25\nsupersedes: [adr-5]\nsuperseded_by: null\nrelated_adrs: [adr-5]\n---\n# ADR-25\n")
+	writeFile(t, root, "work/issues/surprises/srp-4.md",
+		"---\nschema_version: 1\nid: srp-4\noccasioned_by: adr-5\n---\n\n")
+	// The control: a handle nothing declares retired is still a finding, so the
+	// skip is a resolution and not a blanket amnesty.
+	writeFile(t, root, "work/issues/surprises/srp-5.md",
+		"---\nschema_version: 1\nid: srp-5\noccasioned_by: adr-6\n---\n\n")
+
+	fs, err := Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if findingWith(fs, filepath.Join("work", "issues", "surprises", "srp-4.md"), ruleRecordSchema, "adr-5") {
+		t.Errorf("a pruned handle resolves through the successor's declaration in a join too: %+v", fs)
+	}
+	if !findingWith(fs, filepath.Join("work", "issues", "surprises", "srp-5.md"), ruleRecordSchema, "adr-6") {
+		t.Errorf("a handle nothing declares retired is still a finding: %+v", fs)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 1 {
+		t.Fatalf("expected exactly 1 finding (the undeclared adr-6), got %d: %+v", n, fs)
+	}
+}
