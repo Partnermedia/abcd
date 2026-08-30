@@ -1260,3 +1260,30 @@ Per hand-run, append:
   it. That is the first time this table has retired a part by finding its home
   already occupied, and it is the outcome the one-canonical-primitive rule
   predicts should be common.
+
+### 2026-08-30 — the review-round cost calibration (hand-run at recording)
+
+- **Proposal:** the maximal review discipline run in cycle 1 was an experiment
+  to measure verification overhead; the evidence is in, and what it says should
+  bind the remainder of this phase and future phases in abcd and abcd-managed
+  repos.
+- **Initial routing:** three parts. (1) The stance — review effort scales with
+  what CHANGED, not only with what is being crossed (principle). (2) The
+  evidence — per-intent commits, rounds and diff sizes, the token accounting,
+  and the delta-versus-full-diff waste (dated research note). (3) Any tooling
+  that would scope a review to the delta mechanically (a future capability,
+  not filed).
+- **Confirmed routing:** confirmed by the orchestrator under the facilitator's
+  standing authorisation, decision (20) of 2026-08-28. The facilitator set the
+  frame explicitly: run it all-in first to see the overhead, then state what
+  should be done with the evidence in hand.
+- **Verdict:** SPLIT into (1) and (2), with (3) recorded as a future rung
+  inside the note rather than filed.
+- **Notes:** part (1) did NOT mint a principle. `adversarial-review-scales-
+  with-blast-radius` already holds the stance for record crossings and simply
+  said nothing about build rounds, so the run EXTENDED it with a build-round
+  half rather than adding a near-synonym beside it. That is the second
+  consecutive hand-run to close a part by finding the home already occupied
+  (the previous one retired a stance into `loud-staging`), which is now enough
+  of a pattern to say the table's most common non-trivial outcome is
+  consolidation rather than minting.
