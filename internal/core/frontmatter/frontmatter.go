@@ -196,3 +196,38 @@ func IsNull(v string) bool {
 	}
 	return false
 }
+
+// Unquote reverses the backslash escaping a double-quoted frontmatter scalar
+// carries — the mirror of the escaping capture's yamlScalar emits, where a
+// backslash and a double quote are each written `\`-prefixed.
+//
+// This is the ONE decoder, for the reason IsNull above is the one null
+// predicate. capture's reader and record-lint's schema gate each held a
+// byte-identical private copy of this loop (iss-2608301212424896), which is the
+// split-verdict shape in waiting: the gate exists to refuse exactly what the
+// reader refuses, and two decoders that drift make a record the reader SKIPS go
+// lint-green. Callers come here rather than re-deriving it.
+//
+// The argument is the scalar's INNER text, with the surrounding quotes already
+// removed: whether a value is double-quoted at all is the caller's question,
+// and each caller answers it differently for its own reasons.
+func Unquote(s string) string {
+	var b strings.Builder
+	esc := false
+	for _, r := range s {
+		if esc {
+			b.WriteRune(r)
+			esc = false
+			continue
+		}
+		if r == '\\' {
+			esc = true
+			continue
+		}
+		b.WriteRune(r)
+	}
+	if esc {
+		b.WriteRune('\\')
+	}
+	return b.String()
+}

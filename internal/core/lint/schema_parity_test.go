@@ -307,6 +307,11 @@ func resolvedIssue(id, slug, extra string) string {
 //     so the block map is what sees it at all.
 //   - empty string: validateStrict skips a blank grounds, so the reader ACCEPTS
 //     it. A gate that put "" to the parser would block a record the reader reads.
+//   - backslash escaped: the escaping is the dimension on which the two decoders
+//     duplicated logic, and the table had no row for it (iss-2608301212424896).
+//     They now share frontmatter.Unquote, and this row is what fails if either
+//     side stops calling it: undecoded, the token reads `pursued\` and the gate
+//     reports a record the reader accepts.
 func TestRecordSchemaGroundsSpellingsMatchTheReader(t *testing.T) {
 	const issues = "work/issues"
 	for _, tc := range []struct {
@@ -318,6 +323,7 @@ func TestRecordSchemaGroundsSpellingsMatchTheReader(t *testing.T) {
 		{"empty list", "grounds: []\n", true},
 		{"block spelled", "grounds:\n  pursued: we expect a mapping rather than a string\n", true},
 		{"empty string", "grounds: \"\"\n", false},
+		{"backslash escaped", "grounds: \"pursued\\: we expect the escape reversed before the token is read\"\n", false},
 		{"bare null", "grounds: null\n", false},
 		{"well formed", "grounds: \"pursued: we expect the recorded reasoning to outlive the session\"\n", false},
 	} {

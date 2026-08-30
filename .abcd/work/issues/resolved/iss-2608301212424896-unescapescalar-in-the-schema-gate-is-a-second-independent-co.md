@@ -7,6 +7,11 @@ category: "tech-debt"
 source: "user-observation"
 found_during: "itd-179-round-2-ruthless"
 found_at: "internal/core/lint/schema.go"
+resolution: "the two byte-identical decoders are now one exported frontmatter.Unquote that capture's reader and record-lint's schema gate both call, and the grounds parity table carries a backslash-escaped row in both halves"
+impact: internal
+grounds: "pursued: we expect two copies of one decoder to drift on the case neither table covers, and the parity table's missing escaping row over a duplicated escaping loop is exactly that gap"
+resolved_by:
+  intent: "itd-179"
 ---
 
 unescapeScalar in the schema gate is a second independent copy of capture.unquote and the parity table has no escaping row

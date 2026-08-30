@@ -32,6 +32,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/intentdriven/abcd/internal/core/frontmatter"
 	"github.com/intentdriven/abcd/internal/core/grounds"
 	"github.com/intentdriven/abcd/internal/core/issueschema"
 	"github.com/intentdriven/abcd/internal/core/recordid"
@@ -660,8 +661,9 @@ func issueScalar(value string) string {
 }
 
 // readerScalar decodes a frontmatter scalar EXACTLY as capture's decodeScalar
-// does: a matched pair of DOUBLE quotes is removed and its backslash escaping
-// reversed; anything else — a single-quoted value included — is the bare token it
+// does — the same shape test here, then the SAME decoder, frontmatter.Unquote,
+// which both call: a matched pair of DOUBLE quotes is removed and its backslash
+// escaping reversed; anything else — a single-quoted value included — is the bare token it
 // spells, quote characters and all.
 //
 // It exists beside issueScalar rather than replacing it because the two answer
@@ -673,32 +675,9 @@ func issueScalar(value string) string {
 func readerScalar(value string) string {
 	v := strings.TrimSpace(value)
 	if len(v) >= 2 && strings.HasPrefix(v, `"`) && strings.HasSuffix(v, `"`) {
-		return unescapeScalar(v[1 : len(v)-1])
+		return frontmatter.Unquote(v[1 : len(v)-1])
 	}
 	return v
-}
-
-// unescapeScalar reverses the backslash escaping capture's yamlScalar emits, the
-// mirror of its unquote.
-func unescapeScalar(s string) string {
-	var b strings.Builder
-	esc := false
-	for _, r := range s {
-		if esc {
-			b.WriteRune(r)
-			esc = false
-			continue
-		}
-		if r == '\\' {
-			esc = true
-			continue
-		}
-		b.WriteRune(r)
-	}
-	if esc {
-		b.WriteRune('\\')
-	}
-	return b.String()
 }
 
 // inSet reports membership in a small value list.
