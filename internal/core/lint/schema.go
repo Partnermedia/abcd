@@ -216,19 +216,27 @@ type recordJoin struct {
 	// the record that joins them. Empty means the join carries no such obligation.
 	//
 	// An admission is meaningful only against the run whose proposals it admits,
-	// and reading ids are minted per run and collide across runs by construction —
-	// so an admission filed under one run naming an item that belongs to another is
-	// keyed on a pair nothing ever queries. It admits nothing, the proposal it
-	// names goes on being reported as unadmitted, and no line says an answer was
-	// written (iss-2608301327013320).
+	// and the outstanding report keys the admitted set on the PAIR — the run the
+	// record is filed under, and the proposal it names (admittedProposals) — so an
+	// admission filed under one run naming an item that belongs to another is keyed
+	// on a pair nothing ever queries. It admits nothing, the proposal it names goes
+	// on being reported as unadmitted, and no line says an answer was written
+	// (iss-2608301327013320).
 	//
-	// It names a family rather than being a bare flag because that reason is a
-	// PROPERTY OF THE FAMILY, and the message says so. An issue id is minted from a
-	// timestamp, globally, and survives a move between status directories; the
-	// outstanding report walks reading items and never names an issue at all. So a
-	// target outside the declared family is left to the silence it had: its value
-	// is wrong for some other reason, and inventing a collision the operator then
-	// goes looking for is the confident false statement this rule must not make
+	// That consequence is what the walk establishes, and it is the whole of what
+	// the message may say. It does NOT rest on ids colliding across buckets: this
+	// rule's own duplicate-ordinal leg refuses a cross-run reading collision
+	// outright, and mintUnusedItemID probes every run under the ledger lock and
+	// redraws on a hit, so a rule asserting the collision would be contradicting
+	// itself twice over (iss-2608301519253368).
+	//
+	// It names a family rather than being a bare flag because the pair is a
+	// PROPERTY OF THE FAMILY, and the message says so. The outstanding report walks
+	// reading items and keys them by the run they sit in; it never names an issue at
+	// all, and no reader keys an issue on its status directory. So a target outside
+	// the declared family is left to the silence it had: its value is wrong for some
+	// other reason, and inventing a consequence the operator then goes looking for
+	// is the confident false statement this rule must not make
 	// (iss-2608301411017768).
 	//
 	// checkRecordBucketField does NOT cover this and never did. That check enforces
@@ -828,11 +836,12 @@ func checkRecordUnknownFields(r schemaRecord, severity string) []Finding {
 //
 // Resolution has two halves, because a join can fail in two ways. A target that
 // is NOT IN THE CORPUS joins nothing at all. A target that is in the corpus but
-// in ANOTHER BUCKET joins something nobody will ever look for: a family whose
-// ids are minted per bucket collides across them, so the pair the joining record
-// is keyed on is one no reader queries. The second half is declared per join AND
-// per target family (sameBucketAs), because that collision is a property of the
-// family and the message names it.
+// in ANOTHER BUCKET joins something nobody will ever look for: what reads that
+// family keys what it finds on the PAIR — the bucket the record is filed under,
+// and the target it names — so a record reaching across buckets is keyed on a
+// pair no reader queries. The second half is declared per join AND per target
+// family (sameBucketAs), because that pair-keying is a property of the family
+// and the message names it.
 //
 // Prose is legitimate and stays silent. A surprise is keyed to WHATEVER
 // occasioned it — a detection, an admission, or a consequence that has no id — so
@@ -896,8 +905,9 @@ func checkRecordJoins(r schemaRecord, index map[recordRef]schemaRecord, retired 
 			File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: cfg.Severity,
 			Message: join.field + " names '" + ref.String() + "', which is filed under '" + target.bucket +
 				"' while this " + r.noun() + " is filed under '" + r.bucket +
-				"'; ids in that family are minted per bucket and collide across them, so the pair this " +
-				r.noun() + " is keyed on is one nothing ever queries — it counts for nothing, and the " +
+				"'; what reads that family keys it on the pair — the bucket it is filed under and the " +
+				target.noun() + " it names — so this " + r.noun() +
+				" is keyed on a pair nothing ever queries: it counts for nothing, and the " +
 				target.noun() + " it names goes on being reported as unanswered with no sign that an answer was written",
 		})
 	}

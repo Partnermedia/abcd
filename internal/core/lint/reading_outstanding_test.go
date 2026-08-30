@@ -603,9 +603,10 @@ func TestAPartlyUnreadableAdmissionTreeStillAdmitsWhatItRead(t *testing.T) {
 // An admission answers ONE proposal in ONE run. Keying the admitted set on the
 // proposal alone made a proposal id a global silencer: an admission filed under
 // run A naming an id that belongs to run B answered B's item, and the report
-// then said nothing about a proposal nobody had admitted. Reading ids are minted
-// per run and collide across them by construction (iss-2608300227228575), so the
-// pair is the only key that identifies what was admitted.
+// then said nothing about a proposal nobody had admitted. Reading ids do not
+// collide across runs (iss-2608300227228575); the pair is the only key that
+// identifies what was ADMITTED, which is a different question from which ids
+// exist.
 func TestAnAdmissionAdmitsOnlyWithinItsOwnRun(t *testing.T) {
 	runA, itemA := "rdg-2608300000000001", "rdi-2608300000000002"
 	root := readingLedger(t, runA, itemA, "widening")
