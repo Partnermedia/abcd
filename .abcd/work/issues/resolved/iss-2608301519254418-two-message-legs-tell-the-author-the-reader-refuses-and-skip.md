@@ -7,7 +7,7 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-189-round-3-ruthless"
 found_at: "internal/core/lint/schema.go"
-resolution: "The closed-schema and duplicate-key findings now gate their reader clause on readerFailsClosed, the same declaration the missing-property finding consults, so all three legs rest on one statement about the store rather than one leg declaring and two assuming. The issue store keeps the refusal account on both legs and the ADR store keeps it on the closed-schema leg, which is true of them; the admission and surprise stores state what a key outside a closed schema and a duplicated key ARE, and stop there. The duplicate-key leg is a THIRD reader question and does not stand behind this flag: the ADR dispatcher reads with the lenient scanner and refuses no duplicate, so it is declared separately as readerRefusesDuplicateKey (iss-2608301656200729)."
+resolution: "The closed-schema finding gates its reader clause on readerFailsClosed, the same declaration the missing-property finding consults, so both legs that read a record's PROPERTIES rest on one statement about the store rather than one leg declaring and the other assuming. The duplicate-key finding gates on a declaration of its own. The issue store keeps the refusal account on both legs and the ADR store keeps it on the closed-schema leg, which is true of them; the admission and surprise stores state what a key outside a closed schema and a duplicated key ARE, and stop there. The duplicate-key leg is a THIRD reader question and does not stand behind this flag: the ADR dispatcher reads with the lenient scanner and refuses no duplicate, so it is declared separately as readerRefusesDuplicateKey (iss-2608301656200729)."
 impact: fix
 resolved_by:
   intent: "itd-189"

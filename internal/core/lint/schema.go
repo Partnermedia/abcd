@@ -1610,6 +1610,13 @@ func isEmptyFlowCollection(v string, open, close byte) bool {
 // all-whitespace value still carries its padding once the quotes are gone (the
 // lesson lapsed_at already learned in iss-2608300212513349).
 //
+// Two things it does NOT decide, both recorded rather than hidden. A trailing
+// comment defeats every test here at once, because the shared same-line scanner
+// strips no comments and each test anchors on the last byte — a scanner question,
+// and iss-2608301744268001's to close. And the supersession leg's silence on an
+// empty collection is not shared by record.describeADR, which renders `[]` and
+// `{}` as a successor link (iss-2608301744300631).
+//
 // It takes the RAW frontmatter value, never one issueScalar has already read:
 // stripping twice empties a value that is two apostrophes inside double quotes,
 // so the legs that pre-stripped read it as absent while the leg that did not read
