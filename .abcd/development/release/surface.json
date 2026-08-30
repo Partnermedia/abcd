@@ -274,6 +274,13 @@
           "hidden": false
         },
         {
+          "name": "production-mode",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
           "name": "severity",
           "shorthand": "",
           "type": "string",
@@ -395,6 +402,13 @@
           "type": "string",
           "required": false,
           "hidden": false
+        },
+        {
+          "name": "production-mode",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
         }
       ]
     },
@@ -424,6 +438,13 @@
           "hidden": false
         },
         {
+          "name": "production-mode",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
           "name": "shipped-in",
           "shorthand": "",
           "type": "string",
@@ -442,7 +463,15 @@
     {
       "path": "abcd capture wontfix",
       "hidden": false,
-      "flags": []
+      "flags": [
+        {
+          "name": "production-mode",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
     },
     {
       "path": "abcd changelog",
@@ -821,6 +850,13 @@
           "type": "string",
           "required": false,
           "hidden": false
+        },
+        {
+          "name": "production-mode",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
         }
       ]
     },
@@ -855,7 +891,15 @@
     {
       "path": "abcd intent plan",
       "hidden": false,
-      "flags": []
+      "flags": [
+        {
+          "name": "production-mode",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
     },
     {
       "path": "abcd intent ready",

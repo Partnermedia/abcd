@@ -44,7 +44,9 @@ default): `--severity` (`nitpick|minor|major|critical`, default `minor`),
 `--found-at` (optional repo-relative path), `--lapsed-at` (RFC 3339 instant in
 UTC at which a recorded discipline gave way — the lapse itself, never the
 write-up), `--slug` (overrides the slug derived from the text), `--blocked-by`
-(comma-separated `iss-N` ids this issue depends on). Report the new `id`, `status`, and `path` from the JSON. Report `redacted`
+(comma-separated `iss-N` ids this issue depends on), `--production-mode`
+(`hand-written|dictated-and-formatted|scribe-transcribed`, default: the repo's
+declared mode, else `hand-written`). Report the new `id`, `status`, and `path` from the JSON. Report `redacted`
 too whenever it is non-zero: it counts the spans rewritten before the text was
 written, and the user needs to know their wording was changed.
 
@@ -52,6 +54,39 @@ written, and the user needs to know their wording was changed.
 lapse capture that omits it exits 2 and writes nothing. The instant the
 discipline gave way is the whole content of a lapse entry, and the only value
 that could be defaulted is the write-up time it exists to be distinguished from.
+
+## Disclosure: where a record came from and how its text was produced
+
+Every record a command writes carries two frontmatter keys, and no flag carries
+either as free text.
+
+`origin` is **derived from which command ran** and has no flag at all:
+`researcher-authored` for a verb a person invoked, `extracted-from-record` for
+`capture promote` — the one verb that derives a record from another record — and
+`contributed-by-reading <rdg-N>/<rdi-N>`, which only the reading-ingest verb
+mints. It is stamped when the record is minted and never rewritten: where a
+record came from does not change when it is resolved.
+
+`production_mode` is the closed choice `--production-mode` carries:
+`hand-written`, `dictated-and-formatted`, or `scribe-transcribed`. Any other
+value is refused and nothing is written. On `capture` and `capture promote` an
+absent flag takes the repo's declared default from `.abcd/config/identity.json`,
+falling back to `hand-written`. On `capture resolve` and `capture wontfix` the
+flag **restamps** the record — a resolution note is new text with its own mode —
+and an absent flag leaves the record's existing stamp alone.
+
+Neither key touches authorship: they are disclosure at field granularity, on the
+same footing as the `Assisted-by:` trailer at commit granularity. Population is
+forward-only, so a record written before the keys existed carries neither, and
+nothing backfills it. Both keys are excluded from every reading by the input
+assembler's field projection.
+
+The `record_provenance` record-lint rule reports a record carrying the pair in a
+shape no write path produces: a value outside its set, one key without the
+other, `extracted-from-record` with no `promoted_from` back-edge, or a reading
+pointer that resolves to no reading record. A hand edit that types a legal value
+in a legal combination is byte-identical to a command's write, so the rule
+catches implausible hand edits, not all of them.
 
 A single whitespace-free word is refused (exit 2, nothing written): a lone
 token reads as a mistyped sub-verb, never as issue text. A near-miss of a real
@@ -94,7 +129,8 @@ carries the product judgement the version derivation reads (`additive`,
 `breaking`, `fix`, or `internal` — plumbing invisible to users). There is no
 default; an absent or misspelled impact is refused rather than guessed, so the
 record always satisfies the `issue_impact_valid` gate. `wontfix` takes no impact
-(a non-action ships nothing).
+(a non-action ships nothing). Both take `--production-mode`, which restamps the
+record rather than defaulting it (see the disclosure section above).
 
 `resolve` also takes optional provenance — the structured `resolved_by` pointer
 to what fixed the issue: `--intent <itd-N>`, `--spec <spc-N>`, `--commit <sha>`,
@@ -181,7 +217,9 @@ One invocation mints a new intent draft under
 `.abcd/development/intents/drafts/` — slug reused from the issue, body carrying
 a by-id pointer ("Graduated from `iss-N`"), never a copy of the issue body —
 and stamps the issue's `promoted_to` with the minted `itd-N`. The draft's
-frontmatter records `promoted_from: iss-N`, so the edge is two-sided. The issue
+frontmatter records `promoted_from: iss-N`, so the edge is two-sided, and its
+`origin` reads `extracted-from-record` — the one arrival path a command derives
+from what it did. The issue
 keeps its status folder: promotion is orthogonal to fix-status and is not
 resolution. An issue already carrying `promoted_to` is refused with the
 existing `itd-N`.

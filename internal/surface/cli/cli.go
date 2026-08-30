@@ -32,6 +32,7 @@ import (
 	"github.com/intentdriven/abcd/internal/core/lifeboat"
 	"github.com/intentdriven/abcd/internal/core/lint"
 	"github.com/intentdriven/abcd/internal/core/memory"
+	"github.com/intentdriven/abcd/internal/core/provenance"
 	"github.com/intentdriven/abcd/internal/core/record"
 	"github.com/intentdriven/abcd/internal/core/rules"
 	"github.com/intentdriven/abcd/internal/core/spec"
@@ -1464,7 +1465,7 @@ func newRulesCommand(asJSON *bool) *cobra.Command {
 // lifecycle status board (never mutates); the `plan` and `link` sub-verbs carry
 // the mutations. Usage/lookup failures exit 2.
 func newIntentCommand(asJSON *bool) *cobra.Command {
-	var intentImpact string
+	var intentImpact, intentProductionMode string
 	intentCmd := &cobra.Command{
 		Use:   "intent [text]",
 		Short: "Intent lifecycle; bare invocation is read-only status, quoted text files a draft",
@@ -1497,7 +1498,7 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 						"unknown intent subcommand %q (nothing created — a lone word is read as a sub-verb, never as a draft title; a draft title must contain a space, so write the whole sentence)",
 						args[0])}
 				}
-				return createIntentFromText(cmd, cwd, strings.Join(args, " "), intentImpact, *asJSON)
+				return createIntentFromText(cmd, cwd, strings.Join(args, " "), intentImpact, intentProductionMode, *asJSON)
 			}
 			v, err := intent.Status(cwd)
 			if err != nil {
@@ -1522,6 +1523,11 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 	// travels unchanged to shipped/, where intent_impact_valid requires it — so the
 	// tool's own create->plan->ship path can produce a record that clears the gate.
 	intentCmd.Flags().StringVar(&intentImpact, "impact", "", "stamp the draft's product impact: additive|breaking|fix (optional)")
+	// --production-mode is a CLOSED CHOICE, refused outright outside the
+	// vocabulary — the same shape as --impact and --severity, both of which
+	// already stamp machine-read enums. There is no flag for `origin`: it is
+	// derived from which command ran (itd-178).
+	intentCmd.Flags().StringVar(&intentProductionMode, "production-mode", "", productionModeFlagHelp)
 
 	// new "<text>" — backwards-compatible alias for the sub-verb-free create path
 	// (itd-46, lean a): routes to the same create engine and warns on stderr that
@@ -1541,12 +1547,13 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 			}
 			fmt.Fprintln(cmd.ErrOrStderr(),
 				"WARNING: `abcd intent new` is deprecated; use `abcd intent \"<text>\"` (quoted text is the create signal).")
-			return createIntentFromText(cmd, cwd, strings.Join(args, " "), "", *asJSON)
+			return createIntentFromText(cmd, cwd, strings.Join(args, " "), "", "", *asJSON)
 		},
 	})
 
 	// plan <itd-N> — mint the spec, write both link sides, move drafts -> planned.
-	intentCmd.AddCommand(&cobra.Command{
+	var planProductionMode string
+	planCmd := &cobra.Command{
 		Use:   "plan <itd-N>",
 		Short: "Plan a draft intent (mint its spec, link both sides, move drafts -> planned); on an already-planned intent, stamp its unmarked scope conditions",
 		Args:  cobra.ExactArgs(1),
@@ -1555,7 +1562,13 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := intent.Plan(cwd, args[0], "")
+			// The mode belongs to the SPEC this mints; the intent's own stamp was
+			// written when its draft was created and is never rewritten.
+			mode, err := resolveProductionMode(cwd, planProductionMode)
+			if err != nil {
+				return err
+			}
+			res, err := intent.Plan(cwd, args[0], mode)
 			if err != nil {
 				return &exitError{Code: 2, Msg: "abcd intent plan: " + err.Error()}
 			}
@@ -1577,7 +1590,9 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 				}
 			})
 		},
-	})
+	}
+	planCmd.Flags().StringVar(&planProductionMode, "production-mode", "", productionModeFlagHelp)
+	intentCmd.AddCommand(planCmd)
 
 	// ready <itd-N> — the read-only implement-readiness gate. Exit codes are the
 	// machine seam an autonomous run gates on: 0 ready, 1 not ready (the rendered
@@ -1677,9 +1692,46 @@ const ideateRoutingRule = "  a big, unproven idea? `abcd ideate` runs the option
 // `abcd intent "<text>"` and the deprecated `abcd intent new "<text>"` alias: it
 // files a new draft via intent.CreateFromText and renders the created record. The
 // engine refuses empty/whitespace text and mints the id under the store lock, so
+// resolveProductionMode turns the --production-mode flag into the value a MINT
+// path stamps: the operator's declared choice, or the repo's own declared
+// default from the identity pin (itd-91's seam), which is hand-written when the
+// pin declares none.
+//
+// The value is validated HERE as well as in the core, because a surface refusal
+// costs nothing and names the closed set before any id is minted — and because
+// "the operator supplies a closed choice, never free text" is the property
+// itd-178 rests on, which belongs at the door the operator types at.
+//
+// It is deliberately NOT used by the ledger transitions: a resolve or wontfix
+// that declares no mode must leave the record's existing stamp alone, and
+// defaulting there would silently overwrite it.
+func resolveProductionMode(cwd, flag string) (string, error) {
+	if flag != "" {
+		m, err := provenance.ParseMode(flag)
+		if err != nil {
+			return "", &exitError{Code: 2, Msg: "abcd: " + err.Error() + " (nothing written)"}
+		}
+		return string(m), nil
+	}
+	m, err := identity.DeclaredProductionMode(cwd)
+	if err != nil {
+		return "", &exitError{Code: 2, Msg: "abcd: " + err.Error() + " (nothing written)"}
+	}
+	return string(m), nil
+}
+
+// productionModeFlagHelp is the one help string every verb carrying the flag
+// shows, composed from the vocabulary so it cannot drift from the enum.
+var productionModeFlagHelp = "how this record's text was produced: " + provenance.ModeList() +
+	" (default: the repo's declared mode, else " + string(provenance.DefaultMode) + ")"
+
 // this surface stays a thin marshaller.
-func createIntentFromText(cmd *cobra.Command, cwd, text, impact string, asJSON bool) error {
-	it, mintWarning, err := intent.CreateFromText(cwd, text, impact, "")
+func createIntentFromText(cmd *cobra.Command, cwd, text, impact, productionMode string, asJSON bool) error {
+	mode, err := resolveProductionMode(cwd, productionMode)
+	if err != nil {
+		return err
+	}
+	it, mintWarning, err := intent.CreateFromText(cwd, text, impact, mode)
 	if err != nil {
 		return &exitError{Code: 2, Msg: "abcd intent: " + err.Error()}
 	}
@@ -2328,7 +2380,7 @@ func (p *stdinPrompter) Prompt(key string, choices []string, def string) string 
 // appends an issue; list/resolve/wontfix/promote are thin consumers of capture
 // core.
 func newCaptureCommand(asJSON *bool) *cobra.Command {
-	var severity, category, source, slug, foundDuring, foundAt, lapsedAt, blockedBy string
+	var severity, category, source, slug, foundDuring, foundAt, lapsedAt, blockedBy, captureProductionMode string
 
 	captureCmd := &cobra.Command{
 		Use:   "capture [text]",
@@ -2464,6 +2516,9 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 				LapsedAt:    lapsedAt,
 				BlockedBy:   blocked,
 			}
+			if req.ProductionMode, err = resolveProductionMode(cwd, captureProductionMode); err != nil {
+				return err
+			}
 			// --lapsed-at has NO default, and this is where the caller learns it: a
 			// lapse capture that omits the instant is refused in flag terms before
 			// anything is reserved or written. Core refuses the same record on its
@@ -2502,6 +2557,10 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	// clock at write-up, which is the one value the lapse log exists to rule out.
 	captureCmd.Flags().StringVar(&lapsedAt, "lapsed-at", "", "RFC 3339 instant a discipline gave way (the lapse, not the write-up)")
 	captureCmd.Flags().StringVar(&blockedBy, "blocked-by", "", "comma-separated iss-ids this issue is blocked by")
+	// A closed choice, refused outright outside the vocabulary — the same shape
+	// as --severity. There is no flag for `origin`: a capture is
+	// researcher-authored by construction (itd-178).
+	captureCmd.Flags().StringVar(&captureProductionMode, "production-mode", "", productionModeFlagHelp)
 
 	// list — the earned SD001 exception: a filter flag is REQUIRED.
 	var lsOpen, lsResolved, lsWontfix, lsAll bool
@@ -2543,7 +2602,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	// resolve — open -> resolved with a note, a required product impact, and
 	// optional resolved_by provenance (spc-25): the intent, spec, or commit
 	// that fixed it.
-	var resolveImpact, resolveByIntent, resolveBySpec, resolveByCommit, resolveShippedIn string
+	var resolveImpact, resolveByIntent, resolveBySpec, resolveByCommit, resolveShippedIn, resolveModeRestamp string
 	resolveCmd := &cobra.Command{
 		Use:   "resolve <iss-N> <note> --impact <additive|breaking|fix|internal> [--intent itd-N] [--spec spc-N] [--commit sha] [--shipped-in vX.Y.Z]",
 		Short: "Mark an open issue resolved (open/ -> resolved/), optionally naming what fixed it",
@@ -2556,7 +2615,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 			res, err := capture.Resolve(capture.ResolveRequest{
 				RepoRoot: cwd, ID: args[0], Resolution: args[1], Impact: resolveImpact,
 				ByIntent: resolveByIntent, BySpec: resolveBySpec, ByCommit: resolveByCommit,
-				ShippedIn: resolveShippedIn,
+				ShippedIn: resolveShippedIn, ProductionMode: resolveModeRestamp,
 			})
 			if err != nil {
 				return err
@@ -2582,6 +2641,11 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	// commit, so the cut is right without it. The derivation leaves such a record out of the current
 	// cut, so the release record cannot announce old work as new. Absent by
 	// default, and never inferred — a record that says nothing belongs to this cut.
+	// A transition RESTAMPS production_mode, so the flag is passed through
+	// unresolved: an undeclared mode must leave the record's existing stamp alone,
+	// and taking the repo default here would silently overwrite it (itd-178).
+	resolveCmd.Flags().StringVar(&resolveModeRestamp, "production-mode", "",
+		"restamp how this record's text was produced: "+provenance.ModeList()+" (default: leave the record's existing stamp alone)")
 	resolveCmd.Flags().StringVar(&resolveShippedIn, "shipped-in", "", "MIGRATION USE: the release that already carried this work (vX.Y.Z), leaving the record out of the current cut; unnecessary in a repo abcd managed from the start")
 	captureCmd.AddCommand(resolveCmd)
 
@@ -2591,7 +2655,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	// promoted_to in one invocation; --intent is the stamp-only repair/link
 	// mode. The issue keeps its status folder — promotion is not resolution —
 	// and an undispositioned rdi-N is refused before anything is minted.
-	var promoteIntent string
+	var promoteIntent, promoteProductionMode string
 	promoteCmd := &cobra.Command{
 		Use:   "promote <iss-N|rdi-N>",
 		Short: "Graduate an issue or a dispositioned reading item into an intent draft (mints + stamps promoted_to)",
@@ -2601,7 +2665,15 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := capture.Promote(capture.PromoteRequest{RepoRoot: cwd, ID: args[0], LinkIntent: promoteIntent})
+			// The mode belongs to the DRAFT this mints; stamp-only mode mints
+			// nothing, so it carries none.
+			mode, err := resolveProductionMode(cwd, promoteProductionMode)
+			if err != nil {
+				return err
+			}
+			res, err := capture.Promote(capture.PromoteRequest{
+				RepoRoot: cwd, ID: args[0], LinkIntent: promoteIntent, ProductionMode: mode,
+			})
 			if err != nil {
 				return err
 			}
@@ -2620,6 +2692,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 		},
 	}
 	promoteCmd.Flags().StringVar(&promoteIntent, "intent", "", "stamp-only mode: link this existing itd-N instead of minting a draft")
+	promoteCmd.Flags().StringVar(&promoteProductionMode, "production-mode", "", productionModeFlagHelp)
 	captureCmd.AddCommand(promoteCmd)
 
 	// disposition — the researcher's answer to ONE reading item, written as a
@@ -2680,7 +2753,8 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	captureCmd.AddCommand(dispositionCmd)
 
 	// wontfix — open -> wontfix with a reason.
-	captureCmd.AddCommand(&cobra.Command{
+	var wontfixProductionMode string
+	wontfixCmd := &cobra.Command{
 		Use:   "wontfix <iss-N> <reason>",
 		Short: "Record an explicit non-action decision (open/ -> wontfix/)",
 		Args:  cobra.ExactArgs(2),
@@ -2689,7 +2763,9 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := capture.Wontfix(capture.WontfixRequest{RepoRoot: cwd, ID: args[0], Reason: args[1]})
+			res, err := capture.Wontfix(capture.WontfixRequest{
+				RepoRoot: cwd, ID: args[0], Reason: args[1], ProductionMode: wontfixProductionMode,
+			})
 			if err != nil {
 				return err
 			}
@@ -2697,7 +2773,10 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 				fmt.Fprintf(w, "%s  %s -> %s — %s\n", res.ID, res.FromStatus, res.ToStatus, termsafe.Sanitize(res.Path))
 			})
 		},
-	})
+	}
+	wontfixCmd.Flags().StringVar(&wontfixProductionMode, "production-mode", "",
+		"restamp how this record's text was produced: "+provenance.ModeList()+" (default: leave the record's existing stamp alone)")
+	captureCmd.AddCommand(wontfixCmd)
 
 	return captureCmd
 }
