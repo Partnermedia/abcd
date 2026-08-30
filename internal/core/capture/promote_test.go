@@ -403,3 +403,56 @@ func TestPromoteRefusesAHeldReadingItem(t *testing.T) {
 		t.Fatalf("the refusal must name the standing answer; got %v", err)
 	}
 }
+
+// The standing answer is read in the pre-flight, but the pre-flight is not where
+// the stamp lands. A disposition arriving between the two — a colleague
+// superseding an acceptance with a rejection while the mint runs — would leave a
+// standing `rejected` beside a `promoted_to`: a ledger holding both a refusal and
+// the admission it refused, which is the state the refusal exists to prevent.
+//
+// So the state is recomputed inside the locked closure, where nothing can land
+// after it. The hook below is that window, forced open.
+func TestPromoteRechecksTheStandingStateUnderTheLock(t *testing.T) {
+	repo, ir, item := dispositionedReadingFixture(t)
+	standing, err := standingDispositions(filepath.Join(ir, issueschema.DispositionsDir, item))
+	if err != nil || len(standing) != 1 {
+		t.Fatalf("fixture: standing = %v, err = %v", standing, err)
+	}
+
+	// Between the pre-flight and the stamp, the acceptance is superseded by a
+	// rejection.
+	orig := beforeStampHook
+	beforeStampHook = func() {
+		beforeStampHook = nil
+		if _, err := Disposition(DispositionRequest{
+			RepoRoot: repo, IssuesRoot: ir, Item: item,
+			State: issueschema.DispositionRejected, Grounds: "the constraint already covers it",
+			Supersedes: standing[0],
+		}); err != nil {
+			t.Errorf("superseding disposition: %v", err)
+		}
+	}
+	t.Cleanup(func() { beforeStampHook = orig })
+
+	_, err = Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: item})
+	if err == nil {
+		t.Fatal("a promote whose standing answer became a rejection must be refused")
+	}
+	if !strings.Contains(err.Error(), issueschema.DispositionRejected) {
+		t.Fatalf("the refusal must name the standing answer it read under the lock; got %v", err)
+	}
+
+	// And nothing was stamped: the record must not carry a promoted_to it was
+	// refused for.
+	path, err := findReadingItem(ir, item)
+	if err != nil {
+		t.Fatal(err)
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(content), "promoted_to") {
+		t.Fatalf("the reading record was stamped despite the refusal:\n%s", content)
+	}
+}

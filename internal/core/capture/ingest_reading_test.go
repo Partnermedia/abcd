@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/intentdriven/abcd/internal/adapter/scanner"
 	"github.com/intentdriven/abcd/internal/core/issueschema"
 	"github.com/intentdriven/abcd/internal/core/recordid"
 	"github.com/intentdriven/abcd/internal/fsutil"
@@ -244,5 +245,61 @@ func TestIngestReportsWhichItemsLandedWhenAWriteFails(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), res.Records[0].ID) {
 		t.Fatalf("the error must name what landed so a retry is not blind; got %v", err)
+	}
+}
+
+// The ledger lock serialises every mutation in the repository, so what is done
+// while holding it is a budget every other verb pays out of. Redaction is the
+// expensive part of an ingest — each scanner probes the machine identity, which
+// shells out — and doing it per field per item inside the lock made a large batch
+// hold the lock for seconds against a 5-second timeout, failing any concurrent
+// capture, disposition or promote with allocator contention.
+//
+// So the text is redacted BEFORE the lock, with one scanner for the whole batch,
+// and the lock holds only the mint, the probe and the write. The assertion is
+// structural rather than timed: one scanner per ingest, and none built while the
+// lock is held.
+func TestIngestRedactsBeforeTakingTheLedgerLock(t *testing.T) {
+	repo, ir := ledger(t)
+
+	built := 0
+	builtWhenLocked := -1
+	origScanner := newLedgerScanner
+	newLedgerScanner = func(root string) (*scanner.Scanner, error) {
+		built++
+		return origScanner(root)
+	}
+	t.Cleanup(func() { newLedgerScanner = origScanner })
+
+	origWrite := readingWriteHook
+	readingWriteHook = func(path string, data []byte) error {
+		if builtWhenLocked < 0 {
+			builtWhenLocked = built
+		}
+		return fsutil.WriteFileAtomic(path, data, 0o644)
+	}
+	t.Cleanup(func() { readingWriteHook = origWrite })
+
+	items := make([]ReadingItem, 0, 50)
+	for i := 0; i < 50; i++ {
+		items = append(items, ReadingItem{Pattern: "a stated constraint", Body: bodyFor("detection")})
+	}
+	res, err := IngestReading(IngestReadingRequest{
+		RepoRoot: repo, IssuesRoot: ir,
+		Run: "rdg-2608300000000001", Manifest: "sha256:beef",
+		Position: "detection", Regime: "registrative",
+		Items: items,
+	})
+	if err != nil {
+		t.Fatalf("IngestReading: %v", err)
+	}
+	if len(res.Records) != 50 {
+		t.Fatalf("wrote %d records, want 50", len(res.Records))
+	}
+	if built != 1 {
+		t.Fatalf("built %d scanners for a 50-item batch, want 1 — a scanner per field per item is what put seconds inside the lock", built)
+	}
+	if builtWhenLocked != built {
+		t.Fatalf("%d scanner(s) were built while the ledger lock was held; redaction belongs outside it", built-builtWhenLocked)
 	}
 }

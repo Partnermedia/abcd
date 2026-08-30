@@ -49,6 +49,14 @@ type PromoteResult struct {
 // dir is a no-op for root), mirroring removeSourceHook in commitTransition.
 var stampWriteHook func(path string, data []byte) error
 
+// beforeStampHook, when non-nil, fires between the pre-flight and the moment the
+// stamp closure takes the ledger lock. It is a test-only seam (nil in production,
+// zero overhead) that forces exactly the window a concurrent write would land in,
+// so the under-lock re-checks are exercised rather than asserted. It fires
+// OUTSIDE the lock on purpose: a hook that ran inside it could not write to the
+// ledger it is meant to change.
+var beforeStampHook func()
+
 // Promote graduates an issue into an intent without retyping (spc-24, step 2
 // of the record walk). Default mode mints an intent draft — slug reused from
 // the issue, body carrying a by-id pointer to the issue rather than a copy
@@ -245,28 +253,10 @@ func promoteReadingItem(repoRoot, issuesRoot string, req PromoteRequest) (Promot
 	if err != nil {
 		return PromoteResult{}, err
 	}
-	if len(standing) == 0 {
-		return PromoteResult{}, fmt.Errorf(
-			"%s carries no disposition; an item is answered before it is acted on, and promoting an undispositioned item collapses the two acts into one — record the disposition first (abcd capture disposition %s --state <state> ...)",
-			req.ID, req.ID)
-	}
-	state, err := standingDispositionState(issuesRoot, req.ID, standing)
-	if err != nil {
+	if err := refuseUnlessAcceptedGiven(issuesRoot, req.ID, standing); err != nil {
 		return PromoteResult{}, err
 	}
-	// Answered, and the answer was not "act". `accepted` is the one standing
-	// state a promotion follows from: acceptance is the record, and the action it
-	// licenses is this separate admission. Promoting a `rejected` or `declined`
-	// item would let the action contradict the record it is supposed to follow
-	// from — the ledger would hold a refusal and the admission it refused —
-	// and promoting a `held` one would settle by action exactly what the hold
-	// left open. The undispositioned refusal above stops an action outrunning
-	// the answer; this is the same rule once the answer has arrived.
-	if state != issueschema.DispositionAccepted {
-		return PromoteResult{}, fmt.Errorf(
-			"%s carries a standing disposition of %q, and only %q licenses an action; supersede it with a new disposition first (abcd capture disposition %s --state accepted --grounds \"...\" --supersedes %s)",
-			req.ID, state, issueschema.DispositionAccepted, req.ID, standing[0])
-	}
+	state := issueschema.DispositionAccepted
 
 	var itdID, intentPath, mintWarning string
 	linked := req.LinkIntent != ""
@@ -303,6 +293,9 @@ func promoteReadingItem(repoRoot, issuesRoot string, req PromoteRequest) (Promot
 		itdID, intentPath, mintWarning = it.ID, it.Path, warn
 	}
 
+	if beforeStampHook != nil {
+		beforeStampHook()
+	}
 	stampErr := withLedgerLock(issuesRoot, func() error {
 		src, err := findReadingItem(issuesRoot, req.ID)
 		if err != nil {
@@ -318,6 +311,15 @@ func promoteReadingItem(repoRoot, issuesRoot string, req PromoteRequest) (Promot
 		}
 		if existing := asString(fm["promoted_to"]); existing != "" {
 			return fmt.Errorf("%s is already promoted to %s; refusing to promote twice", req.ID, existing)
+		}
+		// Re-read the standing answer HERE, not only in the pre-flight. A
+		// disposition landing between the two — an acceptance superseded by a
+		// rejection while the mint runs — would otherwise leave a standing
+		// `rejected` beside a `promoted_to`, a ledger holding both a refusal and
+		// the admission it refused. Nothing can land after this check, because the
+		// lock is held from here to the write.
+		if err := refuseUnlessAccepted(issuesRoot, req.ID); err != nil {
+			return err
 		}
 		newContent, err := setScalarField(content, "promoted_to", rawScalar(itdID))
 		if err != nil {
@@ -377,4 +379,42 @@ func standingDispositionState(issuesRoot, item string, standing []string) (strin
 		return "", err
 	}
 	return asString(fm["state"]), nil
+}
+
+// refuseUnlessAccepted re-reads the item's standing answer and refuses anything
+// but an acceptance. It is the under-lock form of the pre-flight check, sharing
+// its wording so the two can never describe the rule differently.
+func refuseUnlessAccepted(issuesRoot, item string) error {
+	standing, err := standingDispositions(filepath.Join(issuesRoot, issueschema.DispositionsDir, item))
+	if err != nil {
+		return err
+	}
+	return refuseUnlessAcceptedGiven(issuesRoot, item, standing)
+}
+
+// refuseUnlessAcceptedGiven is the rule itself, over a standing set the caller
+// has already read.
+//
+// `accepted` is the one standing state a promotion follows from: acceptance is
+// the record, and the action it licenses is a separate admission. An
+// undispositioned item collapses the two acts into one, so nothing could show
+// the finding was weighed before it was acted on. A `rejected` or `declined`
+// one would let the action contradict the record it is supposed to follow from.
+// A `held` one would settle by action exactly what the hold left open.
+func refuseUnlessAcceptedGiven(issuesRoot, item string, standing []string) error {
+	if len(standing) == 0 {
+		return fmt.Errorf(
+			"%s carries no disposition; an item is answered before it is acted on, and promoting an undispositioned item collapses the two acts into one — record the disposition first (abcd capture disposition %s --state <state> ...)",
+			item, item)
+	}
+	state, err := standingDispositionState(issuesRoot, item, standing)
+	if err != nil {
+		return err
+	}
+	if state != issueschema.DispositionAccepted {
+		return fmt.Errorf(
+			"%s carries a standing disposition of %q, and only %q licenses an action; supersede it with a new disposition first (abcd capture disposition %s --state accepted --grounds \"...\" --supersedes %s)",
+			item, state, issueschema.DispositionAccepted, item, standing[0])
+	}
+	return nil
 }

@@ -159,6 +159,23 @@ func IngestReading(req IngestReadingRequest) (IngestReadingResult, error) {
 		content string
 	}
 	result := IngestReadingResult{Run: req.Run}
+
+	// Redaction happens HERE, outside the lock, with one scanner for the whole
+	// batch. A scanner probes the machine identity and shells out to do it, so
+	// building one per free-text value per item put seconds inside a lock every
+	// other ledger verb waits on — a large batch failed concurrent work with
+	// allocator contention. Nothing below the lock needs a scanner.
+	redactor := newLedgerRedactor(repoRoot)
+	result.Degraded = redactor.Degraded()
+	manifest, n := redactor.redact(req.Manifest)
+	result.Redacted += n
+	items := make([]ReadingItem, 0, len(req.Items))
+	for _, item := range req.Items {
+		clean, n := redactReadingItem(redactor, item)
+		result.Redacted += n
+		items = append(items, clean)
+	}
+
 	runDir := filepath.Join(issuesRoot, issueschema.ReadingsDir, req.Run)
 	err = withLedgerLock(issuesRoot, func() error {
 		if err := ensureFamilyDir(issuesRoot, issueschema.ReadingsDir, req.Run); err != nil {
@@ -169,16 +186,13 @@ func IngestReading(req IngestReadingRequest) (IngestReadingResult, error) {
 		// is half-written is a visible world nobody can reconstruct.
 		var pending []staged
 		minted := map[string]bool{}
-		for i, item := range req.Items {
+		for i, item := range items {
 			id, err := mintUnusedItemID(issuesRoot, minted)
 			if err != nil {
 				return err
 			}
 			minted[id] = true
-			fields, fm, redacted, degraded, err := readingFields(repoRoot, id, req, item)
-			if err != nil {
-				return fmt.Errorf("item %d: %w", i+1, err)
-			}
+			fields, fm := readingFields(id, manifest, req, item)
 			if err := validateReadingStrict(fm); err != nil {
 				return fmt.Errorf("item %d: %w", i+1, err)
 			}
@@ -187,10 +201,6 @@ func IngestReading(req IngestReadingRequest) (IngestReadingResult, error) {
 				return fmt.Errorf("item %d: %w", i+1, err)
 			}
 			pending = append(pending, staged{id: id, content: content})
-			result.Redacted += redacted
-			if degraded != "" {
-				result.Degraded = degraded
-			}
 		}
 
 		// The mint above already proved every id free across the whole ledger, so
@@ -313,35 +323,24 @@ func Disposition(req DispositionRequest) (DispositionResult, error) {
 // readingFields assembles one reading record's ordered frontmatter and the map
 // its validator reads, redacting every free-text value on the way — a reading's
 // text lands in the committed ledger exactly as a capture's does.
-func readingFields(repoRoot, id string, req IngestReadingRequest, item ReadingItem) ([]kv, map[string]any, int, string, error) {
-	redacted := 0
-	degraded := ""
-	scrub := func(s string) string {
-		out, n, d := redactLedgerText(repoRoot, s)
-		redacted += n
-		if d != "" {
-			degraded = d
-		}
-		return out
-	}
-
+func readingFields(id, manifest string, req IngestReadingRequest, item ReadingItem) ([]kv, map[string]any) {
 	fields := []kv{
 		{"schema_version", 1},
 		{"id", id},
 		{"run", req.Run},
-		{"manifest", scrub(req.Manifest)},
+		{"manifest", manifest},
 		{"position", req.Position},
 		{"regime", req.Regime},
-		{"pattern", scrub(item.Pattern)},
+		{"pattern", item.Pattern},
 	}
 	fm := map[string]any{
 		"schema_version": 1,
 		"id":             id,
 		"run":            req.Run,
-		"manifest":       fields[3].val,
+		"manifest":       manifest,
 		"position":       req.Position,
 		"regime":         req.Regime,
-		"pattern":        fields[len(fields)-1].val,
+		"pattern":        item.Pattern,
 	}
 
 	// Body fields are written in the position's DECLARED order, so two records at
@@ -353,9 +352,8 @@ func readingFields(repoRoot, id string, req IngestReadingRequest, item ReadingIt
 		if !ok {
 			continue
 		}
-		s := scrub(v)
-		fields = append(fields, kv{f, s})
-		fm[f] = s
+		fields = append(fields, kv{f, v})
+		fm[f] = v
 	}
 	for f, v := range item.Body {
 		if _, already := fm[f]; already {
@@ -366,7 +364,31 @@ func readingFields(repoRoot, id string, req IngestReadingRequest, item ReadingIt
 	if item.OccasionedBy != "" {
 		fm["occasioned_by"] = item.OccasionedBy
 	}
-	return fields, fm, redacted, degraded, nil
+	return fields, fm
+}
+
+// redactReadingItem returns the item with every free-text value sanitised, using
+// the batch's ONE scanner. It runs BEFORE the ledger lock is taken: redaction is
+// the expensive part of an ingest, and the lock serialises every mutation in the
+// repository, so time spent under it is a budget every other verb pays out of.
+func redactReadingItem(r *ledgerRedactor, item ReadingItem) (ReadingItem, int) {
+	total := 0
+	scrub := func(s string) string {
+		out, n := r.redact(s)
+		total += n
+		return out
+	}
+	out := ReadingItem{
+		Pattern:      scrub(item.Pattern),
+		OccasionedBy: item.OccasionedBy,
+	}
+	if item.Body != nil {
+		out.Body = make(map[string]string, len(item.Body))
+		for k, v := range item.Body {
+			out.Body[k] = scrub(v)
+		}
+	}
+	return out, total
 }
 
 // dispositionFields assembles one disposition's ordered frontmatter and map.
@@ -635,6 +657,9 @@ func readingItemPaths(issuesRoot, item string) ([]string, error) {
 		return nil, fmt.Errorf("invalid %s-N identifier: %q", issueschema.ReadingItemFamily, item)
 	}
 	readingsRoot := filepath.Join(issuesRoot, issueschema.ReadingsDir)
+	if err := refuseSymlinkedDir(readingsRoot); err != nil {
+		return nil, err
+	}
 	runs, err := os.ReadDir(readingsRoot)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -644,15 +669,47 @@ func readingItemPaths(issuesRoot, item string) ([]string, error) {
 	}
 	var matches []string
 	for _, run := range runs {
-		if !run.IsDir() || !reRunID.MatchString(run.Name()) {
+		if !reRunID.MatchString(run.Name()) {
 			continue
 		}
-		cand := filepath.Join(readingsRoot, run.Name(), item+".md")
+		// Every run directory is checked, not only the ones a walk would descend
+		// into: a symlink IS a directory to ReadDir, and following one is how a
+		// read — or promote's stamp, which writes back to whatever this returns —
+		// leaves the tree that is supposed to contain it.
+		runDir := filepath.Join(readingsRoot, run.Name())
+		if err := refuseSymlinkedDir(runDir); err != nil {
+			return nil, err
+		}
+		if !run.IsDir() {
+			continue
+		}
+		cand := filepath.Join(runDir, item+".md")
 		if fi, err := os.Lstat(cand); err == nil && fi.Mode().IsRegular() {
 			matches = append(matches, cand)
 		}
 	}
 	return matches, nil
+}
+
+// refuseSymlinkedDir is safeMkdirLeaf's guard without the mkdir: it refuses a
+// path that exists and is not a real directory. The write paths provision their
+// directories and meet that guard on the way in; the READ paths never did, and a
+// read here is not read-only in consequence — promote stamps back into whatever
+// findReadingItem returns, so a symlinked readings root or run directory sent
+// that write outside the ledger. An absent path is not a fault: an unpopulated
+// tree is a state.
+func refuseSymlinkedDir(dir string) error {
+	fi, err := os.Lstat(dir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("%w: lstat failed for %s: %v", ErrPathUnsafe, dir, err)
+	}
+	if fi.Mode()&os.ModeSymlink != 0 || !fi.IsDir() {
+		return fmt.Errorf("%w: not a real directory: %s", ErrPathUnsafe, dir)
+	}
+	return nil
 }
 
 // standingDispositions lists the dispositions of one item that no sibling
@@ -675,6 +732,9 @@ func standingDispositions(itemDir string) ([]string, error) {
 // readDispositions reads one item's disposition directory into the shared record
 // shape. A directory that does not exist is an unanswered item, not a fault.
 func readDispositions(itemDir string) ([]issueschema.DispositionRecord, error) {
+	if err := refuseSymlinkedDir(itemDir); err != nil {
+		return nil, err
+	}
 	entries, err := os.ReadDir(itemDir)
 	if err != nil {
 		if os.IsNotExist(err) {

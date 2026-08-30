@@ -331,3 +331,47 @@ func TestIngestRedactsTheManifestReference(t *testing.T) {
 		t.Fatalf("the committed reading record carries the caller's home root:\n%s", content)
 	}
 }
+
+// The ledger's status directories refuse a symlinked leaf, because a link is a
+// way to make a write land outside the tree that is supposed to contain it. The
+// readings tree needed the same refusal and did not have it on every path: only
+// the ingest provisioned its directories (and so met safeMkdirLeaf), while the
+// disposition and promote paths merely READ through whatever was there — so a
+// symlinked readings root let promote stamp a file outside the ledger.
+func TestReadingPathsRefuseASymlinkedTree(t *testing.T) {
+	t.Run("the readings root", func(t *testing.T) {
+		repo, ir := ledger(t)
+		if err := ensureLedgerDirs(ir); err != nil {
+			t.Fatal(err)
+		}
+		outside := t.TempDir()
+		if err := os.Symlink(outside, filepath.Join(ir, issueschema.ReadingsDir)); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+		_, err := findReadingItem(ir, "rdi-2608300000000002")
+		if !errors.Is(err, ErrPathUnsafe) {
+			t.Fatalf("a symlinked readings root: err = %v, want ErrPathUnsafe", err)
+		}
+		_, err = Disposition(DispositionRequest{
+			RepoRoot: repo, IssuesRoot: ir, Item: "rdi-2608300000000002",
+			State: issueschema.DispositionAccepted, Grounds: "because",
+		})
+		if !errors.Is(err, ErrPathUnsafe) {
+			t.Fatalf("Disposition through a symlinked readings root: err = %v, want ErrPathUnsafe", err)
+		}
+	})
+
+	t.Run("a run directory", func(t *testing.T) {
+		repo, ir, item := readingFixture(t, "detection")
+		runDir := filepath.Join(ir, issueschema.ReadingsDir, "rdg-2608300000000009")
+		outside := t.TempDir()
+		if err := os.Symlink(outside, runDir); err != nil {
+			t.Skipf("symlinks unavailable: %v", err)
+		}
+		_, err := findReadingItem(ir, item)
+		if !errors.Is(err, ErrPathUnsafe) {
+			t.Fatalf("a symlinked run directory: err = %v, want ErrPathUnsafe", err)
+		}
+		_ = repo
+	})
+}
