@@ -1,6 +1,7 @@
 package reading
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -494,17 +495,34 @@ func collect(repoRoot string, position Position) ([]candidate, error) {
 	return out, nil
 }
 
+// artefactTags are the two strings that identify this assembler's own output.
+// They are the SIGNATURE the refusal below scans for, so they are stated once
+// and read as bytes rather than as a shape a parser has to agree about.
+var artefactTags = []string{BundleType, ManifestType}
+
 // refuseOwnArtefact refuses an admitted file that IS one of this assembler's own
 // artefacts. Ruling (18) says the instrument's own output never becomes its
 // input, and the path deny alone cannot keep that promise: a run written to a
-// directory the table reaches, then committed, arrives as an ordinary config
-// item, its manifest's repository paths riding into the bundle text while the
-// current run's manifest still asserts the exclusion.
+// directory the table reaches, then committed, arrives as an ordinary item, its
+// manifest's repository paths riding into the bundle text while the current
+// run's manifest still asserts the exclusion.
 //
-// The artefacts self-identify, which is what makes this checkable rather than
-// guessed at: both carry a top-level `_type`. A file that is not JSON, or whose
-// JSON carries neither tag, is not one of ours and passes untouched.
+// The check is CONTENT-SIGNED, not extension- and parse-shaped. An earlier form
+// keyed on a `.json` name and a successful top-level unmarshal, which made it a
+// spelling check: the same artefact committed as `.yaml` or `.toml`, behind a
+// byte-order mark, wrapped in another object, wrapped in an array, or carrying a
+// duplicate key was admitted whole. What identifies the artefact is the tag it
+// carries, wherever it sits and whatever the file is called, so the tag is
+// looked for in the bytes before anything is parsed.
+//
+// The parse stays on behind it, and earns its keep on exactly one shape a byte
+// scan cannot see: a tag spelled with a JSON unicode escape.
 func refuseOwnArtefact(rel string, raw []byte) error {
+	for _, tag := range artefactTags {
+		if bytes.Contains(raw, []byte(tag)) {
+			return ownArtefactError(rel, tag)
+		}
+	}
 	if !strings.EqualFold(path.Ext(rel), ".json") {
 		return nil
 	}
@@ -512,13 +530,20 @@ func refuseOwnArtefact(rel string, raw []byte) error {
 		Type string `json:"_type"`
 	}
 	if err := json.Unmarshal(raw, &probe); err != nil {
-		return nil // not a JSON object this assembler wrote
+		return nil // not a JSON document, so its bytes are the whole of the evidence
 	}
-	if probe.Type != BundleType && probe.Type != ManifestType {
-		return nil
+	for _, tag := range artefactTags {
+		if probe.Type == tag {
+			return ownArtefactError(rel, tag)
+		}
 	}
-	return fmt.Errorf("reading: %s is this assembler's own output (_type %s), and the instrument's own "+
-		"output never becomes its input; move it outside the include table's reach", rel, probe.Type)
+	return nil
+}
+
+// ownArtefactError states the refusal and the remedy.
+func ownArtefactError(rel, tag string) error {
+	return fmt.Errorf("reading: %s carries this assembler's own artefact tag %q, and the instrument's "+
+		"own output never becomes its input; move it outside the include table's reach", rel, tag)
 }
 
 // requireConfiguredStores refuses a configuration that is silent about a store

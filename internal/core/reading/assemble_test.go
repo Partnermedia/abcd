@@ -675,3 +675,58 @@ func TestAssembleRefusesANonEmptyOutputDirectory(t *testing.T) {
 		t.Error("a second run over the same directory was accepted; it is no longer empty")
 	}
 }
+
+// TestOwnArtefactRefusalIsContentSigned: keying the refusal on a .json extension
+// and a successful top-level unmarshal makes it a spelling check, not a
+// recognition. Each shape below is this assembler's own output, admitted whole,
+// while the run's manifest asserts the exclusion.
+func TestOwnArtefactRefusalIsContentSigned(t *testing.T) {
+	priorManifest := `{
+  "_type": "` + ManifestType + `",
+  "schema_version": 1,
+  "run_id": "rdg-2608301200000001",
+  "items": [{"item_key": "itm-0001", "path": ".abcd/work/issues/open/iss-1-a-defect.md", "sha256": "00"}]
+}`
+	shapes := map[string]string{
+		"a manifest committed as YAML": "runs/prior.yaml",
+		"a manifest committed as TOML": "runs/prior.toml",
+	}
+	for what, rel := range shapes {
+		root := fixtureRepo(t)
+		writeFile(t, root, rel, priorManifest+"\n")
+		gitCommitAll(t, root)
+		assertRefusesOwnArtefact(t, root, what, rel)
+	}
+
+	byteShapes := map[string]string{
+		"a JSON manifest behind a byte-order mark": "\ufeff" + priorManifest + "\n",
+		"a manifest wrapped in another object":     `{"run": ` + priorManifest + "}\n",
+		"a manifest wrapped in an array":           "[" + priorManifest + "]\n",
+		"a manifest carrying a duplicate _type": `{"_type": "notes", "_type": "` + ManifestType + `",
+  "schema_version": 1}` + "\n",
+		// The one shape a byte scan cannot see, and the reason the parse stays on
+		// as a second check rather than being replaced by it.
+		"a bundle whose tag is unicode-escaped": `{"_type": "abcd.reading.b\u0075ndle",
+  "schema_version": 1, "items": []}` + "\n",
+	}
+	for what, body := range byteShapes {
+		root := fixtureRepo(t)
+		writeFile(t, root, "runs/prior.json", body)
+		gitCommitAll(t, root)
+		assertRefusesOwnArtefact(t, root, what, "runs/prior.json")
+	}
+}
+
+// assertRefusesOwnArtefact runs one assembly and requires it to refuse, naming
+// the artefact.
+func assertRefusesOwnArtefact(t *testing.T, root, what, rel string) {
+	t.Helper()
+	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	if err == nil {
+		t.Errorf("%s was admitted whole (%s)", what, rel)
+		return
+	}
+	if !strings.Contains(err.Error(), rel) {
+		t.Errorf("%s: the refusal does not name the artefact: %v", what, err)
+	}
+}
