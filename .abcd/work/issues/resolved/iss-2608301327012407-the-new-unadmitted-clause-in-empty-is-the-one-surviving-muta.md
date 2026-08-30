@@ -7,6 +7,11 @@ category: "tech-debt"
 source: "user-observation"
 found_during: "itd-189-round-2-ruthless"
 found_at: "internal/core/lint/readingoutstanding.go"
+resolution: "Empty gains a test that enumerates the report's fault lists from the struct itself and asserts each one alone makes the report non-empty, so every clause discriminates and a field added to the report but forgotten in Empty is red. Deleting any clause now turns its case red, the Unadmitted one included."
+impact: internal
+resolved_by:
+  intent: "itd-189"
+  spec: "spc-67"
 ---
 
 the new Unadmitted clause in Empty is the one surviving mutation because Empty has no production caller
