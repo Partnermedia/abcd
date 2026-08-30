@@ -3,6 +3,7 @@ package reading
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestRenderEquivalenceIsDeterministic: a determinism instrument cannot have a
@@ -63,5 +64,30 @@ func TestAttributeMaskStaysOnItsOwnLine(t *testing.T) {
 	const inline = "<h2 title=\"a>b\">Audit Notes</h2>"
 	if m := maskMarkupData(inline); !strings.Contains(m, "a b") {
 		t.Errorf("a greater-than inside a same-line attribute value was left as structure: %q", m)
+	}
+}
+
+// TestRawHeadingScanStaysLinearInTheOpenerCount: the bound scan materialised
+// every candidate bound in the whole remainder of the document for every heading
+// opener, though it breaks at the first hard one. That is quadratic with a large
+// constant, and a committed markdown file up to the size cap the assembler sets
+// did not finish — a silent hang, which is the one staging a fail-closed floor
+// cannot afford. The bound is generous: the walk is milliseconds and the
+// materialising scan was minutes.
+func TestRawHeadingScanStaysLinearInTheOpenerCount(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("# A spec\n\n")
+	for range 8000 {
+		b.WriteString("<h2>Ordinary heading</h2>\n")
+	}
+	doc := b.String()
+	headings := map[string]bool{"Audit Notes": true}
+	start := time.Now()
+	if err := verifyRedaction("spc-x.md", doc, doc, nil, headings); err != nil {
+		t.Fatalf("the scan refused an ordinary document: %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > 10*time.Second {
+		t.Errorf("the raw heading scan took %s over %d openers; it materialises the whole "+
+			"bound list per opener", elapsed, 8000)
 	}
 }

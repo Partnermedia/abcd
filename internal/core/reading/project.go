@@ -602,21 +602,34 @@ func submatches(m []string) []string {
 // that. Neither reading is the heading on its own, so both are returned and the
 // caller refuses on either: a title read two ways is excluded if EITHER way
 // names an excluded heading.
+//
+// The walk is incremental rather than a materialised match list. Listing every
+// candidate bound in the whole remainder for every opener, only to break at the
+// first hard one, is quadratic with a large constant: a committed markdown file
+// of repeated openers up to the size cap this package sets did not finish, and a
+// silent hang is the one staging a fail-closed floor cannot afford.
 func rawHeadingTitleEnds(rest, name string) []int {
 	hard, soft := -1, -1
-	for _, m := range rawHeadingBoundRe.FindAllStringSubmatchIndex(rest, -1) {
+	for off := 0; off < len(rest); {
+		m := rawHeadingBoundRe.FindStringSubmatchIndex(rest[off:])
+		if m == nil {
+			break
+		}
+		at := off + m[0]
 		switch {
-		case rest[m[0]] == '\n': // a blank line
+		case rest[at] == '\n': // a blank line
 			if soft < 0 {
-				soft = m[0]
+				soft = at
 			}
+			off += m[1]
 			continue
 		case m[2] >= 0: // a closing tag, this element's or an inner one's
-			if !strings.EqualFold(rest[m[2]:m[3]], name) {
+			if !strings.EqualFold(rest[off+m[2]:off+m[3]], name) {
+				off += m[1]
 				continue
 			}
 		}
-		hard = m[0]
+		hard = at
 		break
 	}
 	if hard < 0 {

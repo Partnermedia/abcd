@@ -7,6 +7,10 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-183-round-9-security"
 found_at: "internal/core/reading/project.go"
+resolution: "The raw heading bound scan walks with a single-match search over an advancing offset and stops at the first hard bound, instead of materialising every candidate bound in the remainder for every opener."
+impact: fix
+resolved_by:
+  intent: "itd-183"
 ---
 
 rawHeadingTitleEnds materialises every bound match in the rest of the document per opener making the scan quadratic and hanging the assembler
