@@ -166,6 +166,7 @@ Capture issues to the ledger; bare invocation is read-only status
       --category string       issue category (default observation)
       --found-at string       optional repo-relative path or conceptual location
       --found-during string   session/command context (default manual-capture)
+      --lapsed-at string      RFC 3339 instant a discipline gave way (the lapse, not the write-up)
       --severity string       severity: nitpick | minor | major | critical (default minor)
       --slug string           override the slug derived from the text
       --source string         surfacing channel (default user-observation)

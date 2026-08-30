@@ -476,3 +476,30 @@ func TestCaptureStatusBoardRendersSkipped(t *testing.T) {
 		t.Fatalf("the status board must render the skipped roster:\n%s", board)
 	}
 }
+
+// TestCaptureLapsedAtWritesTheGivenInstant pins the flag half of spc-60: the
+// instant handed to --lapsed-at is the instant committed to the record. The
+// record id is minted from the wall clock, so a surface that dropped, rounded or
+// re-derived the value would leave a lapse entry stamped with its own write-up
+// time and nothing to say so.
+func TestCaptureLapsedAtWritesTheGivenInstant(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	const lapsedAt = "2026-08-28T09:15:00Z"
+	out := runCLI(t, "capture", "the discipline gave way here",
+		"--category", "lapse", "--lapsed-at", lapsedAt, "--json")
+	var r struct {
+		Path string `json:"path"`
+	}
+	if err := json.Unmarshal(out, &r); err != nil {
+		t.Fatalf("capture output not JSON: %v\n%s", err, out)
+	}
+	body, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(r.Path)))
+	if err != nil {
+		t.Fatalf("read the captured record: %v", err)
+	}
+	if want := "lapsed_at: \"" + lapsedAt + "\""; !strings.Contains(string(body), want) {
+		t.Fatalf("the captured record does not carry %s:\n%s", want, body)
+	}
+}

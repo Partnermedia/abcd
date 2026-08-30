@@ -2305,7 +2305,7 @@ func (p *stdinPrompter) Prompt(key string, choices []string, def string) string 
 // appends an issue; list/resolve/wontfix/promote are thin consumers of capture
 // core.
 func newCaptureCommand(asJSON *bool) *cobra.Command {
-	var severity, category, source, slug, foundDuring, foundAt, blockedBy string
+	var severity, category, source, slug, foundDuring, foundAt, lapsedAt, blockedBy string
 
 	captureCmd := &cobra.Command{
 		Use:   "capture [text]",
@@ -2389,6 +2389,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 				Slug:        slug,
 				FoundDuring: orDefault(foundDuring, "manual-capture"),
 				FoundAt:     foundAt,
+				LapsedAt:    lapsedAt,
 				BlockedBy:   blocked,
 			}
 			res, err := capture.Capture(req)
@@ -2415,6 +2416,9 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	captureCmd.Flags().StringVar(&slug, "slug", "", "override the slug derived from the text")
 	captureCmd.Flags().StringVar(&foundDuring, "found-during", "", "session/command context (default manual-capture)")
 	captureCmd.Flags().StringVar(&foundAt, "found-at", "", "optional repo-relative path or conceptual location")
+	// No default, deliberately: an unsupplied lapse time would default to the wall
+	// clock at write-up, which is the one value the lapse log exists to rule out.
+	captureCmd.Flags().StringVar(&lapsedAt, "lapsed-at", "", "RFC 3339 instant a discipline gave way (the lapse, not the write-up)")
 	captureCmd.Flags().StringVar(&blockedBy, "blocked-by", "", "comma-separated iss-ids this issue is blocked by")
 
 	// list — the earned SD001 exception: a filter flag is REQUIRED.
