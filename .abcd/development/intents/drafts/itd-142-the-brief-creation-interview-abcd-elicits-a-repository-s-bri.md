@@ -116,16 +116,16 @@ was willing to consider.
 
 ## Open Questions
 
-- **The escalation rule — ratified (maintainer, 2026-08-28; decision log):** a
+- **The escalation rule — ratified (facilitator, 2026-08-28; decision log):** a
   defaults question that turns out conjectural escalates to the options
   regime. The recording obligation is adopted (2026-08-28) on top of the
   ratified rule: every escalation logged as data (which
   question, on what grounds), because a question that keeps escalating is
   a misclassified question and the log is the recalibration evidence.
-- **One intent vs three at the final round — ratified (maintainer, 2026-08-28; decision log):** Round 5 articulates one intent, the exit noting
+- **One intent vs three at the final round — ratified (facilitator, 2026-08-28; decision log):** Round 5 articulates one intent, the exit noting
   candidates for subsequent articulation — one exercises the machinery
   without front-loading articulation ahead of crystallisation.
-- **A held working-principle at the final round — ratified (maintainer ruling, 2026-08-28):** Round 5 proceeds with "mechanism open" recorded
+- **A held working-principle at the final round — ratified (facilitator ruling, 2026-08-28):** Round 5 proceeds with "mechanism open" recorded
   as a gap and flagged in the readiness summary. Implemented via the
   claim recording gradient: the mechanism claim recorded as an explicit
   nullity; an absent section and a recorded nullity are never collapsed.

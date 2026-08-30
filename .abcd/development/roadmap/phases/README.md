@@ -66,7 +66,7 @@ that backend is attached) via the Go CLI.
 | Phase 6 — Lifeboat round-trip | `/abcd:disembark` + `/abcd:embark`; a faithful lifeboat round-trips | [phase-6-lifeboat.md](phase-6-lifeboat.md) |
 | Phase 7 — Provenance ledger and cold reading | Origin and grounds stamped at the point of commitment; the cold-reading instrument built, unrun | [phase-7-ledger.md](phase-7-ledger.md) |
 
-Phases 1–6 are organised by **user-capability moment** — each one ends in a
+Phases 1–7 are organised by **user-capability moment** — each one ends in a
 milestone a contributor can demo. **Install and launch (Phase 1) is the first
 milestone**, and the delivery order is MVP → the companion harness → Claude Code. Phase 0 is
 the exception: it delivers no product-capability user moment, and is numbered 0

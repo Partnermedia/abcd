@@ -9,13 +9,11 @@ committed record, its history stays on the local ledger side
 ([adr-55](../../decisions/adrs/0055-the-construal-stands-in-the-record-its-history-does-not.md)).
 A passage describing an intention rather than a commitment opens with the
 not-yet-real marker: a blockquote line holding exactly `**Status: NOT YET
-REAL.**`, a blank line, then the statement as the first paragraph.
+REAL.**`, a blank line, then the statement as the first paragraph. The
+construal below is the ledger's — the frame the ledger's own design reasons
+inside; its provenance is recorded by role in the decision log.
 
 ## Construal
-
-This is the ledger's construal — the frame the ledger's own design reasons
-inside — and it is the cycle's construal (ruled 2026-08-29). Its provenance
-is recorded by role in the decision log.
 
 > **Status: NOT YET REAL.**
 

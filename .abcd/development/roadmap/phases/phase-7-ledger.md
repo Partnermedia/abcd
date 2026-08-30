@@ -131,4 +131,4 @@ parallel store.
 - Whether "ledger" needs a glossary term to separate the provenance ledger from
   the issue ledger — flagged by the adversarial reviews, not ruled.
 - The [HAND] owners for the scribe-protocol rehearsal and the step-2 admission
-  records — to be named at Phase 2 planning.
+  records — to be named when the workstream's planning cycle phase runs.
