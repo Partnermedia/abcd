@@ -186,3 +186,98 @@ func TestRecordSchemaFlagsIssueEnumAndSlug(t *testing.T) {
 		})
 	}
 }
+
+// TestIssueRecordShapeFlagsLapseWithoutLapsedAt (spc-60) pins that the
+// committed-ledger gate refuses exactly what the reader refuses: a record whose
+// category is lapse and which carries no well-formed lapsed_at. capture's
+// validateStrict refuses such a record and SKIPS it, so it sits in the ledger
+// invisible to every capture surface — the failure mode this rule exists to turn
+// into a red gate. The well-formed record beside it is the control: the gate must
+// refuse the defect and nothing else.
+func TestIssueRecordShapeFlagsLapseWithoutLapsedAt(t *testing.T) {
+	issues := "work/issues"
+	record := func(id, slug, category, lapsedAt string) string {
+		rec := "---\nschema_version: 1\nid: " + id + "\nslug: " + slug +
+			"\nseverity: minor\ncategory: " + category + "\nsource: user-observation\nfound_during: preparation\n"
+		if lapsedAt != "" {
+			rec += "lapsed_at: " + lapsedAt + "\n"
+		}
+		return rec + "---\n\na record\n"
+	}
+	lapse := func(id, slug, lapsedAt string) string {
+		return record(id, slug, "lapse", lapsedAt)
+	}
+	// A lapsed_at whose own line carries no value and whose value is an indented
+	// continuation on the lines that follow. The shared frontmatter scanner reads
+	// same-line values only, so this is the one shape it sees as empty.
+	blockValued := func(id, slug, category, continuation string) string {
+		return "---\nschema_version: 1\nid: " + id + "\nslug: " + slug +
+			"\nseverity: minor\ncategory: " + category +
+			"\nsource: user-observation\nfound_during: preparation\n" +
+			"lapsed_at:\n  " + continuation + "\n---\n\na record\n"
+	}
+
+	cases := []struct {
+		name   string
+		file   string
+		rec    string
+		substr string // "" means the record must stay clean
+	}{
+		{"absent", "iss-5-lapse-a.md", lapse("iss-5", "lapse-a", ""), "lapse record carries no 'lapsed_at'"},
+		{"date only", "iss-6-lapse-b.md", lapse("iss-6", "lapse-b", "2026-08-28"), "is not an RFC 3339 instant"},
+		{"free text", "iss-7-lapse-c.md", lapse("iss-7", "lapse-c", "yesterday"), "is not an RFC 3339 instant"},
+		{"well-formed", "iss-8-lapse-d.md", lapse("iss-8", "lapse-d", `"2026-08-28T00:00:00Z"`), ""},
+		// A quoted all-whitespace value, hand-authored. capture's reader trims
+		// before judging, so it reads as ABSENT: on a lapse record that is the
+		// missing-instant refusal, and on every other category it is a clean record
+		// with an optional property left unset. This gate must reach the same two
+		// verdicts, or it reports a reader refusal that does not happen
+		// (iss-2608300212513349).
+		{"padded on a lapse", "iss-9-lapse-e.md", lapse("iss-9", "lapse-e", `"   "`), "lapse record carries no 'lapsed_at'"},
+		{"padded on a non-lapse", "iss-10-obs-a.md", record("iss-10", "obs-a", "observation", `"   "`), ""},
+		// A list-shaped value. capture's reader parses it as []string and refuses the
+		// record outright ("lapsed_at" must be a string), skipping it — so it is
+		// invisible to every capture surface. Reading an empty inline list as ABSENT
+		// here would leave that record lint-green on any category but lapse, which is
+		// the split iss-2608300224316569 records. Both categories must be refused,
+		// and for the same reason: the value is present and is no instant.
+		{"list on a non-lapse", "iss-11-obs-b.md", record("iss-11", "obs-b", "observation", "[]"), "is not an RFC 3339 instant"},
+		{"list on a lapse", "iss-12-lapse-f.md", lapse("iss-12", "lapse-f", "[]"), "is not an RFC 3339 instant"},
+		// The block-mapped sibling of the list case. capture's reader builds a map
+		// and refuses the record for the same reason ("lapsed_at" must be a string),
+		// skipping it; the same-line scanner sees an empty value, so without the
+		// look-ahead the gate reads a value that is plainly there as absent and goes
+		// green on a record no capture surface can see (iss-2608300234599781).
+		{"map on a non-lapse", "iss-13-obs-c.md", blockValued("iss-13", "obs-c", "observation", "intent: itd-1"), "spelled as an indented block"},
+		{"map on a lapse", "iss-14-lapse-g.md", blockValued("iss-14", "lapse-g", "lapse", "intent: itd-1"), "spelled as an indented block"},
+		// The block continuation that READS as a valid instant. It is the case the
+		// block look-ahead must not hand to the format validator: capture splits the
+		// indented line on its first colon and builds map["2026-08-28T00"]="00:00Z",
+		// then refuses the record because lapsed_at must be a string. A block-spelled
+		// value is never a string to the reader, whatever its text spells, so the
+		// finding is its presence rather than its content (iss-2608300244489638).
+		{"block instant on a non-lapse", "iss-15-obs-d.md", blockValued("iss-15", "obs-d", "observation", "2026-08-28T00:00:00Z"), "spelled as an indented block"},
+		{"block instant on a lapse", "iss-16-lapse-h.md", blockValued("iss-16", "lapse-h", "lapse", "2026-08-28T00:00:00Z"), "spelled as an indented block"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			root := t.TempDir()
+			seedRecRoot(t, root)
+			writeFile(t, root, issues+"/open/"+c.file, c.rec)
+			fs, err := Lint(schemaConfig(), root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rel := filepath.Join(issues, "open", c.file)
+			if c.substr == "" {
+				if findingWith(fs, rel, ruleRecordSchema, "") {
+					t.Fatalf("a record the reader accepts must stay clean: %+v", fs)
+				}
+				return
+			}
+			if !findingWith(fs, rel, ruleRecordSchema, c.substr) {
+				t.Fatalf("expected a lapse-shape finding quoting %q: %+v", c.substr, fs)
+			}
+		})
+	}
+}

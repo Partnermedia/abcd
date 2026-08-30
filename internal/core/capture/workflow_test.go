@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -793,5 +794,48 @@ func TestMalformedRecordNameIsVisiblySkipped(t *testing.T) {
 	// something was dropped.
 	if !strings.Contains(lr.Skipped[0].Error, "iss-2-another_finding.md") {
 		t.Errorf("skip message %q does not name the offending filename", lr.Skipped[0].Error)
+	}
+}
+
+// TestCaptureBlankLapsedAtIsNotWritten closes a gate disagreement the writer
+// could create on its own. The reader trims lapsed_at before judging it, so a
+// whitespace-only value reads as ABSENT and — for any category but lapse, where
+// the property is optional — is accepted; the committed-ledger gate does not
+// trim, so it reads the same bytes as a present value that is no RFC 3339
+// instant and blocks. Capture would then have written a record that it goes on
+// reading happily while its own record_schema blocker says it refuses and skips
+// it: a red preflight whose message is false about the record in front of it.
+//
+// The writer is the right side to fix. Trimming here means an all-whitespace
+// value never reaches the file, so both gates see an absent property and agree.
+// Refusing it in validateStrict instead would move the disagreement the other
+// way: lint stays silent on `lapsed_at: ""`, so the reader would refuse — and
+// therefore SKIP, making the record invisible to every capture surface — a
+// record the gate calls clean.
+func TestCaptureBlankLapsedAtIsNotWritten(t *testing.T) {
+	// Spaces only: a tab or newline in a scalar is already refused by the
+	// serializer's control-char guard, so those spellings never reach the file by
+	// a different mechanism and would pin the wrong guard here.
+	for _, blank := range []string{" ", "   "} {
+		t.Run(strconv.Quote(blank), func(t *testing.T) {
+			repo, ir := ledger(t)
+			res, err := Capture(CaptureRequest{
+				RepoRoot: repo, IssuesRoot: ir,
+				Text: "a plain observation", Severity: SeverityMinor,
+				Category: "observation", Source: "user-observation",
+				Slug: "padded", FoundDuring: "manual smoke", LapsedAt: blank,
+			})
+			if err != nil {
+				t.Fatalf("capture: %v", err)
+			}
+			raw, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(res.Path)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(raw), "lapsed_at") {
+				t.Fatalf("a whitespace-only lapsed_at reached the record, where the "+
+					"committed-ledger gate blocks on it:\n%s", raw)
+			}
+		})
 	}
 }

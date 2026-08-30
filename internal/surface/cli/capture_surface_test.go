@@ -476,3 +476,52 @@ func TestCaptureStatusBoardRendersSkipped(t *testing.T) {
 		t.Fatalf("the status board must render the skipped roster:\n%s", board)
 	}
 }
+
+// TestCaptureLapsedAtWritesTheGivenInstant pins the flag half of spc-60: the
+// instant handed to --lapsed-at is the instant committed to the record. The
+// record id is minted from the wall clock, so a surface that dropped, rounded or
+// re-derived the value would leave a lapse entry stamped with its own write-up
+// time and nothing to say so.
+func TestCaptureLapsedAtWritesTheGivenInstant(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	const lapsedAt = "2026-08-28T09:15:00Z"
+	out := runCLI(t, "capture", "the discipline gave way here",
+		"--category", "lapse", "--lapsed-at", lapsedAt, "--json")
+	var r struct {
+		Path string `json:"path"`
+	}
+	if err := json.Unmarshal(out, &r); err != nil {
+		t.Fatalf("capture output not JSON: %v\n%s", err, out)
+	}
+	body, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(r.Path)))
+	if err != nil {
+		t.Fatalf("read the captured record: %v", err)
+	}
+	if want := "lapsed_at: \"" + lapsedAt + "\""; !strings.Contains(string(body), want) {
+		t.Fatalf("the captured record does not carry %s:\n%s", want, body)
+	}
+}
+
+// TestCaptureLapsedAtHasNoDefault is the flag's whole point, made checkable: a
+// lapse capture with --lapsed-at omitted is refused, names the flag, and writes
+// nothing. Every other provenance flag on capture falls back to a default; the
+// only fallback available here is the wall clock at write-up, which is the one
+// value itd-182's criterion rules out — so the surface must refuse rather than
+// invent, and it must refuse BEFORE the ledger gains a record.
+func TestCaptureLapsedAtHasNoDefault(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	out, err := runCLIErr(t, "capture", "the discipline gave way here", "--category", "lapse")
+	if err == nil {
+		t.Fatalf("a lapse capture with no --lapsed-at succeeded:\n%s", out)
+	}
+	if !strings.Contains(err.Error(), "--lapsed-at") {
+		t.Fatalf("the refusal does not name the flag the caller must supply: %v", err)
+	}
+	if n := ledgerIssueCount(t, repo); n != 0 {
+		t.Fatalf("the refused lapse capture wrote %d record(s); it must write nothing", n)
+	}
+}

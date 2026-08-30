@@ -52,6 +52,18 @@ Required:
 Optional:
 
 - `found_at` — repo-relative path or conceptual location.
+- `lapsed_at` — the RFC 3339 instant, in UTC, at which a recorded discipline gave
+  way: the lapse itself, not its write-up. The record id is timestamp-numeric and
+  therefore already carries write-up time, which is the value this property
+  distinguishes itself from. **Required when `category` is `lapse`**, and refused
+  when it is not an RFC 3339 instant: a lapse entry with no lapse time is
+  reconstruction rather than evidence, so the reader and the record-lint blocker
+  `record_schema` both refuse it. The point in the process at which the discipline
+  gave way is `found_during`, which every record already carries. Where the
+  source a stamp is transcribed from names only a day, the record is stamped at
+  midnight UTC of that day: the day is what the source asserts, and midnight is
+  the convention that makes it an instant without inventing an hour the source
+  never gave.
 - `related_intents` — list of `itd-N` ids.
 - `related_specs` — list of `spc-N` ids.
 - `related_issues` — list of `iss-N` ids.
@@ -89,7 +101,8 @@ issue's timeline; the ledger does not duplicate it.
 `abcd capture "<text>"` appends a new issue to `open/`, minting a fresh
 timestamp-numeric `iss-N` (never "the next" one — the mint reads no maximum).
 Flags refine the frontmatter — `--severity`, `--category`, `--source`,
-`--slug`, `--found-during`, `--found-at`, and `--blocked-by` (a comma-separated
+`--slug`, `--found-during`, `--found-at`, `--lapsed-at` (required with
+`--category lapse`, and never defaulted), and `--blocked-by` (a comma-separated
 list of `iss-N` ids). Bare `abcd capture` renders a read-only status board;
 `abcd capture list` filters by state; `abcd capture resolve` moves an open issue
 to `resolved/` with a note and a required

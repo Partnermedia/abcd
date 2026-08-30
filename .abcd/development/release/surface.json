@@ -267,6 +267,13 @@
           "hidden": false
         },
         {
+          "name": "lapsed-at",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
           "name": "severity",
           "shorthand": "",
           "type": "string",
