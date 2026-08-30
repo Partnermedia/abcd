@@ -1950,3 +1950,41 @@ func TestABucketJoinIsSilentOnATargetTheFamilysReaderDoesNotRead(t *testing.T) {
 		t.Fatalf("no spelling admits a file the family's reader never reads, got %d finding(s): %+v", n, fs)
 	}
 }
+
+// isAbsentValue does its own stripping, so a leg that hands it an ALREADY
+// STRIPPED scalar strips twice and reaches a different verdict from the leg
+// beside it. A value that is two apostrophes inside double quotes is the shape
+// that parts them: the required-fields leg strips once and calls it present,
+// while the join and bucket legs stripped twice and called it absent — so every
+// leg stood down and an admission that admits nothing drew no finding at all
+// (iss-2608301656192369).
+//
+// The claim under test is that SOMETHING speaks on each record, which is the
+// silence the defect was; the quoted leg substrings pin which voice it is.
+func TestADoublyQuotedEmptyJoinAndBucketFieldAreJudgedOnOneStrip(t *testing.T) {
+	root := admissionCorpus(t)
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-3.md",
+		"---\nschema_version: 1\nid: adm-3\nrun: rdg-1\nproposal: \"''\"\n"+
+			"grounds: the configuration it admits is one the frame does not already hold\n---\n\n")
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-4.md",
+		"---\nschema_version: 1\nid: adm-4\nrun: \"''\"\nproposal: rdi-2\n"+
+			"grounds: the configuration it admits is one the frame does not already hold\n---\n\n")
+
+	fs, err := Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	adm3 := filepath.Join("work", "issues", "admissions", "rdg-1", "adm-3.md")
+	adm4 := filepath.Join("work", "issues", "admissions", "rdg-1", "adm-4.md")
+	for _, c := range []struct{ rel, field, leg string }{
+		{adm3, "proposal", "is not a reading item handle"},
+		{adm4, "run", "is filed under 'rdg-1'"},
+	} {
+		if !findingWith(fs, c.rel, ruleRecordSchema, c.field) {
+			t.Errorf("a doubly quoted empty %s admits nothing and no leg spoke about %s: %+v", c.field, c.rel, fs)
+		}
+		if !findingWith(fs, c.rel, ruleRecordSchema, c.leg) {
+			t.Errorf("the leg that judges %s must be the one that speaks on %s: %+v", c.field, c.rel, fs)
+		}
+	}
+}

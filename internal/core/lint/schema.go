@@ -880,10 +880,16 @@ func checkRecordJoins(r schemaRecord, index map[recordRef]schemaRecord, retired 
 	var out []Finding
 	for _, join := range r.store.joins {
 		f := r.fields[join.field]
-		value := issueScalar(f.value)
-		if isAbsentValue(value) {
+		// Absence is decided on the RAW value, because isAbsentValue strips the
+		// value itself: handing it an already-stripped scalar strips twice, and a
+		// value that is two apostrophes inside double quotes then reads as absent
+		// here while checkRecordRequiredFields — which strips once — reads it as
+		// present. Every leg stood down on it and an admission that admits nothing
+		// drew no finding at all (iss-2608301656192369).
+		if isAbsentValue(f.value) {
 			continue
 		}
+		value := issueScalar(f.value)
 		line := f.line
 		if line == 0 {
 			line = 1
@@ -1046,8 +1052,14 @@ func checkRecordBucketField(r schemaRecord, severity string) []Finding {
 	if !present {
 		return nil // absence is checkRecordRequiredFields' business, not this one's
 	}
+	// Absence on the RAW value, one strip, for checkRecordJoins' reason: stripping
+	// before the absence test strips twice and parts this leg from the required
+	// leg beside it (iss-2608301656192369).
+	if isAbsentValue(f.value) {
+		return nil
+	}
 	got := issueScalar(f.value)
-	if isAbsentValue(got) || got == r.bucket {
+	if got == r.bucket {
 		return nil
 	}
 	line := f.line
@@ -1487,6 +1499,12 @@ func undeclaredSubdirMessage(store recordStore, bucket, name string) string {
 // rule's own issueScalar and the result trimmed AFTER, because a quoted
 // all-whitespace value still carries its padding once the quotes are gone (the
 // lesson lapsed_at already learned in iss-2608300212513349).
+//
+// It takes the RAW frontmatter value, never one issueScalar has already read:
+// stripping twice empties a value that is two apostrophes inside double quotes,
+// so the legs that pre-stripped read it as absent while the leg that did not read
+// it as present — and every leg stood down on one admission
+// (iss-2608301656192369).
 //
 // This is deliberately the ONE place the rule decides emptiness, so the fix is
 // store-wide rather than scoped to the store the defect was reported against: the
