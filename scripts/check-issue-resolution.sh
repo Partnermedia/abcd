@@ -70,8 +70,9 @@ ISSUES_DIR=".abcd/work/issues"
 # StatusDirs, pinned to it by TestIssueResolutionGateScopesToStatusDirs.
 #
 # The scan is scoped to these three rather than to the ledger root because the
-# root now holds sibling record families — readings/<run-id>/ and
-# dispositions/<item-id>/ — whose files are not issue records. RS001 already
+# root holds sibling record families — readings/<run-id>/,
+# dispositions/<item-id>/, admissions/<run-id>/ and surprises/ — whose files are
+# not issue records, and the list of them grows. RS001 already
 # matched only the terminal folders; RS002 and RS003 did not, and would read a
 # `commit:`-shaped line out of one of those records as a resolution stamp.
 STATUS_DIRS=(open resolved wontfix)
