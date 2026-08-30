@@ -674,3 +674,95 @@ func TestAnAdmissionWhoseRunFieldContradictsItsBucketAdmitsNothing(t *testing.T)
 		t.Fatalf("an admission contradicting its own bucket admits nothing, got %d finding(s): %+v", n, fs)
 	}
 }
+
+// `unread` is not `absent`, and the admission side owes the same discipline the
+// disposition side already keeps. When the admissions tree cannot be read, the
+// walk knows nothing about whether a widening proposal was admitted — so
+// reporting it "outstanding" with a remedy to write a DISPOSITION contradicts the
+// invariant the same report enforces one branch up, and points the researcher at
+// the wrong record. The unreadable tree is named; the proposal is not judged.
+func TestAnUnreadableAdmissionTreeDoesNotMakeAProposalOutstanding(t *testing.T) {
+	run, item := "rdg-2608300000000001", "rdi-2608300000000002"
+	root := readingLedger(t, run, item, "widening")
+	link := filepath.Join(root, filepath.FromSlash(".abcd/work/issues/admissions"))
+	if err := os.MkdirAll(filepath.Dir(link), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(t.TempDir(), link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	fs, err := Lint(readingOutstandingConfig(severityBlocker), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var named bool
+	for _, f := range fs {
+		if f.RuleID != ruleReadingOutstanding {
+			continue
+		}
+		if strings.Contains(f.Message, "did not read this") {
+			named = true
+		}
+		if strings.Contains(f.Message, "carries no disposition") ||
+			strings.Contains(f.Message, "neither an admission nor a decline") {
+			t.Errorf("a proposal whose admissions nobody could read was judged anyway: %s", f.Message)
+		}
+	}
+	if !named {
+		t.Fatalf("the unreadable admissions tree must be named; findings: %+v", fs)
+	}
+
+	// The control: a DETECTION is answered by a disposition alone, so an
+	// unreadable admissions tree tells the walk nothing it needed and the item is
+	// still outstanding. Standing down for every position would trade one silence
+	// for a much larger one.
+	other := "rdi-2608300000000005"
+	writeFile(t, root, ".abcd/work/issues/readings/"+run+"/"+other+".md",
+		"---\nschema_version: 1\nid: \""+other+"\"\nrun: \""+run+"\"\nmanifest: \"sha256:beef\"\n"+
+			"position: \"detection\"\nregime: \"registrative\"\npattern: \"a stated constraint\"\n---\n\n")
+	fs, err = Lint(readingOutstandingConfig(severityBlocker), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var stillReported bool
+	for _, f := range fs {
+		if f.RuleID == ruleReadingOutstanding && strings.Contains(f.Message, other) {
+			stillReported = true
+		}
+	}
+	if !stillReported {
+		t.Fatalf("a detection is answered by a disposition alone and stays outstanding: %+v", fs)
+	}
+}
+
+// A HELD widening proposal is already published with its exit condition, so
+// naming it on the admission leg too would trade one silence for a duplicate.
+// Whether `held` is even available at the widening position is deferred to the
+// first widening run's dispositions, and this leg deliberately does not decide
+// it — the exclusion was written and never pinned, so a later reordering could
+// have removed it in silence.
+func TestAHeldWideningProposalIsNotAlsoReportedUnadmitted(t *testing.T) {
+	item := "rdi-2608300000000002"
+	root := readingLedger(t, "rdg-2608300000000001", item, "widening")
+	writeFile(t, root, ".abcd/work/issues/dispositions/"+item+"/dsp-2608300000000003.md",
+		"---\nschema_version: 1\nid: \"dsp-2608300000000003\"\nitem: \""+item+"\"\n"+
+			"state: \""+issueschema.DispositionHeld+"\"\ndisposition_grounds: \"not yet\"\n"+
+			"exit_condition: \"the first widening run reports\"\n---\n\n")
+
+	fs, err := Lint(readingOutstandingConfig(severityBlocker), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range fs {
+		if f.RuleID == ruleReadingOutstanding && strings.Contains(f.Message, "neither an admission nor a decline") {
+			t.Errorf("a held proposal is already published with its exit condition: %s", f.Message)
+		}
+	}
+	if n := countRule(fs, ruleReadingOutstanding); n != 1 {
+		t.Fatalf("expected exactly the open-hold line, got %d finding(s): %+v", n, fs)
+	}
+	if !strings.Contains(fs[0].Message, "exit condition") {
+		t.Fatalf("the one line must be the hold and its exit condition; got %q", fs[0].Message)
+	}
+}

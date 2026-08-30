@@ -275,12 +275,27 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 				// researcher to answer a proposal they have already admitted would
 				// be the report saying something the ledger contradicts.
 				//
-				// Readability is deliberately NOT consulted here. It supports one
-				// direction only: a record the walk actually READ is a fact whatever
-				// else in that tree it could not read, and only the claim that a
-				// proposal is unadmitted needs the whole tree behind it.
-				if position == issueschema.PositionWidening && admitted[admissionKey{run.Name(), item}] {
-					break
+				// Readability supports ONE direction, and both halves are used
+				// below: a record the walk actually READ is a fact whatever else in
+				// that tree it could not read, so an admission it holds answers its
+				// proposal even beside an unreadable sibling — while the claim that
+				// a proposal is UNADMITTED needs the whole tree behind it, and
+				// stands down when the tree is not there to stand on.
+				if position == issueschema.PositionWidening {
+					if admitted[admissionKey{run.Name(), item}] {
+						break
+					}
+					// And an admissions tree nobody could read supports no claim
+					// that this proposal was NOT admitted — the direction that needs
+					// the whole tree behind it. Reporting it outstanding here would
+					// tell the researcher to write a DISPOSITION, which is the wrong
+					// record for a proposal that may already carry an admission, and
+					// would contradict the invariant the disposition branch above
+					// keeps for its own tree. The Unsafe line already names what
+					// could not be read.
+					if !admissionsReadable {
+						break
+					}
 				}
 				report.Undispositioned = append(report.Undispositioned, OutstandingItem{
 					Item: item, Run: run.Name(), Path: filepath.ToSlash(rel),
