@@ -7,7 +7,7 @@ intent: itd-188
 
 ## Summary
 
-spc-66 delivers [itd-188](../../intents/planned/itd-188-machine-assistance-in-maintaining-the-ledger-without-any-con.md)'s
+spc-66 delivers [itd-188](../../intents/shipped/itd-188-machine-assistance-in-maintaining-the-ledger-without-any-con.md)'s
 scribe: machine assistance in maintaining the ledger whose access rule is the
 assembler's exact inverse. The assembler passes a reading a positively included
 slice of the shipped repository and no ledger; the scribe receives ledger
