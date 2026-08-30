@@ -28,6 +28,7 @@ import (
 	"syscall"
 
 	"github.com/intentdriven/abcd/internal/core/issueschema"
+	"github.com/intentdriven/abcd/internal/core/recordid"
 	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
@@ -41,7 +42,13 @@ const severityInfo = "info"
 var (
 	readingRunDirRe   = regexp.MustCompile(`^` + issueschema.ReadingRunFamily + `-[0-9]+$`)
 	readingItemFileRe = regexp.MustCompile(`^(` + issueschema.ReadingItemFamily + `-[0-9]+)\.md$`)
-	admissionFileRe   = regexp.MustCompile(`^` + issueschema.AdmissionFamily + `-[0-9]+\.md$`)
+	// The admission filename grammar is the RESOLVER's, the same value
+	// record_schema holds the store to — never a local copy. A stricter one here
+	// would pass a record through the gate and then report the proposal it admits
+	// as unadmitted: a confident false statement about a file the gate has just
+	// accepted, and these records are hand-written this cycle, which is exactly
+	// when `adm-N-<slug>.md` arrives.
+	admissionFileRe = recordid.FilenameNumRe(issueschema.AdmissionFamily)
 )
 
 // OutstandingItem is one reading item nobody has answered.
@@ -254,7 +261,12 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 				// admission records the grounds it was admitted on, and telling the
 				// researcher to answer a proposal they have already admitted would
 				// be the report saying something the ledger contradicts.
-				if position == issueschema.PositionWidening && admissionsReadable && admitted[item] {
+				//
+				// Readability is deliberately NOT consulted here. It supports one
+				// direction only: a record the walk actually READ is a fact whatever
+				// else in that tree it could not read, and only the claim that a
+				// proposal is unadmitted needs the whole tree behind it.
+				if position == issueschema.PositionWidening && admitted[item] {
 					break
 				}
 				report.Undispositioned = append(report.Undispositioned, OutstandingItem{
