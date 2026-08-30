@@ -1606,3 +1606,42 @@ func TestAStrayQuoteDoesNotConsumeALaterValuesMasking(t *testing.T) {
 	gitCommitAll(t, root)
 	refusesOrWithholds(t, root, "a stray quote ahead of a legitimate attribute value", sentinelAuditNotes)
 }
+
+// TestFlowPathEscapedKeyIsRecognised: the escape refusal exists TWICE because
+// neither spelling reaches the other. The line-anchored rule cannot see a key
+// inside a flow mapping or under a sequence dash, so the positional scanner
+// carries its own — and that half had no test, which is exactly how the
+// line-anchored half came to be deleted as redundant in the round before.
+func TestFlowPathEscapedKeyIsRecognised(t *testing.T) {
+	rows := map[string]string{
+		"in a flow mapping":      "---\nid: spc-44\nmeta: {\"ori\\u0067in\": " + sentinelOrigin + "}\n---\n",
+		"under a sequence dash":  "---\nid: spc-44\nmeta:\n  - \"ori\\u0067in\": " + sentinelOrigin + "\n---\n",
+		"after another flow key": "---\nid: spc-44\nmeta: {a: 1, \"ori\\u0067in\": " + sentinelOrigin + "}\n---\n",
+	}
+	for what, front := range rows {
+		root := fixtureRepo(t)
+		spcWithFrontmatter(t, root, "spc-44-flowescape.md", front)
+		refusesOrWithholds(t, root, "an escaped excluded key "+what, sentinelOrigin)
+	}
+}
+
+// TestRawHeadingTitleIsReadFromEveryMasking: the maskings bound a title AND are
+// read for it. An inline element whose attribute value carries a greater-than
+// truncates the tag in the unmasked rest, so the unmasked rendering reads a
+// different heading and only the masked rendering names the excluded one. The
+// bound dimension was pinned; this is the rendering dimension.
+func TestRawHeadingTitleIsReadFromEveryMasking(t *testing.T) {
+	rows := map[string]string{
+		"an inline element inside the heading": "<h2><span title=\"a>c\">Audit Notes</span></h2>\n\n" +
+			sentinelAuditNotes + "\n",
+		"a trailing inline element": "<h2>Audit Notes<span title=\"a>c\"></span></h2>\n\n" +
+			sentinelAuditNotes + "\n",
+	}
+	for what, body := range rows {
+		root := fixtureRepo(t)
+		writeFile(t, root, ".abcd/development/specs/open/spc-45-rendering.md",
+			"---\nid: spc-45\n---\n\n# A spec\n\nProse.\n\n"+body)
+		gitCommitAll(t, root)
+		refusesOrWithholds(t, root, "a raw heading carrying "+what, sentinelAuditNotes)
+	}
+}

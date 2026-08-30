@@ -565,10 +565,17 @@ func quotedEnd(s string, i int) (int, bool) {
 }
 
 // skipBlanks returns the offset of the first character at or after i that is not
-// blank. Blank is YAML's own whitespace class rather than space and tab alone: a
-// line whose bytes are `"origin"\r: x` is a top-level `origin` key to a YAML
-// reader, and stopping at the carriage return read the token as a scalar instead
-// of a key, so the key was never reported and never refused.
+// blank, where blank is wider than space and tab. A line whose bytes are
+// `"origin"\r: x` is a top-level `origin` key to a YAML reader — the carriage
+// return belongs to the line break, not to the name — and stopping at it read
+// the token as a scalar instead of a key, so the key was never reported and
+// never refused.
+//
+// The class is deliberately NOT YAML's `s-white`, which is space and tab alone:
+// a carriage return is a line break to YAML and a form feed is not a permitted
+// character in a YAML stream at all. Both are admitted here because neither has
+// any legitimate place inside a frontmatter line in this corpus, and skipping
+// them can only report MORE keys.
 func skipBlanks(s string, i int) int {
 	for i < len(s) && (s[i] == ' ' || s[i] == '\t' || s[i] == '\r' || s[i] == '\f') {
 		i++
