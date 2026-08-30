@@ -710,3 +710,55 @@ func TestRecordSchemaFilenameSlugAgrees(t *testing.T) {
 		t.Fatalf("expected exactly 2 record_schema findings (the two drifted records), got %d: %+v", n, fs)
 	}
 }
+
+// TestCaptureReaderAcceptsGroundsKey proves the allow-list half through the
+// READER: `grounds` must be a known property, or capture refuses every stamped
+// record and skips it — invisible to every capture surface while it still sits
+// in the ledger. The gate is proved the same way in the same fixture: a
+// well-formed value raises no finding.
+func TestCaptureReaderAcceptsGroundsKey(t *testing.T) {
+	root := t.TempDir()
+	issues := "work/issues"
+	writeFile(t, root, issues+"/resolved/iss-1-ok.md",
+		"---\nschema_version: 1\nid: iss-1\nslug: ok\nseverity: minor\ncategory: bug\n"+
+			"source: user-observation\nfound_during: t\nimpact: fix\nresolution: done\n"+
+			"grounds: \"pursued: we expect the recorded reasoning to outlive the session\"\n---\n\nan issue\n")
+	writeFile(t, root, "rec/decisions/adrs/0001-model.md", "---\nid: adr-1\n---\n# ADR-1\n")
+
+	fs, err := Lint(schemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 0 {
+		t.Fatalf("a well-formed grounds value raised %d record_schema finding(s): %+v", n, fs)
+	}
+}
+
+// TestRecordSchemaFlagsOutOfVocabularyGrounds: the committed-ledger gate refuses
+// exactly what capture's reader refuses. The vocabulary is closed and read from
+// the ONE copy in core/grounds, so the two can never disagree about what a legal
+// value is.
+func TestRecordSchemaFlagsOutOfVocabularyGrounds(t *testing.T) {
+	root := t.TempDir()
+	issues := "work/issues"
+	writeFile(t, root, issues+"/resolved/iss-1-bad.md",
+		"---\nschema_version: 1\nid: iss-1\nslug: bad\nseverity: minor\ncategory: bug\n"+
+			"source: user-observation\nfound_during: t\nimpact: fix\nresolution: done\n"+
+			"grounds: \"planned: not a value the vocabulary carries\"\n---\n\nan issue\n")
+	writeFile(t, root, issues+"/resolved/iss-2-shape.md",
+		"---\nschema_version: 1\nid: iss-2\nslug: shape\nseverity: minor\ncategory: bug\n"+
+			"source: user-observation\nfound_during: t\nimpact: fix\nresolution: done\n"+
+			"grounds: \"no token at all here\"\n---\n\nan issue\n")
+	writeFile(t, root, "rec/decisions/adrs/0001-model.md", "---\nid: adr-1\n---\n# ADR-1\n")
+
+	fs, err := Lint(schemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingWith(fs, filepath.Join(issues, "resolved", "iss-1-bad.md"), ruleRecordSchema, "planned") {
+		t.Errorf("expected an out-of-vocabulary grounds finding: %+v", fs)
+	}
+	if !findingWith(fs, filepath.Join(issues, "resolved", "iss-2-shape.md"), ruleRecordSchema, "grounds") {
+		t.Errorf("expected a malformed-grammar grounds finding: %+v", fs)
+	}
+}

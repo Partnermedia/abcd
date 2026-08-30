@@ -237,6 +237,18 @@ func Resolve(req ResolveRequest) (TransitionResult, error) {
 	if err != nil {
 		return TransitionResult{}, err
 	}
+	// Validated BEFORE the move, like the impact: a resolution is a conjecture
+	// being closed, and recording the route without the reasoning is the thing
+	// itd-179 exists to stop. resolveRoots is called for the redactor's repo root
+	// alone — the transition below resolves them again for the move itself.
+	rr, _, err := resolveRoots(req.RepoRoot, req.IssuesRoot)
+	if err != nil {
+		return TransitionResult{}, err
+	}
+	g, gRedacted, gDegraded, err := requireGrounds(rr, "resolve", req.Grounds)
+	if err != nil {
+		return TransitionResult{}, err
+	}
 	// Validated BEFORE the move, like every other member: the field's job is to
 	// take a record OUT of a release, so a value the derivation cannot read is
 	// worse than no value at all — it would sit in the ledger looking like an
@@ -245,7 +257,7 @@ func Resolve(req ResolveRequest) (TransitionResult, error) {
 		return TransitionResult{}, fmt.Errorf(
 			"resolve: --shipped-in %q is not a release tag (want vMAJOR.MINOR.PATCH); nothing written", req.ShippedIn)
 	}
-	extras := []kv{{"impact", rawScalar(string(impact))}}
+	extras := []kv{{"impact", rawScalar(string(impact))}, groundsField(g)}
 	if req.ShippedIn != "" {
 		// rawScalar, like impact above: a plain string is double-quoted by
 		// yamlScalar, and the derivation reads the RAW scalar, so a quoted value
@@ -273,6 +285,10 @@ func Resolve(req ResolveRequest) (TransitionResult, error) {
 		return TransitionResult{}, err
 	}
 	res.ResolvedBy = rb
+	res.Redacted += gRedacted
+	if res.Degraded == "" {
+		res.Degraded = gDegraded
+	}
 	return res, nil
 }
 
@@ -321,11 +337,33 @@ func resolveProvenance(req ResolveRequest) (*ResolvedBy, error) {
 // lines of documentation from the function to the regexp.
 var reShippedIn = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
 
-// Wontfix moves an open issue to wontfix/, writing the wontfix_reason note.
-// wontfix/ carries no impact (issue_impact_valid gates resolved/ only), so no
-// judgement is stamped.
+// Wontfix moves an open issue to wontfix/, writing the wontfix_reason note and
+// the `declined:` grounds derived from it. wontfix/ carries no impact
+// (issue_impact_valid gates resolved/ only), so no judgement is stamped.
+//
+// It needs no new required flag: transition already refuses an empty reason, so
+// a wontfix could never be recorded without grounds — what it lacked was the
+// TYPE. Grounds overrides the text when the conjecture is worth stating
+// separately from the user-facing reason.
 func Wontfix(req WontfixRequest) (TransitionResult, error) {
-	return transition(req.RepoRoot, req.IssuesRoot, req.ID, "wontfix_reason", req.Reason, nil, StateWontfix)
+	rr, _, err := resolveRoots(req.RepoRoot, req.IssuesRoot)
+	if err != nil {
+		return TransitionResult{}, err
+	}
+	g, gRedacted, gDegraded, err := wontfixGrounds(rr, req.Grounds, req.Reason)
+	if err != nil {
+		return TransitionResult{}, err
+	}
+	res, err := transition(req.RepoRoot, req.IssuesRoot, req.ID, "wontfix_reason", req.Reason,
+		[]kv{groundsField(g)}, StateWontfix)
+	if err != nil {
+		return TransitionResult{}, err
+	}
+	res.Redacted += gRedacted
+	if res.Degraded == "" {
+		res.Degraded = gDegraded
+	}
+	return res, nil
 }
 
 // transition moves an open issue to target, setting the defining note field and

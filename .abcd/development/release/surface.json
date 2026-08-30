@@ -335,6 +335,13 @@
       "hidden": false,
       "flags": [
         {
+          "name": "grounds",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
           "name": "intent",
           "shorthand": "",
           "type": "string",
@@ -349,6 +356,13 @@
       "flags": [
         {
           "name": "commit",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
+          "name": "grounds",
           "shorthand": "",
           "type": "string",
           "required": false,
@@ -387,7 +401,15 @@
     {
       "path": "abcd capture wontfix",
       "hidden": false,
-      "flags": []
+      "flags": [
+        {
+          "name": "grounds",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
     },
     {
       "path": "abcd changelog",

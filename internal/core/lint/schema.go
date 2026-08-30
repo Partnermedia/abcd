@@ -32,6 +32,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/intentdriven/abcd/internal/core/grounds"
 	"github.com/intentdriven/abcd/internal/core/issueschema"
 	"github.com/intentdriven/abcd/internal/core/recordid"
 )
@@ -533,6 +534,23 @@ func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
 		v := issueScalar(f.value)
 		if !issueschema.SlugRe.MatchString(v) {
 			add(f.line, "invalid slug '"+v+"'; a slug is kebab-case (lower-case alphanumerics joined by single hyphens) and capture refuses any other shape")
+		}
+	}
+
+	// grounds: the closed vocabulary and the `<token>: <text>` grammar, read from
+	// the ONE copy in core/grounds — the same parser capture's validateStrict
+	// reads, so this gate refuses exactly the record the reader refuses (and
+	// therefore skips, making it invisible to every capture surface while it still
+	// sits in the ledger).
+	//
+	// The SUBSTANCE FLOOR is deliberately not applied here. It is an input gate at
+	// the writing verb over what a caller supplies; a wontfix stamps its grounds
+	// from a reason whose own contract is merely non-empty, so a floor at this gate
+	// would block records the ledger has always accepted and the reader still reads.
+	if f, present := r.fields["grounds"]; present && !isAbsentValue(f.value) {
+		v := issueScalar(f.value)
+		if _, err := grounds.Parse(v); err != nil {
+			add(f.line, err.Error()+"; capture refuses the record and skips it")
 		}
 	}
 

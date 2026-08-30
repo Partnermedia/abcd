@@ -50,6 +50,19 @@ func TestGroundsParseSplitsOnFirstColon(t *testing.T) {
 	}
 }
 
+// TestGroundsParseChecksGrammarNotTheFloor: Parse is the reader's gate over a
+// value already written, so it judges the grammar and the vocabulary and leaves
+// the substance floor to New — a reader that applied the floor would skip
+// records the ledger has always accepted.
+func TestGroundsParseChecksGrammarNotTheFloor(t *testing.T) {
+	if _, err := Parse("declined: out of scope"); err != nil {
+		t.Fatalf("Parse of a short but well-formed value = %v, want it accepted", err)
+	}
+	if _, err := Parse("declined:   "); err == nil {
+		t.Fatal("Parse of a value with no text = nil error, want a refusal")
+	}
+}
+
 // TestGroundsRefusesDegenerateText pins the substance floor: the shape check
 // that refuses the cases carrying no reasoning at all. It is a floor, not a
 // judgement — whether a text really names a conjecture is review's question.

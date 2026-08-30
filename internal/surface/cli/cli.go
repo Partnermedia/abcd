@@ -2523,9 +2523,9 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	// resolve — open -> resolved with a note, a required product impact, and
 	// optional resolved_by provenance (spc-25): the intent, spec, or commit
 	// that fixed it.
-	var resolveImpact, resolveByIntent, resolveBySpec, resolveByCommit, resolveShippedIn string
+	var resolveImpact, resolveByIntent, resolveBySpec, resolveByCommit, resolveShippedIn, resolveGrounds string
 	resolveCmd := &cobra.Command{
-		Use:   "resolve <iss-N> <note> --impact <additive|breaking|fix|internal> [--intent itd-N] [--spec spc-N] [--commit sha] [--shipped-in vX.Y.Z]",
+		Use:   "resolve <iss-N> <note> --impact <additive|breaking|fix|internal> --grounds \"<token>: <text>\" [--intent itd-N] [--spec spc-N] [--commit sha] [--shipped-in vX.Y.Z]",
 		Short: "Mark an open issue resolved (open/ -> resolved/), optionally naming what fixed it",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -2533,16 +2533,20 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if err := requireGroundsFlag("resolve", resolveGrounds); err != nil {
+				return err
+			}
 			res, err := capture.Resolve(capture.ResolveRequest{
 				RepoRoot: cwd, ID: args[0], Resolution: args[1], Impact: resolveImpact,
 				ByIntent: resolveByIntent, BySpec: resolveBySpec, ByCommit: resolveByCommit,
-				ShippedIn: resolveShippedIn,
+				ShippedIn: resolveShippedIn, Grounds: resolveGrounds,
 			})
 			if err != nil {
 				return err
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				fmt.Fprintf(w, "%s  %s -> %s — %s%s\n", res.ID, res.FromStatus, res.ToStatus, termsafe.Sanitize(res.Path), resolvedByNote(res.ResolvedBy))
+				emitRedactionNote(w, res.Redacted, res.Degraded)
 			})
 		},
 	}
@@ -2553,6 +2557,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	// tree's no-required-flags invariant (TestLiveTreeMarksNoFlagRequired): the
 	// requirement is enforced semantically in the core, not by a usage annotation.
 	resolveCmd.Flags().StringVar(&resolveImpact, "impact", "", "product impact: additive|breaking|fix|internal (required)")
+	resolveCmd.Flags().StringVar(&resolveGrounds, "grounds", "", groundsFlagUsage)
 	resolveCmd.Flags().StringVar(&resolveByIntent, "intent", "", "resolved_by provenance: the itd-N that fixed it (must exist)")
 	resolveCmd.Flags().StringVar(&resolveBySpec, "spec", "", "resolved_by provenance: the spc-N that fixed it (must exist)")
 	resolveCmd.Flags().StringVar(&resolveByCommit, "commit", "", "resolved_by provenance: the fixing commit sha (7-64 hex chars, shape-checked only)")
@@ -2569,9 +2574,9 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	// record walk). Default mode mints a draft and stamps the issue's
 	// promoted_to in one invocation; --intent is the stamp-only repair/link
 	// mode. The issue keeps its status folder — promotion is not resolution.
-	var promoteIntent string
+	var promoteIntent, promoteGrounds string
 	promoteCmd := &cobra.Command{
-		Use:   "promote <iss-N>",
+		Use:   "promote <iss-N> --grounds \"<token>: <text>\"",
 		Short: "Graduate an issue into an intent draft (mints + stamps promoted_to)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -2579,7 +2584,12 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := capture.Promote(capture.PromoteRequest{RepoRoot: cwd, ID: args[0], LinkIntent: promoteIntent})
+			if err := requireGroundsFlag("promote", promoteGrounds); err != nil {
+				return err
+			}
+			res, err := capture.Promote(capture.PromoteRequest{
+				RepoRoot: cwd, ID: args[0], LinkIntent: promoteIntent, Grounds: promoteGrounds,
+			})
 			if err != nil {
 				return err
 			}
@@ -2594,15 +2604,22 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 				fmt.Fprintf(w, "%s (%s, %s) promoted — %s %s — %s\n",
 					res.IssueID, res.IssueStatus, termsafe.Sanitize(res.IssuePath),
 					verb, res.IntentID, termsafe.Sanitize(res.IntentPath))
+				emitRedactionNote(w, res.Redacted, res.Degraded)
 			})
 		},
 	}
 	promoteCmd.Flags().StringVar(&promoteIntent, "intent", "", "stamp-only mode: link this existing itd-N instead of minting a draft")
+	promoteCmd.Flags().StringVar(&promoteGrounds, "grounds", "", groundsFlagUsage)
 	captureCmd.AddCommand(promoteCmd)
 
-	// wontfix — open -> wontfix with a reason.
-	captureCmd.AddCommand(&cobra.Command{
-		Use:   "wontfix <iss-N> <reason>",
+	// wontfix — open -> wontfix with a reason. It needs no required --grounds:
+	// the reason is already mandatory, so a wontfix could never be recorded
+	// without grounds — what it lacked was the TYPE, which it stamps as
+	// `declined: <reason>`. The flag overrides the TEXT for the case where the
+	// conjecture is worth stating separately from the user-facing reason.
+	var wontfixGrounds string
+	wontfixCmd := &cobra.Command{
+		Use:   "wontfix <iss-N> <reason> [--grounds \"declined: <text>\"]",
 		Short: "Record an explicit non-action decision (open/ -> wontfix/)",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -2610,17 +2627,56 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := capture.Wontfix(capture.WontfixRequest{RepoRoot: cwd, ID: args[0], Reason: args[1]})
+			res, err := capture.Wontfix(capture.WontfixRequest{
+				RepoRoot: cwd, ID: args[0], Reason: args[1], Grounds: wontfixGrounds,
+			})
 			if err != nil {
 				return err
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				fmt.Fprintf(w, "%s  %s -> %s — %s\n", res.ID, res.FromStatus, res.ToStatus, termsafe.Sanitize(res.Path))
+				emitRedactionNote(w, res.Redacted, res.Degraded)
 			})
 		},
-	})
+	}
+	wontfixCmd.Flags().StringVar(&wontfixGrounds, "grounds", "",
+		"override the stamped grounds text (the token stays `declined` — a wontfix IS that non-action)")
+	captureCmd.AddCommand(wontfixCmd)
 
 	return captureCmd
+}
+
+// groundsFlagUsage is the one spelling of the argument's help text, so promote
+// and resolve cannot describe the same closed vocabulary differently.
+const groundsFlagUsage = "REQUIRED — the conjecture being acted on, not the route taken: " +
+	"\"<pursued|deferred|declined>: <what is expected, and what would show it wrong>\""
+
+// requireGroundsFlag refuses a triage that names no grounds, at the CLI, as a
+// USAGE error (exit 2) with nothing written — the same shape `--category lapse`
+// without `--lapsed-at` already has. The core refuses the same call on its own
+// for every other caller; this is where a person typing the command learns it, in
+// flag terms rather than in property terms. Neither flag is marked
+// cobra-required, which would break the tree's no-required-flags invariant
+// (TestLiveTreeMarksNoFlagRequired): the requirement is semantic, not a usage
+// annotation.
+func requireGroundsFlag(verb, value string) error {
+	if strings.TrimSpace(value) != "" {
+		return nil
+	}
+	return &exitError{Code: 2, Msg: "abcd capture " + verb + " requires --grounds \"<pursued|deferred|declined>: <text>\" " +
+		"(nothing written — a triage records the conjecture being acted on, never only the route taken)"}
+}
+
+// emitRedactionNote says, on the human surface, that the written text differs
+// from the text handed in. Redaction is never silent: only the caller can judge
+// whether the rewritten record still says what they meant.
+func emitRedactionNote(w io.Writer, redacted int, degraded string) {
+	if redacted > 0 {
+		fmt.Fprintf(w, "  redacted %d span(s) before writing (home paths and identifiers are never committed)\n", redacted)
+	}
+	if degraded != "" {
+		fmt.Fprintf(w, "  WARNING: %s\n", termsafe.Sanitize(degraded))
+	}
 }
 
 // resolvedByNote renders the stamped provenance members for the resolve text

@@ -66,6 +66,12 @@ var Known = map[string]bool{
 	// what gates the move into resolved/ — but it must be a KNOWN property, or
 	// the reader drops every judged record as malformed.
 	"impact": true,
+	// grounds is the conjecture behind the triage that moved this record —
+	// `<token>: <text>` in the closed core/grounds vocabulary (spc-57). Stamped by
+	// promote, resolve and wontfix. It must be a KNOWN property or the reader
+	// drops every stamped record as malformed, which would make the three triage
+	// routes write records nothing can read.
+	"grounds": true,
 	// created/updated are no longer written, but legacy ledgers still carry
 	// them. Tolerate (accept, then drop) them on read so an existing committed
 	// ledger is not rejected as an unknown property; the reader ignores their

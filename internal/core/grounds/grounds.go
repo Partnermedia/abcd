@@ -84,7 +84,14 @@ var degenerateWords = map[string]bool{
 // Parse reads the `<token>: <text>` grammar — the one spelling written to a
 // `grounds:` frontmatter scalar and to a `- <token>: <text>` bullet alike. It
 // splits on the FIRST colon, because the text is prose and may carry colons of
-// its own, then validates both halves through New.
+// its own.
+//
+// It checks the GRAMMAR and the VOCABULARY, and deliberately not the substance
+// floor. Parse is what the readers and the committed-record gate use, and those
+// judge values already written: a wontfix stamps its grounds from a reason whose
+// own contract is merely non-empty, so a floor here would make a reader skip
+// records the ledger has always accepted. The floor is an input gate, applied by
+// New at the writing verb over what a caller supplies.
 func Parse(s string) (Grounds, error) {
 	tok, text, ok := strings.Cut(s, ":")
 	if !ok {
@@ -95,7 +102,11 @@ func Parse(s string) (Grounds, error) {
 	if err != nil {
 		return Grounds{}, err
 	}
-	return New(t, text)
+	folded := Fold(text)
+	if folded == "" {
+		return Grounds{}, fmt.Errorf("grounds %q carries no text after its token", s)
+	}
+	return Grounds{Token: t, Text: folded}, nil
 }
 
 // ParseToken validates one vocabulary value. Surrounding whitespace and case are
@@ -111,10 +122,11 @@ func ParseToken(s string) (Token, error) {
 	return "", fmt.Errorf("grounds token %q is not one of %s", strings.TrimSpace(s), vocabularyList())
 }
 
-// New builds a validated Grounds from a token and a free text. The text is
-// folded to one line first — both carriers hold a single line — and then put to
-// the substance floor, so a text that is only line breaks is refused as the empty
-// text it is.
+// New builds a validated Grounds from a token and a free text, PUTTING THE TEXT
+// TO THE SUBSTANCE FLOOR. It is the writing verb's gate over what a caller
+// supplies; Parse is the reader's gate over what is already written. The text is
+// folded to one line first — both carriers hold a single line — so a text that
+// is only line breaks is refused as the empty text it is.
 func New(tok Token, text string) (Grounds, error) {
 	t, err := ParseToken(string(tok))
 	if err != nil {

@@ -191,24 +191,26 @@ List issues by state (one of --open/--resolved/--wontfix/--all required)
 
 Graduate an issue into an intent draft (mints + stamps promoted_to)
 
-**Usage:** `abcd capture promote <iss-N> [flags]`
+**Usage:** `abcd capture promote <iss-N> --grounds "<token>: <text>" [flags]`
 
 **Flags:**
 
 ```
-      --intent string   stamp-only mode: link this existing itd-N instead of minting a draft
+      --grounds string   REQUIRED — the conjecture being acted on, not the route taken: "<pursued|deferred|declined>: <what is expected, and what would show it wrong>"
+      --intent string    stamp-only mode: link this existing itd-N instead of minting a draft
 ```
 
 #### `abcd capture resolve`
 
 Mark an open issue resolved (open/ -> resolved/), optionally naming what fixed it
 
-**Usage:** `abcd capture resolve <iss-N> <note> --impact <additive|breaking|fix|internal> [--intent itd-N] [--spec spc-N] [--commit sha] [--shipped-in vX.Y.Z] [flags]`
+**Usage:** `abcd capture resolve <iss-N> <note> --impact <additive|breaking|fix|internal> --grounds "<token>: <text>" [--intent itd-N] [--spec spc-N] [--commit sha] [--shipped-in vX.Y.Z] [flags]`
 
 **Flags:**
 
 ```
       --commit string       resolved_by provenance: the fixing commit sha (7-64 hex chars, shape-checked only)
+      --grounds string      REQUIRED — the conjecture being acted on, not the route taken: "<pursued|deferred|declined>: <what is expected, and what would show it wrong>"
       --impact string       product impact: additive|breaking|fix|internal (required)
       --intent string       resolved_by provenance: the itd-N that fixed it (must exist)
       --shipped-in string   MIGRATION USE: the release that already carried this work (vX.Y.Z), leaving the record out of the current cut; unnecessary in a repo abcd managed from the start
@@ -219,7 +221,13 @@ Mark an open issue resolved (open/ -> resolved/), optionally naming what fixed i
 
 Record an explicit non-action decision (open/ -> wontfix/)
 
-**Usage:** `abcd capture wontfix <iss-N> <reason>`
+**Usage:** `abcd capture wontfix <iss-N> <reason> [--grounds "declined: <text>"] [flags]`
+
+**Flags:**
+
+```
+      --grounds declined   override the stamped grounds text (the token stays declined — a wontfix IS that non-action)
+```
 
 ### `abcd changelog`
 

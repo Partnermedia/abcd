@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/changelog"
+	"github.com/intentdriven/abcd/internal/core/grounds"
 	"github.com/intentdriven/abcd/internal/core/issueschema"
 	"github.com/intentdriven/abcd/internal/core/recordid"
 )
@@ -99,7 +100,7 @@ func validateStrict(fm map[string]any) error {
 	}
 
 	// Optional scalar strings.
-	for _, opt := range []string{"found_at", "lapsed_at", "details", "suggested_fix", "wontfix_reason", "resolution", "promoted_to"} {
+	for _, opt := range []string{"found_at", "lapsed_at", "details", "suggested_fix", "wontfix_reason", "resolution", "promoted_to", "grounds"} {
 		if v, present := fm[opt]; present {
 			if _, isStr := v.(string); !isStr {
 				return fmt.Errorf("%w: %q must be a string", ErrMalformedFrontmatter, opt)
@@ -121,6 +122,24 @@ func validateStrict(fm map[string]any) error {
 	if lapsedAt != "" && !issueschema.ValidLapsedAt(lapsedAt) {
 		return fmt.Errorf("%w: lapsed_at %q is not an RFC 3339 instant (want 2026-08-28T00:00:00Z)",
 			ErrMalformedFrontmatter, lapsedAt)
+	}
+
+	// grounds is optional but, when written, is checked against the ONE shared
+	// vocabulary in core/grounds rather than a private copy — the same set the
+	// record lint gates on, so the reader and the committed-ledger gate can never
+	// disagree about what a legal value is.
+	//
+	// The GRAMMAR and the VOCABULARY are checked here; the substance floor is not.
+	// The floor is an input gate at the writing verb, over what a caller supplies;
+	// a wontfix stamps its grounds from a reason whose own contract is merely
+	// non-empty, and applying the floor here would make the reader skip records the
+	// ledger has always accepted.
+	if v, present := fm["grounds"]; present {
+		if s, _ := v.(string); strings.TrimSpace(s) != "" {
+			if _, err := grounds.Parse(s); err != nil {
+				return fmt.Errorf("%w: %v", ErrMalformedFrontmatter, err)
+			}
+		}
 	}
 
 	if v, present := fm["promoted_to"]; present {
@@ -289,6 +308,7 @@ func issueFromFrontmatter(fm map[string]any, status State, path, body string) Is
 		FoundAt:       asString(fm["found_at"]),
 		LapsedAt:      asString(fm["lapsed_at"]),
 		PromotedTo:    asString(fm["promoted_to"]),
+		Grounds:       asString(fm["grounds"]),
 		Resolution:    asString(fm["resolution"]),
 		WontfixReason: asString(fm["wontfix_reason"]),
 		Status:        status,

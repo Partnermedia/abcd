@@ -1,7 +1,7 @@
 ---
 name: capture
 description: Capture issues to the structured per-repo ledger and query them, by invoking the abcd binary. Bare invocation is a read-only status render; list/promote/resolve/wontfix act on the ledger.
-argument-hint: "[text] | list --open|--resolved|--wontfix|--all | promote <iss-N> [--intent <itd-N>] | resolve <iss-N> <note> --impact <additive|breaking|fix|internal> [--intent <itd-N>] [--spec <spc-N>] [--commit <sha>] | wontfix <iss-N> <reason>"
+argument-hint: "[text] | list --open|--resolved|--wontfix|--all | promote <iss-N> --grounds \"<token>: <text>\" [--intent <itd-N>] | resolve <iss-N> <note> --impact <additive|breaking|fix|internal> --grounds \"<token>: <text>\" [--intent <itd-N>] [--spec <spc-N>] [--commit <sha>] | wontfix <iss-N> <reason>"
 ---
 
 # `/abcd:capture` — issue ledger
@@ -76,10 +76,37 @@ message; there is no implicit default. Summarise each issue's `id`, `status`,
 unblocked issues first, then by severity (`critical` → `nitpick`); rows still
 blocked by an open dependency are demoted and annotated `[blocked-by iss-N,…]`.
 
+## Grounds: why this triage, not just which one
+
+Every triage route records the CONJECTURE being acted on. The vocabulary is
+closed — `pursued`, `deferred`, `declined` — and the text is free prose:
+
+```bash
+--grounds "pursued: <what is expected, and what would show it wrong>"
+```
+
+`promote` and `resolve` **require** it: they mint the value in the same call, so
+an absent `--grounds` exits 2 and writes nothing. `wontfix` does not, because its
+reason is already mandatory — it stamps `declined: <reason>` from the reason it
+already takes, and `--grounds "declined: <text>"` overrides that text for the
+case where the conjecture and the user-facing reason are not the same sentence.
+The token there stays `declined`: a wontfix IS the non-action that value names.
+
+**Ask for the expectation and its falsifier.** "Promoted it because it is next"
+restates the decision and records nothing; "promoted it because we expect a
+stamped identity to survive rewording, which nothing else does" is a conjecture
+somebody can later find wrong. abcd refuses only the degenerate texts — empty,
+too short, or the vocabulary word repeated back — and cannot tell a conjecture
+from a restatement. That part is yours: put the question to the user and write
+down their answer.
+
+The value lands as a `grounds:` frontmatter scalar and is scanned before it is
+committed, so report `redacted` whenever it is non-zero.
+
 ## Resolve / wontfix
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT}/abcd" capture resolve <iss-N> "<resolution-note>" --impact <additive|breaking|fix|internal> --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" capture resolve <iss-N> "<resolution-note>" --impact <additive|breaking|fix|internal> --grounds "<token>: <text>" --json
 "${CLAUDE_PLUGIN_ROOT}/abcd" capture wontfix <iss-N> "<reason>" --json
 ```
 
@@ -127,7 +154,7 @@ When a one-line issue turns out to be a capability, graduate it without
 retyping:
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT}/abcd" capture promote <iss-N> --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" capture promote <iss-N> --grounds "pursued: <conjecture>" --json
 ```
 
 One invocation mints a new intent draft under
