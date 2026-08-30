@@ -6,6 +6,7 @@ import (
 	"path"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/intentdriven/abcd/internal/core/frontmatter"
 	"github.com/intentdriven/abcd/internal/core/site"
@@ -162,10 +163,7 @@ var (
 	// multi-line forms — a document does not have to be well-formed for a reader
 	// to see a heading in it.
 	rawHeadingOpenRe = regexp.MustCompile(
-		`(?is)<h[1-6](?:\s[^>]*)?/?>|<[a-z][a-z0-9-]*\s[^>]*role\s*=\s*["']?heading\b[^>]*>`)
-	// rawHeadingEndRe bounds the text such a tag introduces: any closing tag, the
-	// next heading tag, or a blank line.
-	rawHeadingEndRe = regexp.MustCompile(`(?is)</[a-z][a-z0-9-]*\s*>|<h[1-6](?:\s[^>]*)?/?>|\n[ \t]*\n`)
+		`(?is)<(h[1-6])(?:\s[^>]*)?/?>|<([a-z][a-z0-9-]*)\s[^>]*role\s*=\s*["']?heading\b[^>]*>`)
 	// questionLineRe matches any explicit-key line. Whether it is READABLE is a
 	// second question, asked against explicitYAMLKeyRe: a `?` line that pattern
 	// cannot fully read is a key this package cannot resolve.
@@ -175,7 +173,13 @@ var (
 	// scan to a brace at the start of a line fixed the quoted-scalar false
 	// positive by giving up every nested flow shape, and a floor that closes a
 	// false positive by dropping a class is not a trade worth making.
-	quotedSpanRe = regexp.MustCompile(`"[^"]*"|'[^']*'`)
+	// A quote opens a scalar only in SCALAR POSITION: at line start, or after a
+	// colon, brace, bracket, comma or a sequence dash. Treating every quote as an
+	// opener paired an apostrophe in ordinary prose — `note: it's` — with a later
+	// one and blanked the excluded key sitting between them, so the flow scan
+	// never saw it. The double-quoted alternative is escape-aware, and the
+	// single-quoted one honours YAML's doubled-quote escape.
+	quotedSpanRe = regexp.MustCompile(`(?:^|[:{\[,]|-\s)\s*("(?:[^"\\]|\\.)*"|'(?:[^']|'')*')`)
 	// htmlCommentRe and htmlTagRe strip the markup a title can carry without
 	// changing how it reads on the page.
 	htmlCommentRe = regexp.MustCompile(`(?s)<!--.*?-->`)
@@ -403,6 +407,12 @@ func verifyRedaction(rel, original, redacted string, keys, headings map[string]b
 		if inFirstBlock(i) && strings.HasPrefix(lines[i], " ") {
 			continue
 		}
+		// The closing `---` sits directly under the block's last line, so reading
+		// it as an underline makes any record whose last key names an excluded
+		// heading refuse. It closes a block; it underlines nothing.
+		if hasBlock && i+1 == fmClose {
+			continue
+		}
 		title := normaliseHeadingTitle(lines[i])
 		if title == "" {
 			continue
@@ -420,16 +430,28 @@ func verifyRedaction(rel, original, redacted string, keys, headings map[string]b
 // so a caller counting braces or offsets is measuring the same line it started
 // with.
 func blankQuoted(line string) string {
-	return quotedSpanRe.ReplaceAllStringFunc(line, func(m string) string {
-		return strings.Repeat(" ", len(m))
-	})
+	out := []byte(line)
+	for _, m := range quotedSpanRe.FindAllStringSubmatchIndex(line, -1) {
+		// Only the captured SCALAR is blanked, never the opener that introduced
+		// it: blanking the opener too would erase the comma or brace the flow
+		// scan reads the next key by.
+		if len(m) < 4 || m[2] < 0 {
+			continue
+		}
+		for i := m[2]; i < m[3]; i++ {
+			out[i] = ' '
+		}
+	}
+	return string(out)
 }
 
 // blockCloser reports whether a line closes a frontmatter block. YAML closes a
 // document with `---` or `...`, and both end the block a key scan is walking.
 func blockCloser(line string) bool {
-	t := strings.TrimSpace(line)
-	return strings.HasPrefix(t, "---") || strings.HasPrefix(t, "...")
+	// Column 0, not "after trimming". YAML closes a document at the left margin,
+	// and trimming first made an ellipsis or a rule INSIDE a block scalar close
+	// the block — so a record was refused for a shape it does not have.
+	return strings.HasPrefix(line, "---") || strings.HasPrefix(line, "...")
 }
 
 // submatches returns a match's non-empty capture groups, so a pattern spelling
@@ -461,6 +483,30 @@ func escapedQuotedKey(line string) (string, bool) {
 	return m[1], true
 }
 
+// rawHeadingEndFor bounds the text one heading element introduces: that
+// element's OWN closing tag, the next heading open, or a blank line.
+//
+// Bounding at any closing tag instead cut the title at the first inline element
+// inside the heading — `<h2><a id="x"></a>Audit Notes</h2>` ended at `</a>` and
+// yielded nothing at all, and `<h2><em>Audit</em> Notes</h2>` yielded "Audit".
+// Both were admitted. A heading's own close is the only bound that survives the
+// markup a heading is allowed to carry.
+func rawHeadingEndFor(name string) *regexp.Regexp {
+	rawHeadingEndMu.Lock()
+	defer rawHeadingEndMu.Unlock()
+	if re, ok := rawHeadingEnds[name]; ok {
+		return re
+	}
+	re := regexp.MustCompile(`(?is)</` + regexp.QuoteMeta(name) + `\s*>|<h[1-6](?:\s[^>]*)?/?>|\n[ \t]*\n`)
+	rawHeadingEnds[name] = re
+	return re
+}
+
+var (
+	rawHeadingEndMu sync.Mutex
+	rawHeadingEnds  = map[string]*regexp.Regexp{}
+)
+
 // rawHTMLHeading finds the first raw HTML heading in the unfenced body whose
 // text names an excluded heading, and reports the line it sits on.
 //
@@ -474,14 +520,23 @@ func escapedQuotedKey(line string) (string, bool) {
 func rawHTMLHeading(lines []string, fenced []bool, offset int, headings map[string]bool) (int, string, bool) {
 	joined := strings.Join(lines, "\n")
 
-	for _, open := range rawHeadingOpenRe.FindAllStringIndex(joined, -1) {
+	for _, open := range rawHeadingOpenRe.FindAllStringSubmatchIndex(joined, -1) {
 		line := strings.Count(joined[:open[0]], "\n")
 		if line < offset || (line < len(fenced) && fenced[line]) {
 			continue
 		}
+		name := ""
+		for _, g := range [][2]int{{open[2], open[3]}, {open[4], open[5]}} {
+			if g[0] >= 0 {
+				name = strings.ToLower(joined[g[0]:g[1]])
+			}
+		}
+		if name == "" {
+			continue
+		}
 		rest := joined[open[1]:]
 		end := len(rest)
-		if b := rawHeadingEndRe.FindStringIndex(rest); b != nil {
+		if b := rawHeadingEndFor(name).FindStringIndex(rest); b != nil {
 			end = b[0]
 		}
 		title := normaliseHeadingTitle(renderedText(rest[:end]))
@@ -542,29 +597,24 @@ func unresolvableFrontmatterShape(lines []string, fenced []bool) (int, string, b
 // firstBlockRange locates the document's first delimiter-fenced region: the line
 // that opens it and the line that closes it, or -1 for a block never closed.
 func firstBlockRange(lines []string, fenced []bool) (int, int, bool) {
-	open := -1
-	for i, line := range lines {
-		if fenced[i] {
-			continue
-		}
-		trimmed := strings.TrimSpace(line)
-		if i == 0 {
-			trimmed = strings.TrimSpace(frontmatter.TrimBOM(line))
-		}
-		if strings.HasPrefix(trimmed, "---") {
-			open = i
-			break
-		}
-	}
-	if open < 0 {
+	// Line 0 only, a byte-order mark allowed ahead of it. That is the ONLY place
+	// the frontmatter stripper recognises a block, and reading the first `---`
+	// found anywhere read a thematic break as a frontmatter opener: an ordinary
+	// documentation page with a rule in it was then refused as an unclosed
+	// block, or its next line read as a tag or an anchor. Every docs page is
+	// admitted, so that was a floor refusing the corpus it exists to pass.
+	if len(lines) == 0 || (len(fenced) > 0 && fenced[0]) {
 		return 0, 0, false
 	}
-	for i := open + 1; i < len(lines); i++ {
+	if !strings.HasPrefix(frontmatter.TrimBOM(lines[0]), "---") {
+		return 0, 0, false
+	}
+	for i := 1; i < len(lines); i++ {
 		if !fenced[i] && blockCloser(lines[i]) {
-			return open, i, true
+			return 0, i, true
 		}
 	}
-	return open, -1, true
+	return 0, -1, true
 }
 
 // excludedKeyInFirstBlock reports an excluded key sitting at column 0 inside the

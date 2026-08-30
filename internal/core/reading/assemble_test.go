@@ -1260,3 +1260,94 @@ func TestHeadingRoleDivIsRecognised(t *testing.T) {
 		refusesOrWithholds(t, root, what, sentinelAuditNotes)
 	}
 }
+
+// mustAssemble runs one assembly and requires it to succeed. A floor that
+// refuses an ordinary document stops every assembly the repository can run, so
+// the negative cases matter as much as the positive ones.
+func mustAssemble(t *testing.T, root, what string) {
+	t.Helper()
+	if _, err := Assemble(AssembleRequest{
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+	}); err != nil {
+		t.Errorf("%s refused the assembly: %v", what, err)
+	}
+}
+
+// TestQuoteBlankerOnlyBlanksScalarOpeners: a quote opens a scalar only in
+// scalar position. Treating every quote as an opener let an apostrophe in
+// ordinary prose, a stray quote, or an escaped quote pair with a later one and
+// blank the excluded key sitting between them.
+func TestQuoteBlankerOnlyBlanksScalarOpeners(t *testing.T) {
+	rows := map[string]string{
+		"apostrophes in plain scalars": "---\nid: spc-26\nmeta: {note: it's, origin: " + sentinelOrigin + ", kind: don't}\n---\n",
+		"a stray double quote":         "---\nid: spc-26\nmeta: {note: say \" hello, origin: " + sentinelOrigin + "}\n---\n",
+		"an escaped quote scalar":      "---\nid: spc-26\nmeta: {a: \"\\\"\", origin: " + sentinelOrigin + "}\n---\n",
+	}
+	for what, front := range rows {
+		root := fixtureRepo(t)
+		spcWithFrontmatter(t, root, "spc-26-quotes.md", front)
+		refusesOrWithholds(t, root, what, sentinelOrigin)
+	}
+
+	// And the false positive the blanking exists to prevent stays prevented: a
+	// quoted reason that merely quotes a flow mapping, escapes and all.
+	root := fixtureRepo(t)
+	spcWithFrontmatter(t, root, "spc-27-reason.md",
+		"---\nid: spc-27\nreason: \"say \\\"{origin: scribe}\\\" done\"\n---\n")
+	mustAssemble(t, root, "a quoted reason carrying an escaped flow mapping")
+}
+
+// TestRawHeadingTitleSurvivesInlineMarkup: cutting the title at the first
+// closing tag of ANY element truncates or empties it whenever the heading holds
+// inline markup, and the section is admitted.
+func TestRawHeadingTitleSurvivesInlineMarkup(t *testing.T) {
+	rows := map[string]string{
+		"an anchor before the text":  "<h2><a id=\"x\"></a>Audit Notes</h2>\n\n" + sentinelAuditNotes + "\n",
+		"emphasis on the first word": "<h2><em>Audit</em> Notes</h2>\n\n" + sentinelAuditNotes + "\n",
+	}
+	for what, body := range rows {
+		root := fixtureRepo(t)
+		writeFile(t, root, ".abcd/development/specs/open/spc-28-inline.md",
+			"---\nid: spc-28\n---\n\n# A spec\n\nProse.\n\n"+body)
+		gitCommitAll(t, root)
+		refusesOrWithholds(t, root, "a raw heading with "+what, sentinelAuditNotes)
+	}
+}
+
+// TestIndentedEllipsisDoesNotCloseTheBlock: YAML closes a document with `...` at
+// column 0. Trimming indentation first made an ellipsis inside a block scalar
+// close the block, and the file was refused for a shape it does not have.
+func TestIndentedEllipsisDoesNotCloseTheBlock(t *testing.T) {
+	root := fixtureRepo(t)
+	spcWithFrontmatter(t, root, "spc-29-ellipsis.md",
+		"---\nid: spc-29\nsummary: |\n  a first line\n  ...\n  a last line\n---\n")
+	mustAssemble(t, root, "an indented ellipsis inside a block scalar")
+}
+
+// TestBodyRulesAreNotFrontmatter: the stripper recognises a block only at line
+// 0, so anything else that opens with three dashes is a thematic break. Reading
+// the first `---` found ANYWHERE as a frontmatter opener turned an ordinary
+// documentation page into a refusal.
+func TestBodyRulesAreNotFrontmatter(t *testing.T) {
+	rows := map[string]string{
+		"a lone thematic break":        "# A page\n\nProse.\n\n---\n\nMore prose.\n",
+		"a break above an image line":  "# A page\n\nProse.\n\n---\n\n![a diagram](x.svg)\n\nMore prose.\n",
+		"a break above an anchor line": "# A page\n\nProse.\n\n---\n\n&mdash; an aside\n\nMore prose.\n",
+		"a break above a dots line":    "# A page\n\nProse.\n\n---\n\n...and it continues.\n",
+	}
+	for what, body := range rows {
+		root := fixtureRepo(t)
+		writeFile(t, root, "docs/reference/page.md", body)
+		gitCommitAll(t, root)
+		mustAssemble(t, root, what)
+	}
+}
+
+// TestFrontmatterCloserIsNotASetextUnderline: the closing `---` sits directly
+// under the last frontmatter line, so reading it as an underline makes every
+// record whose last key happens to name an excluded heading refuse.
+func TestFrontmatterCloserIsNotASetextUnderline(t *testing.T) {
+	root := fixtureRepo(t)
+	spcWithFrontmatter(t, root, "spc-30-closer.md", "---\nid: spc-30\nAudit Notes\n---\n")
+	mustAssemble(t, root, "a frontmatter closer under a column-0 last line")
+}

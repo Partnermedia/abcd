@@ -63,6 +63,13 @@ format character, which slugs differently because the comparison is over code
 points; and a double-encoded character reference, which decodes to the literal
 text it renders as and is therefore a different heading, left as one on purpose.
 
+Two further residues are shared with the site renderer and pre-date this
+instrument. A fence delimiter indented four spaces is accepted here as a fence,
+where CommonMark reads an indented code block, so a heading between two such
+lines is masked and not seen. And a double-quoted scalar continued across lines,
+carrying a brace on a continuation line, refuses: the scan reads one line at a
+time, and the closing quote is not on it.
+
 The heading signal is scoped to markdown. A heading and a frontmatter key are
 things a record carries, and a source or configuration file carries neither, so
 those travel whole with no section scan run over them. Within markdown a heading
