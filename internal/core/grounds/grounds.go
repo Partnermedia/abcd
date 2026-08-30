@@ -52,10 +52,13 @@ const (
 // Vocabulary is the closed set, in the order a surface should offer it. The two
 // refusals that reject a TOKEN -- Parse's grammar refusal and ParseToken's --
 // render it (vocabularyList), so a caller told their token is wrong is told
-// which tokens are right. The package's other eleven refusals speak about the
-// TEXT rather than the token and render nothing of the kind; the earlier
-// spelling of this comment claimed every refusal rendered it, which was the
-// same overclaim it was written to correct (iss-2608301908284034).
+// which tokens are right. The package's other eleven refusals render nothing of
+// the kind -- and that is all this comment claims about them. Two earlier
+// spellings each replaced an overclaim with a smaller one: first that every
+// refusal rendered the list, then that the other eleven all speak about the
+// text, which is false of the three in record.go that speak about the record's
+// structure and one of which ends "the grounds text is not the fault"
+// (iss-2608301908284034, iss-2608301918362294).
 //
 // It is not yet what the surfaces read: the CLI's flag descriptions and usage
 // strings, and the ledger's own missing-grounds refusal, each spell the three

@@ -46,3 +46,19 @@ the new token, while the refusal it declines to raise still says the text only
 repeats the vocabulary. So the count is not five edits in code but six, and this
 is the one to consolidate first.
 
+Amended again 2026-08-30, and this is the amendment that says stop amending.
+
+The previous amendment claimed the enumeration missed "a copy" and put the count
+at six code sites. It is at least SEVEN, plus two doc sites nobody listed:
+`internal/core/intent/ready.go`'s `groundsRemedy` -- live, printed to the
+operator by the readiness gate, and whose own doc calls itself "the one spelling
+of how a ground is recorded" while four `cli.go` copies falsify that --
+`commands/capture.md`, and `internal/README.md`. A tree sweep finds twelve files
+carrying a literal spelling.
+
+**Do not amend this list again by hand.** Three consecutive corrections have each
+introduced a fresh error, because a prose enumeration of copies cannot fail and
+so cannot be maintained. The remedy is iss-2608301918362294: make it executable,
+and decide there what counts as a copy, since the package that defines the tokens
+legitimately spells them.
+
