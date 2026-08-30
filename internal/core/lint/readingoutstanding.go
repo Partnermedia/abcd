@@ -54,11 +54,14 @@ var (
 // admissionKey is the pair an admission actually answers: the RUN whose candidate
 // set it joins, and the PROPOSAL it admits.
 //
-// The proposal alone is not a key. Reading ids are minted per run and collide
-// across runs by construction (iss-2608300227228575), so an admission filed under
-// one run naming an id that belongs to another silenced the other run's item —
-// the report going quiet about a proposal nobody had admitted, which is the one
-// answer this leg exists to prevent (iss-2608300935215868).
+// The proposal alone is not a key. Keying on it alone made a proposal id a GLOBAL
+// silencer: an admission filed under one run naming an id that belongs to another
+// silenced the other run's item — the report going quiet about a proposal nobody
+// had admitted, which is the one answer this leg exists to prevent
+// (iss-2608300935215868). Reading ids do NOT collide across runs —
+// mintUnusedItemID probes the whole ledger under its lock and redraws on a hit
+// (iss-2608300227228575) — so the pair is what identifies the admission, never
+// what disambiguates the id.
 type admissionKey struct {
 	run      string
 	proposal string

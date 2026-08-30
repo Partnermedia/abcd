@@ -7,6 +7,10 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-189-round-3-security"
 found_at: "internal/core/lint/schema.go"
+resolution: "The blocker and the six comments that echoed it now state only the consequence the walk establishes: the reader keys the family on the (bucket, target) pair, so a record reaching across buckets is keyed on a pair nothing queries. The minting clause is gone from all seven sites rather than scoped to a family where it is equally false, which is how the previous spelling survived. The vacuous negative assertion the deletion would have created is re-anchored on the new wording."
+impact: internal
+resolved_by:
+  intent: "itd-189"
 ---
 
 the join's blocker message asserts per-bucket id minting that the same rule refuses as a fault and that the branch base already made false

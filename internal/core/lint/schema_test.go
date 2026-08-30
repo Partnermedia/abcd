@@ -1520,8 +1520,8 @@ func TestAbsentAndEmptyRequiredPropertiesGiveDifferentReasons(t *testing.T) {
 // (iss-2608301327013320).
 func TestAdmissionNamingAnotherRunsProposalIsAFinding(t *testing.T) {
 	root := admissionCorpus(t)
-	// A second run with its own proposal. Reading ids are minted per run, so
-	// rdi-7 belongs to rdg-9 and to nothing else.
+	// A second run with its own proposal. rdi-7 is filed under rdg-9 and belongs
+	// to that run alone.
 	writeFile(t, root, "work/issues/readings/rdg-9/rdi-7.md",
 		"---\nschema_version: 1\nid: rdi-7\nrun: rdg-9\nmanifest: sha256:feed\nposition: widening\n"+
 			"regime: constitutive\npattern: a stated constraint\n---\n\n")
@@ -1546,6 +1546,43 @@ func TestAdmissionNamingAnotherRunsProposalIsAFinding(t *testing.T) {
 	}
 	if n := countRule(fs, ruleRecordSchema); n != 1 {
 		t.Fatalf("expected exactly 1 finding (the cross-run join), got %d: %+v", n, fs)
+	}
+}
+
+// The blocker states the CONSEQUENCE the walk establishes and nothing more. Its
+// previous spellings asserted a mechanism instead — that ids in the family are
+// minted per bucket and collide across them — which this same rule refuses as a
+// fault 440 lines away (the duplicate-ordinal leg fires on a cross-run rdi), and
+// which mintUnusedItemID had already made false before this branch began: it
+// probes every run under the ledger lock and redraws on a hit
+// (iss-2608300227228575).
+//
+// Scoping that claim to the one family where it was believed true is how the
+// round before last closed it (iss-2608301411017768), which is exactly why it
+// survived to be found again. So this test pins the WORDING: a message that
+// reintroduces the mechanism fails here, rather than being rediscovered as a
+// fresh finding a round later (iss-2608301519253368).
+func TestBucketJoinBlockerAssertsNoIDCollision(t *testing.T) {
+	root := admissionCorpus(t)
+	writeFile(t, root, "work/issues/readings/rdg-9/rdi-7.md",
+		"---\nschema_version: 1\nid: rdi-7\nrun: rdg-9\nmanifest: sha256:feed\nposition: widening\n"+
+			"regime: constitutive\npattern: a stated constraint\n---\n\n")
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-3.md",
+		"---\nschema_version: 1\nid: adm-3\nrun: rdg-1\nproposal: rdi-7\n"+
+			"grounds: the configuration it admits is one the frame does not already hold\n---\n\n")
+
+	fs, err := Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rel := filepath.Join("work", "issues", "admissions", "rdg-1", "adm-3.md")
+	if !findingWith(fs, rel, ruleRecordSchema, "keyed on a pair nothing ever queries") {
+		t.Fatalf("the blocker must state the consequence the walk establishes: %+v", fs)
+	}
+	for _, mechanism := range []string{"minted per", "collide", "collision", "allocate the same"} {
+		if findingWith(fs, rel, ruleRecordSchema, mechanism) {
+			t.Errorf("the blocker asserts a minting mechanism (%q) that is not the case: %+v", mechanism, fs)
+		}
 	}
 }
 
@@ -1584,16 +1621,15 @@ func TestJoinsResolveARetiredHandleTheWayCrossReferencesDo(t *testing.T) {
 	}
 }
 
-// The bucket comparison speaks about a mechanism that belongs to ONE family: a
-// reading id is minted per run, so two runs allocate the same rdi-N and an
-// admission reaching into another run is keyed on a pair nothing queries. Neither
-// half of that is true of the issue ledger — an issue id is timestamp-minted
-// globally and survives a move between status directories, and the outstanding
-// report walks reading items only and never reports an issue at all.
+// The bucket comparison speaks about a mechanism that belongs to ONE family: the
+// outstanding report keys reading items on the run they sit in, so an admission
+// reaching into another run is keyed on a pair nothing queries. That is not true
+// of the issue ledger — no reader keys an issue on its status directory, and the
+// outstanding report walks reading items only and never reports an issue at all.
 //
 // So the join is scoped to the family whose mechanism it describes, and a target
 // of any other family returns to the silence it had before the leg existed: the
-// value is wrong for a different reason, and inventing a collision the operator
+// value is wrong for a different reason, and inventing a consequence the operator
 // then goes looking for is the confident false statement this rule must not make
 // (iss-2608301411017768).
 func TestSameBucketJoinIsSilentOnACrossFamilyTarget(t *testing.T) {
@@ -1608,8 +1644,8 @@ func TestSameBucketJoinIsSilentOnACrossFamilyTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	rel := filepath.Join("work", "issues", "admissions", "rdg-1", "adm-3.md")
-	if findingWith(fs, rel, ruleRecordSchema, "minted per bucket") {
-		t.Errorf("issue ids are not minted per status directory, and the report never names an issue; "+
+	if findingWith(fs, rel, ruleRecordSchema, "keys it on the pair") {
+		t.Errorf("no reader keys an issue on its status directory, and the report never names an issue; "+
 			"the bucket leg must not describe that mechanism over a target of another family: %+v", fs)
 	}
 	if n := countRule(fs, ruleRecordSchema); n != 0 {
