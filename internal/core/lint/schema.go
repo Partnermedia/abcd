@@ -847,16 +847,19 @@ func checkRecordUnknownFields(r schemaRecord, severity string) []Finding {
 //
 // The first is SPELLING, and it is asked only of a join that declares a family
 // (sameBucketAs): such a join's value is a handle of that family by declaration,
-// so it is judged verbatim — the family's own prefix in lower case, one hyphen,
-// an unpadded ordinal, and nothing around it. It is judged as a STRING because
-// what reads the family matches it as one: the outstanding report keys the
-// admitted set on the value as written (admittedProposals), while the two
-// questions below parse it as a handle and compare its ordinal as a number. Six
-// spellings fell between the two readings and were green. `RDI-2`, `Rdi-2` and
-// `rdi-02` parsed, resolved and matched their bucket, so the gate approved them;
-// a space inside the quotes on either side, and bare prose, parsed as no handle
-// at all and took the silence prose is owed. Every one of them admitted nothing
-// (iss-2608301519255871).
+// so it is judged as a STRING, because what reads the family matches it as one —
+// the outstanding report keys the admitted set on the value as written
+// (admittedProposals), while the questions below parse it as a handle and resolve
+// its ordinal as a number. Six spellings fell between the two readings and were
+// green. `RDI-2`, `Rdi-2` and `rdi-02` parsed, resolved and matched their bucket,
+// so the gate approved them; a space inside the quotes on either side, and bare
+// prose, parsed as no handle at all and took the silence prose is owed. Every one
+// of them admitted nothing (iss-2608301519255871).
+//
+// It is asked in two places, because the two halves need different evidence. What
+// the VALUE alone settles — the family's own prefix, lower case, nothing around
+// it — is asked here. Whether its PADDING is the padding that admits is a fact
+// about the target's FILE, so it is asked once the target is resolved, below.
 //
 // The second is PRESENCE: a target that is not in the corpus joins nothing.
 //
@@ -886,8 +889,8 @@ func checkRecordJoins(r schemaRecord, index map[recordRef]schemaRecord, retired 
 			line = 1
 		}
 		// The spelling, where the join declares the family its value belongs to.
-		// Asked before anything is resolved, because every later half reads the
-		// value as a parsed handle and the reader of the family reads it as a
+		// Asked before anything is resolved, because every later question reads the
+		// value as a parsed handle while the reader of the family reads it as a
 		// string: a value the two read differently is one the gate approves and no
 		// reader can act on.
 		if join.sameBucketAs != "" && !spellsHandleOf(join.sameBucketAs, value) {
@@ -895,10 +898,9 @@ func checkRecordJoins(r schemaRecord, index map[recordRef]schemaRecord, retired 
 			out = append(out, Finding{
 				File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: cfg.Severity,
 				Message: join.field + " declares '" + value + "', which is not a " + noun + " handle (want " +
-					join.sameBucketAs + "-<N>, spelled as the " + noun + "'s own id is); what reads this " +
-					r.noun() + " matches the value as written against the " + noun +
-					"'s id, so a spelling that is not the " + noun + "'s own admits nothing and the " + noun +
-					" it names goes on being reported as unanswered",
+					join.sameBucketAs + "-<N>, lower case with nothing around it); what reads this " +
+					r.noun() + " matches the value as written against the name the " + noun +
+					"'s own file carries, so a value that is not one of those names admits nothing",
 			})
 			continue
 		}
@@ -935,6 +937,32 @@ func checkRecordJoins(r schemaRecord, index map[recordRef]schemaRecord, retired 
 			})
 			continue
 		}
+		// The PADDING half of the spelling question, which only the resolved target
+		// can answer. What reads the family keys the record on its FILENAME — the
+		// outstanding report captures the item name out of `rdi-<N>.md` and never
+		// opens the item's own id property — while this rule's filename ↔ id leg
+		// compares those two numerically, so a zero-padded FILE is legitimate. Which
+		// spelling admits is therefore decided by the file, not by the join, and it
+		// is read off the file.
+		//
+		// A target whose filename is not itself a bare handle is left in the silence
+		// it had: the reader of the family does not read such a file at all, so no
+		// spelling of this join admits it and none is more right than another. That
+		// divergence between this rule's filename grammar and the report's is
+		// iss-2608300929274006's to close.
+		if join.sameBucketAs != "" {
+			stem := strings.TrimSuffix(filepath.Base(target.rel), ".md")
+			if spellsHandleOf(join.sameBucketAs, stem) && value != stem {
+				out = append(out, Finding{
+					File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: cfg.Severity,
+					Message: join.field + " declares '" + value + "' while the " + target.noun() +
+						" it names is filed as '" + filepath.Base(target.rel) + "'; what reads this " + r.noun() +
+						" matches the value as written against the name that file carries, so this spelling admits " +
+						"nothing and the " + target.noun() + " it names goes on being reported as unanswered",
+				})
+				continue
+			}
+		}
 		// The bucket obligation, where the join declares one. The target is of the
 		// declared family by construction: the spelling leg above refused every value
 		// that is not a handle of it, and the index is keyed on the parsed handle.
@@ -959,14 +987,19 @@ func checkRecordJoins(r schemaRecord, index map[recordRef]schemaRecord, retired 
 }
 
 // spellsHandleOf reports whether value is VERBATIM one family's handle: the
-// family's own prefix, one hyphen, and an unpadded ordinal, with nothing around
-// it. It is deliberately narrower than anyHandleFullRe, which is case-insensitive
-// and pads freely because it exists to RESOLVE a handle to a record. This asks
-// the other question — is this the spelling the family's own reader matches — and
-// the two answers differed on six values (iss-2608301519255871).
+// family's own prefix, one hyphen, and digits, with nothing around it. It is
+// deliberately narrower than anyHandleFullRe, which is case-insensitive because
+// it exists to RESOLVE a handle to a record. This asks the other question — is
+// this a name the family's own reader could match — and the two answers differed
+// on six values (iss-2608301519255871).
+//
+// It says nothing about PADDING, which is not a property of the value: `rdi-02`
+// and `rdi-2` are one id written two ways, and which of them the reader matches
+// is decided by the file the target sits in. That comparison needs the resolved
+// target and is made against its filename.
 func spellsHandleOf(family, value string) bool {
 	rest, ok := strings.CutPrefix(value, family+"-")
-	if !ok || rest == "" || rest[0] == '0' {
+	if !ok || rest == "" {
 		return false
 	}
 	for i := 0; i < len(rest); i++ {

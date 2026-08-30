@@ -7,7 +7,7 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-189-round-3-security"
 found_at: "internal/core/lint/schema.go"
-resolution: "checkRecordJoins judges the SPELLING of a join that declares a family before it resolves anything: the family's own prefix, lower case, unpadded, and nothing around it. The six spellings that resolved numerically while the outstanding report keyed the value as a string are findings, and a cross-family handle with them; occasioned_by, which declares no family, keeps its prose tolerance."
+resolution: "checkRecordJoins judges the SPELLING of a join that declares a family, in two places. What the value alone settles - the family's own prefix, lower case, nothing around it - is judged before anything is resolved, and takes five of the six spellings plus a cross-family handle. Whether the PADDING is the padding that admits is a fact about the target's FILE, since the family's reader keys on the filename and never opens the target's id property, so it is judged against the resolved target's filename and takes the sixth. A target whose filename is not itself a bare handle is one that reader does not read at all and stays silent (iss-2608300929274006). occasioned_by, which declares no family, keeps its prose tolerance."
 impact: fix
 resolved_by:
   intent: "itd-189"
