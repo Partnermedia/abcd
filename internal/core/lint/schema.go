@@ -637,11 +637,19 @@ func checkRecordFilenameSlug(r schemaRecord, severity string) []Finding {
 // surface — while sitting in the ledger, counted by nothing, reported by nothing.
 // A record nobody can read is not a lax record, it is a lost one.
 //
-// A property present but empty (`schema_version:`) counts as missing for the same
-// reason: the reader cannot make a value out of it either. "Empty" is judged on
-// the value the YAML scalar carries rather than on its bytes — see isAbsentValue
-// for the quoted spellings, and blockScalarIndicatorRe for the one shape whose
-// value is not on the key's own line at all.
+// A property present but EMPTY is a finding too, on different grounds, and the
+// two say so differently. The reader's required-property check tests presence and
+// type and never judges content (capture's validateStrict), so it refuses an
+// omitted property and ACCEPTS a blank one — telling the author of a blank that
+// their record is being skipped would send them to look for a refusal that never
+// happens, which is the confident false statement this rule must not make. A
+// blank is refused on its own honest grounds: a required property exists because
+// the record has to state something, and a blank states nothing while every
+// surface renders it as answered.
+//
+// "Empty" is judged on the value the YAML scalar carries rather than on its bytes
+// — see isAbsentValue for the quoted spellings, and blockScalarIndicatorRe for the
+// one shape whose value is not on the key's own line at all.
 func checkRecordRequiredFields(r schemaRecord, severity string) []Finding {
 	var out []Finding
 	for _, field := range r.store.requiredFields {
@@ -653,11 +661,17 @@ func checkRecordRequiredFields(r schemaRecord, severity string) []Finding {
 		if line == 0 {
 			line = 1
 		}
+		msg := "frontmatter is missing required property '" + field + "'; the " + r.store.noun +
+			" reader validates before it reads, so a record without it is skipped — invisible to every " +
+			r.store.noun + " surface while it still sits in the store"
+		if present {
+			msg = "required property '" + field + "' carries no value once its YAML scalar is read; " +
+				"the schema declares it required because the record has to state it, and a blank states nothing — " +
+				"the " + r.store.noun + " reader type-checks a present property without judging it, so this record " +
+				"is read and every surface renders the property as answered"
+		}
 		out = append(out, Finding{
-			File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: severity,
-			Message: "frontmatter is missing required property '" + field + "'; the " + r.store.noun +
-				" reader validates before it reads, so a record without it is skipped — invisible to every " +
-				r.store.noun + " surface while it still sits in the store",
+			File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: severity, Message: msg,
 		})
 	}
 	return out
@@ -922,10 +936,10 @@ func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
 // surrounding whitespace and quotes stripped, so a quoted enum
 // (`severity: "minor"`) compares unquoted.
 //
-// It is the package's ONE scalar reader, and it mirrors capture's parse path
-// deliberately: that path trims the raw value before decoding and then strips the
-// quotes WITHOUT trimming again, so padding inside the quotes survives. This does
-// the same. Trimming it away here would call `severity: "  minor  "` clean while
+// It is the package's ONE scalar reader. On WHITESPACE it matches capture's parse
+// path deliberately: that path trims the raw value before decoding and then strips
+// the quotes WITHOUT trimming again, so padding inside the quotes survives. This
+// does the same. Trimming it away here would call `severity: "  minor  "` clean while
 // capture's enum lookup refuses the record and skips it — lint-green and
 // invisible to every ledger surface, which is the one silence this rule exists to
 // break. Whether padding is a value is the FIELD's question, and the two fields
@@ -941,6 +955,14 @@ func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
 // either end: a value that is itself two apostrophes inside double quotes is a
 // value, and eating it down to nothing puts a missing-property blocker on a
 // property the record plainly carries.
+//
+// On QUOTING the parity is incomplete, and that is a KNOWN GAP rather than a
+// claim: this strips a single-quote pair, capture's decodeScalar unquotes only
+// double quotes, so `severity: 'minor'` is green here and refused there. The
+// divergence is pre-existing and cuts across every shape check that reads a
+// scalar, which is why it is recorded as iss-2608300205044566 — naming this
+// function as the one place to fix it — rather than closed from inside a change
+// about required fields.
 func issueScalar(value string) string {
 	v := strings.TrimSpace(value)
 	if len(v) >= 2 && (v[0] == '"' || v[0] == '\'') && v[len(v)-1] == v[0] {
