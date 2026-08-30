@@ -223,6 +223,12 @@ func scopeConditionsCheck(it Intent, claims Claims) ReadyCheck {
 		c.Remedy = scopeConditionsRemedy
 		return c
 	}
+	if multi := MultiplyMarkedConditions(claims.Conditions); len(multi) > 0 {
+		c.OK = false
+		c.Detail = fmt.Sprintf("condition(s) %s carry more than one identity", joinInts(multi))
+		c.Remedy = "delete the surplus `<!-- cond: … -->` marker(s), leaving each condition exactly one"
+		return c
+	}
 	if unmarked := UnmarkedConditionOrdinals(claims.Conditions); len(unmarked) > 0 {
 		c.OK = false
 		c.Detail = fmt.Sprintf("condition(s) %s carry no identity marker", joinInts(unmarked))

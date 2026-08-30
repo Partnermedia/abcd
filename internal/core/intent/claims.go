@@ -55,11 +55,18 @@ var (
 	mechanismHeadingRe = regexp.MustCompile(`^#{1,6}\s+Mechanism\s*$`)
 	// scopeHeadingRe matches the `## Scope Conditions` heading (any depth).
 	scopeHeadingRe = regexp.MustCompile(`^#{1,6}\s+Scope Conditions\s*$`)
-	// condMarkerRe matches the identity marker closing a condition bullet's first
-	// line. The HTML-comment form is this repository's machine-marker idiom (see
-	// audit.go's `<!-- abcd-review: … -->`): invisible once rendered, so the
-	// bullet's prose stays exactly what a human wrote.
-	condMarkerRe = regexp.MustCompile(`\s*<!-- cond: (cond-[0-9]{16}) -->\s*$`)
+	// condMarkerRe matches the identity marker ANYWHERE inside a condition bullet
+	// — first physical line or a folded continuation line. The HTML-comment form
+	// is this repository's machine-marker idiom (see audit.go's
+	// `<!-- abcd-review: … -->`): invisible once rendered, so the bullet's prose
+	// stays exactly what a human wrote. It is deliberately not anchored to the end
+	// of a line: an editor that rewraps an 80-column bullet moves the marker, and
+	// a positional read would orphan every disposition keyed on it and then mint a
+	// second identity for the same condition (iss-2608300235377731).
+	condMarkerRe = regexp.MustCompile(`<!-- cond: (cond-[0-9]{16}) -->`)
+	// spaceRunRe collapses the whitespace left behind when a marker is excised
+	// from the middle of a line, and by folding a wrapped bullet into one string.
+	spaceRunRe = regexp.MustCompile(`\s+`)
 	// bulletPrefixRe strips a top-level list marker to leave the bullet's prose.
 	bulletPrefixRe = regexp.MustCompile(`^[-*]\s+`)
 	// anyBulletRe matches a list item at ANY indent. A line that is a bullet ends
@@ -76,6 +83,10 @@ type ScopeCondition struct {
 	Ordinal int    `json:"ordinal"` // 1-based position in the section
 	ID      string `json:"id"`      // cond-<16 digits>, empty when unmarked
 	Text    string `json:"text"`    // the bullet's prose, marker removed
+	// ExtraIDs holds every well-formed marker after the first. A bullet carrying
+	// two identities is an ambiguity the gate names: a disposition keyed on one of
+	// them would attach to whichever the reader reached first.
+	ExtraIDs []string `json:"extra_ids,omitempty"`
 }
 
 // Claims is what one intent record says about its mechanism and context claims.
@@ -146,41 +157,68 @@ func sectionIsPrompt(lines []string, headRe *regexp.Regexp) bool {
 }
 
 // parseConditions enumerates the top-level bullets of `## Scope Conditions` in
-// order, each with the identity marker closing its first line (when stamped) and
-// its prose. Continuation lines — the wrap of a long bullet — are folded into
-// the prose; an indented sub-bullet is detail of its parent and ends it, exactly
-// as bulletRe already rules for acceptance criteria.
+// order, each with its identity marker (wherever in the bullet it sits) and its
+// prose. Continuation lines — the wrap of a long bullet — are folded into the
+// prose; an indented sub-bullet is detail of its parent and ends it, exactly as
+// bulletRe already rules for acceptance criteria.
 func parseConditions(lines []string) []ScopeCondition {
 	start, end, ok := sectionLineRange(lines, scopeHeadingRe)
 	if !ok {
 		return []ScopeCondition{}
 	}
 	conds := []ScopeCondition{}
+	for _, b := range conditionBlocks(lines, start, end) {
+		ids, text := readConditionBlock(lines, b)
+		c := ScopeCondition{Ordinal: len(conds) + 1, Text: text}
+		if len(ids) > 0 {
+			c.ID, c.ExtraIDs = ids[0], ids[1:]
+		}
+		conds = append(conds, c)
+	}
+	return conds
+}
+
+// conditionBlock is one top-level bullet and the continuation lines folded into
+// it, as the half-open line range [start, end).
+type conditionBlock struct{ start, end int }
+
+// conditionBlocks splits a section body into its top-level bullets. It is the
+// single notion of where a condition starts and stops, so the reader and the
+// stamper can never disagree about which lines belong to which bullet.
+func conditionBlocks(lines []string, start, end int) []conditionBlock {
+	var blocks []conditionBlock
 	for i := start; i < end; i++ {
-		ln := strings.TrimRight(lines[i], "\r")
-		if !bulletRe.MatchString(ln) {
+		if !bulletRe.MatchString(strings.TrimRight(lines[i], "\r")) {
 			continue
 		}
-		id := ""
-		if m := condMarkerRe.FindStringSubmatch(ln); m != nil {
-			id = m[1]
-			ln = condMarkerRe.ReplaceAllString(ln, "")
-		}
-		parts := []string{strings.TrimSpace(bulletPrefixRe.ReplaceAllString(ln, ""))}
-		for j := i + 1; j < end; j++ {
+		j := i + 1
+		for ; j < end; j++ {
 			cont := strings.TrimRight(lines[j], "\r")
 			if strings.TrimSpace(cont) == "" || anyBulletRe.MatchString(cont) {
 				break
 			}
-			parts = append(parts, strings.TrimSpace(cont))
 		}
-		conds = append(conds, ScopeCondition{
-			Ordinal: len(conds) + 1,
-			ID:      id,
-			Text:    strings.TrimSpace(strings.Join(parts, " ")),
-		})
+		blocks = append(blocks, conditionBlock{start: i, end: j})
 	}
-	return conds
+	return blocks
+}
+
+// readConditionBlock returns every well-formed identity marker in the bullet, in
+// the order they appear, and the bullet's prose with those markers excised.
+func readConditionBlock(lines []string, b conditionBlock) (ids []string, text string) {
+	var parts []string
+	for i := b.start; i < b.end; i++ {
+		ln := strings.TrimRight(lines[i], "\r")
+		for _, m := range condMarkerRe.FindAllStringSubmatch(ln, -1) {
+			ids = append(ids, m[1])
+		}
+		ln = condMarkerRe.ReplaceAllString(ln, " ")
+		if i == b.start {
+			ln = bulletPrefixRe.ReplaceAllString(ln, "")
+		}
+		parts = append(parts, ln)
+	}
+	return ids, strings.TrimSpace(spaceRunRe.ReplaceAllString(strings.Join(parts, " "), " "))
 }
 
 // DuplicateConditionIDs returns the identity markers carried by more than one
@@ -200,6 +238,18 @@ func DuplicateConditionIDs(conds []ScopeCondition) []string {
 		}
 	}
 	return dupes
+}
+
+// MultiplyMarkedConditions returns the 1-based positions of bullets carrying
+// more than one identity.
+func MultiplyMarkedConditions(conds []ScopeCondition) []int {
+	var out []int
+	for _, c := range conds {
+		if len(c.ExtraIDs) > 0 {
+			out = append(out, c.Ordinal)
+		}
+	}
+	return out
 }
 
 // UnmarkedConditionOrdinals returns the 1-based positions of the conditions no
@@ -235,11 +285,15 @@ func stampScopeConditions(content string, minter recordid.Minter) (string, int, 
 		if c.ID != "" {
 			used[c.ID] = true
 		}
+		for _, extra := range c.ExtraIDs {
+			used[extra] = true
+		}
 	}
 	stamped := 0
-	for i := start; i < end; i++ {
-		trimmed := strings.TrimRight(lines[i], "\r")
-		if !bulletRe.MatchString(trimmed) || condMarkerRe.MatchString(trimmed) {
+	for _, b := range conditionBlocks(lines, start, end) {
+		// Marker-free bullets only. A bullet that already carries an identity —
+		// wherever in its wrapped text that identity sits — is never re-minted.
+		if ids, _ := readConditionBlock(lines, b); len(ids) > 0 {
 			continue
 		}
 		id, err := mintConditionID(minter, used)
@@ -247,6 +301,8 @@ func stampScopeConditions(content string, minter recordid.Minter) (string, int, 
 			return "", 0, err
 		}
 		used[id] = true
+		i := b.start
+		trimmed := strings.TrimRight(lines[i], "\r")
 		cr := ""
 		if strings.HasSuffix(lines[i], "\r") {
 			cr = "\r"

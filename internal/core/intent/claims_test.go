@@ -395,3 +395,72 @@ func TestPlanOnAPlannedRecordWithNothingToStampRefuses(t *testing.T) {
 		})
 	}
 }
+
+// TestConditionMarkerSurvivesAReflow is iss-2608300235377731: an editor that
+// rewraps an 80-column bullet moves the marker onto a continuation line. The
+// identity is bytes in the BULLET, not bytes at the end of one physical line —
+// reading it positionally would let a reflow orphan every disposition keyed on
+// it, and would then mint a second id for the same condition.
+func TestConditionMarkerSurvivesAReflow(t *testing.T) {
+	const id = "cond-2608300102030405"
+	flat := "- holds only where a POSIX shell exists <!-- cond: " + id + " -->\n"
+	reflowed := "- holds only where a POSIX shell\n  exists <!-- cond: " + id + " -->\n"
+	onOwnLine := "- holds only where a POSIX shell exists\n  <!-- cond: " + id + " -->\n"
+
+	for name, body := range map[string]string{"flat": flat, "reflowed": reflowed, "marker on its own line": onOwnLine} {
+		t.Run(name, func(t *testing.T) {
+			conds := ParseClaims(claimRecord(nil, str(body))).Conditions
+			if len(conds) != 1 {
+				t.Fatalf("got %d conditions, want 1: %+v", len(conds), conds)
+			}
+			if conds[0].ID != id {
+				t.Fatalf("id = %q, want %q — a reflow must not orphan the identity", conds[0].ID, id)
+			}
+			if conds[0].Text != "holds only where a POSIX shell exists" {
+				t.Fatalf("text = %q, want the prose with the marker stripped", conds[0].Text)
+			}
+			_, n, err := stampScopeConditions(claimRecord(nil, str(body)), fixedMinter(7))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if n != 0 {
+				t.Fatalf("stamped %d — an already-identified bullet must never be re-minted", n)
+			}
+		})
+	}
+}
+
+// TestConditionMarkerFollowedByProse: prose appended after the marker is still
+// the same condition, and the marker is still its identity.
+func TestConditionMarkerFollowedByProse(t *testing.T) {
+	const id = "cond-2608300102030405"
+	body := "- holds only where a POSIX <!-- cond: " + id + " --> shell exists\n"
+	conds := ParseClaims(claimRecord(nil, str(body))).Conditions
+	if len(conds) != 1 || conds[0].ID != id {
+		t.Fatalf("conditions = %+v, want one carrying %s", conds, id)
+	}
+	if conds[0].Text != "holds only where a POSIX shell exists" {
+		t.Fatalf("text = %q, want the marker excised from the prose", conds[0].Text)
+	}
+}
+
+// TestConditionWithTwoMarkersIsAFault: two well-formed markers in one bullet is
+// an ambiguity, not a choice — a disposition would attach to whichever the
+// reader reached first. The bullet is reported and never stamped.
+func TestConditionWithTwoMarkersIsAFault(t *testing.T) {
+	body := "- one condition <!-- cond: cond-2608300102030405 --> <!-- cond: cond-2608300102030406 -->\n"
+	conds := ParseClaims(claimRecord(nil, str(body))).Conditions
+	if len(conds) != 1 {
+		t.Fatalf("got %d conditions, want 1", len(conds))
+	}
+	if len(conds[0].ExtraIDs) != 1 || conds[0].ExtraIDs[0] != "cond-2608300102030406" {
+		t.Fatalf("ExtraIDs = %+v, want the second marker reported", conds[0].ExtraIDs)
+	}
+	_, n, err := stampScopeConditions(claimRecord(nil, str(body)), fixedMinter(7))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("stamped %d — a bullet that already carries markers is never stamped", n)
+	}
+}

@@ -542,3 +542,20 @@ func TestReadyScaffoldPromptIsNotAClaim(t *testing.T) {
 		t.Fatalf("scope_conditions = %+v, want fail naming the unanswered prompt", cond)
 	}
 }
+
+// TestReadyConditionCarryingTwoMarkers: a bullet holding two identities is
+// named by the gate, because nothing downstream can choose between them.
+func TestReadyConditionCarryingTwoMarkers(t *testing.T) {
+	res := readyWithClaims(t, "", "## Scope Conditions\n\n"+
+		"- one condition <!-- cond: cond-2608300102030405 --> <!-- cond: cond-2608300102030406 -->\n\n")
+	if res.Ready {
+		t.Fatal("a bullet with two identities must not be ready")
+	}
+	c := checkByName(t, res, "scope_conditions")
+	if c.OK || !strings.Contains(c.Detail, "1") || !strings.Contains(c.Detail, "more than one identity") {
+		t.Fatalf("scope_conditions = %+v, want fail naming the ambiguous bullet", c)
+	}
+	if c.Remedy == "" {
+		t.Fatal("the fault must carry a remedy")
+	}
+}
