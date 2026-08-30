@@ -6,7 +6,6 @@ import (
 	"path"
 	"regexp"
 	"strings"
-	"sync"
 
 	"github.com/intentdriven/abcd/internal/core/frontmatter"
 	"github.com/intentdriven/abcd/internal/core/site"
@@ -168,18 +167,6 @@ var (
 	// second question, asked against explicitYAMLKeyRe: a `?` line that pattern
 	// cannot fully read is a key this package cannot resolve.
 	questionLineRe = regexp.MustCompile(`^\s*\?(\s|$)`)
-	// quotedSpanRe matches a quoted scalar. The flow scan blanks these before
-	// looking for keys, which is what lets it stay UNANCHORED: anchoring the
-	// scan to a brace at the start of a line fixed the quoted-scalar false
-	// positive by giving up every nested flow shape, and a floor that closes a
-	// false positive by dropping a class is not a trade worth making.
-	// A quote opens a scalar only in SCALAR POSITION: at line start, or after a
-	// colon, brace, bracket, comma or a sequence dash. Treating every quote as an
-	// opener paired an apostrophe in ordinary prose — `note: it's` — with a later
-	// one and blanked the excluded key sitting between them, so the flow scan
-	// never saw it. The double-quoted alternative is escape-aware, and the
-	// single-quoted one honours YAML's doubled-quote escape.
-	quotedSpanRe = regexp.MustCompile(`(?:^|[:{\[,]|-\s)\s*("(?:[^"\\]|\\.)*"|'(?:[^']|'')*')`)
 	// htmlCommentRe and htmlTagRe strip the markup a title can carry without
 	// changing how it reads on the page.
 	htmlCommentRe = regexp.MustCompile(`(?s)<!--.*?-->`)
@@ -193,12 +180,15 @@ var (
 	explicitYAMLKeyRe = regexp.MustCompile(`^\s*\?\s+["']?([A-Za-z_][A-Za-z0-9_-]*)["']?\s*$`)
 	// flowKeyRe matches a key inside a flow mapping, at top level or nested.
 	flowKeyRe = regexp.MustCompile(`[{,]\s*["']?([A-Za-z_][A-Za-z0-9_-]*)["']?\s*:`)
-	// doubleQuotedKeyRe captures a double-quoted key's raw spelling, escapes and
-	// all, so escapedQuotedKey can judge it.
-	doubleQuotedKeyRe = regexp.MustCompile(`^\s*"([^"]*)"\s*:`)
 	// fenceOpenRe matches a fenced code block's delimiter, on the section scan's
 	// own rule so the two agree about what is inside a fence.
 	fenceOpenRe = regexp.MustCompile("^[ \t]*```")
+	// rawHeadingBoundRe matches every candidate end of a raw heading's text: a
+	// closing tag of ANY element, the next heading open, or a blank line. The
+	// element name is CAPTURED so one static pattern serves every element — the
+	// alternative was a pattern compiled per element name and cached forever
+	// under a key the document chooses, which is a store an input can grow.
+	rawHeadingBoundRe = regexp.MustCompile(`(?is)</([a-z][a-z0-9-]*)\s*>|<h[1-6](?:\s[^>]*)?/?>|\n[ \t]*\n`)
 )
 
 // Two shapes this floor does NOT see, disclosed rather than claimed. A heading
@@ -251,7 +241,12 @@ func sameRendering(a, b string) bool {
 func renderedText(title string) string {
 	out := htmlCommentRe.ReplaceAllString(title, "")
 	out = mdLinkRe.ReplaceAllString(out, "$1")
-	out = htmlTagRe.ReplaceAllString(out, "")
+	// A tag is replaced by a SPACE, not by nothing. `<br>` is a line break and
+	// `</em>` closes a word, so dropping either without the boundary it stands
+	// for spells `Audit<br>Notes` as one word and slugs it onto something that is
+	// not the excluded heading — while every renderer, and every reader, sees two
+	// words. A comment is dropped outright, because a comment draws no boundary.
+	out = htmlTagRe.ReplaceAllString(out, " ")
 	return strings.TrimSpace(html.UnescapeString(out))
 }
 
@@ -425,24 +420,123 @@ func verifyRedaction(rel, original, redacted string, keys, headings map[string]b
 	return nil
 }
 
-// blankQuoted replaces every quoted scalar with spaces of the same length, so a
-// scan over the rest of the line cannot see inside a string. The length is kept
-// so a caller counting braces or offsets is measuring the same line it started
-// with.
-func blankQuoted(line string) string {
+// blankQuoted reads one frontmatter line by POSITION rather than by byte. It
+// reports the line with every quoted token's interior blanked to spaces — so a
+// scan over the rest of the line cannot see inside a string — together with the
+// quoted tokens that turned out to be KEYS, each with its quotes still on. The
+// length is kept so a caller counting braces or offsets is measuring the same
+// line it started with.
+//
+// Two rules, one class each.
+//
+// A quote opens a token only in SCALAR POSITION, and a position is decided by a
+// YAML indicator carrying the whitespace YAML requires of it. `:` is a mapping
+// indicator only before whitespace or the end of the line; `-` and `?` are
+// indicators only at the start of a line and before whitespace; `{`, `[` and `,`
+// are indicators wherever they stand; and the start of a line is a position of
+// its own. Reading a bare `:` or a bare `-` as an opener let a quote sitting
+// inside a plain scalar — `a:'b` and `a - 'b` — pair with a later one and blank
+// the excluded key between them, so the flow scan never saw it. Reading EVERY
+// quote as an opener did the same to an apostrophe in ordinary prose.
+//
+// A quoted token followed by a colon is a KEY, not a scalar. Blanking it as a
+// scalar hid `{"origin": x}` from the flow scan entirely, and the excluded key
+// travelled under a manifest asserting its refusal. Such a token is reported by
+// name instead, and its interior is still blanked: the name is the token's own
+// text, so `{"a, origin: b": 1}` names one key called `a, origin: b` — which is
+// what YAML reads there — rather than the key `origin` a scan of the interior
+// would have found.
+//
+// Disclosed: the double-quoted form is escape-aware, as YAML is, so `\"`
+// continues the token. A line whose double-quoted token is never closed is
+// therefore read as unterminated, and NOTHING from the opening quote on is
+// blanked — the fail-closed direction, because the flow scan then reads the rest
+// of the line in full.
+func blankQuoted(line string) (string, []string) {
 	out := []byte(line)
-	for _, m := range quotedSpanRe.FindAllStringSubmatchIndex(line, -1) {
-		// Only the captured SCALAR is blanked, never the opener that introduced
-		// it: blanking the opener too would erase the comma or brace the flow
-		// scan reads the next key by.
-		if len(m) < 4 || m[2] < 0 {
+	var quotedKeys []string
+	scalar := true    // the start of a line is a scalar position
+	lineStart := true // only whitespace and block indicators seen so far
+	for i := 0; i < len(line); {
+		c := line[i]
+		if c == ' ' || c == '\t' {
+			i++
 			continue
 		}
-		for i := m[2]; i < m[3]; i++ {
-			out[i] = ' '
+		if scalar && (c == '"' || c == '\'') {
+			end, ok := quotedEnd(line, i)
+			if !ok {
+				break
+			}
+			if j := skipBlanks(line, end); j < len(line) && line[j] == ':' {
+				quotedKeys = append(quotedKeys, line[i:end])
+			}
+			for k := i + 1; k < end-1; k++ {
+				out[k] = ' '
+			}
+			i, scalar, lineStart = end, false, false
+			continue
 		}
+		switch c {
+		case '{', '[', ',':
+			scalar = true
+		case '}', ']':
+			scalar = false
+		case ':':
+			scalar = i+1 >= len(line) || line[i+1] == ' ' || line[i+1] == '\t'
+		case '-', '?':
+			// A sequence entry or an explicit key opens a position of its own,
+			// and leaves the line still at its start: `- - 'x'` nests.
+			if lineStart && (i+1 >= len(line) || line[i+1] == ' ' || line[i+1] == '\t') {
+				scalar = true
+				i++
+				continue
+			}
+			scalar = false
+		default:
+			scalar = false
+		}
+		lineStart = false
+		i++
 	}
-	return string(out)
+	return string(out), quotedKeys
+}
+
+// quotedEnd reports the offset just past the closing quote of the token opening
+// at i, and whether the token is closed at all. Both YAML escapes are honoured:
+// a backslash escape inside double quotes, a doubled quote inside single ones.
+func quotedEnd(s string, i int) (int, bool) {
+	if s[i] == '"' {
+		for j := i + 1; j < len(s); j++ {
+			switch s[j] {
+			case '\\':
+				j++
+			case '"':
+				return j + 1, true
+			}
+		}
+		return 0, false
+	}
+	for j := i + 1; j < len(s); j++ {
+		if s[j] != '\'' {
+			continue
+		}
+		if j+1 < len(s) && s[j+1] == '\'' {
+			j++
+			continue
+		}
+		return j + 1, true
+	}
+	return 0, false
+}
+
+// skipBlanks returns the offset of the first character at or after i that is not
+// a space or a tab.
+func skipBlanks(s string, i int) int {
+	for i < len(s) && (s[i] == ' ' || s[i] == '\t') {
+		i++
+	}
+	return i
 }
 
 // blockCloser reports whether a line closes a frontmatter block. YAML closes a
@@ -469,43 +563,130 @@ func submatches(m []string) []string {
 	return out
 }
 
-// escapedQuotedKey refuses a double-quoted frontmatter key containing a
-// backslash. YAML decodes escapes inside double quotes, so "ori\u0067in" IS
-// `origin` to the reader and is nothing at all to a pattern over the bytes.
-// Rather than grow a YAML decoder here, the escape itself is the signal: a
-// record has no reason to spell a key that way, and refusing is the fail-closed
-// answer to a name this package cannot resolve.
-func escapedQuotedKey(line string) (string, bool) {
-	m := doubleQuotedKeyRe.FindStringSubmatch(line)
-	if m == nil || !strings.Contains(m[1], `\`) {
-		return "", false
-	}
-	return m[1], true
-}
-
-// rawHeadingEndFor bounds the text one heading element introduces: that
-// element's OWN closing tag, the next heading open, or a blank line.
+// rawHeadingTitleEnds bounds the text one heading element introduces, and
+// returns EVERY reading of that bound rather than one.
 //
-// Bounding at any closing tag instead cut the title at the first inline element
-// inside the heading — `<h2><a id="x"></a>Audit Notes</h2>` ended at `</a>` and
-// yielded nothing at all, and `<h2><em>Audit</em> Notes</h2>` yielded "Audit".
-// Both were admitted. A heading's own close is the only bound that survives the
-// markup a heading is allowed to carry.
-func rawHeadingEndFor(name string) *regexp.Regexp {
-	rawHeadingEndMu.Lock()
-	defer rawHeadingEndMu.Unlock()
-	if re, ok := rawHeadingEnds[name]; ok {
-		return re
+// The hard bound is the element's OWN closing tag or the next heading open,
+// whichever comes first. Bounding at any closing tag instead cut the title at
+// the first inline element inside the heading — `<h2><a id="x"></a>Audit
+// Notes</h2>` ended at `</a>` and yielded nothing at all, and
+// `<h2><em>Audit</em> Notes</h2>` yielded "Audit". Both were admitted. The name
+// is folded against the opener's, so one static pattern serves every element
+// name and nothing is compiled from a name the document chose.
+//
+// A blank line is a SOFT bound, and only that. It is the sole bound an element
+// that is never closed has, so dropping it would admit `<h2>Audit Notes`
+// followed by a paragraph; and it is not a bound at all to a renderer, which
+// reads a blank line inside a heading element as whitespace — so applying it
+// unconditionally emptied the title of `<h2>\n\nAudit Notes</h2>` and admitted
+// that. Neither reading is the heading on its own, so both are returned and the
+// caller refuses on either: a title read two ways is excluded if EITHER way
+// names an excluded heading.
+func rawHeadingTitleEnds(rest, name string) []int {
+	hard, soft := -1, -1
+	for _, m := range rawHeadingBoundRe.FindAllStringSubmatchIndex(rest, -1) {
+		switch {
+		case rest[m[0]] == '\n': // a blank line
+			if soft < 0 {
+				soft = m[0]
+			}
+			continue
+		case m[2] >= 0: // a closing tag, this element's or an inner one's
+			if !strings.EqualFold(rest[m[2]:m[3]], name) {
+				continue
+			}
+		}
+		hard = m[0]
+		break
 	}
-	re := regexp.MustCompile(`(?is)</` + regexp.QuoteMeta(name) + `\s*>|<h[1-6](?:\s[^>]*)?/?>|\n[ \t]*\n`)
-	rawHeadingEnds[name] = re
-	return re
+	if hard < 0 {
+		hard = len(rest)
+	}
+	ends := []int{hard}
+	if soft >= 0 && soft < hard {
+		ends = append(ends, soft)
+	}
+	return ends
 }
 
-var (
-	rawHeadingEndMu sync.Mutex
-	rawHeadingEnds  = map[string]*regexp.Regexp{}
-)
+// maskMarkupData blanks, length-preservingly, the angle brackets that stand
+// INSIDE an HTML comment or inside a quoted attribute value.
+//
+// One class: a `<` or a `>` written in either place is data, and the heading
+// scan read it as structure. A `</h2>` inside a comment or inside a `title`
+// attribute bounded the title short of the heading it belongs to, and a `>`
+// inside an attribute value ended the opening tag early — in each case a heading
+// every browser renders as the excluded one was judged as something else.
+//
+// Only the brackets are blanked, never the whole span: an attribute VALUE is
+// still read by the opener pattern, which recognises `role="heading"` by its
+// value, and a comment's text is still stripped by renderedText. And each
+// masking is bounded by its own terminator and skipped entirely when there is
+// none, so an unterminated comment or attribute value makes the scan see MORE
+// rather than less.
+func maskMarkupData(s string) string {
+	out := []byte(s)
+	for i := 0; i < len(s); {
+		if strings.HasPrefix(s[i:], "<!--") {
+			end := strings.Index(s[i+4:], "-->")
+			if end < 0 {
+				i += 4
+				continue
+			}
+			maskAngles(out, i+4, i+4+end)
+			i += 4 + end + 3
+			continue
+		}
+		if !opensTag(s, i) {
+			i++
+			continue
+		}
+		for i++; i < len(s) && s[i] != '>'; {
+			if s[i] != '=' {
+				i++
+				continue
+			}
+			q := skipBlanks(s, i+1)
+			if q >= len(s) || (s[q] != '"' && s[q] != '\'') {
+				i++
+				continue
+			}
+			end := strings.IndexByte(s[q+1:], s[q])
+			if end < 0 {
+				i++
+				continue
+			}
+			maskAngles(out, q+1, q+1+end)
+			i = q + end + 2
+		}
+		i++
+	}
+	return string(out)
+}
+
+// opensTag reports whether s[i] begins an HTML tag, on htmlTagRe's own rule: a
+// `<` followed by a name, or by a slash and a name. An autolink and a bare `<`
+// in prose open nothing, so neither drags the attribute walk over them.
+func opensTag(s string, i int) bool {
+	if s[i] != '<' {
+		return false
+	}
+	j := i + 1
+	if j < len(s) && s[j] == '/' {
+		j++
+	}
+	return j < len(s) && (s[j] >= 'A' && s[j] <= 'Z' || s[j] >= 'a' && s[j] <= 'z')
+}
+
+// maskAngles blanks the angle brackets in s[from:to], leaving every other byte —
+// newlines included — where it stands.
+func maskAngles(out []byte, from, to int) {
+	for i := from; i < to && i < len(out); i++ {
+		if out[i] == '<' || out[i] == '>' {
+			out[i] = ' '
+		}
+	}
+}
 
 // rawHTMLHeading finds the first raw HTML heading in the unfenced body whose
 // text names an excluded heading, and reports the line it sits on.
@@ -517,8 +698,14 @@ var (
 //
 // A fenced line is replaced by an empty line rather than dropped, so the offset
 // arithmetic keeps working and an example inside a code block still cannot fire.
+//
+// The scan runs over the joined body with its markup DATA masked — see
+// maskMarkupData — because the opener and the bound are structure, and a `<` or
+// a `>` written inside a comment or an attribute value is not. Masking is
+// length- and newline-preserving, so the offsets it hands back still name the
+// line they came from.
 func rawHTMLHeading(lines []string, fenced []bool, offset int, headings map[string]bool) (int, string, bool) {
-	joined := strings.Join(lines, "\n")
+	joined := maskMarkupData(strings.Join(lines, "\n"))
 
 	for _, open := range rawHeadingOpenRe.FindAllStringSubmatchIndex(joined, -1) {
 		line := strings.Count(joined[:open[0]], "\n")
@@ -528,23 +715,21 @@ func rawHTMLHeading(lines []string, fenced []bool, offset int, headings map[stri
 		name := ""
 		for _, g := range [][2]int{{open[2], open[3]}, {open[4], open[5]}} {
 			if g[0] >= 0 {
-				name = strings.ToLower(joined[g[0]:g[1]])
+				name = joined[g[0]:g[1]]
 			}
 		}
 		if name == "" {
 			continue
 		}
 		rest := joined[open[1]:]
-		end := len(rest)
-		if b := rawHeadingEndFor(name).FindStringIndex(rest); b != nil {
-			end = b[0]
-		}
-		title := normaliseHeadingTitle(renderedText(rest[:end]))
-		if title == "" {
-			continue
-		}
-		if _, ok := namesExcludedHeading(title, headings); ok {
-			return line + 1, title, true
+		for _, end := range rawHeadingTitleEnds(rest, name) {
+			title := normaliseHeadingTitle(renderedText(rest[:end]))
+			if title == "" {
+				continue
+			}
+			if _, ok := namesExcludedHeading(title, headings); ok {
+				return line + 1, title, true
+			}
 		}
 	}
 	return 0, "", false
@@ -553,10 +738,11 @@ func rawHTMLHeading(lines []string, fenced []bool, offset int, headings map[stri
 // unresolvableFrontmatterShape reports a construction in the first block whose
 // keys this package cannot resolve, or a block whose bounds it cannot trust.
 //
-// The reasoning is the escaped quoted key's, applied to its whole class:
-// resolving any of these means a YAML parser, a record has no reason to use one,
-// so the construction itself is the signal and the answer is a refusal rather
-// than a guess. Any line-initial `!` is a tag — the double-bang shorthand, a
+// The reasoning is the escaped quoted key's — a key spelled `"ori\u0067in"` IS
+// `origin` to YAML and is nothing at all to a compare over the bytes — applied
+// to its whole class: resolving any of these means a YAML parser, a record has
+// no reason to use one, so the construction itself is the signal and the answer
+// is a refusal rather than a guess. Any line-initial `!` is a tag — the double-bang shorthand, a
 // single-bang local tag, a verbatim `!<…>` tag alike. Any `&` is an anchor. And
 // any explicit-key line the readable-key pattern cannot fully read is a key
 // whose name this package is not entitled to assume.
@@ -617,41 +803,36 @@ func firstBlockRange(lines []string, fenced []bool) (int, int, bool) {
 	return 0, -1, true
 }
 
-// excludedKeyInFirstBlock reports an excluded key sitting at column 0 inside the
-// document's first delimiter-fenced region.
+// excludedKeyInFirstBlock reports an excluded key inside the document's
+// frontmatter block.
 //
-// Two loosenesses are deliberate, and each closes a shape the strict reading
-// misses. The region is bounded by any line OPENING with three dashes, not by an
-// exact `---`, because that is the rule the frontmatter stripper applies and the
-// gap between the two rules is where a key survives. And the region is found
-// wherever it starts rather than at line 0, because a preamble ahead of the
-// block makes the field reader report nothing at all while the keys sit there
-// in plain sight.
+// The block is firstBlockRange's, which is the ONE definition of it this package
+// holds. Finding the block wherever three dashes first appeared was a second
+// definition, and the two disagreed exactly where the false-refusal class lives:
+// a thematic break in an ordinary documentation page opened a phantom block, and
+// a line of prose spelled `origin: …` beneath it refused the run. There is no
+// key to lose by agreeing — a document whose line 0 is not a delimiter has no
+// frontmatter to any reader in this binary, so what sits under its rules is body
+// prose, which travels because inclusion admits it and not because redaction
+// missed it.
+//
+// The looseness kept is the block's own bounds: any line OPENING with three
+// dashes delimits it, not an exact `---`, because that is the rule the
+// frontmatter stripper applies and the gap between the two rules is where a key
+// survives.
 func excludedKeyInFirstBlock(lines []string, fenced []bool, keys map[string]bool) (int, string, bool) {
-	open := -1
-	for i, line := range lines {
-		if fenced[i] {
-			continue
-		}
-		trimmed := strings.TrimSpace(line)
-		if i == 0 {
-			trimmed = strings.TrimSpace(frontmatter.TrimBOM(line))
-		}
-		if strings.HasPrefix(trimmed, "---") {
-			open = i
-			break
-		}
-	}
-	if open < 0 {
+	open, closed, ok := firstBlockRange(lines, fenced)
+	if !ok {
 		return 0, "", false
 	}
+	end := len(lines)
+	if closed >= 0 {
+		end = closed
+	}
 	depth := 0
-	for i := open + 1; i < len(lines); i++ {
+	for i := open + 1; i < end; i++ {
 		if fenced[i] {
 			continue
-		}
-		if blockCloser(lines[i]) {
-			return 0, "", false
 		}
 		// Four spellings, because the field reader reports one of them. A plain
 		// or quoted key at any indent; YAML's explicit-key form; a key inside a
@@ -677,7 +858,24 @@ func excludedKeyInFirstBlock(lines []string, fenced []bool, keys map[string]bool
 		//
 		// `depth` carries an open brace across lines, so a key on a continuation
 		// line is read as the flow key it is rather than as prose.
-		bare := blankQuoted(lines[i])
+		bare, quotedKeys := blankQuoted(lines[i])
+		// A quoted key is reported BY the scanner rather than found in the
+		// blanked line: its interior is blanked precisely so nothing is read out
+		// of it, and its name is the token's own text.
+		for _, tok := range quotedKeys {
+			name := tok[1 : len(tok)-1]
+			// The escaped-key refusal, on the flow path too. YAML decodes escapes
+			// inside double quotes, so "ori\u0067in" IS `origin` and is nothing
+			// at all to a compare over the bytes — the escape is the signal
+			// wherever the key stands, and escapedQuotedKey below reaches only
+			// the line-anchored spelling of it.
+			if tok[0] == '"' && strings.Contains(name, `\`) {
+				return i + 1, name, true
+			}
+			if keys[name] {
+				return i + 1, name, true
+			}
+		}
 		scan := bare
 		if depth > 0 {
 			scan = "," + bare
@@ -693,9 +891,6 @@ func excludedKeyInFirstBlock(lines []string, fenced []bool, keys map[string]bool
 			strings.Count(bare, "}") - strings.Count(bare, "]")
 		if depth < 0 {
 			depth = 0
-		}
-		if key, ok := escapedQuotedKey(lines[i]); ok {
-			return i + 1, key, true
 		}
 	}
 	return 0, "", false

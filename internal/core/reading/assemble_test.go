@@ -1351,3 +1351,136 @@ func TestFrontmatterCloserIsNotASetextUnderline(t *testing.T) {
 	spcWithFrontmatter(t, root, "spc-30-closer.md", "---\nid: spc-30\nAudit Notes\n---\n")
 	mustAssemble(t, root, "a frontmatter closer under a column-0 last line")
 }
+
+// TestQuotedFlowKeyIsRecognised: a quoted token sitting in scalar position is a
+// KEY when a colon follows it, and the blanker treated it as a scalar — so the
+// span was blanked before the flow scan could read it and the excluded key
+// travelled under a manifest asserting its refusal.
+func TestQuotedFlowKeyIsRecognised(t *testing.T) {
+	rows := map[string]string{
+		"a quoted key opening a flow map": "---\nid: spc-31\nmeta: {\"origin\": " + sentinelOrigin + "}\n---\n",
+		"a quoted key after a comma":      "---\nid: spc-31\nmeta: {a: 1, 'origin': " + sentinelOrigin + "}\n---\n",
+		"a quoted key in a flow sequence": "---\nid: spc-31\nmeta: [{'origin': " + sentinelOrigin + "}]\n---\n",
+		"a quoted key on a continuation":  "---\nid: spc-31\nmeta: {a: 1\n, \"origin\": " + sentinelOrigin + "}\n---\n",
+	}
+	for what, front := range rows {
+		root := fixtureRepo(t)
+		spcWithFrontmatter(t, root, "spc-31-quoted-key.md", front)
+		refusesOrWithholds(t, root, what, sentinelOrigin)
+	}
+}
+
+// TestScalarOpenersNeedTheirYAMLWhitespace: a colon and a dash are YAML
+// indicators only with the whitespace YAML requires after them. Reading either
+// as an opener without it let a quote inside a plain scalar open a span that
+// blanked the excluded key beside it.
+func TestScalarOpenersNeedTheirYAMLWhitespace(t *testing.T) {
+	rows := map[string]string{
+		"a colon with nothing after it": "---\nid: spc-32\nmeta: {a:'b, origin: " + sentinelOrigin + ", c: 'd}\n---\n",
+		"a dash that is not a sequence": "---\nid: spc-32\nmeta: {a: b - 'c, origin: " + sentinelOrigin + ", d: 'e}\n---\n",
+		"a dash with nothing after it":  "---\nid: spc-32\nmeta: {a: b-'c, origin: " + sentinelOrigin + ", d: 'e}\n---\n",
+		"a colon inside a plain scalar": "---\nid: spc-32\nmeta: {a: b:\"c, origin: " + sentinelOrigin + ", d: \"e}\n---\n",
+	}
+	for what, front := range rows {
+		root := fixtureRepo(t)
+		spcWithFrontmatter(t, root, "spc-32-whitespace.md", front)
+		refusesOrWithholds(t, root, what, sentinelOrigin)
+	}
+}
+
+// TestQuotedKeyNamesOnlyItself: the interior of a quoted key is its NAME, not a
+// place to read further keys out of. Skipping such a span rather than reading it
+// as one token would let `{"a, origin: b": 1}` — whose only key is the whole
+// quoted string — refuse a document that carries no excluded key at all.
+func TestQuotedKeyNamesOnlyItself(t *testing.T) {
+	root := fixtureRepo(t)
+	spcWithFrontmatter(t, root, "spc-33-key-interior.md",
+		"---\nid: spc-33\nmeta: {\"a, origin: b\": 1}\n---\n")
+	mustAssemble(t, root, "a quoted key whose own name mentions a flow key")
+}
+
+// TestSequenceDashOpensAScalarAtLineStart: the dash the fix bounds to line start
+// still has to open one there, or a quoted sequence item mentioning a flow
+// mapping refuses the run.
+func TestSequenceDashOpensAScalarAtLineStart(t *testing.T) {
+	root := fixtureRepo(t)
+	spcWithFrontmatter(t, root, "spc-34-sequence.md",
+		"---\nid: spc-34\nmeta:\n  - 'we stamped {origin: scribe} and moved on'\n  - - 'and again {origin: scribe}'\n---\n")
+	mustAssemble(t, root, "a quoted sequence item carrying a flow mapping")
+}
+
+// TestBodyRuleAboveAnExcludedKeyLineDoesNotRefuse: the key scan opened its block
+// at the first `---` found ANYWHERE while every other scan reads a block at line
+// 0 only, so an ordinary documentation page with a thematic break above a line
+// spelled like a key was refused as frontmatter carrying an excluded key.
+func TestBodyRuleAboveAnExcludedKeyLineDoesNotRefuse(t *testing.T) {
+	rows := map[string]string{
+		"a break above a key-shaped line":   "# A page\n\nProse.\n\n---\n\norigin: where the claim came from\n\nMore prose.\n",
+		"a break above a flow-mapping line": "# A page\n\nProse.\n\n---\n\nWe write {origin: scribe} on the record.\n",
+		"a break above a quoted key line":   "# A page\n\nProse.\n\n---\n\n\"production_mode\": the phrase, quoted.\n",
+	}
+	for what, body := range rows {
+		root := fixtureRepo(t)
+		writeFile(t, root, "docs/reference/page.md", body)
+		gitCommitAll(t, root)
+		mustAssemble(t, root, what)
+	}
+}
+
+// TestRawHeadingBoundsIgnoreMarkupData: a closing tag inside an HTML comment or
+// inside a quoted attribute value is DATA, and so is a greater-than inside one.
+// Reading any of the three as structure cut the title short, and a heading every
+// browser renders as the excluded one was judged as something else.
+func TestRawHeadingBoundsIgnoreMarkupData(t *testing.T) {
+	rows := map[string]string{
+		"a close inside a comment":           "<h2>Audit<!-- </h2> --> Notes</h2>\n\n" + sentinelAuditNotes + "\n",
+		"a close inside an attribute value":  "<h2><a title=\"</h2>\"></a>Audit Notes</h2>\n\n" + sentinelAuditNotes + "\n",
+		"a greater-than in an attribute":     "<h2 title=\"a>b\">Audit Notes</h2>\n\n" + sentinelAuditNotes + "\n",
+		"a heading open inside an attribute": "<h2 title=\"<h3>\">Audit Notes</h2>\n\n" + sentinelAuditNotes + "\n",
+	}
+	for what, body := range rows {
+		root := fixtureRepo(t)
+		writeFile(t, root, ".abcd/development/specs/open/spc-35-bounds.md",
+			"---\nid: spc-35\n---\n\n# A spec\n\nProse.\n\n"+body)
+		gitCommitAll(t, root)
+		refusesOrWithholds(t, root, "a raw heading with "+what, sentinelAuditNotes)
+	}
+}
+
+// TestRawHeadingTitleCrossesBlankLinesAndBreaks: a blank line inside a heading
+// element is whitespace to every renderer, and a line break element separates
+// two words rather than joining them. Bounding at the blank line unconditionally
+// emptied the first title, and dropping a tag without the space it stands for
+// spelled the second as one word.
+func TestRawHeadingTitleCrossesBlankLinesAndBreaks(t *testing.T) {
+	rows := map[string]string{
+		"a blank line inside the element": "<h2>\n\nAudit Notes</h2>\n\n" + sentinelAuditNotes + "\n",
+		"a line break inside the title":   "<h2>Audit<br>Notes</h2>\n\n" + sentinelAuditNotes + "\n",
+		"a self-closing break":            "<h2>Audit<br/>Notes</h2>\n\n" + sentinelAuditNotes + "\n",
+	}
+	for what, body := range rows {
+		root := fixtureRepo(t)
+		writeFile(t, root, ".abcd/development/specs/open/spc-36-breaks.md",
+			"---\nid: spc-36\n---\n\n# A spec\n\nProse.\n\n"+body)
+		gitCommitAll(t, root)
+		refusesOrWithholds(t, root, "a raw heading with "+what, sentinelAuditNotes)
+	}
+}
+
+// TestRawHeadingCaseIsFolded: the element name is compared case-insensitively,
+// which the per-name compiled pattern got from its own flags. Dropping that
+// cache must not drop the fold with it.
+func TestRawHeadingCaseIsFolded(t *testing.T) {
+	rows := map[string]string{
+		"an upper-case pair":  "<H2>Audit Notes</H2>\n\n" + sentinelAuditNotes + "\n",
+		"a mixed-case close":  "<h2>Audit Notes</H2>\n\n" + sentinelAuditNotes + "\n",
+		"a role element pair": "<DIV role=\"heading\" aria-level=\"2\">Audit Notes</DIV>\n\n" + sentinelAuditNotes + "\n",
+	}
+	for what, body := range rows {
+		root := fixtureRepo(t)
+		writeFile(t, root, ".abcd/development/specs/open/spc-37-case.md",
+			"---\nid: spc-37\n---\n\n# A spec\n\nProse.\n\n"+body)
+		gitCommitAll(t, root)
+		refusesOrWithholds(t, root, "a raw heading with "+what, sentinelAuditNotes)
+	}
+}
