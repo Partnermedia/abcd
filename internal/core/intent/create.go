@@ -13,7 +13,6 @@ import (
 
 	"github.com/intentdriven/abcd/internal/core/changelog"
 	"github.com/intentdriven/abcd/internal/core/recordid"
-	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // mintLockTimeout bounds how long CreateFromText waits for the intent-store mint
@@ -155,8 +154,8 @@ func CreateDraft(repoRoot string, opts DraftOptions) (Intent, string, error) {
 			return fmt.Errorf("intent: refusing to overwrite existing %s", rel)
 		}
 		content := seedDraft(id, opts)
-		if err := fsutil.WriteFileAtomic(abs, []byte(content), 0o644); err != nil {
-			return fmt.Errorf("intent: writing %s: %w", rel, err)
+		if err := writeIntentFile(abs, rel, content); err != nil {
+			return err
 		}
 		created = Intent{
 			ID:           id,

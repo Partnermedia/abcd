@@ -419,3 +419,114 @@ func TestUnclosedCommentOpenerStillMasksToEOF(t *testing.T) {
 		t.Fatalf("got %d conditions, want 1: %+v", len(c.Conditions), c.Conditions)
 	}
 }
+
+// TestAuditEmitRefusesPastTheReadCap: the audit block upserts rewrite the intent
+// record too, and were the last writes in this package still going straight to
+// disk. Uncapped, they carry a record over the read cap and every intent verb
+// then refuses the whole corpus.
+func TestAuditEmitRefusesPastTheReadCap(t *testing.T) {
+	root := t.TempDir()
+	head := "---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n" +
+		"## Why This Matters\n\n"
+	tail := "\n\n## Acceptance Criteria\n\n- ok\n\n## Audit Notes\n\n_Empty._\n"
+	record := head + strings.Repeat("x", 262120-len(head)-len(tail)) + tail
+	if len(record) != 262120 {
+		t.Fatalf("fixture is %d bytes, want 262120", len(record))
+	}
+	writeFile(t, root, shippedDir+"/itd-10-alpha.md", record)
+	writeFile(t, root, specsOpen+"/spc-1-alpha.md", specNaming("spc-1", "alpha", "itd-10"))
+
+	if _, err := ReEmitAudit(root, "itd-10"); err == nil {
+		t.Fatal("the audit upsert must refuse rather than write past the read cap")
+	} else if !strings.Contains(err.Error(), "cap") {
+		t.Fatalf("the refusal must name the cap, got %q", err)
+	}
+	after, err := os.ReadFile(filepath.Join(root, shippedDir, "itd-10-alpha.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != record {
+		t.Fatalf("the record was rewritten by a refused emit (%d bytes, was %d)", len(after), len(record))
+	}
+	if _, err := Load(root); err != nil {
+		t.Fatalf("the corpus no longer loads: %v", err)
+	}
+}
+
+// TestPlanRefusesBeforeAnyWriteOnTheDraftFace: the draft face grows a record
+// three times — stamp, kind, spec_id — and the final size is knowable before the
+// first write. Checking per-write let a draft pass the kind write, MOVE to
+// planned, and then fail the spec_id write, leaving a half-planned record that
+// neither Plan nor Link repairs.
+func TestPlanRefusesBeforeAnyWriteOnTheDraftFace(t *testing.T) {
+	root := t.TempDir()
+	head := "---\nid: itd-10\nslug: alpha\nspec_id: null\nkind: null\n---\n# alpha\n\n" +
+		"## Scope Conditions\n\n- holds on POSIX\n\n## Why This Matters\n\n"
+	tail := "\n\n## Acceptance Criteria\n\n- ok\n"
+	record := head + strings.Repeat("x", 262101-len(head)-len(tail)) + tail
+	if len(record) != 262101 {
+		t.Fatalf("fixture is %d bytes, want 262101", len(record))
+	}
+	writeFile(t, root, draftsDir+"/itd-10-alpha.md", record)
+
+	if _, err := Plan(root, "itd-10"); err == nil {
+		t.Fatal("Plan must refuse before any write")
+	} else if !strings.Contains(err.Error(), "cap") {
+		t.Fatalf("the refusal must name the cap, got %q", err)
+	}
+	after, err := os.ReadFile(filepath.Join(root, draftsDir, "itd-10-alpha.md"))
+	if err != nil {
+		t.Fatal("the draft must still be in drafts/: " + err.Error())
+	}
+	if string(after) != record {
+		t.Fatal("the draft was rewritten by a refused plan")
+	}
+	if entries, err := os.ReadDir(filepath.Join(root, specsOpen)); err == nil && len(entries) > 0 {
+		t.Fatalf("a refused plan left %d spec(s) dangling", len(entries))
+	}
+	if _, err := Load(root); err != nil {
+		t.Fatalf("the corpus no longer loads: %v", err)
+	}
+}
+
+// TestStampPreservesAHardLineBreak: two trailing spaces are a markdown hard
+// line break — content, not slack. The marker goes in front of them.
+func TestStampPreservesAHardLineBreak(t *testing.T) {
+	content := claimRecord(nil, str("- holds on a POSIX shell  \n  and nowhere else\n"))
+	stamped, n, err := stampScopeConditions(content, fixedMinter(7))
+	if err != nil || n != 1 {
+		t.Fatalf("stamp = (%d, %v)", n, err)
+	}
+	if !strings.Contains(stamped, "-->  \n") {
+		t.Fatalf("the hard line break was trimmed away:\n%s", stamped)
+	}
+	if conds := ParseClaims(stamped).Conditions; len(conds) != 1 || conds[0].ID == "" {
+		t.Fatalf("the stamped bullet no longer reads back: %+v", conds)
+	}
+}
+
+// TestOpensCommentIsALeftToRightCursor: CommonMark resolves the FIRST construct
+// on the line and skips past it, so a backtick inside a live comment is literal
+// and a comment inside a code span is not a comment. Resolving code spans first
+// diverged in both directions.
+func TestOpensCommentIsALeftToRightCursor(t *testing.T) {
+	tests := []struct {
+		name, line string
+		want       bool
+	}{
+		{"comment wins, then a span swallows the second opener", "<!-- ` --> `<!--` x`", false},
+		{"backticks inside a live comment are literal, second opener is live", "- live <!-- a ` --> <!-- `", true},
+		{"a marker never opens a span", "- x <!-- cond: cond-2608300102030405 -->", false},
+		{"a quoted opener is prose", "- the idiom is `<!--`", false},
+		{"a bare opener runs to EOF", "- x <!--", true},
+		{"a closer then a fresh opener", "--> tail <!--", true},
+		{"unmatched backticks are literal", "- ` x <!--", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := opensComment(tt.line); got != tt.want {
+				t.Fatalf("opensComment(%q) = %v, want %v", tt.line, got, tt.want)
+			}
+		})
+	}
+}

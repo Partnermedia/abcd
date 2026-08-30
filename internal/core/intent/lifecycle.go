@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/intentdriven/abcd/internal/core/frontmatter"
 	"github.com/intentdriven/abcd/internal/core/recordid"
@@ -148,6 +149,26 @@ func Plan(repoRoot, intentID string) (PlanResult, error) {
 		return PlanResult{}, err
 	}
 	sp, ok := store.ByIntent(intentID)
+
+	// 1a. The draft face grows the record THREE times — the identity stamp, the
+	// kind rewrite, the spec_id rewrite — and the largest of them is knowable
+	// before any of them is written. Checking per write let a record pass the kind
+	// write, MOVE to planned, and only then fail the spec_id write, leaving a
+	// half-planned record neither Plan nor Link repairs; and it left a freshly
+	// minted spec behind with nothing pointing at it (iss-2608300335369473). The
+	// check runs first, before the spec is minted, over the id that mint WOULD
+	// produce. A prediction is enough because writeIntentFile still backstops
+	// every write: the only cost of a wrong guess is a refusal one step later.
+	specID := sp.ID
+	if !ok {
+		if specID, _, err = spec.NextID(repoRoot); err != nil {
+			return PlanResult{}, err
+		}
+	}
+	if err := checkDraftFaceSize(content, it, specID, draftRel); err != nil {
+		return PlanResult{}, err
+	}
+
 	var mintWarning string
 	if !ok {
 		sp, mintWarning, err = spec.Create(repoRoot, intentID, it.Slug)
@@ -204,6 +225,58 @@ func Plan(repoRoot, intentID string) (PlanResult, error) {
 	it.Bucket = BucketPlanned
 	it.Path = plannedRel
 	return PlanResult{Intent: it, Spec: sp, MintWarning: mintWarning, ConditionsStamped: conditionsStamped}, nil
+}
+
+// checkDraftFaceSize refuses a draft whose planned form would not fit under the
+// cap its own reader enforces, BEFORE the first write and before the bucket
+// move. It reproduces the three growth steps in order and judges the largest.
+func checkDraftFaceSize(content string, it Intent, specID, rel string) error {
+	stamped, _, err := stampScopeConditions(content, sizeProbeMinter)
+	if err != nil {
+		// A structural refusal (a fenced or commented section) is the stamp's to
+		// report where it happens, with its own message.
+		return nil //nolint:nilerr // the real stamp reports this a few lines later
+	}
+	kind := it.Kind
+	if frontmatter.IsNull(kind) {
+		kind = KindStandalone
+	}
+	withKind, err := setFrontmatterFields(stamped, map[string]string{"kind": kind})
+	if err != nil {
+		return err
+	}
+	withSpec, err := setFrontmatterFields(withKind, map[string]string{"spec_id": specID})
+	if err != nil {
+		return err
+	}
+	largest := len(stamped)
+	for _, n := range []int{len(withKind), len(withSpec)} {
+		if n > largest {
+			largest = n
+		}
+	}
+	if largest > maxIntentFileBytes {
+		return fmt.Errorf("intent: planning %s would produce %d bytes, past the %d-byte cap its own reader enforces; refusing before any write", rel, largest, maxIntentFileBytes)
+	}
+	return nil
+}
+
+// sizeProbeMinter mints ids for the size probe only. Every native id is the same
+// width, so a fixed clock and a fixed suffix measure exactly what the real mint
+// will write, and nothing it produces is ever stored.
+var sizeProbeMinter = recordid.Minter{
+	Now:     func() time.Time { return time.Unix(0, 0).UTC() },
+	Entropy: constantEntropy{},
+}
+
+// constantEntropy is an endless zero source for the size probe.
+type constantEntropy struct{}
+
+func (constantEntropy) Read(p []byte) (int, error) {
+	for i := range p {
+		p[i] = 0
+	}
+	return len(p), nil
 }
 
 // stampPlanned is Plan's idempotent second face: it mints an identity for every
@@ -428,7 +501,9 @@ func Reconcile(repoRoot, specID string) (ReconcileResult, error) {
 	return res, nil
 }
 
-// writeIntentFile is the one way this package rewrites an intent record. It caps
+// writeIntentFile is the one way this package writes an intent record — the
+// seed, the lifecycle rewrites and the audit-block upserts all go through it,
+// so the claim is a fact rather than a description of most of them. It caps
 // the FINAL bytes before writing them, because the cap belongs at the write and
 // not at any one producer: readRepoFile refuses a record over the cap, and every
 // verb here loads the WHOLE corpus first, so one oversized record makes every

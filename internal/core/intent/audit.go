@@ -230,8 +230,8 @@ func emitAuditForIntent(repoRoot string, it Intent) (AuditEmitResult, error) {
 	res := AuditEmitResult{ReceiptID: rcp, IntentID: it.ID}
 	block := owedBlock(rcp)
 	updated := upsertReviewBlock(content, rcp, block)
-	if err := fsutil.WriteFileAtomic(abs, []byte(updated), 0o644); err != nil {
-		return AuditEmitResult{}, fmt.Errorf("intent: writing OWED stub to %s: %w", it.Path, err)
+	if err := writeIntentFile(abs, it.Path, updated); err != nil {
+		return AuditEmitResult{}, err
 	}
 	if err := writeAuditRequest(repoRoot, it, rcp, updated); err != nil {
 		return AuditEmitResult{}, err
@@ -363,8 +363,8 @@ func IngestVerdict(repoRoot, verdictPath string) (IngestVerdictResult, error) {
 	rollup := countVerdicts(v)
 	block := ingestedBlock(rcp, v, rollup)
 	updated := upsertReviewBlock(content, rcp, block)
-	if err := fsutil.WriteFileAtomic(filepath.Join(repoRoot, it.Path), []byte(updated), 0o644); err != nil {
-		return IngestVerdictResult{}, fmt.Errorf("intent: writing verdict to %s: %w", it.Path, err)
+	if err := writeIntentFile(filepath.Join(repoRoot, it.Path), it.Path, updated); err != nil {
+		return IngestVerdictResult{}, err
 	}
 	return IngestVerdictResult{
 		Status: "ingested", ReceiptID: rcp, IntentID: it.ID, Criteria: len(v.Criteria),
@@ -493,8 +493,8 @@ func deadLetter(repoRoot string, it Intent, content, rcp string, raw []byte, rea
 	}
 	block := deadLetterBlock(rcp, reason, dlRel)
 	updated := upsertReviewBlock(content, rcp, block)
-	if err := fsutil.WriteFileAtomic(filepath.Join(repoRoot, it.Path), []byte(updated), 0o644); err != nil {
-		return IngestVerdictResult{}, fmt.Errorf("intent: writing dead-letter marker to %s: %w", it.Path, err)
+	if err := writeIntentFile(filepath.Join(repoRoot, it.Path), it.Path, updated); err != nil {
+		return IngestVerdictResult{}, err
 	}
 	return IngestVerdictResult{
 		Status: "dead_letter", ReceiptID: rcp, IntentID: it.ID,

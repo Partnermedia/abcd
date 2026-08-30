@@ -178,9 +178,11 @@ func maskLines(lines []string) []uint8 {
 		switch {
 		case inComment:
 			mask[i] |= maskComment
-			if strings.Contains(ln, "-->") {
-				// A line may close the span and open a fresh one after it.
-				inComment = opensComment(ln)
+			// Inside a comment every byte is literal, so the raw first `-->` is the
+			// closer; the remainder of the line is live markdown again and may open
+			// a fresh span.
+			if k := strings.Index(ln, "-->"); k >= 0 {
+				inComment = opensCommentFrom(ln, k+len("-->"))
 			}
 		case fenceOpen != "":
 			mask[i] |= maskFence
@@ -203,25 +205,46 @@ func maskLines(lines []string) []uint8 {
 	return mask
 }
 
-// opensComment reports whether a line leaves an HTML comment open: its last LIVE
-// `<!--` has no `-->` after it. A well-formed identity marker closes on its own
-// line, so it never opens a span — and an opener QUOTED in backticks is prose
-// about the syntax, not the syntax. Reading one as live ran the span to end of
-// file through every later heading, so a record whose prose explains the marker
-// idiom lost its Scope Conditions and its Acceptance Criteria both
-// (iss-2608300320418618). A genuinely unclosed opener still masks to EOF.
-func opensComment(ln string) bool {
-	spans := codeSpanRanges(ln)
-	for end := len(ln); ; {
-		i := strings.LastIndex(ln[:end], "<!--")
-		if i < 0 {
-			return false
+// opensComment reports whether a line leaves an HTML comment open. It walks the
+// line left to right and lets the FIRST construct win, which is CommonMark's own
+// precedence: at a backtick run it skips a matched code span whole (or treats an
+// unmatched run as literal backticks), and at `<!--` it skips to the `-->` that
+// closes it — consuming any backticks in between, because inside a comment they
+// are literal text.
+//
+// Resolving code spans first, as this did, diverged in both directions: a
+// backtick inside a LIVE comment re-paired the rest of the line, and a comment
+// opener quoted in backticks read as live. One cursor closes both
+// (iss-2608300320418618, iss-2608300335369473). A well-formed identity marker
+// closes on its own line, so it never opens a span; a genuinely unclosed opener
+// masks to end of file.
+func opensComment(ln string) bool { return opensCommentFrom(ln, 0) }
+
+// opensCommentFrom is opensComment beginning at an offset — the form maskLines
+// needs when a line closes the span it was already inside and the remainder is
+// live markdown again.
+func opensCommentFrom(ln string, start int) bool {
+	for i := start; i < len(ln); {
+		switch {
+		case ln[i] == '`':
+			j := backtickRunEnd(ln, i)
+			if _, end, ok := findBacktickRun(ln, j, j-i); ok {
+				i = end
+			} else {
+				i = j
+			}
+		case strings.HasPrefix(ln[i:], "<!--"):
+			rest := ln[i+len("<!--"):]
+			k := strings.Index(rest, "-->")
+			if k < 0 {
+				return true
+			}
+			i += len("<!--") + k + len("-->")
+		default:
+			i++
 		}
-		if !inAnyRange(spans, i) {
-			return !strings.Contains(ln[i+len("<!--"):], "-->")
-		}
-		end = i
 	}
+	return false
 }
 
 // masked reports whether a line is not live markdown, for any reason.
@@ -539,7 +562,10 @@ func stampScopeConditions(content string, minter recordid.Minter) (string, int, 
 		if strings.HasSuffix(lines[i], "\r") {
 			cr = "\r"
 		}
-		lines[i] = strings.TrimRight(trimmed, " \t") + " <!-- cond: " + id + " -->" + cr
+		// Two trailing spaces are a markdown hard line break — content, not slack —
+		// so the marker goes in FRONT of the trailing run rather than replacing it.
+		body := strings.TrimRight(trimmed, " \t")
+		lines[i] = body + " <!-- cond: " + id + " -->" + trimmed[len(body):] + cr
 		stamped++
 	}
 	if stamped == 0 {
