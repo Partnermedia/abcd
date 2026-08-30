@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/issueschema"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 const ruleReadingOutstanding = "reading_outstanding"
@@ -81,6 +82,19 @@ type OutstandingReadings struct {
 	// resolves nothing, because which answer is in force is the researcher's
 	// judgement and there is nothing here to make it from.
 	Contested []ContestedItem `json:"contested,omitempty"`
+	// Unreadable names items whose SOLE standing answer is a record no reader can
+	// read. Such a record has no state, so it matched none of the report's cases
+	// and the item simply vanished from the board — and an item whose only answer
+	// is unreadable is the case most in need of a line, not least.
+	Unreadable []UnreadableAnswer `json:"unreadable,omitempty"`
+}
+
+// UnreadableAnswer is one item whose standing disposition cannot be read.
+type UnreadableAnswer struct {
+	Item        string `json:"item"`
+	Run         string `json:"run"`
+	Path        string `json:"path"`
+	Disposition string `json:"disposition"`
 }
 
 // ContestedItem is one item with more than one standing answer.
@@ -97,7 +111,8 @@ type ContestedItem struct {
 // as silence rather than as a heading with nothing under it.
 func (r OutstandingReadings) Empty() bool {
 	return len(r.Undispositioned) == 0 && len(r.OpenHolds) == 0 &&
-		len(r.Unsafe) == 0 && len(r.Cyclic) == 0 && len(r.Contested) == 0
+		len(r.Unsafe) == 0 && len(r.Cyclic) == 0 && len(r.Contested) == 0 &&
+		len(r.Unreadable) == 0
 }
 
 // ReadReadingOutstanding builds the report from the ledger at issuesDir
@@ -162,6 +177,11 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 				return OutstandingReadings{}, err
 			}
 			switch {
+			case len(answer.unsafe) > 0:
+				// A path the walk could not read supports no claim about whether the
+				// item has been answered. Saying "nobody has answered it" here would
+				// invite the answer to be written a second time.
+				report.Unsafe = append(report.Unsafe, answer.unsafe...)
 			case answer.cyclic:
 				report.Cyclic = append(report.Cyclic, OutstandingItem{
 					Item: item, Run: run.Name(), Path: filepath.ToSlash(rel),
@@ -174,6 +194,11 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 			case answer.standing == nil:
 				report.Undispositioned = append(report.Undispositioned, OutstandingItem{
 					Item: item, Run: run.Name(), Path: filepath.ToSlash(rel),
+				})
+			case !answer.standing.wellFormed:
+				report.Unreadable = append(report.Unreadable, UnreadableAnswer{
+					Item: item, Run: run.Name(), Path: filepath.ToSlash(answer.standing.rel),
+					Disposition: answer.standing.id,
 				})
 			}
 			// Every standing hold is rendered, whatever else is true of the item —
@@ -194,6 +219,7 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 	})
 	sort.Slice(report.Cyclic, func(i, j int) bool { return report.Cyclic[i].Item < report.Cyclic[j].Item })
 	sort.Slice(report.Contested, func(i, j int) bool { return report.Contested[i].Item < report.Contested[j].Item })
+	sort.Slice(report.Unreadable, func(i, j int) bool { return report.Unreadable[i].Item < report.Unreadable[j].Item })
 	sort.Strings(report.Unsafe)
 	return report, nil
 }
@@ -215,6 +241,10 @@ type standingRecord struct {
 	state         string
 	exitCondition string
 	rel           string
+	// wellFormed carries issueschema's verdict forward, so a sole standing record
+	// nobody can read is reported as unreadable rather than falling through every
+	// case on the strength of its empty state.
+	wellFormed bool
 }
 
 // itemAnswer is everything the walk learned about one item's dispositions. It is
@@ -231,6 +261,9 @@ type itemAnswer struct {
 	// holds is every standing record that is a hold, so an exit condition is
 	// published whatever else is true of the item.
 	holds []OpenHold
+	// unsafe names the repo-relative paths the walk declined to read. Any one of
+	// them means the item's answer is unknown, not absent.
+	unsafe []string
 }
 
 // standingDisposition reads one item's dispositions and says what stands.
@@ -238,6 +271,8 @@ func standingDisposition(issuesRoot, issuesDir, item string) (itemAnswer, error)
 	var answer itemAnswer
 	itemDir := filepath.Join(issuesRoot, issueschema.DispositionsDir, item)
 	if !realDir(itemDir) {
+		answer.unsafe = append(answer.unsafe,
+			filepath.ToSlash(filepath.Join(issuesDir, issueschema.DispositionsDir, item)))
 		return answer, nil
 	}
 	entries, err := os.ReadDir(itemDir)
@@ -255,15 +290,15 @@ func standingDisposition(issuesRoot, issuesDir, item string) (itemAnswer, error)
 		if !ok {
 			continue
 		}
-		// A symlinked record file sources the answer from outside the ledger just
-		// as a symlinked directory does, so it is not read.
-		fi, lerr := os.Lstat(filepath.Join(itemDir, e.Name()))
-		if lerr != nil || !fi.Mode().IsRegular() {
-			continue
-		}
-		content, err := os.ReadFile(filepath.Join(itemDir, e.Name()))
+		// ReadGuarded rather than Lstat-then-ReadFile: it opens once with
+		// O_NOFOLLOW and validates on the SAME descriptor, so no symlink swap fits
+		// between the check and the read. A record it refuses makes the item's
+		// answer UNKNOWN, which is not the same fact as unanswered.
+		content, err := fsutil.ReadGuarded(filepath.Join(itemDir, e.Name()), citationPageSizeLimit)
 		if err != nil {
-			return itemAnswer{}, err
+			answer.unsafe = append(answer.unsafe,
+				filepath.ToSlash(filepath.Join(issuesDir, issueschema.DispositionsDir, item, e.Name())))
+			continue
 		}
 		r := issueschema.ParseDisposition(id, string(content))
 		records = append(records, r)
@@ -305,6 +340,7 @@ func standingDisposition(issuesRoot, issuesDir, item string) (itemAnswer, error)
 	r := byID[standing[0]]
 	answer.standing = &standingRecord{
 		id: r.ID, state: r.State, exitCondition: r.ExitCondition, rel: rel[r.ID],
+		wellFormed: r.WellFormed,
 	}
 	return answer, nil
 }
@@ -324,6 +360,14 @@ func checkReadingOutstanding(repoRoot string, cfg RuleConfig) ([]Finding, error)
 				"An item nobody has answered has no state to sit in, because nothing in this " +
 				"vocabulary means \"already covered\"; answer it with `abcd capture disposition " +
 				o.Item + " --state <state> ...`",
+		})
+	}
+	for _, u := range report.Unreadable {
+		out = append(out, Finding{
+			File: u.Path, Line: 1, RuleID: ruleReadingOutstanding, Severity: severityInfo,
+			Message: u.Item + " (run " + u.Run + ") stands on " + u.Disposition +
+				", which no reader of this ledger can read — its frontmatter is malformed, so the record carries no state. " +
+				"The item is answered and the answer is illegible; repair the record rather than writing a second one",
 		})
 	}
 	for _, u := range report.Unsafe {

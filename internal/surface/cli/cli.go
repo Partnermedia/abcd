@@ -2373,6 +2373,11 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 						fmt.Fprintf(w, "  tangled %s (run %s) — its dispositions supersede one another, so none stands\n",
 							termsafe.Sanitize(c.Item), termsafe.Sanitize(c.Run))
 					}
+					// An answer that exists and cannot be read is not an absent one.
+					for _, u := range board.Outstanding.Unreadable {
+						fmt.Fprintf(w, "  illegible %s (run %s) — stands on %s, which no reader can read\n",
+							termsafe.Sanitize(u.Item), termsafe.Sanitize(u.Run), termsafe.Sanitize(u.Disposition))
+					}
 					// A tree the walk declined to enter is named, because a tree
 					// nobody walked looks exactly like a tree with nothing in it.
 					for _, u := range board.Outstanding.Unsafe {
@@ -2888,6 +2893,9 @@ func captureBoardOf(repoRoot string, st capture.StatusResult) (captureBoard, err
 	}
 	if report.Contested == nil {
 		report.Contested = []lint.ContestedItem{}
+	}
+	if report.Unreadable == nil {
+		report.Unreadable = []lint.UnreadableAnswer{}
 	}
 	return captureBoard{StatusResult: st, Outstanding: report}, nil
 }

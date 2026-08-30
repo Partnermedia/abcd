@@ -7,7 +7,7 @@ category: "security"
 source: "impl-review"
 found_during: "itd-180 third-round security review, 2026-08-30"
 found_at: "internal/core/capture/reading.go (readDispositions), internal/core/capture/promote.go, internal/core/lint/readingoutstanding.go, internal/core/issueschema/disposition.go"
-resolution: "Disposition files are Lstat-refused in all three readers (capture's walk, promote's state read, lint's report), a self-citing supersession is not well-formed so the record stands, and a non-empty record set with nothing standing is a supersession cycle the verb refuses and the board names."
+resolution: "Disposition files are Lstat-refused in all three readers (capture's walk, promote's state read, lint's report) — a two-syscall check whose stat-then-read window closed only when iss-2608300349493306 moved them onto fsutil.ReadGuarded — a self-citing supersession is not well-formed so the record stands, and a non-empty record set with nothing standing is a supersession cycle the verb refuses and the board names."
 impact: internal
 ---
 

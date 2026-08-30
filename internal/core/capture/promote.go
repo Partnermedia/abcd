@@ -234,7 +234,7 @@ func promoteReadingItem(repoRoot, issuesRoot string, req PromoteRequest) (Promot
 	if err != nil {
 		return PromoteResult{}, err
 	}
-	content, _, err := readWithChecksum(src)
+	content, err := readRecordGuarded(src)
 	if err != nil {
 		return PromoteResult{}, err
 	}
@@ -301,7 +301,7 @@ func promoteReadingItem(repoRoot, issuesRoot string, req PromoteRequest) (Promot
 		if err != nil {
 			return err
 		}
-		content, _, err := readWithChecksum(src)
+		content, err := readRecordGuarded(src)
 		if err != nil {
 			return err
 		}
@@ -372,11 +372,10 @@ func standingDispositionState(issuesRoot, item string, standing []string) (strin
 	path := filepath.Join(issuesRoot, issueschema.DispositionsDir, item, standing[0]+".md")
 	// The third reader of a disposition file, and it needs the same guard as the
 	// other two: the state read here is what licenses the stamp, so a symlinked
-	// record would license it from outside the ledger.
-	if err := refuseSymlinkedFile(path); err != nil {
-		return "", err
-	}
-	content, _, err := readWithChecksum(path)
+	// record would license it from outside the ledger. One primitive, opened once
+	// with O_NOFOLLOW and validated on the same descriptor — no stat-then-read
+	// window for a racing writer to swap a link into.
+	content, err := readRecordGuarded(path)
 	if err != nil {
 		return "", err
 	}

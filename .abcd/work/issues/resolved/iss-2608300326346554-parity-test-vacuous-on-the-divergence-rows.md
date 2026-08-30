@@ -7,7 +7,7 @@ category: "bug"
 source: "impl-review"
 found_during: "itd-180 third-round ruthless review, 2026-08-30"
 found_at: "internal/core/capture/standingparity_test.go, internal/core/capture/promote.go, internal/core/lint/readingoutstanding.go"
-resolution: "The parity table now asserts lint's observable against the full standing set (proved by a newest-standing-wins mutation failing all three retires-nothing rows), the dispositions family root is Lstat-refused in capture's reader, and lint's read-only walk names every tree it declined to enter instead of reporting it empty."
+resolution: "The parity table now asserts lint's observable against the full standing set (proved by a newest-standing-wins mutation failing all three retires-nothing rows), the dispositions family root is Lstat-refused in capture's reader, and lint's read-only walk names the three ROOT-LEVEL trees it declined to enter instead of reporting them empty — an item's own disposition directory and a symlinked record file still read as unanswered until iss-2608300349493306."
 impact: fix
 ---
 

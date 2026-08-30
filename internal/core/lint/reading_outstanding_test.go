@@ -146,6 +146,8 @@ func TestSymlinkedReadingTreesAreReportedNotSkippedSilently(t *testing.T) {
 		{"the readings root", ".abcd/work/issues/readings"},
 		{"a run directory", ".abcd/work/issues/readings/rdg-2608300000000001"},
 		{"the dispositions root", ".abcd/work/issues/dispositions"},
+		{"an item's disposition directory", ".abcd/work/issues/dispositions/rdi-2608300000000002"},
+		{"a disposition record file", ".abcd/work/issues/dispositions/rdi-2608300000000002/dsp-2608300000000003.md"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			run, item := "rdg-2608300000000001", "rdi-2608300000000002"
@@ -169,11 +171,20 @@ func TestSymlinkedReadingTreesAreReportedNotSkippedSilently(t *testing.T) {
 			}
 			var said bool
 			for _, f := range fs {
-				if f.RuleID == ruleReadingOutstanding && strings.Contains(f.Message, "symlink") {
+				if f.RuleID != ruleReadingOutstanding {
+					continue
+				}
+				if strings.Contains(f.Message, "symlink") {
 					said = true
 					if f.Severity != severityInfo {
 						t.Errorf("severity = %q, want %q — this report never gates", f.Severity, severityInfo)
 					}
+				}
+				// "Nobody has answered it" is a claim about the ledger. A path the
+				// walk could not read supports no such claim, and making it anyway
+				// invites the answer to be written twice.
+				if strings.Contains(f.Message, "carries no disposition") {
+					t.Errorf("an item whose answer could not be read was reported unanswered: %s", f.Message)
 				}
 			}
 			if !said {
@@ -275,5 +286,47 @@ func TestContestedItemIsNamedNotSilentlyResolved(t *testing.T) {
 	}
 	if !showedExit {
 		t.Errorf("the held answer's exit condition is hidden behind the accepted one; findings: %+v", fs)
+	}
+}
+
+// A sole standing record that no reader can read matched none of the report's
+// cases: its state is empty, so it was not a hold, and it was not nil, so it was
+// not outstanding — the item simply vanished from the board. An item whose only
+// answer is unreadable is the case most in need of a line, not least.
+func TestUnreadableStandingAnswerIsReportedNotVanished(t *testing.T) {
+	run, item := "rdg-2608300000000001", "rdi-2608300000000002"
+	id := "dsp-2608300000000003"
+	root := readingLedger(t, run, item, "detection")
+	// A duplicated top-level key: malformed to every reader of this ledger.
+	writeFile(t, root, ".abcd/work/issues/dispositions/"+item+"/"+id+".md",
+		"---\nschema_version: 1\nid: \""+id+"\"\nid: \""+id+"\"\nitem: \""+item+"\"\n"+
+			"state: \"accepted\"\ndisposition_grounds: \"a\"\n---\n\n")
+
+	report, err := ReadReadingOutstanding(root, ".abcd/work/issues")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Empty() {
+		t.Fatal("an item whose only answer is unreadable must not vanish from the report")
+	}
+	if len(report.Undispositioned) != 0 {
+		t.Fatalf("an item that carries an answer is not unanswered: %+v", report.Undispositioned)
+	}
+
+	fs, err := Lint(readingOutstandingConfig(severityBlocker), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var said bool
+	for _, f := range fs {
+		if f.RuleID == ruleReadingOutstanding && strings.Contains(f.Message, id) && strings.Contains(f.Message, "read") {
+			said = true
+			if f.Severity != severityInfo {
+				t.Errorf("severity = %q, want %q — this report never gates", f.Severity, severityInfo)
+			}
+		}
+	}
+	if !said {
+		t.Fatalf("the unreadable standing answer went unreported; findings: %+v", fs)
 	}
 }

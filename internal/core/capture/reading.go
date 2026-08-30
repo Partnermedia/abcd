@@ -21,11 +21,13 @@ package capture
 // content, and saying so is better than letting the header claim cover for it.
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"syscall"
 
 	"github.com/intentdriven/abcd/internal/core/issueschema"
 	"github.com/intentdriven/abcd/internal/fsutil"
@@ -619,7 +621,7 @@ func readingItemPosition(issuesRoot, item string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	content, _, err := readWithChecksum(path)
+	content, err := readRecordGuarded(path)
 	if err != nil {
 		return "", err
 	}
@@ -699,23 +701,33 @@ func readingItemPaths(issuesRoot, item string) ([]string, error) {
 	return matches, nil
 }
 
-// refuseSymlinkedFile refuses a record path that exists and is a symlink. A
-// directory guard is not enough on its own: the standing computation, promote's
-// state read and the board's exit-condition line all take their answer from a
-// record FILE, so a symlinked dsp-N.md sources that answer from outside the
-// ledger — and the verb would then accept a supersession citing the link.
-func refuseSymlinkedFile(path string) error {
-	fi, err := os.Lstat(path)
-	if os.IsNotExist(err) {
-		return nil
+// recordReadLimit caps a guarded record read. A reading record and a disposition
+// are single-screen documents; the cap exists so a device or a swapped huge file
+// cannot make a read unbounded, not to bound legitimate content.
+const recordReadLimit = 1 << 20
+
+// readRecordGuarded reads one record file through the shared trust-boundary
+// primitive: fsutil.ReadGuarded opens once with O_NOFOLLOW and validates on the
+// SAME descriptor, so no symlink swap fits between a check and the read. It
+// replaces Lstat-then-ReadFile everywhere in this family — the two-syscall shape
+// left a window a racing local writer could use to swap a link under the read
+// that licenses a stamp.
+//
+// The sentinels are mapped to this package's own: a non-regular leaf, or a
+// symlink refused by O_NOFOLLOW, is ErrPathUnsafe, which is what every caller
+// here already tests for.
+func readRecordGuarded(path string) (string, error) {
+	data, err := fsutil.ReadGuarded(path, recordReadLimit)
+	if err == nil {
+		return string(data), nil
 	}
-	if err != nil {
-		return fmt.Errorf("%w: lstat failed for %s: %v", ErrPathUnsafe, path, err)
+	if errors.Is(err, fsutil.ErrNotRegular) || errors.Is(err, syscall.ELOOP) {
+		return "", fmt.Errorf("%w: record path is not a regular file: %s", ErrPathUnsafe, path)
 	}
-	if fi.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("%w: record path is a symlink: %s", ErrPathUnsafe, path)
+	if errors.Is(err, fsutil.ErrTooBig) {
+		return "", fmt.Errorf("%w: record exceeds the %d-byte cap: %s", ErrPathUnsafe, recordReadLimit, path)
 	}
-	return nil
+	return "", err
 }
 
 // refuseSymlinkedDir is safeMkdirLeaf's guard without the mkdir: it refuses a
@@ -794,18 +806,14 @@ func readDispositions(itemDir string) ([]issueschema.DispositionRecord, error) {
 			continue
 		}
 		path := filepath.Join(itemDir, e.Name())
-		if err := refuseSymlinkedFile(path); err != nil {
-			return nil, err
-		}
-		fi, err := os.Lstat(path)
-		if err != nil || !fi.Mode().IsRegular() {
-			continue
-		}
-		content, err := os.ReadFile(path)
+		content, err := readRecordGuarded(path)
 		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
 			return nil, err
 		}
-		records = append(records, issueschema.ParseDisposition(id, string(content)))
+		records = append(records, issueschema.ParseDisposition(id, content))
 	}
 	return records, nil
 }
