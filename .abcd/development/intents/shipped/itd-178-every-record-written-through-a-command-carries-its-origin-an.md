@@ -59,3 +59,7 @@ None stated.
 - **Given** a hand-edited record carrying either key, **when** the lint
   runs, **then** the lint reports it.
 
+## Audit Notes
+
+<!-- abcd-review: OWED receipt=rcp-789188ac284f -->
+Fidelity review OWED (receipt rcp-789188ac284f).
