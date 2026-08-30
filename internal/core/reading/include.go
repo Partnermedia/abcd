@@ -136,12 +136,14 @@ func (r Row) AdmittedAt(p Position) bool {
 // Questions and its scope-condition dispositions carry no row here, so they
 // cannot travel however the record's shape changes around them.
 //
-// The list is a CONTRACT, not a census. `Scope Conditions` and `Mechanism` are
-// spc-55's headings and no shipped record carries them yet, so three fields
-// travel in this repository today and five will once that work lands. A field
-// the file does not carry simply contributes no item, which is what lets one
-// projection describe a record whose sections the record is still growing —
-// and what keeps the list from having to be edited on the day they appear.
+// The list is a CONTRACT, not a census, and the two differ per POSITION today.
+// `Scope Conditions` and `Mechanism` are spc-55's headings: no shipped intent
+// carries them, so the shipped rows yield three fields, while two drafts already
+// do, so the entailment position — the only one that reads drafts — projects all
+// five. A field the file does not carry simply contributes no item, which is
+// what lets one projection describe a record whose sections the record is still
+// growing, and what keeps this list from needing an edit on the day the rest of
+// the corpus catches up.
 var intentProjection = []string{
 	"Press Release",
 	"Acceptance Criteria",

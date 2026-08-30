@@ -805,3 +805,102 @@ func TestFencedTemplateExampleDoesNotRefuse(t *testing.T) {
 		t.Fatalf("a fenced template example refused the assembly: %v", err)
 	}
 }
+
+// TestSymlinkedOutDirIntoAnAdmittedRootRefuses: the self-admitting check
+// compares path text, so a symlink whose name is outside the table's reach and
+// whose target is inside it walks straight through.
+func TestSymlinkedOutDirIntoAnAdmittedRootRefuses(t *testing.T) {
+	root := fixtureRepo(t)
+	target := filepath.Join(root, "runs")
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(t.TempDir(), "elsewhere")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	if _, err := Assemble(AssembleRequest{
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", OutDir: link,
+	}); err == nil {
+		t.Fatal("an output directory symlinked into an admitted root was accepted")
+	}
+}
+
+// TestSymlinkedStoreDirectoryRefuses: os.Stat follows the link, so a store
+// pointed through one passes the directory check and then enumerates nothing,
+// because the record scan reads the real path.
+func TestSymlinkedStoreDirectoryRefuses(t *testing.T) {
+	root := fixtureRepo(t)
+	target := filepath.Join(root, "elsewhere-specs")
+	if err := os.MkdirAll(target, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(root, ".abcd/development/linked-specs")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	writeFile(t, root, LintConfigPath, `{"schema_version": 1, "rules": {"record_schema":
+  {"enabled": true, "severity": "blocker", "record_stores": {"itd": ".abcd/development/intents",
+   "spc": ".abcd/development/linked-specs"}}}}`)
+	gitCommitAll(t, root)
+
+	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	if err == nil {
+		t.Fatal("a store reached through a symlink was accepted")
+	}
+	if !strings.Contains(err.Error(), "linked-specs") {
+		t.Errorf("the refusal does not name the symlinked store: %v", err)
+	}
+}
+
+// TestAbsentWalkSourceRefuses: a walk row names a directory that must be there —
+// a brief chapter, the glossary. Absent, it enumerates nothing and the run
+// reports clean. A record store's BUCKET is different: an empty lifecycle bucket
+// is legitimate, so those stay silent by design.
+func TestAbsentWalkSourceRefuses(t *testing.T) {
+	root := fixtureRepo(t)
+	if err := os.RemoveAll(filepath.Join(root, ".abcd/development/brief/glossary")); err != nil {
+		t.Fatal(err)
+	}
+	gitCommitAll(t, root)
+
+	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	if err == nil {
+		t.Fatal("an absent include-row source directory assembled silently")
+	}
+	if !strings.Contains(err.Error(), "glossary") {
+		t.Errorf("the refusal does not name the absent source: %v", err)
+	}
+}
+
+// TestAnEmptyBucketStaysSilent is the other side of that line: removing a record
+// store's bucket is a legitimate state and must not refuse.
+func TestAnEmptyBucketStaysSilent(t *testing.T) {
+	root := fixtureRepo(t)
+	if err := os.RemoveAll(filepath.Join(root, ".abcd/development/intents/drafts")); err != nil {
+		t.Fatal(err)
+	}
+	gitCommitAll(t, root)
+
+	if _, err := Assemble(AssembleRequest{
+		RepoRoot: root, Position: PositionEntailment, Target: "HEAD", DryRun: true,
+	}); err != nil {
+		t.Fatalf("an absent lifecycle bucket refused the assembly: %v", err)
+	}
+}
+
+// TestAFailedManifestWriteLeavesNoBundle: the two artefacts are one run's
+// evidence. A bundle left behind by a half-finished run is both a partial record
+// and a directory that refuses every later run for being non-empty.
+func TestAFailedManifestWriteLeavesNoBundle(t *testing.T) {
+	dir := t.TempDir()
+	// A directory where the manifest must go: the write cannot succeed.
+	if err := os.MkdirAll(filepath.Join(dir, ManifestFileName), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := writePair(dir, []byte("{}\n"), []byte("{}\n")); err == nil {
+		t.Fatal("a manifest write onto a directory succeeded")
+	}
+	if _, err := os.Stat(filepath.Join(dir, BundleFileName)); !os.IsNotExist(err) {
+		t.Error("the bundle survived a failed manifest write")
+	}
+}

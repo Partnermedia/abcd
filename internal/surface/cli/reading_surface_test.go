@@ -15,7 +15,18 @@ import (
 // surface test proves the WIRING end to end rather than mocking the core.
 func readingRepo(t *testing.T) string {
 	t.Helper()
-	root := t.TempDir()
+	return readingRepoAt(t, t.TempDir())
+}
+
+// readingRepoAt builds the same fixture at a caller-chosen root, so a test about
+// PATH RESOLUTION can place the repository deep enough that its two candidate
+// bases both stay inside the test's own temporary directory. A test that wrote
+// outside it would leave state behind and pass or fail on the leavings.
+func readingRepoAt(t *testing.T, root string) string {
+	t.Helper()
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	write := func(rel, body string) {
 		abs := filepath.Join(root, filepath.FromSlash(rel))
 		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
@@ -36,6 +47,8 @@ func readingRepo(t *testing.T) string {
 		"---\nid: itd-2\n---\n\n# A discipline\n\nA standing commitment.\n")
 	write(".abcd/development/intents/drafts/itd-3-a-draft.md",
 		"---\nid: itd-3\n---\n\n# A draft\n\n## Press Release\n\nA candidate.\n")
+	write(".abcd/development/brief/glossary/core/construal.md", "# Construal\n\nWhat it is treated as.\n")
+	write("docs/reference/thing.md", "# Thing\n\nReference prose.\n")
 	write("README.md", "# The repository\n")
 	write("go.mod", "module example\n\ngo 1.24\n")
 
@@ -266,5 +279,37 @@ func TestBareReadingRenders(t *testing.T) {
 	}
 	if status.AssemblerVersion != reading.AssemblerVersion {
 		t.Errorf("status names assembler version %q", status.AssemblerVersion)
+	}
+}
+
+// TestRelativeOutResolvesAgainstTheWorkingDirectory: the core takes a relative
+// output directory against the repository root, which is right for the default
+// it computes itself and wrong for a path an operator typed. Run from a
+// subdirectory, `--out ../../x` must mean what the shell means by it.
+func TestRelativeOutResolvesAgainstTheWorkingDirectory(t *testing.T) {
+	repo := readingRepoAt(t, filepath.Join(t.TempDir(), "a", "b", "repo"))
+	sub := filepath.Join(repo, "docs")
+	t.Chdir(sub)
+
+	raw := runCLI(t, "reading", "assemble", "--position", "widening", "--target", "HEAD",
+		"--out", "../../outside-run", "--json")
+	var res reading.AssembleResult
+	if err := json.Unmarshal(raw, &res); err != nil {
+		t.Fatalf("the --json envelope does not decode: %v\n%s", err, raw)
+	}
+
+	fromCwd := filepath.Join(filepath.Dir(filepath.Dir(sub)), "outside-run")
+	fromRepoRoot := filepath.Join(filepath.Dir(filepath.Dir(repo)), "outside-run")
+	if fromCwd == fromRepoRoot {
+		t.Fatal("the two bases coincide, so this test proves nothing")
+	}
+	if _, err := os.Stat(filepath.Join(fromCwd, reading.BundleFileName)); err != nil {
+		t.Errorf("the artefacts did not land beside the working directory: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(fromRepoRoot, reading.BundleFileName)); err == nil {
+		t.Error("the artefacts landed against the repository root instead")
+	}
+	if !filepath.IsAbs(res.OutDir) {
+		t.Errorf("the result echoes %q rather than the resolved path", res.OutDir)
 	}
 }

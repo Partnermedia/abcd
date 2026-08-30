@@ -235,14 +235,24 @@ func writeArtefacts(repoRoot, outDir string, b Bundle, m Manifest) error {
 	if err != nil {
 		return err
 	}
-	// Both artefacts go through the repository's one atomic write: temp file,
-	// then rename. A reader never opens a half-written bundle, and a run that
-	// dies mid-write leaves no artefact rather than a plausible short one whose
-	// hash nothing matches.
-	if err := fsutil.WriteFileAtomic(filepath.Join(dir, BundleFileName), bundleRaw, 0o644); err != nil {
+	return writePair(dir, bundleRaw, manifestRaw)
+}
+
+// writePair writes the two artefacts, and leaves either both or neither.
+//
+// Each write is atomic on its own, which is not the same as the pair being
+// atomic. A manifest write that fails after the bundle landed leaves a run that
+// is half evidence — and worse, a directory that refuses every later run for
+// being non-empty, so the failure is permanent until someone clears it by hand.
+// The bundle is removed on that path, which puts the directory back the way the
+// run found it.
+func writePair(dir string, bundleRaw, manifestRaw []byte) error {
+	bundlePath := filepath.Join(dir, BundleFileName)
+	if err := fsutil.WriteFileAtomic(bundlePath, bundleRaw, 0o644); err != nil {
 		return fmt.Errorf("reading: writing the assembled input: %w", err)
 	}
 	if err := fsutil.WriteFileAtomic(filepath.Join(dir, ManifestFileName), manifestRaw, 0o644); err != nil {
+		os.Remove(bundlePath)
 		return fmt.Errorf("reading: writing the manifest: %w", err)
 	}
 	return nil
@@ -282,7 +292,16 @@ func refuseSelfAdmittingOutDir(repoRoot, outDir string) error {
 	if !filepath.IsAbs(abs) {
 		abs = filepath.Join(repoRoot, filepath.FromSlash(outDir))
 	}
-	rel, err := filepath.Rel(repoRoot, abs)
+	// Both sides are resolved through their symlinks before being compared. A
+	// lexical comparison reads a link by its NAME, so a directory named outside
+	// the table's reach whose target is inside it walks straight through — and a
+	// repository root reached through a link never matches its own paths.
+	realRoot, err := filepath.EvalSymlinks(repoRoot)
+	if err != nil {
+		realRoot = repoRoot
+	}
+	abs = resolveDeepest(abs)
+	rel, err := filepath.Rel(realRoot, abs)
 	if err != nil {
 		return nil // not expressible against the repository, so not inside it
 	}
@@ -301,6 +320,26 @@ func refuseSelfAdmittingOutDir(repoRoot, outDir string) error {
 		}
 	}
 	return nil
+}
+
+// resolveDeepest resolves the symlinks of the deepest ANCESTOR of p that exists,
+// then re-joins the missing tail. An output directory is usually absent — that
+// is the normal case — so resolving p itself would answer nothing about the
+// links on the way to it.
+func resolveDeepest(p string) string {
+	missing := []string{}
+	cur := p
+	for {
+		if resolved, err := filepath.EvalSymlinks(cur); err == nil {
+			return filepath.Join(append([]string{resolved}, missing...)...)
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			return p
+		}
+		missing = append([]string{filepath.Base(cur)}, missing...)
+		cur = parent
+	}
 }
 
 // resolveTarget validates the second operand and resolves it against HEAD.
@@ -565,10 +604,14 @@ func requireConfiguredStores(repoRoot string, cfg lint.Config) error {
 		// configuration did not follow — leaves the key in place and points it at
 		// nothing, and the scan then reports an empty store exactly as it reports
 		// a store with no records.
-		info, err := os.Stat(filepath.Join(repoRoot, filepath.FromSlash(dir)))
+		// Lstat, not Stat: Stat follows a link, so a store reached through one
+		// passes this check and then enumerates nothing, because the record scan
+		// walks the real path. A link is refused rather than followed.
+		info, err := os.Lstat(filepath.Join(repoRoot, filepath.FromSlash(dir)))
 		if err != nil || !info.IsDir() {
-			return fmt.Errorf("reading: %s points the %q record store at %s, which is not a directory, "+
-				"so the include row %q would enumerate nothing", LintConfigPath, row.Store, dir, row.Source)
+			return fmt.Errorf("reading: %s points the %q record store at %s, which is not a directory "+
+				"(a symlink is not followed), so the include row %q would enumerate nothing",
+				LintConfigPath, row.Store, dir, row.Source)
 		}
 	}
 	return nil
@@ -664,9 +707,18 @@ func rowPaths(repoRoot string, row Row, graph lint.RecordGraph) ([]string, error
 	base := repoRoot
 	if row.Source != "." {
 		base = filepath.Join(repoRoot, filepath.FromSlash(row.Source))
-	}
-	if _, err := os.Stat(base); os.IsNotExist(err) {
-		return nil, nil
+		// A walk row names a directory that must be there — a brief chapter, the
+		// glossary. Absent, it enumerates nothing and the run reports clean, which
+		// is the silent hole the store check already refuses one level up.
+		//
+		// A record store's BUCKET is deliberately not held to this: an empty
+		// lifecycle bucket is a legitimate state of the record, and those rows
+		// enumerate through the record graph rather than through this walk.
+		info, err := os.Lstat(base)
+		if err != nil || !info.IsDir() {
+			return nil, fmt.Errorf("reading: the include row %q names %s, which is not a directory "+
+				"(a symlink is not followed), so it would enumerate nothing", row.Source, row.Source)
+		}
 	}
 	err := filepath.WalkDir(base, func(abs string, d fs.DirEntry, err error) error {
 		if err != nil {

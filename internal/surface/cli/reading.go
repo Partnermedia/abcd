@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/reading"
@@ -91,11 +92,22 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return &exitError{Code: 2, Msg: "reading assemble: " + scrubPaths(err)}
 			}
+			// The core takes a relative output directory against the REPOSITORY
+			// root, which is right for the default it computes itself and wrong
+			// for a path an operator typed: `--out ./run` from a subdirectory
+			// means what the shell means by it. The front door is where that
+			// difference belongs, because the working directory is a transport
+			// fact the core does not hold.
+			cwd := mustCwd()
+			resolvedOut := outDir
+			if resolvedOut != "" && !filepath.IsAbs(resolvedOut) {
+				resolvedOut = filepath.Join(cwd, filepath.FromSlash(resolvedOut))
+			}
 			res, err := reading.Assemble(reading.AssembleRequest{
-				RepoRoot: captureRoot(mustCwd()),
+				RepoRoot: captureRoot(cwd),
 				Position: pos,
 				Target:   target,
-				OutDir:   outDir,
+				OutDir:   resolvedOut,
 				DryRun:   dryRun,
 			})
 			if err != nil {

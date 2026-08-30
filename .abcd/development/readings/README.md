@@ -34,15 +34,30 @@ Two rules bind the table itself (ruled 2026-08-28):
    change. The drafts asymmetry and the Audit Notes exclusion are its two
    instances, which is what makes the table derivable rather than remembered.
 
-A row's field list is a contract rather than a census. The intent projection
-names five fields; `Scope Conditions` and `Mechanism` are headings no shipped
-record carries yet, so three fields travel in this repository today and five
-travel once those sections exist. A field a file does not carry contributes no
-item.
+A row's field list is a contract rather than a census, and the two differ by
+position today. The intent projection names five fields. `Scope Conditions` and
+`Mechanism` are headings no shipped intent carries, so the shipped rows yield
+three; two drafts already carry them, so the entailment position — the only one
+that reads drafts — projects all five. A field a file does not carry contributes
+no item.
 
 A projected field ends where the redactor ends a section: at the next heading of
 the same level or shallower. A subsection therefore travels with the field it
 sits under, rather than being cut off at the first heading of any depth.
+
+The heading signal is scoped to markdown. A heading and a frontmatter key are
+things a record carries, and a source or configuration file carries neither, so
+those travel whole with no section scan run over them. Within markdown a heading
+is recognised however it is spelled: a closing sequence of hashes is normalised
+away, a heading inside a fenced block is an example rather than a field and is
+left alone, and an underlined heading is refused rather than redacted, because
+the scan this projection spans by does not model one.
+
+A walk row's source directory must exist, and its absence refuses the run: a
+brief chapter or the glossary going missing would otherwise enumerate nothing
+and report clean. A record store's lifecycle BUCKET is different — an empty
+bucket is a legitimate state of the record — so those rows stay silent, which is
+disclosed residue rather than a check.
 
 The exclusion floor is asserted into every manifest, each entry with the signal
 by which a reader detects it, so the exclusions are checkable rather than taken
