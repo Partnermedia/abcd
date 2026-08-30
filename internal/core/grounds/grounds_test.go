@@ -296,3 +296,30 @@ func TestGroundsFloorRefusalNamesTheUnitThatRefused(t *testing.T) {
 		}
 	}
 }
+
+// TestGroundsNoWordBreaksRefusalIsOnlyForScriptsWithout is iss-2608301455387795:
+// scriptioContinuaOnly picks the refusal that asks for LETTERS instead of words,
+// and two of its conditions had nothing holding them. Without the empty-unit
+// guard, a text carrying no letters at all takes the branch vacuously — "every
+// unit is a scriptio-continua letter" is true of no units. Without the letter
+// test, so does a text whose units are single-letter words of a script that does
+// separate words. Either way the caller is told the floor asks for letters
+// "where the script has no word breaks", which is not true of the text in front
+// of them and names a remedy that is not theirs; the word floor is.
+func TestGroundsNoWordBreaksRefusalIsOnlyForScriptsWithout(t *testing.T) {
+	for name, text := range map[string]string{
+		"no letters at all":   strings.Repeat(".", 20),
+		"single-letter words": "a b" + strings.Repeat(".", 18),
+	} {
+		_, err := New(Pursued, text)
+		if err == nil {
+			t.Fatalf("%s: New(%q) = nil error, want a refusal", name, text)
+		}
+		if strings.Contains(err.Error(), "no word breaks") {
+			t.Fatalf("%s: refusal of %q = %q, want a text whose script has word breaks not told otherwise", name, text, err)
+		}
+		if !strings.Contains(err.Error(), "word floor") {
+			t.Fatalf("%s: refusal of %q = %q, want the word floor named", name, text, err)
+		}
+	}
+}
