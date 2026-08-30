@@ -1,6 +1,10 @@
 package provenance
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/intentdriven/abcd/internal/core/issueschema"
+)
 
 func TestParseOriginThreeForms(t *testing.T) {
 	cases := []struct {
@@ -100,5 +104,19 @@ func TestNewStampRefusesTheUnmintableOrigin(t *testing.T) {
 	}
 	if _, err := NewStamp(KindResearcherAuthored, "typed"); err == nil {
 		t.Error("NewStamp with an out-of-vocabulary mode: want a refusal")
+	}
+}
+
+// TestKeysAreKnownToTheIssueSchema pins the two spellings of each key together.
+// issueschema cannot import this package (this one reads it for the reading
+// families' prefixes, so the arrow points one way only), and its allow-list
+// therefore carries the keys as literals — which is a second spelling, and a
+// second spelling is a divergence waiting for a rename. The reader refuses a key
+// it does not know, so a drift here makes every stamped record invisible.
+func TestKeysAreKnownToTheIssueSchema(t *testing.T) {
+	for _, key := range []string{KeyOrigin, KeyProductionMode} {
+		if !issueschema.Known[key] {
+			t.Errorf("issueschema.Known is missing %q; the ledger reader refuses a record carrying it", key)
+		}
 	}
 }
