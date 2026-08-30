@@ -80,8 +80,16 @@ func redactExcluded(rel, doc string, exclusions []Exclusion) (string, error) {
 			continue
 		}
 		drop[i] = true
+		// A block scalar's continuation lines are indented, and a blank line
+		// INSIDE one is still part of it — stopping at the first blank leaves the
+		// rest of the value sitting in the frontmatter. The run ends at the first
+		// non-blank line that is not indented.
 		for j := i + 1; j < len(lines); j++ {
-			if lines[j] == "" || (lines[j][0] != ' ' && lines[j][0] != '\t') {
+			if strings.TrimSpace(lines[j]) == "" {
+				drop[j] = true
+				continue
+			}
+			if lines[j][0] != ' ' && lines[j][0] != '\t' {
 				break
 			}
 			drop[j] = true
@@ -96,7 +104,7 @@ func redactExcluded(rel, doc string, exclusions []Exclusion) (string, error) {
 		return "", fmt.Errorf("reading: reading the sections of %s: %w", rel, err)
 	}
 	for i, sec := range sections {
-		if sec.Level == 0 || !headings[sec.Title] {
+		if sec.Level == 0 || !headings[normaliseHeadingTitle(sec.Title)] {
 			continue
 		}
 		start, end := sectionSpan(sections, i, len(lines))
@@ -120,12 +128,51 @@ func redactExcluded(rel, doc string, exclusions []Exclusion) (string, error) {
 	return out, nil
 }
 
-// excludedKeyLineRe matches an excluded key still at column 0. The key set is
-// small and fixed, so the pattern is composed from it rather than spelled twice.
-var excludedKeyLineRe = regexp.MustCompile(`^([A-Za-z_][A-Za-z0-9_-]*)\s*:`)
+var (
+	// excludedKeyLineRe matches an excluded key still at column 0. YAML permits
+	// the key to be quoted, and a quoted key is the same key — the field reader
+	// does not report it, so redaction leaves it and this is what notices.
+	excludedKeyLineRe = regexp.MustCompile(`^(?:"([A-Za-z_][A-Za-z0-9_-]*)"|'([A-Za-z_][A-Za-z0-9_-]*)'|([A-Za-z_][A-Za-z0-9_-]*))\s*:`)
+	// atxCloseRe matches an ATX heading's optional closing sequence. `## X ##`
+	// and `## X` are one heading, and the section scan reports the closing hashes
+	// as part of the title, so they are normalised away before any comparison.
+	atxCloseRe = regexp.MustCompile(`\s+#+\s*$`)
+	// setextRuleRe matches the underline that turns the line above it into a
+	// heading. The section scan does not model setext at all.
+	setextRuleRe = regexp.MustCompile(`^\s{0,3}(=+|-+)\s*$`)
+	// fenceOpenRe matches a fenced code block's delimiter, on the section scan's
+	// own rule so the two agree about what is inside a fence.
+	fenceOpenRe = regexp.MustCompile("^[ \t]*```")
+)
 
-// headingLineRe matches a markdown ATX heading and captures its title.
-var headingLineRe = regexp.MustCompile(`^(#{1,6})\s+(.*?)\s*$`)
+// normaliseHeadingTitle reduces a heading to the text it names: surrounding
+// whitespace and the optional ATX closing sequence removed.
+func normaliseHeadingTitle(title string) string {
+	return strings.TrimSpace(atxCloseRe.ReplaceAllString(strings.TrimSpace(title), ""))
+}
+
+// fenceMask reports, per line, whether that line sits inside a fenced code
+// block. It answers a LINE-level question the section scan does not expose —
+// that scan reports where the headings are, having already skipped the fences —
+// and the two scans share one fence rule so they cannot disagree about it.
+//
+// It is what keeps this floor from firing on a document that merely SHOWS the
+// record template: a fenced example carries frontmatter and headings that are
+// examples, not fields, and refusing them would stop every assembly the
+// repository can run.
+func fenceMask(lines []string) []bool {
+	mask := make([]bool, len(lines))
+	inside := false
+	for i, line := range lines {
+		if fenceOpenRe.MatchString(line) {
+			inside = !inside
+			mask[i] = true // the delimiter itself belongs to the block
+			continue
+		}
+		mask[i] = inside
+	}
+	return mask
+}
 
 // verifyRedaction is the key-and-heading half of the exclusion floor made
 // fail-closed, the way the path half already is.
@@ -143,6 +190,9 @@ var headingLineRe = regexp.MustCompile(`^(#{1,6})\s+(.*?)\s*$`)
 // quietly walk through is a disclosure, not a gate — so a file that still
 // carries an excluded shape after redaction refuses the run and names the shape.
 func verifyRedaction(rel, original, redacted string, keys, headings map[string]bool) error {
+	lines := strings.Split(redacted, "\n")
+	fenced := fenceMask(lines)
+
 	if len(keys) > 0 {
 		for _, dup := range frontmatter.Duplicates(strings.Split(original, "\n")) {
 			if keys[dup.Key] {
@@ -150,7 +200,7 @@ func verifyRedaction(rel, original, redacted string, keys, headings map[string]b
 					"only the first occurrence is redactable, so the rest would travel", rel, dup.Key, dup.Line)
 			}
 		}
-		if line, key, ok := excludedKeyInFirstBlock(redacted, keys); ok {
+		if line, key, ok := excludedKeyInFirstBlock(lines, fenced, keys); ok {
 			return fmt.Errorf("reading: %s still carries the excluded key %q at line %d after redaction; "+
 				"the frontmatter block is not closed the way the field reader expects it", rel, key, line)
 		}
@@ -158,16 +208,47 @@ func verifyRedaction(rel, original, redacted string, keys, headings map[string]b
 	if len(headings) == 0 {
 		return nil
 	}
-	for i, line := range strings.Split(redacted, "\n") {
-		m := headingLineRe.FindStringSubmatch(line)
-		if m == nil {
+
+	// The heading check runs over the SAME fence-aware scan the redactor spans
+	// by. Reading raw lines instead made this floor fire on a fenced example of
+	// the record template — a heading inside a code block is an example, not a
+	// field, and the redactor rightly left it alone while this refused the run.
+	body, offset := site.StripFrontmatter(redacted)
+	sections, err := site.Sections(rel, body, offset)
+	if err != nil {
+		return fmt.Errorf("reading: re-reading the sections of %s: %w", rel, err)
+	}
+	for _, sec := range sections {
+		if sec.Level == 0 {
 			continue
 		}
-		for title := range headings {
-			if strings.EqualFold(m[2], title) {
+		title := normaliseHeadingTitle(sec.Title)
+		for want := range headings {
+			if strings.EqualFold(title, want) {
 				return fmt.Errorf("reading: %s still carries the excluded heading %q at line %d after "+
 					"redaction; the floor names %q, and a heading is excluded however it is spelled",
-					rel, m[2], i+1, title)
+					rel, sec.Title, sec.Line, want)
+			}
+		}
+	}
+
+	// Setext headings are a refusal rather than a redaction. The section scan
+	// does not model them, so there is no span to delete, and inventing a second
+	// heading scanner here to compute one is the second parser this package
+	// exists not to grow. A record underlining its Audit Notes is rare and a
+	// refusal names it; a leak would not.
+	for i := 0; i+1 < len(lines); i++ {
+		if fenced[i] || fenced[i+1] || !setextRuleRe.MatchString(lines[i+1]) {
+			continue
+		}
+		title := normaliseHeadingTitle(lines[i])
+		if title == "" {
+			continue
+		}
+		for want := range headings {
+			if strings.EqualFold(title, want) {
+				return fmt.Errorf("reading: %s underlines the excluded heading %q at line %d; the floor "+
+					"names %q, and a heading is excluded however it is spelled", rel, lines[i], i+1, want)
 			}
 		}
 	}
@@ -184,10 +265,12 @@ func verifyRedaction(rel, original, redacted string, keys, headings map[string]b
 // wherever it starts rather than at line 0, because a preamble ahead of the
 // block makes the field reader report nothing at all while the keys sit there
 // in plain sight.
-func excludedKeyInFirstBlock(doc string, keys map[string]bool) (int, string, bool) {
-	lines := strings.Split(doc, "\n")
+func excludedKeyInFirstBlock(lines []string, fenced []bool, keys map[string]bool) (int, string, bool) {
 	open := -1
 	for i, line := range lines {
+		if fenced[i] {
+			continue
+		}
 		trimmed := strings.TrimSpace(line)
 		if i == 0 {
 			trimmed = strings.TrimSpace(frontmatter.TrimBOM(line))
@@ -201,12 +284,20 @@ func excludedKeyInFirstBlock(doc string, keys map[string]bool) (int, string, boo
 		return 0, "", false
 	}
 	for i := open + 1; i < len(lines); i++ {
+		if fenced[i] {
+			continue
+		}
 		if strings.HasPrefix(strings.TrimSpace(lines[i]), "---") {
 			return 0, "", false
 		}
 		m := excludedKeyLineRe.FindStringSubmatch(lines[i])
-		if m != nil && keys[m[1]] {
-			return i + 1, m[1], true
+		if m == nil {
+			continue
+		}
+		for _, key := range m[1:] {
+			if key != "" && keys[key] {
+				return i + 1, key, true
+			}
 		}
 	}
 	return 0, "", false

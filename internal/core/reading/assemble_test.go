@@ -730,3 +730,78 @@ func assertRefusesOwnArtefact(t *testing.T, root, what, rel string) {
 		t.Errorf("%s: the refusal does not name the artefact: %v", what, err)
 	}
 }
+
+// The spellings the floor's heading and key halves did not recognise. Each is an
+// excluded field travelling while the manifest asserts it refused.
+func TestExcludedHeadingSpellingsAreRecognised(t *testing.T) {
+	cases := map[string]string{
+		"an ATX closing sequence":       "## Audit Notes ##\n\n" + sentinelAuditNotes + "\n",
+		"a single closing hash":         "## Audit Notes #\n\n" + sentinelAuditNotes + "\n",
+		"a closing sequence with space": "## Audit Notes ##   \n\n" + sentinelAuditNotes + "\n",
+		"a setext underline":            "Audit Notes\n---\n\n" + sentinelAuditNotes + "\n",
+		"a setext rule":                 "Audit Notes\n===\n\n" + sentinelAuditNotes + "\n",
+	}
+	for what, body := range cases {
+		root := fixtureRepo(t)
+		writeFile(t, root, ".abcd/development/specs/open/spc-9-spelled.md",
+			"---\nid: spc-9\n---\n\n# A spec\n\nProse.\n\n"+body)
+		gitCommitAll(t, root)
+
+		res, err := Assemble(AssembleRequest{
+			RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+		})
+		if err != nil {
+			continue // a refusal is a legitimate way to recognise the spelling
+		}
+		if strings.Contains(bundleText(res.Bundle), sentinelAuditNotes) {
+			t.Errorf("%s let an excluded section travel", what)
+		}
+	}
+}
+
+// TestQuotedExcludedKeyIsRecognised: the field reader does not report a quoted
+// key, so redaction leaves it and the manifest asserts a refusal that did not
+// happen.
+func TestQuotedExcludedKeyIsRecognised(t *testing.T) {
+	root := fixtureRepo(t)
+	writeFile(t, root, ".abcd/development/specs/open/spc-7-quoted.md",
+		"---\nid: spc-7\n\"origin\": "+sentinelOrigin+"\n---\n\n# A spec\n\nProse.\n")
+	gitCommitAll(t, root)
+
+	res, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	if err == nil && strings.Contains(bundleText(res.Bundle), sentinelOrigin) {
+		t.Error("a quoted excluded key travelled")
+	}
+}
+
+// TestBlockScalarWithABlankLineIsFullyRedacted: the drop loop stopped at the
+// first blank line, so the rest of a block scalar stayed in the frontmatter.
+func TestBlockScalarWithABlankLineIsFullyRedacted(t *testing.T) {
+	root := fixtureRepo(t)
+	writeFile(t, root, ".abcd/development/specs/open/spc-8-block.md",
+		"---\nid: spc-8\norigin: |\n  a first line\n\n  "+sentinelOrigin+"\nspec: kept\n---\n\n# A spec\n\nProse.\n")
+	gitCommitAll(t, root)
+
+	res, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	if err == nil && strings.Contains(bundleText(res.Bundle), sentinelOrigin) {
+		t.Error("a block scalar's tail survived the blank line inside it")
+	}
+}
+
+// TestFencedTemplateExampleDoesNotRefuse is the false-positive half, and it
+// matters as much as the leaks: the redactor is fence-aware and the verifier was
+// not, so a fenced example of the record template in ANY admitted document
+// refused every assembly the repository could run.
+func TestFencedTemplateExampleDoesNotRefuse(t *testing.T) {
+	root := fixtureRepo(t)
+	writeFile(t, root, "docs/reference/template.md",
+		"# The record template\n\nA record looks like this:\n\n"+
+			"```markdown\n---\nid: itd-1\norigin: scribe\n---\n\n## Audit Notes\n\nThe audit goes here.\n```\n")
+	gitCommitAll(t, root)
+
+	if _, err := Assemble(AssembleRequest{
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+	}); err != nil {
+		t.Fatalf("a fenced template example refused the assembly: %v", err)
+	}
+}
