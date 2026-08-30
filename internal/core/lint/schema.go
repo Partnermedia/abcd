@@ -168,6 +168,12 @@ type schemaRecord struct {
 	// reads as empty — and an empty read here would make the bidirectional check
 	// assert, confidently and falsely, that another file omits a link it carries.
 	refs map[string][]recordRef
+	// blocks holds the block-spelled value of every key whose same-line value is
+	// empty, read once at scan time for the same reason refs is. Without it a rule
+	// asking "is this scalar property present?" answers no for a value the file
+	// plainly carries on the following lines, and goes green on a record the
+	// reader refuses and skips (iss-2608300234599781).
+	blocks map[string]string
 }
 
 // handle renders the record's prose handle (adr-12, itd-47).
@@ -556,6 +562,17 @@ func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
 	if hasLapseField && !isNull(strings.TrimSpace(lapseField.value)) {
 		lapsedAt = strings.TrimSpace(issueScalar(lapseField.value))
 	}
+	// A key whose own line carries no value may still carry one, on the indented
+	// lines below it. The shared scanner is a same-line scanner, so it reports that
+	// as empty; capture's reader builds the mapping and refuses the record because
+	// lapsed_at must be a string, then skips it. Reading the block-spelled value as
+	// ABSENT here would leave that record lint-green on any category but lapse —
+	// the sibling of the list case, and the same silent invisibility
+	// (iss-2608300234599781). What the block SAYS is not parsed: it is present, and
+	// it is no instant, which is the whole of the finding.
+	if hasLapseField && lapsedAt == "" && strings.TrimSpace(lapseField.value) == "" {
+		lapsedAt = r.blocks["lapsed_at"]
+	}
 	if f, present := r.fields["category"]; present && !isAbsentValue(f.value) &&
 		issueschema.LapsedAtRequired(issueScalar(f.value)) && lapsedAt == "" {
 		add(f.line, "lapse record carries no 'lapsed_at'; capture refuses a lapse entry with no instant at which the discipline gave way and skips the record")
@@ -683,6 +700,7 @@ func scanRecordStores(repoRoot string, cfg RuleConfig) ([]schemaRecord, []Findin
 					title:  recordTitle(lines),
 					fields: fields,
 					refs:   recordRefsOf(lines, fields),
+					blocks: frontmatterBlocksOf(lines, fields),
 				})
 			}
 			return nil
@@ -797,27 +815,78 @@ func recordRefsOf(lines []string, fields map[string]fmField) map[string][]record
 // block sequence under a mapping key at column 0 too, which the record uses.
 func blockSequenceAt(lines []string, line int) string {
 	var items []string
-	for i := line; i >= 1 && i < len(lines); i++ {
-		trimmed := strings.TrimSpace(lines[i])
-		// A blank line or a comment INTERRUPTS a sequence without ending it: YAML
-		// reads `- a`, blank, `# why`, `- b` as one two-item list. Stopping at the
-		// interruption would drop the tail — and a dropped item is not a quiet
-		// under-read here, it makes the bidirectional check assert that ANOTHER
-		// file omits a link that file carries, the exact false claim this parse
-		// exists to prevent. The closing `---` is neither, so the scan still ends
-		// at the frontmatter boundary.
-		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
-			continue
-		}
-		// A block sequence nested under a mapping key needs NO extra indentation:
-		// `key:\n- item` is the same list as `key:\n  - item`, and the record writes
-		// both. Only a line that is not a list item at all ends the scan.
+	for _, trimmed := range frontmatterBlockAt(lines, line) {
+		// Only a line that is not a list item at all ends the sequence. The walker
+		// also yields an indented non-item continuation (a nested MAPPING), which is
+		// not a sequence item and stops the read here exactly as an unindented line
+		// would have.
 		if !strings.HasPrefix(trimmed, "- ") {
 			break
 		}
 		items = append(items, strings.TrimPrefix(trimmed, "- "))
 	}
 	return strings.Join(items, ", ")
+}
+
+// frontmatterBlockAt is the ONE walker over the lines that continue a
+// frontmatter key whose own line carries no value, returning them trimmed and in
+// order. The shared frontmatter scanner reads same-line values only — correct for
+// its own job — so every reader that must see a block-spelled value walks it
+// here rather than growing a scanner of its own.
+//
+// line is the key's 1-based source line, so the scan starts at the line after it.
+// It yields two shapes, because YAML spells a blank-valued key's value two ways
+// and the record uses both: a block SEQUENCE item (`- x`, at any indentation —
+// `key:\n- item` is the same list as `key:\n  - item`) and an INDENTED
+// continuation, which is how a nested mapping is written. The scan stops at the
+// first line that is neither: the next key at column 0, the closing delimiter, or
+// the end of the file.
+//
+// A blank line or a comment INTERRUPTS a block without ending it: YAML reads
+// `- a`, blank, `# why`, `- b` as one two-item list. Stopping at the interruption
+// would drop the tail — and a dropped item is not a quiet under-read for the
+// handle reader, it makes the bidirectional check assert that ANOTHER file omits
+// a link that file carries, the exact false claim that parse exists to prevent.
+// The closing `---` is neither blank nor a comment, so the scan still ends at the
+// frontmatter boundary.
+func frontmatterBlockAt(lines []string, line int) []string {
+	var block []string
+	for i := line; i >= 1 && i < len(lines); i++ {
+		raw := lines[i]
+		trimmed := strings.TrimSpace(raw)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		indented := strings.HasPrefix(raw, " ") || strings.HasPrefix(raw, "\t")
+		if !strings.HasPrefix(trimmed, "- ") && !indented {
+			break
+		}
+		block = append(block, trimmed)
+	}
+	return block
+}
+
+// frontmatterBlocksOf reads, once per record, the block continuation of every key
+// whose same-line value is empty — the shape the same-line scanner reports as no
+// value at all. It is held on the record for the same reason refs is: a rule that
+// re-read the lines would be a second parse of one spelling, and a rule that
+// skipped the look-ahead would read a value that is plainly in the file as absent.
+func frontmatterBlocksOf(lines []string, fields map[string]fmField) map[string]string {
+	var blocks map[string]string
+	for key, f := range fields {
+		if strings.TrimSpace(f.value) != "" {
+			continue
+		}
+		block := frontmatterBlockAt(lines, f.line)
+		if len(block) == 0 {
+			continue
+		}
+		if blocks == nil {
+			blocks = map[string]string{}
+		}
+		blocks[key] = strings.Join(block, ", ")
+	}
+	return blocks
 }
 
 // recordRefsIn reads every record handle out of a frontmatter value, tolerating
