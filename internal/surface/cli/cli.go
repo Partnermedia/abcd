@@ -1555,7 +1555,7 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := intent.Plan(cwd, args[0])
+			res, err := intent.Plan(cwd, args[0], "")
 			if err != nil {
 				return &exitError{Code: 2, Msg: "abcd intent plan: " + err.Error()}
 			}
@@ -1679,7 +1679,7 @@ const ideateRoutingRule = "  a big, unproven idea? `abcd ideate` runs the option
 // engine refuses empty/whitespace text and mints the id under the store lock, so
 // this surface stays a thin marshaller.
 func createIntentFromText(cmd *cobra.Command, cwd, text, impact string, asJSON bool) error {
-	it, mintWarning, err := intent.CreateFromText(cwd, text, impact)
+	it, mintWarning, err := intent.CreateFromText(cwd, text, impact, "")
 	if err != nil {
 		return &exitError{Code: 2, Msg: "abcd intent: " + err.Error()}
 	}
