@@ -2298,3 +2298,40 @@ func TestDuplicateKeyClaimIsScopedToThisRulesOwnScanner(t *testing.T) {
 		}
 	}
 }
+
+// isAbsentValue's enumeration is a SPELLING test, not a null test, and the two
+// sentences that describe it — its own godoc and the `grounds` paragraph in
+// commands/capture.md — used to read as a complete account of what carries
+// nothing. It is not: `!!null null` and `!<tag:yaml.org,2002:null>` are the same
+// YAML node as the `!!null` the predicate accepts, and both read as PRESENT here
+// (iss-2608301808193750).
+//
+// This pins the boundary the two sentences now claim, in both directions: the
+// listed spellings are absent, and the tagged, anchored and aliased ones are not.
+// Widening the predicate is deliberately NOT what this asks for — that is
+// iss-2608301808198621's altitude question, and adding an eleventh literal leaves
+// a twelfth. What the pin buys is that the widening cannot land quietly: the day
+// the predicate learns the null CLASS, this goes red on the prose that still
+// tells a reader which spellings pass.
+func TestIsAbsentValueIsASpellingTestNotANullTest(t *testing.T) {
+	// The spellings the enumeration claims, and the whole of what it claims.
+	for _, v := range []string{
+		"", "   ", `""`, `"  "`, "''", "[]", "{}", "[ ]", "{ }",
+		"~", "null", "Null", "NULL", "!!null",
+	} {
+		if !isAbsentValue(v) {
+			t.Errorf("the gate reads %q as carrying no value: %+v", v, isAbsentValue(v))
+		}
+	}
+	// The spellings outside it. Each carries nothing in YAML and each passes the
+	// gate green, which is exactly what the prose beside the predicate says.
+	for _, v := range []string{
+		"!!null null", "!<tag:yaml.org,2002:null>", "!!str ''", "&anchor", "*alias",
+		"!!seq []", "!!map {}", "!!null ~", `!!str ""`,
+	} {
+		if isAbsentValue(v) {
+			t.Errorf("%q is outside the spellings this predicate tests; if it now reads as absent, "+
+				"the enumeration in its godoc and in the capture surface has to change with it", v)
+		}
+	}
+}
