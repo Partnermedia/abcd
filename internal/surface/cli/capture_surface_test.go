@@ -557,3 +557,48 @@ func TestCaptureDispositionWritesTheKeyedRecord(t *testing.T) {
 		t.Fatalf("the disposition record must exist on disk: %v", err)
 	}
 }
+
+// The outstanding-readings roster rides the bare status board. This is the
+// wiring assertion: the rule and the board call one function, so an item nobody
+// has answered is visible where a person actually looks, not only in a lint run
+// they have to remember to make.
+func TestCaptureBoardCarriesTheOutstandingRoster(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+	writeReadingFixture(t, repo, "rdg-2608300000000001", "rdi-2608300000000002")
+
+	out := runCLI(t, "capture", "--json")
+	var r struct {
+		Outstanding struct {
+			Undispositioned []struct {
+				Item string `json:"item"`
+			} `json:"undispositioned"`
+			OpenHolds []struct {
+				Item          string `json:"item"`
+				ExitCondition string `json:"exit_condition"`
+			} `json:"open_holds"`
+		} `json:"reading_outstanding"`
+	}
+	if err := json.Unmarshal(out, &r); err != nil {
+		t.Fatalf("capture board not JSON: %v\n%s", err, out)
+	}
+	if len(r.Outstanding.Undispositioned) != 1 || r.Outstanding.Undispositioned[0].Item != "rdi-2608300000000002" {
+		t.Fatalf("the board must carry the undispositioned item; got %+v\n%s", r.Outstanding, out)
+	}
+
+	// A held item renders on the board WITH its exit condition, which is the only
+	// thing that distinguishes a hold from a parking space.
+	if err := os.MkdirAll(filepath.Join(repo, ".abcd", "work", "issues", "dispositions", "rdi-2608300000000002"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(repo, ".abcd", "work", "issues", "dispositions", "rdi-2608300000000002", "dsp-2608300000000003.md"),
+		[]byte("---\nschema_version: 1\nid: \"dsp-2608300000000003\"\nitem: \"rdi-2608300000000002\"\n"+
+			"state: \"held\"\nexit_condition: \"the closing run returns it again\"\n---\n\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	text := string(runCLI(t, "capture"))
+	if !strings.Contains(text, "exits when: the closing run returns it again") {
+		t.Fatalf("the board must render an open hold with its exit condition:\n%s", text)
+	}
+}

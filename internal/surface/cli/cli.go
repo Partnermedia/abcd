@@ -2847,6 +2847,8 @@ type captureBoard struct {
 // captureBoardOf composes the board, normalising the report's collections to
 // empty slices: a collection is never null in this surface's envelope.
 func captureBoardOf(repoRoot string, st capture.StatusResult) (captureBoard, error) {
+	// repoRoot is the SAME value handed to capture.Status, so the two halves of
+	// one board can never resolve two different ledgers.
 	report, err := lint.ReadReadingOutstanding(repoRoot, capture.LedgerRelPath)
 	if err != nil {
 		return captureBoard{}, err
