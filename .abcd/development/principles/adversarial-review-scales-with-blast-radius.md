@@ -47,6 +47,18 @@ finding real defects to the last one, including a false claim inside an
 already-resolved record. What they reduce is re-reading. Every question about
 new code still gets asked, once.
 
+**Measured the same day, and the first rule's justification changed.** Delta
+scoping was adopted to save spend and saves 16.8%, against a predicted 50-60%,
+even though the diffs shrank from 42 commits to 10 and from 40 to 6. Review cost
+here turns out to be dominated by EXPERIMENTATION rather than reading — these
+reviewers build harnesses, sweep spellings, run mutation matrices and probe
+whole corpora, and that work scales with the surface under test, not with the
+diff. What the rule demonstrably buys is FINDING RATE: the delta pairs surfaced
+a critical availability defect and a recursive claim defect that four
+full-branch passes over the same code had missed, apparently because a reviewer
+given six commits reads them and one given forty-two skims. Keep the rule,
+justify it on findings, and look to the NUMBER of rounds for cost.
+
 **Bounds.**
 
 - "Independent" is [evaluator-outside-the-loop](evaluator-outside-the-loop.md):

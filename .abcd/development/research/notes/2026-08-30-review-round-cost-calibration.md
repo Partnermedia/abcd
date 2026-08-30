@@ -83,9 +83,8 @@ principle's build-round half:
   does not gets one. This is the repository's existing rule for changes,
   applied to rounds, which is where it had never been applied.
 
-Applied to the four remaining intents (itd-184, itd-185, itd-186, itd-187) the
-expected saving is 50-60% of review spend at unchanged correctness bar, because
-every question about new code still gets asked, once.
+The expected saving was put at 50-60% of review spend at unchanged correctness
+bar. **That prediction was wrong, and the measurement is in the next section.**
 
 ## What this does not settle
 
@@ -104,3 +103,61 @@ meters development acts, and the near-miss records estimate forward without ever
 measuring. Parked as
 [the token metering gap](2026-08-30-development-token-metering-gap.md) for the
 next phase to file or reject.
+
+## Measured, the same day: the prediction was wrong and the rule still holds
+
+The three rules were adopted mid-cycle and both branches then ran a delta-scoped
+pair. Four full-branch reviews and four delta reviews, same two branches, same
+reviewer agents, same model.
+
+| | reviews | tokens | mean |
+|---|---|---|---|
+| full-branch (round 5) | 4 | 757,664 | 189,416 |
+| delta-scoped | 4 | 630,707 | 157,676 |
+
+**16.8%, against a predicted 50-60%.** The branches were LARGER by the time the
+delta pairs ran, and the diffs they were given were far smaller — b189 went from
+42 commits to 10, b179 from 40 to 6 — so a reading-bound cost model predicts a
+saving several times what was observed.
+
+The model was wrong. **Review cost here is dominated by experimentation, not by
+reading.** These reviews build harnesses and run them: 36 spellings of one field
+probed end to end, 17 injection payloads, ten-mutation matrices with each guard
+reverted in turn, a probe of all 933 committed records, an enumeration of the
+entire Unicode code space. That work scales with the SURFACE under test and with
+the reviewer's own thoroughness, not with the number of commits in the diff.
+Scoping the diff caps the reading and barely touches the probing.
+
+So the first rule does not pay for itself on cost, and the note that said it
+would was reasoning about the wrong variable.
+
+**It pays on quality, which is the better reason and was not the one given.**
+The four delta pairs found, among other things, a critical availability defect
+reproduced end to end through the production entry point (an ordinary sentence
+in an issue body permanently locking the record out of every triage route, with
+a minted draft orphaned per attempt), and a claim defect that was RECURSIVE —
+an audit commissioned to stop a claim being carried across stores without
+checking each, which enumerated three stores and stopped one short. Four
+full-branch passes over substantially the same code had not found either. The
+plausible reason is unglamorous: a reviewer given six commits reads them, and a
+reviewer given forty-two skims.
+
+**Revised conclusions.**
+
+- Keep the delta rule, and justify it on FINDING RATE rather than on spend. It
+  is a quality intervention that happens to be slightly cheaper.
+- The cost lever is the NUMBER OF ROUNDS, not the size of each. A round costs
+  roughly 190k whatever it reads, so the nit rule — which stops five sentences
+  triggering a fresh pair — is where the money is. Fourteen nits were captured
+  rather than re-opened across these two branches; that saving is real but
+  PROSPECTIVE and is not measured here.
+- The trust-boundary rule saved nothing on this workstream. Nearly everything
+  here parses records, so both branches qualified for a pair every time. It may
+  discriminate on a workstream with more pure-refactor rounds; on this evidence
+  it is untested rather than validated.
+
+**A caution about this table.** Eight data points, one workstream, one model,
+one day, and the reviewers were given different instructions in the two
+conditions (the delta briefs also carried do-not-re-report lists for
+already-captured findings, which suppresses some duplicate work). The direction
+is trustworthy; the 16.8% is not a constant to plan with.
