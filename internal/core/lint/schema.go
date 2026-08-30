@@ -570,14 +570,29 @@ func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
 	// the sibling of the list case, and the same silent invisibility
 	// (iss-2608300234599781). What the block SAYS is not parsed: it is present, and
 	// it is no instant, which is the whole of the finding.
+	fromBlock := false
 	if hasLapseField && lapsedAt == "" && strings.TrimSpace(lapseField.value) == "" {
-		lapsedAt = r.blocks["lapsed_at"]
+		if block := r.blocks["lapsed_at"]; block != "" {
+			lapsedAt, fromBlock = block, true
+		}
 	}
 	if f, present := r.fields["category"]; present && !isAbsentValue(f.value) &&
 		issueschema.LapsedAtRequired(issueScalar(f.value)) && lapsedAt == "" {
 		add(f.line, "lapse record carries no 'lapsed_at'; capture refuses a lapse entry with no instant at which the discipline gave way and skips the record")
 	}
-	if lapsedAt != "" && !issueschema.ValidLapsedAt(lapsedAt) {
+	switch {
+	case fromBlock:
+		// A block-spelled value is refused whatever it spells, so its CONTENT is
+		// never put to the format check. capture splits an indented continuation on
+		// its first colon and builds a mapping — `lapsed_at:` over an indented
+		// 2026-08-28T00:00:00Z becomes map["2026-08-28T00"]="00:00Z" — and then
+		// refuses the record because lapsed_at must be a string; an indented line
+		// that is no key at all is refused earlier still, at the parse. Handing the
+		// joined block to ValidLapsedAt would pass exactly the spelling that reads
+		// like an instant and is not one, which is the gap the look-ahead exists to
+		// close (iss-2608300244489638).
+		add(lapseField.line, "lapsed_at is spelled as an indented block; capture reads a block-spelled value as a mapping rather than a string, refuses the record and skips it — a lapse time is an RFC 3339 instant on the key's own line")
+	case lapsedAt != "" && !issueschema.ValidLapsedAt(lapsedAt):
 		add(lapseField.line, "lapsed_at '"+lapsedAt+"' is not an RFC 3339 instant (want 2026-08-28T00:00:00Z); capture refuses the record and skips it")
 	}
 	return out

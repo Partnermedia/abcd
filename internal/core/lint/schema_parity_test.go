@@ -208,13 +208,13 @@ func TestIssueRecordShapeFlagsLapseWithoutLapsedAt(t *testing.T) {
 		return record(id, slug, "lapse", lapsedAt)
 	}
 	// A lapsed_at whose own line carries no value and whose value is an indented
-	// block mapping on the lines that follow. The shared frontmatter scanner reads
+	// continuation on the lines that follow. The shared frontmatter scanner reads
 	// same-line values only, so this is the one shape it sees as empty.
-	blockMapped := func(id, slug, category string) string {
+	blockValued := func(id, slug, category, continuation string) string {
 		return "---\nschema_version: 1\nid: " + id + "\nslug: " + slug +
 			"\nseverity: minor\ncategory: " + category +
 			"\nsource: user-observation\nfound_during: preparation\n" +
-			"lapsed_at:\n  intent: itd-1\n---\n\na record\n"
+			"lapsed_at:\n  " + continuation + "\n---\n\na record\n"
 	}
 
 	cases := []struct {
@@ -248,8 +248,16 @@ func TestIssueRecordShapeFlagsLapseWithoutLapsedAt(t *testing.T) {
 		// skipping it; the same-line scanner sees an empty value, so without the
 		// look-ahead the gate reads a value that is plainly there as absent and goes
 		// green on a record no capture surface can see (iss-2608300234599781).
-		{"map on a non-lapse", "iss-13-obs-c.md", blockMapped("iss-13", "obs-c", "observation"), "is not an RFC 3339 instant"},
-		{"map on a lapse", "iss-14-lapse-g.md", blockMapped("iss-14", "lapse-g", "lapse"), "is not an RFC 3339 instant"},
+		{"map on a non-lapse", "iss-13-obs-c.md", blockValued("iss-13", "obs-c", "observation", "intent: itd-1"), "spelled as an indented block"},
+		{"map on a lapse", "iss-14-lapse-g.md", blockValued("iss-14", "lapse-g", "lapse", "intent: itd-1"), "spelled as an indented block"},
+		// The block continuation that READS as a valid instant. It is the case the
+		// block look-ahead must not hand to the format validator: capture splits the
+		// indented line on its first colon and builds map["2026-08-28T00"]="00:00Z",
+		// then refuses the record because lapsed_at must be a string. A block-spelled
+		// value is never a string to the reader, whatever its text spells, so the
+		// finding is its presence rather than its content (iss-2608300244489638).
+		{"block instant on a non-lapse", "iss-15-obs-d.md", blockValued("iss-15", "obs-d", "observation", "2026-08-28T00:00:00Z"), "spelled as an indented block"},
+		{"block instant on a lapse", "iss-16-lapse-h.md", blockValued("iss-16", "lapse-h", "lapse", "2026-08-28T00:00:00Z"), "spelled as an indented block"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
