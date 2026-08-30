@@ -21,7 +21,7 @@ The scope this brief covers is bounded by what is bundled into the eight planned
 **Phased intents — derived, never hand-counted here.** The intents each phase
 bundles are named in that phase doc's `## Scope` section — the single source of
 the mapping ([adr-9](../../decisions/adrs/0009-phase-as-product-layer.md)); the
-phased set is the union across the seven phase docs, and this page keeps no
+phased set is the union across the eight phase docs, and this page keeps no
 static copy of it (a hand-kept count re-drifts the moment a phase doc changes,
 the same failure the roadmap dashboard avoids by deriving counts from disk).
 The set spans two of the three kinds: standalone capabilities, plus the three

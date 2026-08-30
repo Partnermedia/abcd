@@ -57,11 +57,12 @@ the record rather than in a transcript that is discarded.
   treated as, in one or two sentences — the surface a widening reading reads
   against; where it describes an intention rather than a commitment it
   carries the not-yet-real marker.
-- The not-yet-real marker's form (proposed 2026-08-27, ratification pending): a fixed bold
-  status-line token opening the passage — the file-level `Status: LIVE`
+- The not-yet-real marker's form (ratified 2026-08-30): a blockquote line
+  holding exactly `**Status: NOT YET REAL.**`, a blank line, then the
+  statement as the first paragraph — the file-level `Status: LIVE`
   convention carried to passage level. One exact token, reader-visible in
   the rendered prose, lintable later without new machinery.
-- **Ruled (maintainer, 2026-08-28; decision log):** the construal is sited as a brief
+- **Ruled (facilitator, 2026-08-28; decision log):** the construal is sited as a brief
   section — this section — and adr-50 is extended to distinguish construal
   from revision history, the extension filed as an ADR in Iteration 1
   *before* the construal surface is built (it files first in the build sequence; adr-55 is that extension). Ground: dropping the Step 2 reading
@@ -103,7 +104,7 @@ the record rather than in a transcript that is discarded.
   construal statement and its load-bearing vocabulary are
   machine-extractable — fixed section heading, statement-first layout, the
   exact marker token — so the framing vocabulary can be pulled from the
-  brief retrospectively (maintainer review requirement, 2026-08-28).
+  brief retrospectively (facilitator review requirement, 2026-08-28).
 
 ## Open Questions
 
