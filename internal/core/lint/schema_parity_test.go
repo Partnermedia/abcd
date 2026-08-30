@@ -290,29 +290,6 @@ func resolvedIssue(id, slug, extra string) string {
 		"impact: fix\nresolution: done\n" + extra + "---\n\nan issue\n"
 }
 
-// TestRecordSchemaGroundsSpellingsMatchTheReader is the parity table for the
-// `grounds` scalar. Each row is a spelling the two gates could disagree about,
-// with the verdict capture's reader reaches on it; the gate must reach the same
-// one, because a record the reader refuses is a record it SKIPS — invisible to
-// every capture surface while it still sits in the ledger — and a record the
-// reader accepts must not be blocked by a gate that reads the value differently.
-//
-//   - single-quoted: capture's decodeScalar unquotes DOUBLE quotes only, so the
-//     reader sees the leading `'` and the token `'pursued`, and refuses. A gate
-//     that strips single quotes parses a value the reader never sees.
-//   - empty inline list: parseScalarOrList returns []string{}, and validateStrict
-//     refuses a non-string grounds. Reading `[]` as ABSENT leaves it lint-green.
-//   - block-spelled: `grounds:` over indented lines is a nested MAPPING to the
-//     reader, refused as a non-string. The same-line scanner reads it as empty,
-//     so the block map is what sees it at all.
-//   - empty string: validateStrict skips a blank grounds, so the reader ACCEPTS
-//     it. A gate that put "" to the parser would block a record the reader reads.
-//   - backslash escaped: the escaping is the dimension on which the two decoders
-//     duplicated logic, and the table had no row for it (iss-2608301212424896).
-//     They now share frontmatter.Unquote, and this row is what fails if either
-//     side stops calling it: undecoded, the token reads `pursued\` and the gate
-//     reports a record the reader accepts.
-
 // TestRecordSchemaBlocksAFrontmatterGroundsKey is the gate half of the move off
 // frontmatter (iss-2608301657354776). Grounds are appended as `## Grounds`
 // bullets in the record body; a frontmatter `grounds:` is a value nothing reads.
