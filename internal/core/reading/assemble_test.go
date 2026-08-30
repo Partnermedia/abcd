@@ -740,6 +740,10 @@ func TestExcludedHeadingSpellingsAreRecognised(t *testing.T) {
 		"a closing sequence with space": "## Audit Notes ##   \n\n" + sentinelAuditNotes + "\n",
 		"a setext underline":            "Audit Notes\n---\n\n" + sentinelAuditNotes + "\n",
 		"a setext rule":                 "Audit Notes\n===\n\n" + sentinelAuditNotes + "\n",
+		// One to three leading spaces is still an ATX heading to every CommonMark
+		// renderer, and four makes it an indented code block instead.
+		"a one-space indent":   " ## Audit Notes\n\n" + sentinelAuditNotes + "\n",
+		"a three-space indent": "   ## Audit Notes\n\n" + sentinelAuditNotes + "\n",
 	}
 	for what, body := range cases {
 		root := fixtureRepo(t)

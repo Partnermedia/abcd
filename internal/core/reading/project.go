@@ -140,6 +140,12 @@ var (
 	// setextRuleRe matches the underline that turns the line above it into a
 	// heading. The section scan does not model setext at all.
 	setextRuleRe = regexp.MustCompile(`^\s{0,3}(=+|-+)\s*$`)
+	// indentedATXRe matches an ATX heading carrying the one-to-three-space indent
+	// CommonMark allows. The section scan anchors its pattern at column 0, so it
+	// reads such a line as prose — while every renderer, and every human, reads
+	// it as the heading it is. Four spaces would make it an indented code block,
+	// which is why the bound is three.
+	indentedATXRe = regexp.MustCompile(`^\s{1,3}#{1,6}\s+(.*)$`)
 	// fenceOpenRe matches a fenced code block's delimiter, on the section scan's
 	// own rule so the two agree about what is inside a fence.
 	fenceOpenRe = regexp.MustCompile("^[ \t]*```")
@@ -228,6 +234,29 @@ func verifyRedaction(rel, original, redacted string, keys, headings map[string]b
 				return fmt.Errorf("reading: %s still carries the excluded heading %q at line %d after "+
 					"redaction; the floor names %q, and a heading is excluded however it is spelled",
 					rel, sec.Title, sec.Line, want)
+			}
+		}
+	}
+
+	// An indented ATX heading is refused for the same reason, and in the same
+	// place. The section scan does not see one, so the redactor has no span to
+	// delete and the section travels whole; widening that scan is not this
+	// package's call to make, because the site renderer's own output turns on it.
+	// A refusal here costs an edit and names the line; the alternative is a leak
+	// under a manifest asserting the opposite.
+	for i, line := range lines {
+		if fenced[i] {
+			continue
+		}
+		m := indentedATXRe.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		title := normaliseHeadingTitle(m[1])
+		for want := range headings {
+			if strings.EqualFold(title, want) {
+				return fmt.Errorf("reading: %s indents the excluded heading %q at line %d; the floor "+
+					"names %q, and a heading is excluded however it is spelled", rel, strings.TrimSpace(line), i+1, want)
 			}
 		}
 	}
