@@ -60,10 +60,12 @@ question is asked of a possibly-unattended caller.
 
 **Decision — grounds live on the intent record, not on the spec.** The
 conjecture is the intent's, and the gate that reads it takes an `itd-N`. The
-`## Grounds (pursued)` sections currently carried by spc-55, spc-56, spc-57 and
-spc-59 are the pre-tooling stand-in named in their own text; the change that
-lands this spec moves those four entries up to their intents and retires the
-stand-in sections, so the corpus has one home for grounds rather than two.
+pre-tooling stand-in was a `## Grounds (pursued)` section on the spec, named as
+such in its own text; the change that lands this spec moves every such entry up
+to its intent and retires the stand-in sections, so the corpus has one home for
+grounds rather than two. Thirteen specs carry one, open and closed alike — the
+migration covers all of them, not the four the record named when this was
+written, because a stand-in left standing anywhere is a second home.
 
 **Decision — wontfix is stamped `declined` and needs no new required flag.**
 `capture.transition` already refuses an empty `wontfix_reason`, so a wontfix can
@@ -143,16 +145,6 @@ Each fails first: `internal/core/grounds` does not exist, `ReadyResult` has no
 - `internal/surface/cli/intent_cli_test.go`:
   `TestIntentReadyGroundsFlagRecordsThenReports` (the write happens, the report
   is unchanged, exit 0), `TestIntentReadyGroundsWriteFailureExits2`.
-
-## Grounds (pursued)
-
-_Pre-tooling: recorded in the plan record until the grounds argument (itd-179) ships._
-
-Pursued now because the reasoning behind what went forward is the half of the
-record that is never written down, and it is unrecoverable once the session
-ends: a wontfix keeps its note and an ADR keeps its alternatives, while every
-pursued conjecture leaves only its outcome. Recording it at the moment of
-pursuit is the only moment it is still known.
 
 ## Out of scope
 

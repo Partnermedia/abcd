@@ -42,3 +42,6 @@ None stated.
 - **Given** a narrowed condition, **when** it is recorded, **then** the
   narrowing is stated rather than implied by a changed text.
 
+## Grounds
+
+- pursued: Pursued now because the difference between what an intent assumed and what held is itself a finding, and it is currently unrecorded: the audit can compare promise to delivery but has nowhere to say that a condition the design leaned on turned out false. It rides with spc-55 because the identity it keys on has no other consumer, and a mechanism with no consumer is scaffolding.

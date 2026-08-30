@@ -170,3 +170,6 @@ None stated.
   the recorded fallback if the evaluative position proves to need candidates
   at invocation.
 
+## Grounds
+
+- pursued: This conjecture is pursued now because the location tiering the repository already has is organisational rather than an access control: nothing today prevents a reading reaching ledger content, so every claim the instrument makes about what it saw rests on a disclosure taken on trust. The assembler is the cheapest point at which that becomes checkable, and the two evals and the output contract that follow have nothing to guard until it exists.
