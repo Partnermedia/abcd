@@ -347,6 +347,9 @@ func promoteReadingItem(repoRoot, issuesRoot string, req PromoteRequest) (Promot
 // More than one standing answer is a ledger fault the write path refuses, so it
 // is reported here rather than silently resolved by picking one.
 func standingDispositionState(issuesRoot, item string, standing []string) (string, error) {
+	if len(standing) == 0 {
+		return "", fmt.Errorf("%w: %s carries no standing disposition", ErrInvariantViolation, item)
+	}
 	if len(standing) > 1 {
 		return "", fmt.Errorf("%w: %s carries %d standing dispositions (%s); exactly one answer is in force at a time",
 			ErrInvariantViolation, item, len(standing), renderList(standing))

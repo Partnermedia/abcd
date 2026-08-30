@@ -156,11 +156,19 @@ func IngestReading(req IngestReadingRequest) (IngestReadingResult, error) {
 	}
 	var pending []staged
 	result := IngestReadingResult{Run: req.Run}
+	// The mint is stateless — a UTC second plus four uniform digits — so two items
+	// of ONE run can draw the same id, and the odds are not exotic: about 3% at 25
+	// items in a second, better than a third at 100. Two items staged under one id
+	// is a run that cannot be reconstructed, so the batch redraws on a repeat,
+	// exactly as the issue allocator's reservation does (spc-33 ruling 2: a redraw
+	// keeps candidates independent, where a bump would re-derive from occupancy).
+	minted := map[string]bool{}
 	for i, item := range req.Items {
-		id, err := minter.Mint(issueschema.ReadingItemFamily)
+		id, err := mintUnusedItemID(minted)
 		if err != nil {
 			return IngestReadingResult{}, err
 		}
+		minted[id] = true
 		fields, fm, redacted, degraded, err := readingFields(repoRoot, id, req, item)
 		if err != nil {
 			return IngestReadingResult{}, fmt.Errorf("item %d: %w", i+1, err)
@@ -184,11 +192,19 @@ func IngestReading(req IngestReadingRequest) (IngestReadingResult, error) {
 		if err := ensureFamilyDir(issuesRoot, issueschema.ReadingsDir, req.Run); err != nil {
 			return err
 		}
+		// Clear the WHOLE batch before the first byte lands. Interleaving the
+		// check with the write leaves a refused run half-written: the caller gets
+		// an error carrying no record list, so nothing can say which items landed,
+		// and a retry mints fresh ids for the ones that did — duplicating them
+		// inside the run directory. That is precisely the unreconstructable visible
+		// world the staging pass above exists to prevent.
 		for _, p := range pending {
-			path := filepath.Join(runDir, p.id+".md")
-			if err := refuseExistingRecord(path, p.id); err != nil {
+			if err := refuseExistingRecord(filepath.Join(runDir, p.id+".md"), p.id); err != nil {
 				return err
 			}
+		}
+		for _, p := range pending {
+			path := filepath.Join(runDir, p.id+".md")
 			if err := fsutil.WriteFileAtomic(path, []byte(p.content), 0o644); err != nil {
 				return err
 			}
@@ -655,6 +671,24 @@ func standingDispositions(itemDir string) ([]string, error) {
 	return out, nil
 }
 
+// mintUnusedItemID draws an item id this batch has not already taken, redrawing
+// on a repeat within a bounded budget. The budget is the allocator's own: a draw
+// that keeps colliding is a broken entropy source, and looping forever on one
+// would hang the ingest instead of reporting it.
+func mintUnusedItemID(minted map[string]bool) (string, error) {
+	for attempt := 0; attempt < placeholderRetryBudget; attempt++ {
+		id, err := minter.Mint(issueschema.ReadingItemFamily)
+		if err != nil {
+			return "", err
+		}
+		if !minted[id] {
+			return id, nil
+		}
+	}
+	return "", fmt.Errorf("%w: could not mint a free %s id after %d draws",
+		ErrAllocatorContention, issueschema.ReadingItemFamily, placeholderRetryBudget)
+}
+
 // refuseExistingRecord fails a write whose target is already taken. The id space
 // is a UTC second plus four random digits, so two same-second draws CAN coincide
 // — rare, and rare is exactly why it must refuse rather than overwrite: a
@@ -664,7 +698,7 @@ func standingDispositions(itemDir string) ([]string, error) {
 // claim the path.
 func refuseExistingRecord(path, id string) error {
 	if _, err := os.Lstat(path); err == nil {
-		return fmt.Errorf("%w: %s already exists in this ledger; the mint collided and the existing record is left untouched",
+		return fmt.Errorf("%w: %s already exists in this ledger; the mint collided with a record already committed, and nothing in this write is applied",
 			ErrDuplicateIssueID, id)
 	} else if !os.IsNotExist(err) {
 		return err

@@ -1,13 +1,16 @@
 package capture
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/intentdriven/abcd/internal/core/issueschema"
+	"github.com/intentdriven/abcd/internal/core/recordid"
 )
 
 // One item in, one record out — each under the run's own directory, each
@@ -121,5 +124,90 @@ func TestSecondDispositionForOneItemRequiresSupersedes(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(repo, filepath.FromSlash(first.Path))); err != nil {
 		t.Fatalf("the superseded record must stay in place: %v", err)
+	}
+}
+
+// pinnedMinter installs a minter whose clock is fixed and whose suffix draws are
+// scripted, so a same-second id collision is certain rather than rare.
+func pinnedMinter(t *testing.T, suffixes ...byte) {
+	t.Helper()
+	setMinter(t, recordid.Minter{
+		Now:     func() time.Time { return time.Date(2026, 8, 30, 11, 0, 0, 0, time.UTC) },
+		Entropy: bytes.NewReader(suffixes),
+	})
+}
+
+// Two items in ONE run can draw the same id: the mint is stateless, so within a
+// second the only thing separating two draws is four random digits. At 25 items
+// that is a few percent; at 100 it is better than a third of the time. Staging
+// two items under one id is not a rare inconvenience — it is a run that cannot be
+// reconstructed, so the batch redraws, exactly as the issue allocator does.
+func TestIngestRedrawsAnIntraBatchIDCollision(t *testing.T) {
+	repo, ir := ledger(t)
+	// 0007, 0007 (the collision), then 0008 on the redraw.
+	pinnedMinter(t, 0x00, 0x07, 0x00, 0x07, 0x00, 0x08)
+
+	res, err := IngestReading(IngestReadingRequest{
+		RepoRoot: repo, IssuesRoot: ir,
+		Run: "rdg-2608300000000001", Manifest: "sha256:beef",
+		Position: "detection", Regime: "supplied",
+		Items: []ReadingItem{
+			{Pattern: "the first item", Body: bodyFor("detection")},
+			{Pattern: "the second item", Body: bodyFor("detection")},
+		},
+	})
+	if err != nil {
+		t.Fatalf("IngestReading: %v", err)
+	}
+	if len(res.Records) != 2 {
+		t.Fatalf("wrote %d records, want one per item (2)", len(res.Records))
+	}
+	if res.Records[0].ID == res.Records[1].ID {
+		t.Fatalf("two items in one run were staged under one id (%s)", res.Records[0].ID)
+	}
+}
+
+// A collision with a record ALREADY in the ledger refuses, and refuses the whole
+// run. A partially written run is the state the staging pass exists to prevent:
+// the caller gets an error with no record list, so nothing can say which items
+// landed, and a retry mints fresh ids for the ones that did — duplicating them.
+func TestIngestWritesNothingWhenOneItemCollidesOnDisk(t *testing.T) {
+	repo, ir := ledger(t)
+	// 0007 for the first (successful) run; then 0008 and 0007 for the second,
+	// whose SECOND item collides with what the first run wrote.
+	pinnedMinter(t, 0x00, 0x07, 0x00, 0x08, 0x00, 0x07)
+	run := "rdg-2608300000000001"
+
+	first, err := IngestReading(IngestReadingRequest{
+		RepoRoot: repo, IssuesRoot: ir, Run: run, Manifest: "sha256:beef",
+		Position: "detection", Regime: "supplied",
+		Items: []ReadingItem{{Pattern: "the first item", Body: bodyFor("detection")}},
+	})
+	if err != nil {
+		t.Fatalf("first ingest: %v", err)
+	}
+
+	_, err = IngestReading(IngestReadingRequest{
+		RepoRoot: repo, IssuesRoot: ir, Run: run, Manifest: "sha256:beef",
+		Position: "detection", Regime: "supplied",
+		Items: []ReadingItem{
+			{Pattern: "a fresh item", Body: bodyFor("detection")},
+			{Pattern: "the colliding item", Body: bodyFor("detection")},
+		},
+	})
+	if !errors.Is(err, ErrDuplicateIssueID) {
+		t.Fatalf("a colliding batch: err = %v, want ErrDuplicateIssueID", err)
+	}
+
+	entries, err := os.ReadDir(filepath.Join(ir, issueschema.ReadingsDir, run))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != first.Records[0].ID+".md" {
+		var names []string
+		for _, e := range entries {
+			names = append(names, e.Name())
+		}
+		t.Fatalf("a refused run left %v behind; the write is all-or-nothing", names)
 	}
 }

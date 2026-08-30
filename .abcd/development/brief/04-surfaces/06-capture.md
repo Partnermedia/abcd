@@ -125,6 +125,16 @@ A later phase, not yet built — the migration rides the `abcd dev-sync work` su
 - **Command flow:** delivered by the predecessor's `spc-21-abcdcapture-command-flow-text-ingest` (predecessor store).
 - **Legacy `.abcd/.work.local/` scratch migration:** design target per the predecessor's `spc-22-workissuesmd-migration-promote-legacy` (predecessor store) — a later phase, not yet built (rides the `dev-sync` surface, § 3).
 - **intent-auditor cross-check:** delivered by the predecessor's `spc-23-intent-auditor-extension` (predecessor store); the reviewer surface ships as `agents/intent-auditor.md`.
+- **Reading records and dispositions (itd-180, spc-58):** the schemas live in
+  `internal/core/issueschema`; `internal/core/capture/reading.go` is the writer
+  and the refusing gate for both families; `capture disposition` is the front
+  door for the answer, and `capture promote` refuses an undispositioned item.
+  The PRODUCER of an `rdi-N` is not here: the cold-reading ingest verb owns the
+  output contract and is the only caller of `capture.IngestReading`, so until it
+  lands the two reading sub-verbs have no item to act on. That sequencing is
+  spc-58's own — it consumes the output contract and adds no second validation
+  path — and it is the reason `IngestReading` is an exported primitive rather
+  than a verb of this surface.
 - **`promote <iss-N>` bridge:** a native engine sub-verb (spc-24, itd-119) —
   `internal/core/capture/promote.go` mints the draft under `intents/drafts/`
   and stamps the issue's `promoted_to` field itself, one invocation writing
