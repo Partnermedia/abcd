@@ -1302,3 +1302,131 @@ func TestAdmissionRunFieldMustAgreeWithItsBucket(t *testing.T) {
 		t.Fatalf("expected exactly 1 finding (the contradiction), got %d: %+v", n, fs)
 	}
 }
+
+// A block-scalar header may carry a trailing comment, and the header is still
+// not the value. `grounds: | # nothing` over an empty block is the empty string
+// exactly as a bare `grounds: |` is — so a pattern that read only the bare
+// spellings left four legal spellings of the reported defect passing the gate,
+// and each of them silences the report that the admission leg exists to make.
+func TestACommentedBlockScalarHeaderIsJudgedByItsBlock(t *testing.T) {
+	headers := map[string]string{
+		"adm-3": "| # nothing",
+		"adm-4": "|- # nothing",
+		"adm-5": ">+ # nothing",
+		"adm-6": "|2 # nothing",
+	}
+	root := admissionCorpus(t)
+	for id, header := range headers {
+		writeFile(t, root, "work/issues/admissions/rdg-1/"+id+".md",
+			"---\nschema_version: 1\nid: "+id+"\nrun: rdg-1\nproposal: rdi-2\ngrounds: "+header+"\n---\n\n")
+	}
+
+	fs, err := Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id, header := range headers {
+		if !findingWith(fs, filepath.Join("work", "issues", "admissions", "rdg-1", id+".md"), ruleRecordSchema, "'grounds'") {
+			t.Errorf("grounds spelled %q holds nothing and must be a finding on %s.md: %+v", header, id, fs)
+		}
+	}
+	if n := countRule(fs, ruleRecordSchema); n != len(headers) {
+		t.Fatalf("expected exactly %d findings, got %d: %+v", len(headers), n, fs)
+	}
+}
+
+// Inside a literal block a `#` is CONTENT, not a comment. The walker the block
+// look-ahead reuses was written for block SEQUENCES, where skipping comments is
+// right — reading a scalar with it makes a legal record's whole value vanish and
+// reports a required property missing that the file plainly carries. A rule whose
+// design argument is that it must never make a confident false statement cannot
+// make this one.
+func TestABlockScalarWhoseOnlyLineIsHashLedIsAValue(t *testing.T) {
+	root := admissionCorpus(t)
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-3.md",
+		"---\nschema_version: 1\nid: adm-3\nrun: rdg-1\nproposal: rdi-2\ngrounds: |\n"+
+			"  # the frame does not already hold the configuration it admits\n---\n\n")
+
+	fs, err := Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 0 {
+		t.Fatalf("a block scalar whose content begins with '#' is a value, got %d finding(s): %+v", n, fs)
+	}
+}
+
+// issueScalar strips ONE surrounding quote pair, not every quote character at
+// either end. A required value that is itself quotes (`"”"`) is a value, and
+// eating it down to nothing turns a present property into a blocker that names a
+// field the record carries.
+func TestARequiredValueMadeOfQuoteCharactersIsPresent(t *testing.T) {
+	root := admissionCorpus(t)
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-3.md",
+		"---\nschema_version: 1\nid: adm-3\nrun: rdg-1\nproposal: rdi-2\ngrounds: \"''\"\n---\n\n")
+
+	fs, err := Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 0 {
+		t.Fatalf("a value made of quote characters is still a value, got %d finding(s): %+v", n, fs)
+	}
+}
+
+// The filename<->slug and filename<->id checks skip an ABSENT value and delegate
+// the emptiness question to checkRecordRequiredFields — which is sound only where
+// the store declares a required set. The intent and spec stores declare none, so
+// widening what those two checks read as "absent" sent the delegation nowhere and
+// left `slug: ""` and `id: ""` green in every rule. Absence here means NOT
+// WRITTEN; an empty value is a value that disagrees.
+func TestQuotedEmptyIdAndSlugStillDisagreeWithTheFilename(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/.keep", "")
+	writeFile(t, root, "rec/specs/open/spc-12-something-else.md",
+		"---\nid: \"\"\nslug: \"\"\nintent_id: null\n---\n# spec\n")
+
+	fs, err := Lint(schemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingWith(fs, filepath.Join("rec", "specs", "open", "spc-12-something-else.md"), ruleRecordSchema, "something-else") {
+		t.Errorf("a quoted-empty slug disagrees with the filename and must be a finding: %+v", fs)
+	}
+	if !findingWith(fs, filepath.Join("rec", "specs", "open", "spc-12-something-else.md"), ruleRecordSchema, "spc-12") {
+		t.Errorf("a quoted-empty id disagrees with the filename and must be a finding: %+v", fs)
+	}
+
+	// The control the delegation rests on: a record carrying NEITHER property is
+	// silent here, because absence is not disagreement.
+	other := t.TempDir()
+	writeFile(t, other, "rec/.keep", "")
+	writeFile(t, other, "rec/specs/open/spc-13-something-else.md", "---\nintent_id: null\n---\n# spec\n")
+	fs, err = Lint(schemaConfig(), other)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 0 {
+		t.Fatalf("a record carrying neither id nor slug is a different question, got %d finding(s): %+v", n, fs)
+	}
+}
+
+// The direction an empty cross-reference is read in, pinned because widening the
+// absence test changed it silently. `superseded_by: ""` is the quoted spelling of
+// the `superseded_by: null` the record writes everywhere: an optional link left
+// unset, not a malformed handle. Reporting it as "not a record handle" would put
+// a blocker on a record that declares no supersession at all.
+func TestQuotedEmptySupersededByIsUnsetNotMalformed(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/.keep", "")
+	writeFile(t, root, "rec/decisions/adrs/0022-bundled-deps-as-pluggable-adapters.md",
+		"---\nid: adr-22\nslug: bundled-deps-as-pluggable-adapters\nsupersedes: []\nsuperseded_by: \"\"\nrelated_adrs: []\n---\n# ADR-22\n")
+
+	fs, err := Lint(schemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 0 {
+		t.Fatalf("an empty superseded_by is unset, got %d finding(s): %+v", n, fs)
+	}
+}

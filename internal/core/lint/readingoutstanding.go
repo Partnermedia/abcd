@@ -64,6 +64,41 @@ type admissionKey struct {
 	proposal string
 }
 
+// admissionTree is what one walk of the admission store learned: which pairs it
+// admits, and — separately for each run — whether it read enough to say a
+// proposal was NOT admitted.
+//
+// The readability verdict is per RUN because the claim it supports is per run.
+// An admission for an item can only live under that item's own run (the
+// run-field agreement below enforces exactly that), so one run's fault says
+// nothing about another's, and a store-wide verdict let a single symlinked or
+// oversized file committed under one run empty the widening leg of the board for
+// every run in the repository — a far wider silence than the one standing down
+// exists to prevent. The disposition side already keeps this discipline: its
+// whole-tree stand-down is a ROOT probe, and a leaf it cannot read withholds that
+// item alone.
+type admissionTree struct {
+	admitted map[admissionKey]bool
+	// rootUnreadable is the whole-tree verdict: the store root itself could not be
+	// probed or listed, so nothing is known about any run.
+	rootUnreadable bool
+	// unreadableRuns names the run buckets the walk could not read in full.
+	unreadableRuns map[string]bool
+}
+
+// unknown reports whether the walk read too little to say whether run admitted
+// anything. An ABSENT tree, and an absent run inside a readable one, are both
+// readable and empty: a repository that has admitted nothing is in a state, not a
+// fault.
+func (t admissionTree) unknown(run string) bool {
+	return t.rootUnreadable || t.unreadableRuns[run]
+}
+
+// admits reports whether the store admits proposal within run.
+func (t admissionTree) admits(run, proposal string) bool {
+	return t.admitted[admissionKey{run: run, proposal: proposal}]
+}
+
 // OutstandingItem is one reading item nobody has answered.
 type OutstandingItem struct {
 	Item string `json:"item"`
@@ -199,7 +234,7 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 	// The admission side of the widening position's answer set, read once for the
 	// same reason: a proposal's admission is a record in a different family, and
 	// re-walking that tree per item would ask one question many times.
-	admitted, admissionsReadable, admissionUnsafe := admittedProposals(issuesRoot, issuesDir)
+	admissions, admissionUnsafe := admittedProposals(issuesRoot, issuesDir)
 	report.Unsafe = append(report.Unsafe, admissionUnsafe...)
 
 	for _, run := range runs {
@@ -279,21 +314,22 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 				// below: a record the walk actually READ is a fact whatever else in
 				// that tree it could not read, so an admission it holds answers its
 				// proposal even beside an unreadable sibling — while the claim that
-				// a proposal is UNADMITTED needs the whole tree behind it, and
-				// stands down when the tree is not there to stand on.
+				// a proposal is UNADMITTED needs this run's admissions behind it,
+				// and stands down when they are not there to stand on.
 				if position == issueschema.PositionWidening {
-					if admitted[admissionKey{run.Name(), item}] {
+					if admissions.admits(run.Name(), item) {
 						break
 					}
-					// And an admissions tree nobody could read supports no claim
-					// that this proposal was NOT admitted — the direction that needs
-					// the whole tree behind it. Reporting it outstanding here would
-					// tell the researcher to write a DISPOSITION, which is the wrong
-					// record for a proposal that may already carry an admission, and
-					// would contradict the invariant the disposition branch above
-					// keeps for its own tree. The Unsafe line already names what
-					// could not be read.
-					if !admissionsReadable {
+					// And admissions nobody could read support no claim that this
+					// proposal was NOT admitted — the direction that needs the tree
+					// behind it. Reporting it outstanding here would tell the
+					// researcher to write a DISPOSITION, which is the wrong record
+					// for a proposal that may already carry an admission, and would
+					// contradict the invariant the disposition branch above keeps
+					// for its own tree. The stand-down is scoped to THIS run,
+					// because an admission for this item could only have lived
+					// there; the Unsafe line names the path that could not be read.
+					if admissions.unknown(run.Name()) {
 						break
 					}
 				}
@@ -318,8 +354,8 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 			// Everything else standing on a widening proposal — acceptance above
 			// all, which at this position IS admission — needs an admission record,
 			// because that is where the grounds live.
-			if position == issueschema.PositionWidening && admissionsReadable &&
-				!admitted[admissionKey{run.Name(), item}] &&
+			if position == issueschema.PositionWidening && !admissions.unknown(run.Name()) &&
+				!admissions.admits(run.Name(), item) &&
 				answer.standing != nil && answer.standing.wellFormed &&
 				answer.standing.state != issueschema.DispositionDeclined &&
 				answer.standing.state != issueschema.DispositionHeld {
@@ -360,7 +396,7 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 // carries no position, so it takes the ordinary disposition-only path.
 func readingPosition(content string) string {
 	f := frontmatterFields(strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n"))["position"]
-	return strings.Trim(strings.TrimSpace(f.value), `"'`)
+	return issueScalar(f.value)
 }
 
 // admittedProposals reads the admission store once and returns the set of
@@ -370,15 +406,20 @@ func readingPosition(content string) string {
 // The readability verdict travels with the set because an unreadable admission
 // tree is not an empty one: reporting every widening proposal as unadmitted
 // because nobody could read the admissions would be the same confident wrong
-// statement the disposition side already refuses to make. An ABSENT tree is
-// readable and empty — a repository that has admitted nothing is in a state, not
-// a fault.
-func admittedProposals(issuesRoot, issuesDir string) (map[admissionKey]bool, bool, []UnsafePath) {
-	admitted := map[admissionKey]bool{}
+// statement the disposition side already refuses to make. It is recorded PER RUN,
+// so one run's fault withholds only that run's proposals — see admissionTree. An
+// ABSENT tree, and an absent run inside a readable one, are readable and empty: a
+// repository that has admitted nothing is in a state, not a fault.
+func admittedProposals(issuesRoot, issuesDir string) (admissionTree, []UnsafePath) {
+	tree := admissionTree{
+		admitted:       map[admissionKey]bool{},
+		unreadableRuns: map[string]bool{},
+	}
 	var unsafe []UnsafePath
 	admissionsRoot := filepath.Join(issuesRoot, issueschema.AdmissionsDir)
 	if !realDir(admissionsRoot) {
-		return admitted, false, []UnsafePath{{
+		tree.rootUnreadable = true
+		return tree, []UnsafePath{{
 			Path:   filepath.ToSlash(filepath.Join(issuesDir, issueschema.AdmissionsDir)),
 			Reason: notARealDirectory,
 		}}
@@ -386,16 +427,16 @@ func admittedProposals(issuesRoot, issuesDir string) (map[admissionKey]bool, boo
 	runs, err := os.ReadDir(admissionsRoot)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return admitted, true, nil
+			return tree, nil
 		}
 		// A root that exists and cannot be listed supports no claim about what has
-		// been admitted, which is the same fact an unsafe root carries.
-		return admitted, false, []UnsafePath{{
+		// been admitted in ANY run, which is the same fact an unsafe root carries.
+		tree.rootUnreadable = true
+		return tree, []UnsafePath{{
 			Path:   filepath.ToSlash(filepath.Join(issuesDir, issueschema.AdmissionsDir)),
 			Reason: unreadableReason(err),
 		}}
 	}
-	readable := true
 	for _, run := range runs {
 		if !readingRunDirRe.MatchString(run.Name()) {
 			continue
@@ -404,13 +445,13 @@ func admittedProposals(issuesRoot, issuesDir string) (map[admissionKey]bool, boo
 		runDir := filepath.Join(admissionsRoot, run.Name())
 		if !realDir(runDir) {
 			unsafe = append(unsafe, UnsafePath{Path: filepath.ToSlash(runRel), Reason: notARealDirectory})
-			readable = false
+			tree.unreadableRuns[run.Name()] = true
 			continue
 		}
 		entries, err := os.ReadDir(runDir)
 		if err != nil {
 			unsafe = append(unsafe, UnsafePath{Path: filepath.ToSlash(runRel), Reason: unreadableReason(err)})
-			readable = false
+			tree.unreadableRuns[run.Name()] = true
 			continue
 		}
 		for _, e := range entries {
@@ -423,31 +464,23 @@ func admittedProposals(issuesRoot, issuesDir string) (map[admissionKey]bool, boo
 					Path:   filepath.ToSlash(filepath.Join(runRel, e.Name())),
 					Reason: unreadableReason(err),
 				})
-				readable = false
+				tree.unreadableRuns[run.Name()] = true
 				continue
 			}
 			fields := frontmatterFields(strings.Split(strings.ReplaceAll(string(content), "\r\n", "\n"), "\n"))
-			proposal := admissionScalar(fields["proposal"].value)
+			proposal := issueScalar(fields["proposal"].value)
 			// The record states its run twice — the directory it sits in and its own
 			// `run` — and a disagreement is the record contradicting itself about
 			// which candidate set it joined. Honouring the bucket alone would let the
 			// field lie; honouring the field alone would make the bucket decorative.
 			// So it admits under neither, and record_schema names the contradiction.
-			if proposal == "" || admissionScalar(fields["run"].value) != run.Name() {
+			if proposal == "" || issueScalar(fields["run"].value) != run.Name() {
 				continue
 			}
-			admitted[admissionKey{run: run.Name(), proposal: proposal}] = true
+			tree.admitted[admissionKey{run: run.Name(), proposal: proposal}] = true
 		}
 	}
-	return admitted, readable, unsafe
-}
-
-// admissionScalar reads one frontmatter value the way the gate reads it: trimmed,
-// with the surrounding quotes stripped, so `run: "rdg-1"` and `run: rdg-1` are one
-// value. A report that read the quotes would disagree with the gate about a record
-// they are both looking at.
-func admissionScalar(value string) string {
-	return strings.TrimSpace(strings.Trim(strings.TrimSpace(value), `"'`))
+	return tree, unsafe
 }
 
 // The reasons an Unsafe entry can carry. They are prose because they are read by

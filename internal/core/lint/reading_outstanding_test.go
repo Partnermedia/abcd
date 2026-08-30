@@ -766,3 +766,94 @@ func TestAHeldWideningProposalIsNotAlsoReportedUnadmitted(t *testing.T) {
 		t.Fatalf("the one line must be the hold and its exit condition; got %q", fs[0].Message)
 	}
 }
+
+// The stand-down must be as narrow as the failure. One unreadable admission
+// LEAF used to set a whole-store verdict, so a single symlinked or oversized
+// file committed under one run emptied the widening leg of the board for every
+// run in the repository — and record_schema, which reads the same file with an
+// unguarded read, stayed green, so nothing anywhere said the items had gone.
+// That is a wider silence than the one the stand-down exists to prevent.
+//
+// The disposition side already keeps this discipline: its whole-tree stand-down
+// is a ROOT probe, and a leaf it cannot read withholds that item alone.
+func TestAnUnreadableAdmissionLeafSilencesOnlyItsOwnRun(t *testing.T) {
+	runA, itemA := "rdg-2608300000000001", "rdi-2608300000000002"
+	root := readingLedger(t, runA, itemA, "widening")
+	runB, itemB := "rdg-2608300000000007", "rdi-2608300000000008"
+	writeFile(t, root, ".abcd/work/issues/readings/"+runB+"/"+itemB+".md",
+		"---\nschema_version: 1\nid: \""+itemB+"\"\nrun: \""+runB+"\"\nmanifest: \"sha256:beef\"\n"+
+			"position: \"widening\"\nregime: \""+issueschema.ReadingRegime("widening")+"\"\n"+
+			"pattern: \"a stated constraint\"\n---\n\n")
+	// One oversized admission under run A alone. Run B's admissions are absent,
+	// which is readable and empty — a run that has admitted nothing is in a state.
+	oversized := "---\nschema_version: 1\nid: \"adm-2608300000000004\"\nrun: \"" + runA + "\"\n" +
+		"proposal: \"" + itemA + "\"\ngrounds: \"g\"\n---\n\n"
+	oversized += strings.Repeat("x", issueschema.RecordReadLimit+1-len(oversized))
+	writeFile(t, root, ".abcd/work/issues/admissions/"+runA+"/adm-2608300000000004.md", oversized)
+
+	fs, err := Lint(readingOutstandingConfig(severityBlocker), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var namedUnsafe, reportedB, reportedA bool
+	for _, f := range fs {
+		if f.RuleID != ruleReadingOutstanding {
+			continue
+		}
+		if strings.Contains(f.Message, "did not read this") {
+			namedUnsafe = true
+		}
+		if strings.Contains(f.Message, itemB) {
+			reportedB = true
+		}
+		if strings.Contains(f.Message, itemA) {
+			reportedA = true
+		}
+	}
+	if !namedUnsafe {
+		t.Errorf("the unreadable admission must be named; findings: %+v", fs)
+	}
+	if !reportedB {
+		t.Errorf("run %s read cleanly, so its unanswered proposal must still be reported: %+v", runB, fs)
+	}
+	if reportedA {
+		t.Errorf("run %s could not be read, so its proposal must not be judged: %+v", runA, fs)
+	}
+}
+
+// The gate and the report must read one record's bytes the same way. They used
+// to hold two spellings of the scalar reader — one re-trimmed after unquoting and
+// one did not — so `run: " rdg-1 "` was a contradiction to record_schema and an
+// agreement to the report: one record, two answers, and the report took the more
+// permissive side while the board that renders it carries no gate beside it.
+func TestTheGateAndTheReportReadOnePaddedRunTheSameWay(t *testing.T) {
+	run, item := "rdg-2608300000000001", "rdi-2608300000000002"
+	root := readingLedger(t, run, item, "widening")
+	writeFile(t, root, ".abcd/work/issues/admissions/"+run+"/adm-2608300000000004.md",
+		"---\nschema_version: 1\nid: \"adm-2608300000000004\"\nrun: \" "+run+" \"\n"+
+			"proposal: \""+item+"\"\ngrounds: \"the frame does not already hold it\"\n---\n\n")
+
+	cfg := readingOutstandingConfig(severityBlocker)
+	cfg.Rules[ruleRecordSchema] = RuleConfig{
+		Enabled: true, Severity: severityBlocker,
+		RecordStores: map[string]string{
+			"adm": ".abcd/work/issues/admissions",
+			"rdi": ".abcd/work/issues/readings",
+		},
+	}
+	fs, err := Lint(cfg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gateRefused := countRule(fs, ruleRecordSchema) > 0
+	var reportRefused bool
+	for _, f := range fs {
+		if f.RuleID == ruleReadingOutstanding && strings.Contains(f.Message, item) {
+			reportRefused = true
+		}
+	}
+	if gateRefused != reportRefused {
+		t.Fatalf("the gate and the report disagree about one record (gate refused=%v, report refused=%v): %+v",
+			gateRefused, reportRefused, fs)
+	}
+}
