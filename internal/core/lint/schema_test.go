@@ -1858,6 +1858,12 @@ func TestClosedSchemaAndDuplicateKeyClaimNoReaderWhereTheStoreHasNone(t *testing
 // The stand-down was correct code no test killed: deleting it left the suite
 // green while `occasioned_by: spike-3` drew a blocker saying it is not a record
 // in the corpus (iss-2608301519254240).
+//
+// It is killed as a WHOLE, and the two halves are not separably killable. A
+// configuration naming a store no prefix declares is refused by LoadConfig's
+// validateRecordStores, so for any configuration a production caller can hold, an
+// unread family is also an unknown one: the `!known` half is defence against a
+// hand-built Config alone, and deleting it on its own leaves this test green.
 func TestAJoinIsSilentOnAFamilyThisScanDoesNotRead(t *testing.T) {
 	root := admissionCorpus(t)
 	writeFile(t, root, "work/issues/surprises/srp-4.md",
