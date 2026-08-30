@@ -194,3 +194,39 @@ func TestGroundsTextIsRedacted(t *testing.T) {
 		t.Fatalf("resolved record unreadable: %v", err)
 	}
 }
+
+// TestReaderVerdictOnGroundsSpellings is the reader half of the parity the
+// record-lint table asserts (iss-2608300927577163). The gate's job is to refuse
+// exactly what this refuses — a refused record is SKIPPED, invisible to every
+// capture surface while it still sits in the ledger — so the verdicts are pinned
+// here rather than described in a comment over there.
+func TestReaderVerdictOnGroundsSpellings(t *testing.T) {
+	const head = "---\nschema_version: 1\nid: iss-1\nslug: ok\nseverity: minor\n" +
+		"category: bug\nsource: user-observation\nfound_during: t\n"
+	for _, tc := range []struct {
+		name    string
+		spell   string
+		refused bool
+	}{
+		{"single quoted", "grounds: 'pursued: the quote survives into the value'\n", true},
+		{"empty list", "grounds: []\n", true},
+		{"block spelled", "grounds:\n  pursued: an indented block is a mapping\n", true},
+		{"empty string", "grounds: \"\"\n", false},
+		{"bare null", "grounds: null\n", false},
+		{"well formed", "grounds: \"pursued: we expect the reasoning to outlive the session\"\n", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fm, _, err := parseFrontmatterAndBody(head + tc.spell + "---\n\nan issue\n")
+			if err != nil {
+				if !tc.refused {
+					t.Fatalf("the reader refused at the parse: %v", err)
+				}
+				return
+			}
+			err = validateStrict(fm)
+			if (err != nil) != tc.refused {
+				t.Fatalf("reader refused = %v (%v), want %v", err != nil, err, tc.refused)
+			}
+		})
+	}
+}
