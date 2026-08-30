@@ -79,10 +79,17 @@ type ScopeCondition struct {
 }
 
 // Claims is what one intent record says about its mechanism and context claims.
+//
+// The two Prompt flags mark a section still holding the create-path scaffold:
+// bytes that ASK for a claim. They read as ClaimStated because that is what
+// they are on disk, and the flag is what stops a gate reporting an unanswered
+// question as an answer (iss-2608300210588414).
 type Claims struct {
-	Mechanism       ClaimState       `json:"mechanism"`
-	ConditionsState ClaimState       `json:"conditions_state"`
-	Conditions      []ScopeCondition `json:"conditions"` // populated only when stated
+	Mechanism        ClaimState       `json:"mechanism"`
+	MechanismPrompt  bool             `json:"mechanism_prompt"`
+	ConditionsState  ClaimState       `json:"conditions_state"`
+	ConditionsPrompt bool             `json:"conditions_prompt"`
+	Conditions       []ScopeCondition `json:"conditions"` // populated only when stated
 }
 
 // ParseClaims reads an intent record's `## Mechanism` and `## Scope Conditions`
@@ -91,9 +98,11 @@ type Claims struct {
 func ParseClaims(content string) Claims {
 	lines := strings.Split(content, "\n")
 	c := Claims{
-		Mechanism:       claimState(lines, mechanismHeadingRe),
-		ConditionsState: claimState(lines, scopeHeadingRe),
-		Conditions:      []ScopeCondition{},
+		Mechanism:        claimState(lines, mechanismHeadingRe),
+		MechanismPrompt:  sectionIsPrompt(lines, mechanismHeadingRe),
+		ConditionsState:  claimState(lines, scopeHeadingRe),
+		ConditionsPrompt: sectionIsPrompt(lines, scopeHeadingRe),
+		Conditions:       []ScopeCondition{},
 	}
 	if c.ConditionsState == ClaimStated {
 		c.Conditions = parseConditions(lines)
@@ -123,6 +132,17 @@ func claimState(lines []string, headRe *regexp.Regexp) ClaimState {
 	default:
 		return ClaimStated
 	}
+}
+
+// sectionIsPrompt reports whether a claim section holds nothing but the
+// create-path scaffold, asking create.go — which owns the templates and is the
+// only place the answer can stay true when they are reworded.
+func sectionIsPrompt(lines []string, headRe *regexp.Regexp) bool {
+	start, end, ok := sectionLineRange(lines, headRe)
+	if !ok {
+		return false
+	}
+	return IsClaimPrompt(strings.Join(lines[start:end], "\n"))
 }
 
 // parseConditions enumerates the top-level bullets of `## Scope Conditions` in

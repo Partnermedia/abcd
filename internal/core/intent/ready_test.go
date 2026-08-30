@@ -480,3 +480,65 @@ func TestReadyReportsConditionIdentities(t *testing.T) {
 		t.Fatalf("scope_conditions = %+v, want OK for an identified condition", cond)
 	}
 }
+
+// TestReadyClaimChecksNotApplicableInTerminalBuckets is half of
+// iss-2608300210588414: spc-55 rules retro-fitting claims onto shipped/ and
+// superseded/ records out of scope — an absent stamp is information — so the
+// gate must not print a backfill remedy at a record nobody may backfill.
+func TestReadyClaimChecksNotApplicableInTerminalBuckets(t *testing.T) {
+	for _, dir := range []string{shippedDir, supersededDir} {
+		t.Run(dir, func(t *testing.T) {
+			root := t.TempDir()
+			writeFile(t, root, dir+"/itd-10-alpha.md",
+				"---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n"+
+					"# alpha\n\n## Mechanism\n\n## Acceptance Criteria\n\n- ok\n")
+
+			res, err := Ready(root, "itd-10")
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, name := range []string{"mechanism_claim", "scope_conditions"} {
+				c := checkByName(t, res, name)
+				if !c.OK || !strings.Contains(c.Detail, "not applicable") {
+					t.Errorf("%s = %+v, want OK reporting the check as not applicable", name, c)
+				}
+				if c.Remedy != "" {
+					t.Errorf("%s must carry no remedy at a record nobody may backfill, got %q", name, c.Remedy)
+				}
+			}
+		})
+	}
+}
+
+// TestReadyScaffoldPromptIsNotAClaim is the other half: the create-path prompt
+// is bytes this package wrote asking for a claim, never a claim somebody made,
+// and the gate must not report it as one.
+func TestReadyScaffoldPromptIsNotAClaim(t *testing.T) {
+	root := t.TempDir()
+	seeded := seedDraft("itd-10", DraftOptions{Slug: "alpha", Title: "alpha", SeedBody: "why it matters"})
+	// Plan the criteria only, so the two claim sections stay as seeded.
+	seeded = strings.Replace(seeded,
+		"> _Required (the itd-1 discipline)", "- **Given** x, **when** y, **then** z.\n\n> _was: ", 1)
+	writeFile(t, root, plannedDir+"/itd-10-alpha.md",
+		strings.Replace(seeded, "spec_id: null", "spec_id: spc-1", 1))
+	writeFile(t, root, specsOpen+"/spc-1-alpha.md", specNaming("spc-1", "alpha", "itd-10"))
+
+	res, err := Ready(root, "itd-10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mech := checkByName(t, res, "mechanism_claim")
+	if !mech.OK {
+		t.Fatalf("an unanswered prompt is not a fault (mechanism is nullable): %+v", mech)
+	}
+	if strings.Contains(mech.Detail, "mechanism claim stated") {
+		t.Fatalf("the scaffold prompt must not read as a stated claim: %+v", mech)
+	}
+	if !strings.Contains(mech.Detail, "unanswered") {
+		t.Fatalf("mechanism_claim = %+v, want the detail to name the unanswered prompt", mech)
+	}
+	cond := checkByName(t, res, "scope_conditions")
+	if cond.OK || !strings.Contains(cond.Detail, "unanswered") {
+		t.Fatalf("scope_conditions = %+v, want fail naming the unanswered prompt", cond)
+	}
+}

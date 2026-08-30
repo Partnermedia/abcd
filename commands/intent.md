@@ -129,7 +129,9 @@ identities are rendered by `abcd intent ready <itd-N> --json` under
 corpus-wide count-and-link status and carries no per-record body.
 
 Population is forward-only: `shipped/` and `superseded/` records are never
-backfilled, because an absent stamp is information.
+backfilled, because an absent stamp is information — so both checks report as
+not applicable there rather than naming work nobody may do. An unanswered
+scaffold prompt is reported as unanswered, never as a recorded claim.
 
 ## Planning interview (host-run, with the human present)
 

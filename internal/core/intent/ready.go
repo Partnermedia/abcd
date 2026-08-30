@@ -162,8 +162,12 @@ func acCheck(acCount int) ReadyCheck {
 // it is neither, and is the section's one fault.
 func mechanismCheck(it Intent, claims Claims) ReadyCheck {
 	c := ReadyCheck{Name: CheckMechanismClaim, OK: true}
-	if it.Bucket == BucketDisciplines {
-		c.Detail = disciplineClaimExemption
+	if detail, exempt := claimCheckExemption(it); exempt {
+		c.Detail = detail
+		return c
+	}
+	if claims.MechanismPrompt {
+		c.Detail = "the '## Mechanism' prompt is unanswered — no claim recorded (prompted, not required)"
 		return c
 	}
 	switch claims.Mechanism {
@@ -188,8 +192,14 @@ func mechanismCheck(it Intent, claims Claims) ReadyCheck {
 // Each condition must carry exactly one identity, and no two may share one.
 func scopeConditionsCheck(it Intent, claims Claims) ReadyCheck {
 	c := ReadyCheck{Name: CheckScopeConditions, OK: true}
-	if it.Bucket == BucketDisciplines {
-		c.Detail = disciplineClaimExemption
+	if detail, exempt := claimCheckExemption(it); exempt {
+		c.Detail = detail
+		return c
+	}
+	if claims.ConditionsPrompt {
+		c.OK = false
+		c.Detail = "the '## Scope Conditions' prompt is unanswered — the context claim is unrecorded"
+		c.Remedy = scopeConditionsRemedy
 		return c
 	}
 	switch claims.ConditionsState {
@@ -229,10 +239,27 @@ func scopeConditionsCheck(it Intent, claims Claims) ReadyCheck {
 	return c
 }
 
+// claimCheckExemption reports the buckets where a claim check has nothing to
+// ask for, and the detail that says why. Discipline records carry no claim
+// sections at all; a shipped or superseded record is never backfilled (spc-55
+// rules retro-fitting out of scope — an absent stamp is information), so
+// printing a write-the-section remedy at one would name work nobody may do
+// (iss-2608300210588414). In every case the bucket check has already settled
+// the verdict.
+func claimCheckExemption(it Intent) (string, bool) {
+	switch it.Bucket {
+	case BucketDisciplines:
+		return disciplineClaimExemption, true
+	case BucketShipped, BucketSuperseded:
+		return "not applicable — a " + it.Bucket + " record's claims are never backfilled", true
+	}
+	return "", false
+}
+
 // The two strings both claim checks share, so the exemption and the remedy read
 // identically wherever they are reported.
 const (
-	disciplineClaimExemption = "discipline records carry no claim sections"
+	disciplineClaimExemption = "not applicable — discipline records carry no claim sections"
 	scopeConditionsRemedy    = "write the conditions this claim holds under as top-level bullets under '## Scope Conditions', or record the exact token `None stated.` alone on its line"
 )
 
