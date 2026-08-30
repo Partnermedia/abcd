@@ -7,7 +7,7 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-189-round-2-security"
 found_at: "internal/core/lint/schema.go"
-resolution: "The generic blank-required-property finding no longer states what the reader does with a blank, because that is a per-field property: capture refuses twenty-seven of the twenty-eight required-issue-field x blank-spelling combinations and accepts one. The legs that mirror capture's own shape checks (the enum legs, the slug grammar) now judge a present-but-blank scalar and state the refusal on their own terms, and the generic leg stays silent for a field one of them has already answered. Every combination is pinned against the reader itself by TestBlankRequiredPropertyFindingsMatchTheReadersVerdict."
+resolution: "The generic blank-required-property finding no longer states what the reader does with a blank, because that is a per-field property: capture refuses thirty-nine of the forty-two required-issue-field x blank-spelling combinations and accepts three, every one of them a found_during. The legs that mirror capture's own shape checks (the enum legs, the slug grammar) now judge a present-but-blank scalar and state the refusal on their own terms, and the generic leg stays silent for a field one of them has already answered. Every combination is pinned against the reader itself by TestBlankRequiredPropertyFindingsMatchTheReadersVerdict."
 impact: fix
 resolved_by:
   intent: "itd-189"

@@ -1470,7 +1470,7 @@ func TestQuotedPaddingIsNotTrimmedOutOfAValueTheReaderRefuses(t *testing.T) {
 // judges, so the finding states what a blank IS and claims nothing about the
 // reader in either direction: neither the refusal that would send the author
 // looking for a record that is being read, nor the acceptance that would send
-// them looking for one that is not. The parity across all twenty-eight
+// them looking for one that is not. The parity across all forty-two
 // combinations is pinned against the reader itself in core/capture
 // (TestBlankRequiredPropertyFindingsMatchTheReadersVerdict); the store half of
 // the question is TestMissingPropertyClaimsNoReaderWhereTheStoreHasNone.
@@ -1986,5 +1986,43 @@ func TestADoublyQuotedEmptyJoinAndBucketFieldAreJudgedOnOneStrip(t *testing.T) {
 		if !findingWith(fs, c.rel, ruleRecordSchema, c.leg) {
 			t.Errorf("the leg that judges %s must be the one that speaks on %s: %+v", c.field, c.rel, fs)
 		}
+	}
+}
+
+// The empty flow MAPPING and the explicit null tag are absences, on the same
+// terms the empty flow sequence already was. `grounds: {}` states nothing, and
+// `grounds: !!null` states nothing twice over — but isAbsentValue special-cased
+// one flow collection and not the other and knew no tag, so a groundless
+// admission passed the gate, the report keyed its pair as admitted, and the
+// proposal it names vanished from the outstanding report with no line saying an
+// answer was written (iss-2608301649337965).
+//
+// The control is the last case: a flow mapping that HOLDS something is a value,
+// wrong for the field perhaps, but not an absence.
+func TestAnEmptyFlowMappingAndAnExplicitNullTagAreAbsences(t *testing.T) {
+	for _, c := range []struct {
+		name, spelling string
+		absent         bool
+	}{
+		{"empty flow mapping", "{}", true},
+		{"padded flow mapping", "{ }", true},
+		{"explicit null tag", "!!null", true},
+		{"populated flow mapping", "{a: b}", false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			root := admissionCorpus(t)
+			writeFile(t, root, "work/issues/admissions/rdg-1/adm-3.md",
+				"---\nschema_version: 1\nid: adm-3\nrun: rdg-1\nproposal: rdi-2\ngrounds: "+c.spelling+"\n---\n\n")
+
+			fs, err := Lint(admissionSchemaConfig(), root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rel := filepath.Join("work", "issues", "admissions", "rdg-1", "adm-3.md")
+			got := findingWith(fs, rel, ruleRecordSchema, "'grounds'")
+			if got != c.absent {
+				t.Fatalf("grounds: %s — absent=%v, gate said %v: %+v", c.spelling, c.absent, got, fs)
+			}
+		})
 	}
 }

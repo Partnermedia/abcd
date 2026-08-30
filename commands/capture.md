@@ -176,9 +176,13 @@ admitted on; a **surprise entry** (`srp-N`, under
 declined proposal is not a third record: it is the disposition above in its
 `declined` state. Neither shape has a sub-verb — this surface writes no `adm-N`
 and no `srp-N`, and the command-side refusal is the next iteration's. What holds
-today is the committed-tree gate: `record_schema` refuses an admission with a
-blank `grounds` or no `proposal`, a surprise whose `occasioned_by` names a
-record the corpus does not hold, and either record filed in the other's store.
+today is the committed-tree gate: `record_schema` refuses an admission whose
+`grounds` carries no value once the YAML scalar on the key's own line is read —
+absent, empty, whitespace, quoted-empty, quoted-whitespace, an empty flow
+collection (`[]`, `{}`), a YAML null (`~`, `null`, `!!null`) or a block scalar
+holding nothing — an admission with no `proposal`, a surprise whose
+`occasioned_by` names a record the corpus does not hold, and either record filed
+in the other's store.
 `abcd lint` reports a widening proposal carrying neither an admission nor a
 decline, at `info`.
 

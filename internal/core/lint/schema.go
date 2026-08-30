@@ -734,16 +734,17 @@ func checkRecordFilenameSlug(r schemaRecord, severity string, judged map[string]
 // The reader's required-property loop type-checks without judging content, but
 // the checks either side of it DO judge: capture refuses `severity: ""` on its
 // enum, `slug: ""` on its grammar, `id: ""` on its pattern and `schema_version:
-// ""` on its version, and accepts a found_during written as a bare single-quote
-// pair, because its decoder leaves those two apostrophes intact. Twenty-seven of
-// the twenty-eight required-issue-field × blank-spelling combinations (four
-// spellings: the three quoted ones and the indented block) are refusals and one
-// is an acceptance, so a single
+// ""` on its version, and reads a found_during written as a bare single-quote
+// pair, an empty flow mapping or an explicit null tag as a value, because its
+// decoder leaves all three intact. Thirty-nine of the forty-two
+// required-issue-field × blank-spelling combinations (six spellings: the three
+// quoted ones, the indented block, the empty flow mapping and the null tag) are
+// refusals and three are acceptances, so a single
 // sentence about "what the reader does with a blank" is a confident false
 // statement in whichever set it does not match — first claiming a refusal that
 // never happens, then, once that was fixed, an acceptance that never happens
 // (iss-2608301308369559). So this leg states only what a blank IS, which is true
-// of all twenty-eight; the consequence is stated by the leg that judges the field,
+// of all forty-two; the consequence is stated by the leg that judges the field,
 // and where such a leg has already spoken (judged) this one stays silent rather
 // than adding a second, weaker finding on the same line.
 //
@@ -1155,7 +1156,8 @@ func checkIssueRecordShape(r schemaRecord, severity string, judged map[string]bo
 	// refuses exactly the record the reader refuses (and therefore skips, making it
 	// invisible to every capture surface while it still sits in the ledger).
 	// Absence is tested with the frontmatter NULL set alone, not isAbsentValue,
-	// which also reads an empty inline list as absent. lapsed_at is a scalar
+	// which also reads an empty flow collection and an explicit null tag as absent.
+	// lapsed_at is a scalar
 	// property: capture's reader parses `lapsed_at: []` as a list, refuses the
 	// record ("lapsed_at" must be a string) and SKIPS it, so reading the list as
 	// absence would leave that record lint-green on every category but lapse —
@@ -1484,12 +1486,38 @@ func undeclaredSubdirMessage(store recordStore, bucket, name string) string {
 		"' is undeclared; records inside it are read by no rule"
 }
 
+// explicitNullTag is YAML's tag shorthand for a null. It is judged HERE rather
+// than in the shared isNull, which is the YAML 1.2 core schema's null set exactly
+// and is read by capture's own normalisation: a tag is not a member of that set,
+// and widening the shared predicate would change what capture DECODES as well as
+// what this rule reports. The comparison is exact for isNull's own reason — YAML
+// folds no case here either.
+const explicitNullTag = "!!null"
+
+// isEmptyFlowCollection reports whether v is a flow collection holding nothing:
+// `[]`, `[ ]`, `{}` or `{ }`. BOTH collections are asked from the one place,
+// because one of them having been asked and the other not is exactly what let
+// `grounds: {}` through a gate that refused `grounds: []` (iss-2608301649337965).
+//
+// A collection that HOLDS something is a value — the wrong shape for a scalar
+// field, which is a different question — so only an empty interior answers yes.
+func isEmptyFlowCollection(v string, open, close byte) bool {
+	if len(v) < 2 || v[0] != open || v[len(v)-1] != close {
+		return false
+	}
+	return strings.TrimSpace(v[1:len(v)-1]) == ""
+}
+
 // isAbsentValue reports whether a frontmatter value says "nothing here". It is
-// isNull widened by the empty flow sequence, which is this record's house
-// spelling for an empty list (`related_rfcs: []`) and therefore an absence, not a
-// malformed value. It is local rather than folded into the shared isNull because
-// isNull also judges SCALAR fields (kind, impact, slug), where a list literal is a
-// wrong value rather than an unset one, and should keep saying so.
+// isNull widened by the two empty flow collections and by YAML's explicit null
+// tag. The empty flow sequence is this record's house spelling for an empty list
+// (`related_rfcs: []`) and therefore an absence, not a malformed value; the empty
+// flow MAPPING and `!!null` state nothing in the same way, and a predicate that
+// caught one collection and not the other left `grounds: {}` green on a gate
+// armed for exactly that blank (iss-2608301649337965). It is local rather than
+// folded into the shared isNull because isNull also judges SCALAR fields (kind,
+// impact, slug), where a collection literal is a wrong value rather than an unset
+// one, and should keep saying so.
 //
 // Absence is decided on the value the YAML SCALAR carries, never on its raw
 // bytes: `grounds: ""` is five bytes and no value, and a reader that validates
@@ -1513,11 +1541,11 @@ func undeclaredSubdirMessage(store recordStore, bucket, name string) string {
 // bug behind a narrower mouth in three other stores.
 func isAbsentValue(value string) bool {
 	v := strings.TrimSpace(value)
-	if isNull(v) {
+	if isNull(v) || v == explicitNullTag {
 		return true
 	}
-	if strings.HasPrefix(v, "[") && strings.HasSuffix(v, "]") {
-		return strings.TrimSpace(v[1:len(v)-1]) == ""
+	if isEmptyFlowCollection(v, '[', ']') || isEmptyFlowCollection(v, '{', '}') {
+		return true
 	}
 	// Trimmed HERE rather than inside issueScalar: emptiness is a question a value
 	// of nothing but padding answers the same way whatever a reader does with it,

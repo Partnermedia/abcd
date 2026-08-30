@@ -14,9 +14,16 @@ import (
 // nothing on the key's own line while still being PRESENT. They are held apart
 // rather than folded into one case because the readers part them: `""` decodes to
 // the empty string, a bare single-quote pair survives decoding intact (this
-// reader unquotes double quotes only), `" "` decodes to padding, and an indented
-// block sequence puts no scalar on the key's line at all — different values, and
-// the reader reaches different verdicts on some of the fields.
+// reader unquotes double quotes only), `" "` decodes to padding, an indented
+// block sequence puts no scalar on the key's line at all, and the empty flow
+// mapping and the explicit null tag are both left as the strings they are spelled
+// with — different values, and the reader reaches different verdicts on some of
+// the fields.
+//
+// The last two are here because the gate read one empty flow collection as
+// nothing and the other as a value, so `grounds: {}` passed a rule armed for
+// exactly that blank (iss-2608301649337965). A set that enumerates the spellings
+// is only as good as the enumeration.
 //
 // A spelling that begins with a newline is a CONTINUATION: the key is written
 // bare and the lines below it carry the shape.
@@ -28,6 +35,8 @@ var blankSpellings = []struct {
 	{"single-quoted", `''`},
 	{"quoted padding", `" "`},
 	{"block sequence", "\n  - a"},
+	{"empty flow mapping", `{}`},
+	{"explicit null tag", `!!null`},
 }
 
 // blankRequiredRecord renders a well-formed open-issue record with exactly one
@@ -107,10 +116,12 @@ const genericBlankFinding = "carries no value once its YAML scalar is read"
 // TestBlankRequiredPropertyFindingsMatchTheReadersVerdict pins the record_schema
 // gate's account of a PRESENT-BUT-BLANK required property against what the ledger
 // reader actually does with it, for every required property × every blank
-// spelling — twenty-eight combinations, of which the reader refuses twenty-seven
-// and accepts exactly one: a found_during written as a bare single-quote pair, which
-// this reader's decoder leaves as the two-apostrophe string and therefore reads as
-// non-empty.
+// spelling — forty-two combinations, of which the reader refuses thirty-nine and
+// accepts three, every one of them a found_during: the bare single-quote pair, the
+// empty flow mapping and the explicit null tag, each of which this reader's
+// decoder leaves as the string it is spelled with and therefore reads as
+// non-empty. `found_during` is the field no shape check judges, which is why it is
+// the field where the two readings can differ at all.
 //
 // What a blank does to a record is a property of the FIELD, not of the store: the
 // reader's required-property loop type-checks without judging, but the shape

@@ -7,6 +7,10 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-189-round-5-security"
 found_at: "internal/core/lint/schema.go"
+resolution: "isAbsentValue asks both flow collections from one place and knows YAML's explicit null tag, so the empty flow mapping and !!null are absences on the same terms the empty flow sequence already was: a hand-written admission carrying grounds: {} or grounds: !!null is a blocker finding rather than a groundless admission the report keys as admitted. The two spellings join blankSpellings in the capture parity test, and the combination counts the required-fields godoc, the parity test and iss-2608301308369559's resolution note state are corrected to the forty-two the enumeration now holds. The resolution note on iss-2608300935218982 is scoped to the spellings that change closed rather than claiming every blank."
+impact: fix
+resolved_by:
+  intent: "itd-189"
 ---
 
 isAbsentValue reads an empty flow sequence as absent but not an empty flow mapping or an explicit null tag so a blank grounds passes the gate and silences the report
