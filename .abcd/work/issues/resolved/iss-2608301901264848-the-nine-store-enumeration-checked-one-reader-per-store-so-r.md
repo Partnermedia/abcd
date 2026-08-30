@@ -7,6 +7,10 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-189-fix-delta-ruthless"
 found_at: "internal/core/lint/schema.go"
+resolution: "The nine-store enumeration is replaced by TestDuplicateTopLevelKeyReaderByReader, which establishes each reader's answer by exercising it through the entry point that reaches it in production: record.Describe, intent.Load, spec.Load, capture.List, capture.Disposition, capture.Promote, changelog.ShippedSince, lint.ReadReadingOutstanding and issueschema.ParseDisposition. A store whose readers disagree carries a row for each, which is the fact four rounds of prose kept losing: rdi and dsp each have a capture reader that REFUSES the file, and iss has a release-cut reader that keeps the first value. The declaration's godoc is now a pointer at the table. TestEveryStoreHasADuplicateKeyReaderRow refuses a store with no row, so a new store costs establishing its readers rather than being given an answer by analogy. Watched red first with the enumeration's own answers in the want column: four rows failed."
+impact: internal
+resolved_by:
+  intent: "itd-189"
 ---
 
 the nine store enumeration checked one reader per store so rdi and dsp are assigned an answer their second reader contradicts
