@@ -922,3 +922,69 @@ func TestAdmissionReaderHonoursARecordMissingRequiredProperties(t *testing.T) {
 			"so the proposal is admitted: %+v", report.Unadmitted)
 	}
 }
+
+// Readability withholds BOTH claims the widening position rests on, and the
+// Unadmitted leg is the second of them. The other stand-down cases all carry no
+// standing disposition, so they exercise only the branch inside the switch; this
+// one carries an ACCEPTED disposition, which is the state that sends an item down
+// the Unadmitted leg — and an admissions tree nobody could read supports no claim
+// that the proposal was not admitted, possibly about the very admission that
+// could not be read (iss-2608301519254240).
+func TestAnUnreadableAdmissionRunWithholdsTheUnadmittedVerdictToo(t *testing.T) {
+	run, item := "rdg-2608300000000001", "rdi-2608300000000002"
+	root := readingLedger(t, run, item, "widening")
+	dispositionRecord(t, root, item, "dsp-2608300000000003", issueschema.DispositionAccepted)
+	oversized := "---\nschema_version: 1\nid: \"adm-2608300000000004\"\nrun: \"" + run + "\"\n" +
+		"proposal: \"" + item + "\"\ngrounds: \"g\"\n---\n\n"
+	oversized += strings.Repeat("x", issueschema.RecordReadLimit+1-len(oversized))
+	writeFile(t, root, ".abcd/work/issues/admissions/"+run+"/adm-2608300000000004.md", oversized)
+
+	report, err := ReadReadingOutstanding(root, ".abcd/work/issues")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Unsafe) == 0 {
+		t.Fatalf("the fixture must leave the run unreadable, or the stand-down is not exercised: %+v", report)
+	}
+	if len(report.Unadmitted) != 0 {
+		t.Fatalf("an admission tree nobody could read supports no claim that the proposal was unadmitted: %+v",
+			report.Unadmitted)
+	}
+}
+
+// The whole-tree verdict's second entrance: a root that EXISTS and is a real
+// directory but cannot be listed. Nothing is then known about any run, which is
+// the same fact an unsafe root carries — and without it every widening proposal
+// in every run would be judged against a tree nobody listed
+// (iss-2608301519254240).
+func TestAnAdmissionsRootThatCannotBeListedStandsDownEveryRun(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root lists a directory whose mode denies it, so the unlistable root cannot be staged")
+	}
+	run, item := "rdg-2608300000000001", "rdi-2608300000000002"
+	root := readingLedger(t, run, item, "widening")
+	admissions := filepath.Join(root, filepath.FromSlash(".abcd/work/issues/admissions"))
+	if err := os.MkdirAll(admissions, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(admissions, 0o000); err != nil {
+		t.Fatal(err)
+	}
+	// Restored so the temporary tree can be removed again.
+	t.Cleanup(func() { _ = os.Chmod(admissions, 0o755) })
+	if _, err := os.ReadDir(admissions); err == nil {
+		t.Skip("this filesystem lists a directory whose mode denies it")
+	}
+
+	report, err := ReadReadingOutstanding(root, ".abcd/work/issues")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Unsafe) == 0 {
+		t.Fatalf("a root that cannot be listed must be named: %+v", report)
+	}
+	if len(report.Undispositioned) != 0 {
+		t.Fatalf("nothing is known about any run, so no widening proposal may be judged: %+v",
+			report.Undispositioned)
+	}
+}

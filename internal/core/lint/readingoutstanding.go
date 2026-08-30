@@ -76,7 +76,7 @@ type admissionKey struct {
 // admitted set on the (run, proposal) pair and reads the run from the DIRECTORY,
 // so nothing an unreadable run holds can bear on another run's items. (What the
 // walk does not establish is that the proposal named is one of that run's own:
-// record_schema's sameBucket join is what refuses an admission reaching into
+// record_schema's sameBucketAs join is what refuses an admission reaching into
 // another run, and until it landed such a record admitted nothing, silently —
 // iss-2608301327013320.) So one run's fault says nothing about another's, and a
 // store-wide verdict let a single symlinked or

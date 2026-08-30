@@ -990,12 +990,18 @@ func joinFamilyNoun(family string) string {
 // admission silently admits nothing — and a record that quietly stops counting is
 // the shape this whole rule exists to make loud.
 //
-// It is scoped to the stores that DECLARE a bucketField. The disposition store
+// It is scoped to the stores that DECLARE a bucketField, and that scope is the
+// whole of it: bucketField is declared by the bucketed admission store alone, so
+// a record reaching this check always has a bucket. A second test for an empty
+// one would be a branch no fixture can enter, which is how a guard comes to look
+// tested (iss-2608301519254240).
+//
+// The disposition store
 // makes the same double claim (`item` beside its item-keyed directory) and is not
 // declared here, because that store declares no frontmatter schema at all this
 // cycle; adding one field of it would be a schema half-stated in a second place.
 func checkRecordBucketField(r schemaRecord, severity string) []Finding {
-	if r.store.bucketField == "" || r.bucket == "" {
+	if r.store.bucketField == "" {
 		return nil
 	}
 	f, present := r.fields[r.store.bucketField]
