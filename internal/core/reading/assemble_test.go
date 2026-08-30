@@ -1472,8 +1472,14 @@ func TestRawHeadingTitleCrossesBlankLinesAndBreaks(t *testing.T) {
 // cache must not drop the fold with it.
 func TestRawHeadingCaseIsFolded(t *testing.T) {
 	rows := map[string]string{
-		"an upper-case pair":  "<H2>Audit Notes</H2>\n\n" + sentinelAuditNotes + "\n",
-		"a mixed-case close":  "<h2>Audit Notes</H2>\n\n" + sentinelAuditNotes + "\n",
+		"an upper-case pair": "<H2>Audit Notes</H2>\n\n" + sentinelAuditNotes + "\n",
+		"a mixed-case close": "<h2>Audit Notes</H2>\n\n" + sentinelAuditNotes + "\n",
+		// The one row that DISCRIMINATES the fold: with a blank line after the
+		// close, the soft bound rescues the title whether the name folded or
+		// not, so every other row stays green with byte equality in place of the
+		// fold. Here the close is the only bound there is.
+		"a mixed-case close with no blank line after it": "<h2>Audit Notes</H2>\nand trailing prose\n\n" +
+			sentinelAuditNotes + "\n",
 		"a role element pair": "<DIV role=\"heading\" aria-level=\"2\">Audit Notes</DIV>\n\n" + sentinelAuditNotes + "\n",
 	}
 	for what, body := range rows {

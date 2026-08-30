@@ -7,6 +7,10 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-183-round-9-ruthless"
 found_at: "internal/core/reading/assemble_test.go"
+resolution: "The fold test gains the row that discriminates it: a mixed-case close with no blank line after it, where the close is the only bound there is. Byte equality in place of the fold now turns the test red."
+impact: internal
+resolved_by:
+  intent: "itd-183"
 ---
 
 TestRawHeadingCaseIsFolded does not discriminate the fold it is named for and the entire package stays green when the guard is removed
