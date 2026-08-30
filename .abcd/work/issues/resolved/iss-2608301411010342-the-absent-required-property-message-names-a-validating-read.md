@@ -7,6 +7,11 @@ category: "bug"
 source: "impl-review"
 found_during: "itd-189-round-3-ruthless"
 found_at: "internal/core/lint/schema.go"
+resolution: "The missing-property message's reader clause is now declared per store (readerFailsClosed), true for the issue ledger and the ADR store whose readers refuse an incomplete record and skip it, and absent for the admission and surprise stores which have no such reader. What the admission reader actually does with an incomplete record is pinned by a test rather than assumed, and the absent-versus-blank test moves onto an issue fixture, where the claim it asserts is true."
+impact: fix
+resolved_by:
+  intent: "itd-189"
+  spec: "spc-67"
 ---
 
 the absent-required-property message names a validating reader for two stores that have none, and this branch certified that claim as store-wide
