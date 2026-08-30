@@ -130,5 +130,7 @@ parallel store.
   local ledger side until the product thinker assigns a home.
 - Whether "ledger" needs a glossary term to separate the provenance ledger from
   the issue ledger — flagged by the adversarial reviews, not ruled.
-- The [HAND] owners for the scribe-protocol rehearsal and the step-2 admission
-  records — to be named when the workstream's planning cycle phase runs.
+- The [HAND] owner for the step-2 admission records — to be named when the
+  workstream's planning cycle phase runs. Nothing is owed before then: a
+  widening reading has to run before a proposal exists to admit, and no reading
+  runs this cycle.
