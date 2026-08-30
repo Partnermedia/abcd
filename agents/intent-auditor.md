@@ -162,8 +162,9 @@ Rules the ingest enforces (so honour them or the verdict is rejected):
    something the record does not claim.
 8. Every `disposition` is one of `survived | narrowed | falsified | untested`
    (the acceptance vocabulary is NOT the disposition vocabulary — `MET` here is
-   rejected). `narrowed` requires a non-empty `narrowing`, and every disposition
-   except `untested` cites ≥1 `evidence` ref.
+   rejected). `narrowing` is required on `narrowed` and MUST be empty on every
+   other disposition — a narrowing stated beside a `survived` is rejected, not
+   quietly kept. Every disposition except `untested` cites ≥1 `evidence` ref.
 
 ## Error verdict (only when you genuinely cannot proceed)
 
