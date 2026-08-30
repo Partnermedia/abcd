@@ -203,3 +203,70 @@ func TestStampPlannedHoldsTheMintLock(t *testing.T) {
 		t.Fatalf("the stamp completed in %v while the mint lock was held — it took no lock", waited)
 	}
 }
+
+// commentedSection is iss-2608300259316871: a condition parked inside an HTML
+// comment. Read as live it is counted as a condition and STAMPED — and the
+// marker's own `-->` then closes the outer comment early, so the rest of the
+// parked block renders as prose. A rewrite that corrupts what the file renders
+// is the worst thing this stamper can do, so the section is refused whole.
+const commentedSection = "- holds on a POSIX shell\n\n<!--\n- parked while we decide\n-->\n"
+
+func TestCommentedBulletIsNotACondition(t *testing.T) {
+	c := ParseClaims(claimRecord(nil, str(commentedSection)))
+	if len(c.Conditions) != 1 {
+		t.Fatalf("got %d conditions, want 1 (the parked bullet is not live): %+v", len(c.Conditions), c.Conditions)
+	}
+	if !c.ConditionsCommented {
+		t.Error("the section must be reported as carrying a comment span")
+	}
+}
+
+// A bullet whose own line opens a comment that closes on the next line is not a
+// live bullet either — the whole span is masked.
+func TestBulletOpeningACommentIsMasked(t *testing.T) {
+	body := "- holds on a POSIX shell\n- parked <!--\n  because we are unsure -->\n"
+	c := ParseClaims(claimRecord(nil, str(body)))
+	if len(c.Conditions) != 1 {
+		t.Fatalf("got %d conditions, want 1: %+v", len(c.Conditions), c.Conditions)
+	}
+	if c.Conditions[0].Text != "holds on a POSIX shell" {
+		t.Fatalf("read the parked bullet: %q", c.Conditions[0].Text)
+	}
+	if !c.ConditionsCommented {
+		t.Error("the section must be reported as carrying a comment span")
+	}
+}
+
+func TestStampRefusesACommentedSection(t *testing.T) {
+	content := claimRecord(nil, str(commentedSection))
+	got, n, err := stampScopeConditions(content, fixedMinter(7))
+	if err == nil {
+		t.Fatal("a section carrying a comment span must refuse the stamp")
+	}
+	if !strings.Contains(err.Error(), "comment") {
+		t.Fatalf("the refusal must name the comment, got %q", err)
+	}
+	if n != 0 || got != "" {
+		t.Fatalf("a refusal writes nothing (n=%d)", n)
+	}
+}
+
+// TestPlanLeavesACommentedSectionByteIdentical is the claim that matters: the
+// refusal reaches the disk, not just the function.
+func TestPlanLeavesACommentedSectionByteIdentical(t *testing.T) {
+	root := t.TempDir()
+	before := "---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n" +
+		"## Scope Conditions\n\n" + commentedSection + "\n## Acceptance Criteria\n\n- ok\n"
+	writeFile(t, root, plannedDir+"/itd-10-alpha.md", before)
+
+	if _, err := Plan(root, "itd-10"); err == nil {
+		t.Fatal("Plan must refuse a section carrying a comment span")
+	}
+	after, err := os.ReadFile(filepath.Join(root, plannedDir, "itd-10-alpha.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != before {
+		t.Fatalf("the record was rewritten by a refused stamp:\n%s", after)
+	}
+}

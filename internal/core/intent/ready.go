@@ -237,6 +237,12 @@ func scopeConditionsCheck(it Intent, claims Claims) ReadyCheck {
 		c.Remedy = "move the fenced example out of '## Scope Conditions'"
 		return c
 	}
+	if claims.ConditionsCommented {
+		c.OK = false
+		c.Detail = "'## Scope Conditions' contains an HTML comment — a bullet parked inside one is not a live condition"
+		c.Remedy = "delete the commented-out block from '## Scope Conditions', or move it out of the section"
+		return c
+	}
 	if bad := MalformedMarkerOrdinals(claims.Conditions); len(bad) > 0 {
 		c.OK = false
 		c.Detail = fmt.Sprintf("condition(s) %s carry a malformed identity marker", joinInts(bad))

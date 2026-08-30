@@ -607,3 +607,20 @@ func TestReadyReportsADuplicatedSectionHeading(t *testing.T) {
 		t.Fatalf("scope_conditions = %+v, want fail naming the duplicated heading", c)
 	}
 }
+
+// TestReadyNamesACommentedSection: the stamp refuses a section carrying a
+// comment span, so the gate has to name it — a refusal the gate cannot describe
+// is a dead end.
+func TestReadyNamesACommentedSection(t *testing.T) {
+	res := readyWithClaims(t, "", "## Scope Conditions\n\n- holds on POSIX\n\n<!--\n- parked\n-->\n\n")
+	if res.Ready {
+		t.Fatal("a section carrying a comment span must not be ready")
+	}
+	c := checkByName(t, res, "scope_conditions")
+	if c.OK || !strings.Contains(c.Detail, "comment") {
+		t.Fatalf("scope_conditions = %+v, want fail naming the comment", c)
+	}
+	if c.Remedy == "" {
+		t.Fatal("the fault needs a remedy the reader can act on")
+	}
+}

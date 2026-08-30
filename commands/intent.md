@@ -117,9 +117,12 @@ Each scope condition carries a stamped identity marker
 (`<!-- cond: cond-<16 digits> -->`) so a later disposition attaches to the
 condition rather than to a sentence that may since have been reworded. The
 marker is read anywhere in the bullet, so rewrapping the text cannot orphan it.
-Two markers in one bullet, a near-miss of one, a fenced block in the section, or
-a second `## Scope Conditions` heading are each reported by name — and each is
-refused by the stamp, so the gate never names a remedy that cannot run. **The
+Two markers in one bullet, a near-miss of one, a fenced block or an HTML comment
+in the section, or a second `## Scope Conditions` heading are each reported by
+name. A fenced or commented section and a duplicated heading are refused by the
+stamp outright; a bullet carrying two markers, a near-miss, or an identity
+another bullet already uses is skipped by the stamp and named by the gate. Either
+way the gate never names a remedy that cannot run. **The
 markers are stamped by `abcd intent plan`, never hand-typed**, and the gate
 refuses a missing or duplicated one by name rather than repairing it — a
 reporter that writes is a reporter whose output depends on who ran it. That

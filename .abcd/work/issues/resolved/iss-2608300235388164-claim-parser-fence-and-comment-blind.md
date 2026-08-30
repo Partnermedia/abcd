@@ -7,7 +7,7 @@ category: "bug"
 source: "impl-review"
 found_during: "itd-177 adversarial reviews, 2026-08-30"
 found_at: "internal/core/intent/claims.go (sectionLineRange, stampScopeConditions), internal/core/intent/ready.go, internal/core/intent/lifecycle.go (stampPlanned)"
-resolution: "sectionLineRange tracks fence state, so a fenced heading neither opens nor closes a section and a fenced bullet is never read or written; the stamp refuses outright on a fenced section or a duplicated heading, takes the store's mint lock around its read-modify-write, and skips a bullet carrying a near-miss of a marker. Every fault the stamp refuses on is also named by the gate with its own remedy, so no refusal is reachable only as a dead end. A corpus test proves the fence-aware bound leaves every existing section body — and so every parked audit receipt's sha256 — byte-identical."
+resolution: "sectionLineRange tracks fence state, so a fenced heading neither opens nor closes a section and a fenced bullet is never read or written; the stamp refuses outright on a fenced section or a duplicated heading, takes the store's mint lock around its read-modify-write, and skips a bullet carrying a near-miss of a marker. Every fault the stamp refuses on is also named by the gate with its own remedy, so no refusal is reachable only as a dead end. A corpus test proves the fence-aware bound leaves every existing section body — and so every parked audit receipt's sha256 — byte-identical. The comment clause its body names was NOT closed by that change and is closed by iss-2608300259316871: the mask now spans HTML comments as well as fences."
 impact: fix
 resolved_by:
   intent: "itd-177"

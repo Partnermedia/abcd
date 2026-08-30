@@ -119,6 +119,7 @@ type Claims struct {
 	// "the section" ambiguous. Both are reported by the gate and refused by the
 	// stamp, so the remedy the gate names is never a command that cannot run.
 	ConditionsFenced     bool `json:"conditions_fenced,omitempty"`
+	ConditionsCommented  bool `json:"conditions_commented,omitempty"`
 	ConditionsDuplicated bool `json:"conditions_duplicated,omitempty"`
 }
 
@@ -127,7 +128,7 @@ type Claims struct {
 // rather than re-deciding what a section, a bullet, or the nullity token is.
 func ParseClaims(content string) Claims {
 	lines := strings.Split(content, "\n")
-	fenced := fenceMask(lines)
+	mask := maskLines(lines)
 	c := Claims{
 		Mechanism:        claimState(lines, mechanismHeadingRe),
 		MechanismPrompt:  sectionIsPrompt(lines, mechanismHeadingRe),
@@ -135,9 +136,10 @@ func ParseClaims(content string) Claims {
 		ConditionsPrompt: sectionIsPrompt(lines, scopeHeadingRe),
 		Conditions:       []ScopeCondition{},
 	}
-	if start, end, ok := sectionLineRangeIn(lines, fenced, scopeHeadingRe); ok {
-		c.ConditionsFenced = anyFenced(fenced, start, end)
-		c.ConditionsDuplicated = countHeadings(lines, fenced, scopeHeadingRe) > 1
+	if start, end, ok := sectionLineRangeIn(lines, mask, scopeHeadingRe); ok {
+		c.ConditionsFenced = anyMasked(mask, start, end, maskFence)
+		c.ConditionsCommented = anyMasked(mask, start, end, maskComment)
+		c.ConditionsDuplicated = countHeadings(lines, mask, scopeHeadingRe) > 1
 	}
 	if c.ConditionsState == ClaimStated {
 		c.Conditions = parseConditions(lines)
@@ -145,49 +147,88 @@ func ParseClaims(content string) Claims {
 	return c
 }
 
-// fenceMask reports, per line, whether that line lies inside a fenced code
-// block — the delimiter lines included, since nothing on them is markdown
-// either. A markdown parser that cannot see a fence reads an EXAMPLE as an
-// instruction: a fenced `## Scope Conditions` shadows the record's real one, and
-// a fenced bullet is counted as a condition and written into by the stamp
-// (iss-2608300235388164). An unclosed fence runs to end of file, per CommonMark.
-func fenceMask(lines []string) []bool {
-	mask := make([]bool, len(lines))
-	open := ""
+// Mask flags: why a line is not live markdown. Both are read the same way — the
+// line is neither matched nor written — but they are reported separately, so a
+// refusal names the thing the reader has to go and look at.
+const (
+	maskFence uint8 = 1 << iota
+	maskComment
+)
+
+// maskLines reports, per line, whether that line lies inside a fenced code block
+// or an HTML comment span — the delimiter lines included, since nothing on them
+// is live markdown either. A parser that cannot see either reads an EXAMPLE, or
+// a deliberately PARKED bullet, as an instruction: a fenced or commented
+// `## Scope Conditions` shadows the record's real one, and a bullet inside
+// either is counted as a condition and written into by the stamp. Writing a
+// marker inside a comment is the worst of the three — the marker's own `-->`
+// closes the comment early, so the rest of the parked block starts rendering
+// (iss-2608300235388164, iss-2608300259316871).
+//
+// Neither construct nests in the other: inside a fence `<!--` is literal text,
+// and inside a comment a fence delimiter is. An unclosed opener of either kind
+// runs to end of file — CommonMark's rule for a fence, and the only safe reading
+// of a comment nobody closed.
+func maskLines(lines []string) []uint8 {
+	mask := make([]uint8, len(lines))
+	fenceOpen := ""
+	inComment := false
 	for i, raw := range lines {
 		ln := strings.TrimRight(raw, "\r")
-		m := fenceRe.FindStringSubmatch(ln)
-		if open == "" {
-			// A backtick opener's info string may not itself contain a backtick.
-			if m != nil && !(m[1][0] == '`' && strings.Contains(m[2], "`")) {
-				open = m[1]
-				mask[i] = true
+		switch {
+		case inComment:
+			mask[i] |= maskComment
+			if strings.Contains(ln, "-->") {
+				// A line may close the span and open a fresh one after it.
+				inComment = opensComment(ln)
 			}
-			continue
-		}
-		mask[i] = true
-		if m != nil && m[1][0] == open[0] && len(m[1]) >= len(open) && strings.TrimSpace(m[2]) == "" {
-			open = ""
+		case fenceOpen != "":
+			mask[i] |= maskFence
+			if m := fenceRe.FindStringSubmatch(ln); m != nil && m[1][0] == fenceOpen[0] && len(m[1]) >= len(fenceOpen) && strings.TrimSpace(m[2]) == "" {
+				fenceOpen = ""
+			}
+		default:
+			// A backtick opener's info string may not itself contain a backtick.
+			if m := fenceRe.FindStringSubmatch(ln); m != nil && !(m[1][0] == '`' && strings.Contains(m[2], "`")) {
+				fenceOpen = m[1]
+				mask[i] |= maskFence
+				continue
+			}
+			if opensComment(ln) {
+				inComment = true
+				mask[i] |= maskComment
+			}
 		}
 	}
 	return mask
 }
 
-// anyFenced reports whether any line of [start, end) lies inside a fence.
-func anyFenced(fenced []bool, start, end int) bool {
-	for i := start; i < end && i < len(fenced); i++ {
-		if fenced[i] {
+// opensComment reports whether a line leaves an HTML comment open: its LAST
+// `<!--` has no `-->` after it. A well-formed identity marker closes on its own
+// line, so it never opens a span.
+func opensComment(ln string) bool {
+	i := strings.LastIndex(ln, "<!--")
+	return i >= 0 && !strings.Contains(ln[i+len("<!--"):], "-->")
+}
+
+// masked reports whether a line is not live markdown, for any reason.
+func masked(mask []uint8, i int) bool { return i < len(mask) && mask[i] != 0 }
+
+// anyMasked reports whether any line of [start, end) carries the given flag.
+func anyMasked(mask []uint8, start, end int, flag uint8) bool {
+	for i := start; i < end && i < len(mask); i++ {
+		if mask[i]&flag != 0 {
 			return true
 		}
 	}
 	return false
 }
 
-// countHeadings counts the unfenced headings matching headRe.
-func countHeadings(lines []string, fenced []bool, headRe *regexp.Regexp) int {
+// countHeadings counts the live headings matching headRe.
+func countHeadings(lines []string, mask []uint8, headRe *regexp.Regexp) int {
 	n := 0
 	for i, ln := range lines {
-		if !fenced[i] && headRe.MatchString(strings.TrimRight(ln, "\r")) {
+		if !masked(mask, i) && headRe.MatchString(strings.TrimRight(ln, "\r")) {
 			n++
 		}
 	}
@@ -235,13 +276,13 @@ func sectionIsPrompt(lines []string, headRe *regexp.Regexp) bool {
 // prose; an indented sub-bullet is detail of its parent and ends it, exactly as
 // bulletRe already rules for acceptance criteria.
 func parseConditions(lines []string) []ScopeCondition {
-	fenced := fenceMask(lines)
-	start, end, ok := sectionLineRangeIn(lines, fenced, scopeHeadingRe)
+	mask := maskLines(lines)
+	start, end, ok := sectionLineRangeIn(lines, mask, scopeHeadingRe)
 	if !ok {
 		return []ScopeCondition{}
 	}
 	conds := []ScopeCondition{}
-	for _, b := range conditionBlocks(lines, fenced, start, end) {
+	for _, b := range conditionBlocks(lines, mask, start, end) {
 		ids, malformed, text := readConditionBlock(lines, b)
 		c := ScopeCondition{Ordinal: len(conds) + 1, Text: text, MalformedMarker: malformed}
 		if len(ids) > 0 {
@@ -259,17 +300,17 @@ type conditionBlock struct{ start, end int }
 // conditionBlocks splits a section body into its top-level bullets. It is the
 // single notion of where a condition starts and stops, so the reader and the
 // stamper can never disagree about which lines belong to which condition. A
-// fenced line neither opens a bullet nor continues one.
-func conditionBlocks(lines []string, fenced []bool, start, end int) []conditionBlock {
+// masked line — fenced or commented — neither opens a bullet nor continues one.
+func conditionBlocks(lines []string, mask []uint8, start, end int) []conditionBlock {
 	var blocks []conditionBlock
 	for i := start; i < end; i++ {
-		if fenced[i] || !bulletRe.MatchString(strings.TrimRight(lines[i], "\r")) {
+		if masked(mask, i) || !bulletRe.MatchString(strings.TrimRight(lines[i], "\r")) {
 			continue
 		}
 		j := i + 1
 		for ; j < end; j++ {
 			cont := strings.TrimRight(lines[j], "\r")
-			if fenced[j] || strings.TrimSpace(cont) == "" || anyBulletRe.MatchString(cont) {
+			if masked(mask, j) || strings.TrimSpace(cont) == "" || anyBulletRe.MatchString(cont) {
 				break
 			}
 		}
@@ -369,8 +410,8 @@ func UnmarkedConditionOrdinals(conds []ScopeCondition) []int {
 // surviving marker and the retired one simply stops appearing.
 func stampScopeConditions(content string, minter recordid.Minter) (string, int, error) {
 	lines := strings.Split(content, "\n")
-	fenced := fenceMask(lines)
-	start, end, ok := sectionLineRangeIn(lines, fenced, scopeHeadingRe)
+	mask := maskLines(lines)
+	start, end, ok := sectionLineRangeIn(lines, mask, scopeHeadingRe)
 	if !ok {
 		return content, 0, nil
 	}
@@ -378,11 +419,14 @@ func stampScopeConditions(content string, minter recordid.Minter) (string, int, 
 	// merely ambiguous to read, so the stamp refuses rather than guessing. Both
 	// are reported by the readiness gate too, so the remedy it names is never a
 	// command that cannot run (iss-2608300235388164).
-	if countHeadings(lines, fenced, scopeHeadingRe) > 1 {
+	if countHeadings(lines, mask, scopeHeadingRe) > 1 {
 		return "", 0, fmt.Errorf("intent: more than one '## Scope Conditions' heading; refusing to stamp an ambiguous section")
 	}
-	if anyFenced(fenced, start, end) {
+	if anyMasked(mask, start, end, maskFence) {
 		return "", 0, fmt.Errorf("intent: '## Scope Conditions' contains a fenced block; refusing to stamp a section whose bullets may be an example")
+	}
+	if anyMasked(mask, start, end, maskComment) {
+		return "", 0, fmt.Errorf("intent: '## Scope Conditions' contains an HTML comment; refusing to stamp a section where a marker's own `-->` would close the comment early")
 	}
 	used := map[string]bool{}
 	for _, c := range parseConditions(lines) {
@@ -394,7 +438,7 @@ func stampScopeConditions(content string, minter recordid.Minter) (string, int, 
 		}
 	}
 	stamped := 0
-	for _, b := range conditionBlocks(lines, fenced, start, end) {
+	for _, b := range conditionBlocks(lines, mask, start, end) {
 		// Marker-free bullets only. A bullet that already carries an identity —
 		// wherever in its wrapped text that identity sits — is never re-minted, and
 		// one carrying a near-miss of a marker is left for the human to correct
@@ -450,20 +494,20 @@ func mintConditionID(minter recordid.Minter, used map[string]bool) (string, erro
 // sectionBody is expressed on top of it, so the claim parse, the identity stamp
 // and the acceptance-criteria count can never drift apart.
 func sectionLineRange(lines []string, headRe *regexp.Regexp) (start, end int, ok bool) {
-	return sectionLineRangeIn(lines, fenceMask(lines), headRe)
+	return sectionLineRangeIn(lines, maskLines(lines), headRe)
 }
 
-// sectionLineRangeIn is sectionLineRange over a fence mask the caller already
-// computed. A fenced line is neither the heading that opens a section nor the
-// heading that closes one.
-func sectionLineRangeIn(lines []string, fenced []bool, headRe *regexp.Regexp) (start, end int, ok bool) {
+// sectionLineRangeIn is sectionLineRange over a mask the caller already
+// computed. A masked line — fenced or commented — is neither the heading that
+// opens a section nor the heading that closes one.
+func sectionLineRangeIn(lines []string, mask []uint8, headRe *regexp.Regexp) (start, end int, ok bool) {
 	for i, ln := range lines {
-		if fenced[i] || !headRe.MatchString(strings.TrimRight(ln, "\r")) {
+		if masked(mask, i) || !headRe.MatchString(strings.TrimRight(ln, "\r")) {
 			continue
 		}
 		end = len(lines)
 		for j := i + 1; j < len(lines); j++ {
-			if !fenced[j] && headingRe.MatchString(strings.TrimRight(lines[j], "\r")) {
+			if !masked(mask, j) && headingRe.MatchString(strings.TrimRight(lines[j], "\r")) {
 				end = j
 				break
 			}
