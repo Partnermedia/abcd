@@ -1578,3 +1578,36 @@ func TestJoinsResolveARetiredHandleTheWayCrossReferencesDo(t *testing.T) {
 		t.Fatalf("expected exactly 1 finding (the undeclared adr-6), got %d: %+v", n, fs)
 	}
 }
+
+// The bucket comparison speaks about a mechanism that belongs to ONE family: a
+// reading id is minted per run, so two runs allocate the same rdi-N and an
+// admission reaching into another run is keyed on a pair nothing queries. Neither
+// half of that is true of the issue ledger — an issue id is timestamp-minted
+// globally and survives a move between status directories, and the outstanding
+// report walks reading items only and never reports an issue at all.
+//
+// So the join is scoped to the family whose mechanism it describes, and a target
+// of any other family returns to the silence it had before the leg existed: the
+// value is wrong for a different reason, and inventing a collision the operator
+// then goes looking for is the confident false statement this rule must not make
+// (iss-2608301411017768).
+func TestSameBucketJoinIsSilentOnACrossFamilyTarget(t *testing.T) {
+	root := admissionCorpus(t)
+	writeFile(t, root, "work/issues/open/iss-42-a-finding.md", validIssue("iss-42", "a-finding"))
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-3.md",
+		"---\nschema_version: 1\nid: adm-3\nrun: rdg-1\nproposal: iss-42\n"+
+			"grounds: the configuration it admits is one the frame does not already hold\n---\n\n")
+
+	fs, err := Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rel := filepath.Join("work", "issues", "admissions", "rdg-1", "adm-3.md")
+	if findingWith(fs, rel, ruleRecordSchema, "minted per bucket") {
+		t.Errorf("issue ids are not minted per status directory, and the report never names an issue; "+
+			"the bucket leg must not describe that mechanism over a target of another family: %+v", fs)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 0 {
+		t.Fatalf("expected no findings on a cross-family target, got %d: %+v", n, fs)
+	}
+}

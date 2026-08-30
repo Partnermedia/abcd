@@ -7,6 +7,11 @@ category: "bug"
 source: "impl-review"
 found_during: "itd-189-round-3-ruthless"
 found_at: "internal/core/lint/schema.go"
+resolution: "The join's bucket obligation now names the FAMILY it holds for (sameBucketAs) rather than being a bare flag, and the comparison runs only against a target of that family. An admission naming a record of any other family returns to the silence it had before the leg existed, so the per-run-minting message is emitted only where that mechanism is real. The empty-bucket stand-downs go with it: a record outside every bucket is reported by the walk and never indexed, so it reaches the join as a target that is not in the corpus."
+impact: fix
+resolved_by:
+  intent: "itd-189"
+  spec: "spc-67"
 ---
 
 the sameBucket join message asserts a per-bucket id mechanism that exists only for reading items, so a cross-family target gets a confidently false diagnosis
