@@ -30,6 +30,28 @@ editing a field. Do not add `README.md` files inside `open/`, `resolved/`, or
 `wontfix/`: only genuine `iss-N` files belong there (stray markdown is ignored
 by the scanner, but keeping the folders clean keeps the contract honest).
 
+## The two sibling families
+
+Beside the three status directories the ledger root holds two families that are
+**not** issues and whose status is not folder membership:
+
+- `readings/<run-id>/rdi-<N>.md` — one reading record per item a cold-reading
+  run returned, under the run that returned it (itd-180, spc-58).
+- `dispositions/<item-id>/dsp-<N>.md` — the researcher's answers to one item,
+  in a directory keyed by that item.
+
+A reading item's status is the presence of its keyed disposition directory —
+one probe — and the standing answer is the disposition no sibling supersedes.
+Superseded records stay in place: a hold that vanished when it was answered
+would take its own exit condition with it.
+
+Neither family is in `issueschema.StatusDirs`, so every gate scoped to the
+ledger's status directories ignores both — the issue-resolution gate
+(`scripts/check-issue-resolution.sh`) among them. `record_schema` declares each
+as a store of its own, bucketed by grammar because their buckets are minted
+rather than enumerated. The report that says which items nobody has answered is
+`reading_outstanding`, which is pinned to `info` and gates nothing.
+
 ## Schema fields
 
 Frontmatter is validated strictly (unknown keys are rejected). The reader

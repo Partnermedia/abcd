@@ -258,7 +258,10 @@
         "adr": ".abcd/development/decisions/adrs",
         "itd": ".abcd/development/intents",
         "spc": ".abcd/development/specs",
-        "iss": ".abcd/work/issues"
+        "iss": ".abcd/work/issues",
+        "rdi": ".abcd/work/issues/readings",
+        "dsp": ".abcd/work/issues/dispositions",
+        "rdg": ".abcd/development/readings"
       }
     },
     "agent_contract": {

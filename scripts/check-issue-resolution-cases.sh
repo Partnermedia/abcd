@@ -318,6 +318,63 @@ git -C "$d" add -A
 git -C "$d" commit -qm "baseline"
 expect pass "$d" "an actually-empty ledger still passes loudly" -- ledger HEAD
 
+# --- the sibling record families are outside the gate's scope ----------------
+#
+# The ledger root now holds readings/<run-id>/ and dispositions/<item-id>/, whose
+# files are NOT issue records. RS002 and RS003 read the frontmatter of every .md
+# under the pathspec and treat an indented `commit:` key as a resolution stamp, so
+# an unscoped gate would reachability-check a value in one of these and refuse a
+# clean tree. The gate scopes to the status directories; these two fixtures are
+# what prove it, in the only direction that can regress — a record the gate must
+# ignore.
+#
+# The frontmatter below deliberately carries that indented `commit:` shape. The
+# record schemas do not mint one today, and that is exactly why the fixture spells
+# it out: the gate reads BYTES under a pathspec, not schemas, so what protects
+# these families is the scope and nothing else. A fixture that relied on today's
+# field list would pass unscoped and prove nothing.
+
+d="$(newrepo reading-record-ignored)"
+mkdir -p "$d/$ISS_DIR/readings/rdg-1"
+cat >"$d/$ISS_DIR/readings/rdg-1/rdi-2.md" <<'EOF'
+---
+schema_version: 1
+id: "rdi-2"
+run: "rdg-1"
+manifest: "sha256:beef"
+position: "detection"
+regime: "supplied"
+pattern: "a stated constraint"
+tension: "the two sides disagree"
+constraint_in_play: "the stated invariant"
+why_a_tension: "one of them must give"
+cited_by:
+  commit: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+---
+EOF
+git -C "$d" add -A
+git -C "$d" commit -qm "chore: ingest a reading run"
+expect pass "$d" "a reading record is outside the gate's scope" -- ledger HEAD
+expect pass "$d" "a reading record is outside the commits scan too" -- commits main HEAD
+
+d="$(newrepo disposition-ignored)"
+mkdir -p "$d/$ISS_DIR/dispositions/rdi-2"
+cat >"$d/$ISS_DIR/dispositions/rdi-2/dsp-3.md" <<'EOF'
+---
+schema_version: 1
+id: "dsp-3"
+item: "rdi-2"
+state: "accepted"
+disposition_grounds: "worth acting on"
+cited_by:
+  commit: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+---
+EOF
+git -C "$d" add -A
+git -C "$d" commit -qm "chore: answer a reading item"
+expect pass "$d" "a disposition is outside the gate's scope" -- ledger HEAD
+expect pass "$d" "a disposition is outside the commits scan too" -- commits main HEAD
+
 if [ "$failures" -gt 0 ]; then
 	printf 'cases: FAILED — %d case(s) did not behave\n' "$failures" >&2
 	exit 1
