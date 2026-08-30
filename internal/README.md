@@ -25,6 +25,20 @@ plugin surface, and a future MCP server share one engine.
   carries, and a record they disagree about is one that sits in the ledger unread
   by every surface. It is not inside `core/capture` because that package's own
   tests import `core/lint`, so a lint importing capture back is an import cycle.
+- **`core/provenance/`** — the record's disclosure vocabulary: where an item came
+  from (`origin`) and how its text was produced (`production_mode`), plus the one
+  parser that reads and renders them. It is a leaf for the same reason
+  `core/issueschema` and `core/changelog` are: the WRITERS that stamp the pair
+  (`core/intent`, `core/spec`, `core/capture`) and the GATE that judges it
+  (`core/lint`) must agree about what a legal value is, and two hand-kept copies
+  of a closed set drift the moment one side gains a member. Both keys are
+  single-line scalars — the reading pointer rides inside the `origin` value —
+  because a nested mapping is invisible to `core/frontmatter`'s same-line scanner
+  and would need a second record parser. It reads `core/issueschema` for the
+  reading families' own spelling of their id prefixes and imports nothing else
+  beyond the standard library; the arrow points one way, so the issue schema's
+  allow-list carries the two key names as literals, pinned to this package's
+  constants by a test here.
 - **`core/surface/`** — the compatibility surface as DATA: the snapshot of every
   command, flag, and manifest entry a consumer binds to, and the diff that names
   what a release narrowed. It shares a word with the `surface/` front-door tier
