@@ -84,6 +84,12 @@ var (
 	dispositionFileNumRe = recordid.FilenameNumRe(issueschema.DispositionFamily)
 	readingRunBucketRe   = regexp.MustCompile(`^` + issueschema.ReadingRunFamily + `-[0-9]+$`)
 	dispositionBucketRe  = regexp.MustCompile(`^` + issueschema.ReadingItemFamily + `-[0-9]+$`)
+	// The step-2 families' filename grammars. An admission is bucketed by the
+	// same minted run directory a reading is (readingRunBucketRe above); a
+	// surprise store is FLAT, because a surprise is keyed by the `occasioned_by`
+	// it carries rather than by a directory.
+	admissionFileNumRe = recordid.FilenameNumRe(issueschema.AdmissionFamily)
+	surpriseFileNumRe  = recordid.FilenameNumRe(issueschema.SurpriseFamily)
 	// The cross-reference frontmatter fields whose targets must resolve. They are
 	// the record's machine-readable claims that another record exists and is a
 	// live input — as distinct from prose, where naming a released or retired id
@@ -147,6 +153,12 @@ type recordStore struct {
 	// frontmatter other rules already judge (intent_lifecycle, spec_id_unique)
 	// must not be re-judged against the issue's shape.
 	requiredFields []string
+	// knownFields is the store's additionalProperties:false allow-list. A nil
+	// knownFields means the store declares no closed schema here and every key is
+	// left to the rules that know it — the intent and spec stores carry fields
+	// their own rules judge, and refusing them against a list this rule invented
+	// would be a blocker over a schema nobody declared.
+	knownFields map[string]bool
 }
 
 // bucketed reports whether the store holds its records in lifecycle
@@ -196,7 +208,7 @@ var recordStores = []recordStore{
 	// the drift would show up as a silently unread record, which is the defect
 	// this invariant exists to catch.
 	{prefix: "iss", noun: "issue", nodeType: "issue", buckets: issueStatusDirs, fileNumRe: issueFileNumRe, fileFamily: "iss", filename: "iss-<N>-<slug>.md",
-		requiredFields: issueschema.Required},
+		requiredFields: issueschema.Required, knownFields: issueschema.Known},
 	// The three reading families (spc-58). Each buckets by GRAMMAR because its
 	// buckets are minted: a reading item and a run record live under the run that
 	// produced them, and a disposition lives under the item it answers.
@@ -217,6 +229,22 @@ var recordStores = []recordStore{
 		fileNumRe: readingRunFileNumRe, fileFamily: "rdg", filename: "rdg-<N>.md"},
 	{prefix: "dsp", noun: "disposition", nodeType: "disposition", bucketRe: dispositionBucketRe,
 		fileNumRe: dispositionFileNumRe, fileFamily: "dsp", filename: "dsp-<N>.md"},
+	// The two step-2 families (spc-67). Unlike the three above they DO declare
+	// their schemas, and that is the whole of this cycle's enforcement: no verb
+	// writes an admission or a surprise yet, so wiring the shapes to the gate that
+	// reads committed records is what keeps a schema no code reads from being dead
+	// scaffolding. A hand-written admission with a blank `grounds` is a blocker
+	// finding from the day this lands; what is hand-run is WHO writes the file.
+	//
+	// Both lists come from core/issueschema's ONE declaration rather than from a
+	// literal here, for the reason the issue store's does: a hand-copied set
+	// drifts the moment one side gains a field.
+	{prefix: "adm", noun: "admission", nodeType: "admission", bucketRe: readingRunBucketRe,
+		fileNumRe: admissionFileNumRe, fileFamily: "adm", filename: "adm-<N>.md",
+		requiredFields: issueschema.AdmissionRequired, knownFields: issueschema.AdmissionKnown},
+	{prefix: "srp", noun: "surprise", nodeType: "surprise",
+		fileNumRe: surpriseFileNumRe, fileFamily: "srp", filename: "srp-<N>.md",
+		requiredFields: issueschema.SurpriseRequired, knownFields: issueschema.SurpriseKnown},
 }
 
 // storeByPrefix returns the code-side store for a prefix.
@@ -356,7 +384,9 @@ func checkRecordSchema(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 		out = append(out, checkRecordFilename(r, cfg.Severity)...)
 		out = append(out, checkRecordFilenameSlug(r, cfg.Severity)...)
 		out = append(out, checkRecordRequiredFields(r, cfg.Severity)...)
+		out = append(out, checkRecordUnknownFields(r, cfg.Severity)...)
 		out = append(out, checkIssueRecordShape(r, cfg.Severity)...)
+		out = append(out, checkSurpriseJoin(r, index, cfg)...)
 
 		// Cross-references: a named record must be in the corpus, or declared
 		// retired by the record that replaced it.
@@ -560,9 +590,95 @@ func checkRecordRequiredFields(r schemaRecord, severity string) []Finding {
 	return out
 }
 
+// checkRecordUnknownFields asserts that a record carries no frontmatter property
+// outside its store's allow-list, for every store that declares one.
+//
+// It is the other half of checkRecordRequiredFields and fails the same way: a
+// closed schema is what a reader validates against before it reads, so a record
+// carrying a key outside it is skipped — invisible to every surface of its own
+// family while it still sits in the store. The check is store-declared rather
+// than hard-coded to the issue ledger because the question is identical wherever
+// a schema is closed, and asking it twice in two places is how the two answers
+// start to differ.
+func checkRecordUnknownFields(r schemaRecord, severity string) []Finding {
+	if r.store.knownFields == nil {
+		return nil
+	}
+	var out []Finding
+	for key, f := range r.fields {
+		if r.store.knownFields[key] {
+			continue
+		}
+		line := f.line
+		if line == 0 {
+			line = 1
+		}
+		out = append(out, Finding{
+			File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: severity,
+			Message: "unknown frontmatter property '" + key + "'; the " + r.store.noun +
+				" schema is closed, so a key outside it makes this a record the reader refuses and skips — invisible to every " +
+				r.store.noun + " surface while it still sits in the store",
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Message < out[j].Message })
+	return out
+}
+
+// checkSurpriseJoin asserts that a surprise entry's `occasioned_by` resolves,
+// where it names a record at all.
+//
+// The join is the whole of what makes a surprise a SEPARATE record rather than a
+// field on the thing that occasioned it: the reading's output, the researcher's
+// answer and the surprise that occasions abduction are three acts, and the only
+// thing tying the third back to the first two is this value. A join naming a
+// record the corpus does not hold joins nothing.
+//
+// Prose is legitimate here and stays silent. A surprise is keyed to WHATEVER
+// occasioned it — a detection, an admission, or a consequence that has no id —
+// so only a value that is a record handle of a store this scan reads is resolved.
+func checkSurpriseJoin(r schemaRecord, index map[recordRef]schemaRecord, cfg RuleConfig) []Finding {
+	if r.store.prefix != issueschema.SurpriseFamily {
+		return nil
+	}
+	f := r.fields["occasioned_by"]
+	value := strings.Trim(strings.TrimSpace(f.value), `"'`)
+	if isAbsentValue(value) {
+		return nil
+	}
+	m := anyHandleFullRe.FindStringSubmatch(value)
+	if m == nil {
+		return nil
+	}
+	prefix := strings.ToLower(m[1])
+	// A family this scan does not read supports no verdict either way: the record
+	// might be perfectly present in a store nobody configured, and reporting it
+	// missing would be a confident false statement.
+	if _, known := storeByPrefix(prefix); !known || cfg.RecordStores[prefix] == "" {
+		return nil
+	}
+	num, err := strconv.Atoi(m[2])
+	if err != nil {
+		return nil
+	}
+	if _, ok := index[recordRef{prefix, num}]; ok {
+		return nil
+	}
+	line := f.line
+	if line == 0 {
+		line = 1
+	}
+	return []Finding{{
+		File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: cfg.Severity,
+		Message: "occasioned_by names '" + prefix + "-" + m[2] +
+			"', which is not a record in the corpus; a surprise is keyed to whatever occasioned it, and a join naming nothing joins nothing",
+	}}
+}
+
 // checkIssueRecordShape mirrors capture's validateStrict shape checks for the
-// ISSUE store: the additionalProperties:false unknown-key check, enum membership
-// (severity/category/source), and the kebab-slug check. Each reads the ONE shared
+// ISSUE store: enum membership (severity/category/source) and the kebab-slug
+// check. The third of them, the additionalProperties:false unknown-key check, is
+// checkRecordUnknownFields, which asks the same question for every store that
+// declares a closed schema rather than for this one alone. Each reads the ONE shared
 // schema data in core/issueschema — the same allow-list and value sets capture
 // validates against — so a record capture would REFUSE (and therefore skip,
 // making it invisible to every capture surface) is not lint-green
@@ -591,14 +707,8 @@ func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
 		})
 	}
 
-	// Unknown property: capture's reader refuses any key outside the allow-list and
-	// skips the whole record.
-	for key, f := range r.fields {
-		if issueschema.Known[key] {
-			continue
-		}
-		add(f.line, "unknown frontmatter property '"+key+"'; capture's reader refuses a key outside the issue schema and skips the record, so it is invisible to every capture surface while it still sits in the ledger")
-	}
+	// Unknown property: checkRecordUnknownFields asks that question for every
+	// store that declares a closed schema, this one included.
 
 	// Enum membership: a present but out-of-enum value is refused by capture.
 	enums := []struct {

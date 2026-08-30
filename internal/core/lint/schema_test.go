@@ -973,3 +973,185 @@ func TestConfigAcceptsASiblingNestedStoreRoot(t *testing.T) {
 		t.Fatalf("the shipped layout must load: %v", err)
 	}
 }
+
+// admissionStores is readingStores plus the two step-2 families (spc-67), laid
+// out as a real ledger holds them: both nested inside the issue store's root,
+// beside its buckets rather than in one.
+func admissionStores() map[string]string {
+	stores := readingStores()
+	stores["adm"] = "work/issues/admissions"
+	stores["srp"] = "work/issues/surprises"
+	return stores
+}
+
+func admissionSchemaConfig() Config {
+	return Config{
+		Roots: []string{"rec"},
+		Rules: map[string]RuleConfig{
+			ruleRecordSchema: {Enabled: true, Severity: severityBlocker, RecordStores: admissionStores()},
+		},
+	}
+}
+
+// wellFormedAdmission is the control every case below carries: a rule watched
+// only failing is a rule that might refuse everything.
+const wellFormedAdmission = "---\nschema_version: 1\nid: adm-2\nrun: rdg-1\nproposal: rdi-2\n" +
+	"grounds: the configuration it admits is one the frame does not already hold\n---\n\n"
+
+// Grounds are the whole point of an admission: declining a proposal costs
+// nothing epistemically, while admitting one is where the frame is engaged, so an
+// admission recording no grounds records nothing. The refusal is armed at the
+// GATE rather than at a verb — no reading has run, so nothing writes these
+// records yet, and a schema no code reads would be dead scaffolding. A blank
+// value and an absent one are alike here for the reason they are alike
+// everywhere in this rule: no reader can make a value out of either.
+func TestAdmissionRecordRequiresGrounds(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/.keep", "")
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-2.md", wellFormedAdmission)
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-3.md",
+		"---\nschema_version: 1\nid: adm-3\nrun: rdg-1\nproposal: rdi-2\ngrounds:\n---\n\n")
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-4.md",
+		"---\nschema_version: 1\nid: adm-4\nrun: rdg-1\nproposal: rdi-2\n---\n\n")
+
+	fs, err := Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rec := range []string{"adm-3.md", "adm-4.md"} {
+		if !findingWith(fs, filepath.Join("work", "issues", "admissions", "rdg-1", rec), ruleRecordSchema, "'grounds'") {
+			t.Errorf("a blank or absent grounds must be a finding on %s: %+v", rec, fs)
+		}
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 2 {
+		t.Fatalf("expected exactly 2 record_schema findings (the blank and the absent grounds), got %d: %+v", n, fs)
+	}
+}
+
+// The proposal is what an admission is keyed to. An admission naming none admits
+// nothing in particular, so the candidate set it claims to have joined cannot be
+// reconstructed from it.
+func TestAdmissionRecordRequiresProposal(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/.keep", "")
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-2.md",
+		"---\nschema_version: 1\nid: adm-2\nrun: rdg-1\ngrounds: it widens the frame\n---\n\n")
+
+	fs, err := Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingWith(fs, filepath.Join("work", "issues", "admissions", "rdg-1", "adm-2.md"), ruleRecordSchema, "'proposal'") {
+		t.Fatalf("an admission naming no proposal must be a finding: %+v", fs)
+	}
+}
+
+// The admission store's allow-list is closed, so a key outside it is a field
+// nothing reads sitting in a record the gate passed.
+func TestAdmissionRecordRefusesUnknownProperty(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/.keep", "")
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-2.md",
+		"---\nschema_version: 1\nid: adm-2\nrun: rdg-1\nproposal: rdi-2\ngrounds: it widens the frame\nverdict: yes\n---\n\n")
+
+	fs, err := Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingWith(fs, filepath.Join("work", "issues", "admissions", "rdg-1", "adm-2.md"), ruleRecordSchema,
+		"unknown frontmatter property 'verdict'") {
+		t.Fatalf("a key outside the admission allow-list must be a finding: %+v", fs)
+	}
+}
+
+// An admission is bucketed by RUN, exactly as the reading store is: it is
+// meaningful only against the run whose proposals it admits, and nobody can list
+// those directories ahead of time, so the store declares them by grammar. A
+// directory the grammar does not describe is still undeclared — declaring by
+// grammar widens what a store can say, it does not stop it saying anything.
+func TestAdmissionStoreBucketsByRun(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/.keep", "")
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-2.md", wellFormedAdmission)
+
+	fs, err := Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 0 {
+		t.Fatalf("a minted run bucket must be declared by grammar, got %d finding(s): %+v", n, fs)
+	}
+
+	writeFile(t, root, "work/issues/admissions/draft-run/adm-3.md", wellFormedAdmission)
+	fs, err = Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingWith(fs, filepath.Join("work", "issues", "admissions", "draft-run"), ruleRecordSchema, "undeclared") {
+		t.Fatalf("a bucket outside the declared grammar must be reported: %+v", fs)
+	}
+}
+
+// A surprise is its own record: separate store, separate family prefix, and a
+// join key rather than the disposition's key. So neither can be filed where the
+// other is read — a surprise in the disposition store would be answered for by
+// the standing-disposition reader, and a disposition in the surprise store would
+// be an answer nobody reads.
+func TestSurpriseRecordIsNotADisposition(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/.keep", "")
+	writeFile(t, root, "work/issues/surprises/srp-4.md",
+		"---\nschema_version: 1\nid: srp-4\noccasioned_by: a consequence nobody predicted\n---\n\n")
+	writeFile(t, root, "work/issues/dispositions/rdi-2/srp-5.md",
+		"---\nschema_version: 1\nid: srp-5\noccasioned_by: a consequence nobody predicted\n---\n\n")
+	writeFile(t, root, "work/issues/surprises/dsp-6.md",
+		"---\nschema_version: 1\nid: dsp-6\nitem: rdi-2\nstate: accepted\ndisposition_grounds: worth acting on\n---\n\n")
+
+	fs, err := Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingWith(fs, filepath.Join("work", "issues", "dispositions", "rdi-2", "srp-5.md"), ruleRecordSchema,
+		"not a well-formed disposition filename") {
+		t.Errorf("a surprise filed in the disposition store must be refused: %+v", fs)
+	}
+	if !findingWith(fs, filepath.Join("work", "issues", "surprises", "dsp-6.md"), ruleRecordSchema,
+		"not a well-formed surprise filename") {
+		t.Errorf("a disposition filed in the surprise store must be refused: %+v", fs)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 2 {
+		t.Fatalf("expected exactly 2 findings (the two misfiled records), got %d: %+v", n, fs)
+	}
+}
+
+// occasioned_by is the surprise's whole join. Where it names a RECORD, that
+// record must be in the corpus: a join naming nothing joins nothing, and the
+// surprise then sits beside the thing it claims to have arisen from with no way
+// back to it. Prose naming a consequence is legitimate and stays silent — a
+// surprise is keyed to whatever occasioned it, and not everything that occasions
+// one has an id.
+func TestSurpriseOccasionedByResolves(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/.keep", "")
+	writeFile(t, root, "work/issues/readings/rdg-1/rdi-2.md",
+		"---\nschema_version: 1\nid: rdi-2\nrun: rdg-1\nmanifest: sha256:beef\nposition: detection\nregime: registrative\npattern: a stated constraint\ntension: t\nconstraint_in_play: c\nwhy_a_tension: w\n---\n\n")
+	writeFile(t, root, "work/issues/dispositions/rdi-2/dsp-3.md",
+		"---\nschema_version: 1\nid: dsp-3\nitem: rdi-2\nstate: accepted\ndisposition_grounds: worth acting on\n---\n\n")
+	writeFile(t, root, "work/issues/surprises/srp-4.md",
+		"---\nschema_version: 1\nid: srp-4\noccasioned_by: rdi-2\n---\n\n")
+	writeFile(t, root, "work/issues/surprises/srp-5.md",
+		"---\nschema_version: 1\nid: srp-5\noccasioned_by: the consequence nobody predicted\n---\n\n")
+	writeFile(t, root, "work/issues/surprises/srp-6.md",
+		"---\nschema_version: 1\nid: srp-6\noccasioned_by: rdi-9999\n---\n\n")
+
+	fs, err := Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !findingWith(fs, filepath.Join("work", "issues", "surprises", "srp-6.md"), ruleRecordSchema, "rdi-9999") {
+		t.Errorf("an occasioned_by naming no record in the corpus must be a finding: %+v", fs)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 1 {
+		t.Fatalf("expected exactly 1 finding (the dangling join), got %d: %+v", n, fs)
+	}
+}
