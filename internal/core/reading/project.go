@@ -157,6 +157,21 @@ var (
 	fenceOpenRe = regexp.MustCompile("^[ \t]*```")
 )
 
+// namesExcludedHeading reports whether a heading title is one of the excluded
+// ones, under the ONE equality this floor uses: a case fold, or the same
+// rendering. It exists so the three refusal paths — the section scan, the
+// indented ATX line, the setext underline — cannot drift apart on what "the same
+// heading" means. They did: the render comparison was added on the first path
+// only, which closed the class on one of three.
+func namesExcludedHeading(title string, headings map[string]bool) (string, bool) {
+	for want := range headings {
+		if strings.EqualFold(title, want) || sameRendering(title, want) {
+			return want, true
+		}
+	}
+	return "", false
+}
+
 // sameRendering reports whether two heading titles come out as the same heading
 // on the page. `## **Audit Notes**`, "## `Audit Notes`" and a title carrying a
 // non-breaking space differ in bytes and are the same heading to every reader,
@@ -248,13 +263,10 @@ func verifyRedaction(rel, original, redacted string, keys, headings map[string]b
 		if sec.Level == 0 {
 			continue
 		}
-		title := normaliseHeadingTitle(sec.Title)
-		for want := range headings {
-			if strings.EqualFold(title, want) || sameRendering(title, want) {
-				return fmt.Errorf("reading: %s still carries the excluded heading %q at line %d after "+
-					"redaction; the floor names %q, and a heading is excluded however it is spelled",
-					rel, sec.Title, sec.Line, want)
-			}
+		if want, ok := namesExcludedHeading(normaliseHeadingTitle(sec.Title), headings); ok {
+			return fmt.Errorf("reading: %s still carries the excluded heading %q at line %d after "+
+				"redaction; the floor names %q, and a heading is excluded however it is spelled",
+				rel, sec.Title, sec.Line, want)
 		}
 	}
 
@@ -272,12 +284,9 @@ func verifyRedaction(rel, original, redacted string, keys, headings map[string]b
 		if m == nil {
 			continue
 		}
-		title := normaliseHeadingTitle(m[1])
-		for want := range headings {
-			if strings.EqualFold(title, want) {
-				return fmt.Errorf("reading: %s indents the excluded heading %q at line %d; the floor "+
-					"names %q, and a heading is excluded however it is spelled", rel, strings.TrimSpace(line), i+1, want)
-			}
+		if want, ok := namesExcludedHeading(normaliseHeadingTitle(m[1]), headings); ok {
+			return fmt.Errorf("reading: %s indents the excluded heading %q at line %d; the floor "+
+				"names %q, and a heading is excluded however it is spelled", rel, strings.TrimSpace(line), i+1, want)
 		}
 	}
 
@@ -294,11 +303,9 @@ func verifyRedaction(rel, original, redacted string, keys, headings map[string]b
 		if title == "" {
 			continue
 		}
-		for want := range headings {
-			if strings.EqualFold(title, want) {
-				return fmt.Errorf("reading: %s underlines the excluded heading %q at line %d; the floor "+
-					"names %q, and a heading is excluded however it is spelled", rel, lines[i], i+1, want)
-			}
+		if want, ok := namesExcludedHeading(title, headings); ok {
+			return fmt.Errorf("reading: %s underlines the excluded heading %q at line %d; the floor "+
+				"names %q, and a heading is excluded however it is spelled", rel, lines[i], i+1, want)
 		}
 	}
 	return nil

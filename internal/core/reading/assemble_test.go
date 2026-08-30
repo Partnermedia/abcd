@@ -914,10 +914,21 @@ func TestAFailedManifestWriteLeavesNoBundle(t *testing.T) {
 // every reader of the rendered page, and the byte comparison misses it.
 func TestHeadingsThatRenderAsAnExcludedTitleAreRecognised(t *testing.T) {
 	cases := map[string]string{
-		"bold":                 "## **Audit Notes**\n\n" + sentinelAuditNotes + "\n",
-		"a code span":          "## `Audit Notes`\n\n" + sentinelAuditNotes + "\n",
-		"a non-breaking space": "## Audit Notes\n\n" + sentinelAuditNotes + "\n",
-		"emphasis":             "## _Audit Notes_\n\n" + sentinelAuditNotes + "\n",
+		"bold":        "## **Audit Notes**\n\n" + sentinelAuditNotes + "\n",
+		"a code span": "## `Audit Notes`\n\n" + sentinelAuditNotes + "\n",
+		"emphasis":    "## _Audit Notes_\n\n" + sentinelAuditNotes + "\n",
+		// Every non-ASCII probe is written as a Go escape. Spelled as the literal
+		// byte it is one keystroke from a plain space, and a shell or an editor
+		// that flattens it turns the probe into a duplicate of the bare title —
+		// a test that passes while testing nothing.
+		"a non-breaking space": "## Audit\u00a0Notes\n\n" + sentinelAuditNotes + "\n",
+		// The same spellings on the two paths the section scan cannot see, where
+		// the raw-line refusal is the only thing between the section and the
+		// bundle.
+		"bold under a one-space indent":      " ## **Audit Notes**\n\n" + sentinelAuditNotes + "\n",
+		"a non-breaking space when indented": " ## Audit\u00a0Notes\n\n" + sentinelAuditNotes + "\n",
+		"bold over a setext rule":            "**Audit Notes**\n---\n\n" + sentinelAuditNotes + "\n",
+		"a code span over a setext rule":     "`Audit Notes`\n===\n\n" + sentinelAuditNotes + "\n",
 	}
 	for what, body := range cases {
 		root := fixtureRepo(t)
