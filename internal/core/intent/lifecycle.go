@@ -244,7 +244,17 @@ func stampPlanned(repoRoot string, it Intent) (PlanResult, error) {
 	if err != nil {
 		return PlanResult{}, err
 	}
-	return PlanResult{Intent: it, ConditionsStamped: stampedCount, StampOnly: true}, nil
+	res := PlanResult{Intent: it, ConditionsStamped: stampedCount, StampOnly: true}
+	// The stamp mints no spec, but the intent has one, and an empty spec object in
+	// the result reads as "this intent has no spec" to anything consuming it. The
+	// lookup is lenient: a broken link is the readiness gate's finding to report,
+	// not a reason to fail a write that already succeeded.
+	if store, lerr := spec.Load(repoRoot); lerr == nil {
+		if sp, ok := store.Lookup(it.SpecID); ok {
+			res.Spec = sp
+		}
+	}
+	return res, nil
 }
 
 // Link retroactively writes the derived spec_id link on an existing planned

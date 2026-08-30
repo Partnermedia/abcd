@@ -492,3 +492,33 @@ func TestIntentPlanStampsAPlannedRecord(t *testing.T) {
 		t.Fatalf("after the remedy the gate must pass, got %v", err)
 	}
 }
+
+// TestIntentPlanStampOnlyJSONNamesTheLinkedSpec: the stamp step mints no spec,
+// but the intent has one, and an empty spec object in the payload reads as "this
+// intent has no spec" to anything consuming the JSON.
+func TestIntentPlanStampOnlyJSONNamesTheLinkedSpec(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+	writeRepoFile(t, repo, cliPlanned+"/itd-10-alpha.md",
+		"---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n"+
+			"## Scope Conditions\n\n- written after planning\n\n## Acceptance Criteria\n\n- ok\n")
+	writeRepoFile(t, repo, cliSpecsOpen+"/spc-1-alpha.md",
+		"---\nid: spc-1\nslug: alpha\nintent: itd-10\n---\n# alpha\n\n## Summary\n\nA written design record.\n")
+
+	out := runCLI(t, "intent", "plan", "itd-10", "--json")
+	var got struct {
+		StampOnly bool `json:"stamp_only"`
+		Spec      struct {
+			ID string `json:"id"`
+		} `json:"spec"`
+	}
+	if err := json.Unmarshal(out, &got); err != nil {
+		t.Fatalf("plan --json not JSON: %v\n%s", err, out)
+	}
+	if !got.StampOnly {
+		t.Fatalf("stamp_only = false\n%s", out)
+	}
+	if got.Spec.ID != "spc-1" {
+		t.Fatalf("spec.id = %q, want the intent's linked spec\n%s", got.Spec.ID, out)
+	}
+}
