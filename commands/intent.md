@@ -77,8 +77,9 @@ planning to `shipped/`, which the `intent_impact_valid` gate requires.
 
 ## Disclosure: where a record came from and how its text was produced
 
-Every record a command writes carries two frontmatter keys, and no flag carries
-either as free text.
+Intent, spec and issue records carry two frontmatter keys, written by the
+commands that mint them, and no flag carries either as free text. Records of
+other families carry neither.
 
 `origin` is **derived from which command ran** and has no flag at all. A draft
 filed from quoted text is `researcher-authored`; a draft `abcd capture promote`
@@ -95,8 +96,7 @@ never rewritten.
 Neither key touches authorship: they are disclosure at field granularity, on the
 same footing as the `Assisted-by:` trailer at commit granularity. Population is
 forward-only, so a record written before the keys existed carries neither, and
-nothing backfills it. Both keys are excluded from every reading by the input
-assembler's field projection. The `record_provenance` record-lint rule reports a
+nothing backfills it. The `record_provenance` record-lint rule reports a
 record carrying the pair in a shape no write path produces — but a hand edit
 that types a legal value in a legal combination is byte-identical to a command's
 write, so it catches implausible hand edits, not all of them.

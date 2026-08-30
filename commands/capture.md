@@ -57,8 +57,9 @@ that could be defaulted is the write-up time it exists to be distinguished from.
 
 ## Disclosure: where a record came from and how its text was produced
 
-Every record a command writes carries two frontmatter keys, and no flag carries
-either as free text.
+Intent, spec and issue records carry two frontmatter keys, written by the
+commands that mint them, and no flag carries either as free text. Records of
+other families — a disposition, for one — carry neither.
 
 `origin` is **derived from which command ran** and has no flag at all:
 `researcher-authored` for a verb a person invoked, `extracted-from-record` for
@@ -73,13 +74,15 @@ value is refused and nothing is written. On `capture` and `capture promote` an
 absent flag takes the repo's declared default from `.abcd/config/identity.json`,
 falling back to `hand-written`. On `capture resolve` and `capture wontfix` the
 flag **restamps** the record — a resolution note is new text with its own mode —
-and an absent flag leaves the record's existing stamp alone.
+and an absent flag leaves the record's existing stamp alone. A restamp of a
+record that predates disclosure (one carrying no `origin`) is refused before
+anything is written, because the pair is written together or not at all; re-run
+without the flag. Such a record still resolves normally.
 
 Neither key touches authorship: they are disclosure at field granularity, on the
 same footing as the `Assisted-by:` trailer at commit granularity. Population is
 forward-only, so a record written before the keys existed carries neither, and
-nothing backfills it. Both keys are excluded from every reading by the input
-assembler's field projection.
+nothing backfills it.
 
 The `record_provenance` record-lint rule reports a record carrying the pair in a
 shape no write path produces: a value outside its set, one key without the
