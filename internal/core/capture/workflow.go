@@ -280,7 +280,7 @@ func Resolve(req ResolveRequest) (TransitionResult, error) {
 		}
 		extras = append(extras, kv{"resolved_by", members})
 	}
-	res, err := transition(req.RepoRoot, req.IssuesRoot, req.ID, "resolution", req.Resolution,
+	res, err := transition(req.RepoRoot, req.IssuesRoot, req.ID, "resolve", "resolution", req.Resolution,
 		extras, &g, StateResolved)
 	if err != nil {
 		return TransitionResult{}, err
@@ -355,7 +355,7 @@ func Wontfix(req WontfixRequest) (TransitionResult, error) {
 	if err != nil {
 		return TransitionResult{}, err
 	}
-	res, err := transition(req.RepoRoot, req.IssuesRoot, req.ID, "wontfix_reason", req.Reason,
+	res, err := transition(req.RepoRoot, req.IssuesRoot, req.ID, "wontfix", "wontfix_reason", req.Reason,
 		nil, &g, StateWontfix)
 	if err != nil {
 		return TransitionResult{}, err
@@ -369,7 +369,13 @@ func Wontfix(req WontfixRequest) (TransitionResult, error) {
 
 // transition moves an open issue to target, setting the defining note field and
 // any extra frontmatter fields (e.g. resolved/'s impact) in one atomic write.
-func transition(repoRoot, issuesRoot, issID, field, note string, extra []kv, g *grounds.Grounds, target State) (TransitionResult, error) {
+//
+// verb is the command the caller is running, and it exists because the grounds
+// append needs it. Passing the target STATE instead made one command emit two
+// prefixes — `resolve: grounds refused` from the flag check and
+// `resolved: grounds refused` from the append — which reads as two different
+// commands failing (iss-2608301803425790).
+func transition(repoRoot, issuesRoot, issID, verb, field, note string, extra []kv, g *grounds.Grounds, target State) (TransitionResult, error) {
 	rr, ir, err := resolveRoots(repoRoot, issuesRoot)
 	if err != nil {
 		return TransitionResult{}, err
@@ -426,7 +432,7 @@ func transition(repoRoot, issuesRoot, issID, field, note string, extra []kv, g *
 		// before it was resolved carries both conjectures afterwards
 		// (iss-2608301657354776).
 		if g != nil {
-			newContent, err = appendGrounds(string(target), newContent, *g)
+			newContent, err = appendGrounds(verb, newContent, *g)
 			if err != nil {
 				return err
 			}

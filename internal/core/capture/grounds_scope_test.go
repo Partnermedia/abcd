@@ -142,3 +142,49 @@ func TestPromoteDoesNotMintWhatItCannotStamp(t *testing.T) {
 		t.Fatalf("three refused promotes minted %d draft(s) nothing can stamp", after-before)
 	}
 }
+
+// TestGroundsRefuseAnAmbiguousSection: a record with two live `## Grounds`
+// headings has no single section to append to. The reader takes the FIRST, so
+// every entry under the second is invisible to every surface — and a writer that
+// picks one is guessing which the operator meant. The intent half already
+// refuses to stamp an ambiguous `## Scope Conditions` for exactly this reason;
+// grounds had the guard on neither side (iss-2608301803425790).
+func TestGroundsRefuseAnAmbiguousSection(t *testing.T) {
+	repo, ir, issID := promoteFixture(t, "the loader drops rules silently when the config is stale")
+	rewriteIssue(t, ir, issID, func(s string) string {
+		return strings.TrimRight(s, "\n") +
+			"\n\n## Grounds\n\n- pursued: an earlier conjecture somebody recorded by hand\n" +
+			"\n## Grounds\n\n- deferred: a second section no reader ever reaches\n"
+	})
+
+	_, err := Resolve(ResolveRequest{
+		RepoRoot: repo, IssuesRoot: ir, ID: issID,
+		Resolution: "closed by the fix under review", Impact: "fix", Grounds: testGrounds,
+	})
+	if err == nil {
+		t.Fatal("Resolve over a record with two Grounds headings = nil error, want a refusal")
+	}
+	if !strings.Contains(err.Error(), "2 live") {
+		t.Fatalf("the refusal does not say the section is ambiguous: %v", err)
+	}
+}
+
+// TestVerbPrefixIsTheVerbNotTheState: one command must not emit two prefixes.
+// appendGrounds was passed the target STATE, so a single `resolve` raised
+// `resolve: grounds refused` from the flag check and `resolved: grounds refused`
+// from the append (iss-2608301803425790).
+func TestVerbPrefixIsTheVerbNotTheState(t *testing.T) {
+	repo, ir, issID := promoteFixture(t, "the loader drops rules silently when the config is stale")
+	openFence(t, ir, issID)
+
+	_, err := Resolve(ResolveRequest{
+		RepoRoot: repo, IssuesRoot: ir, ID: issID,
+		Resolution: "closed by the fix under review", Impact: "fix", Grounds: testGrounds,
+	})
+	if err == nil {
+		t.Fatal("Resolve over a record with an unclosed fence = nil error, want a refusal")
+	}
+	if !strings.HasPrefix(err.Error(), "resolve: ") {
+		t.Fatalf("the append refusal is prefixed with the state, not the verb: %v", err)
+	}
+}

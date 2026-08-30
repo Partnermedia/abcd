@@ -44,8 +44,11 @@ func Body(content string) string {
 	return body
 }
 
-// Heading is the section a record carries its grounds under. It is spelled once:
-// the writer creates it, the reader locates it, and a gate names it in a remedy.
+// Heading is the section a record carries its grounds under. It is spelled once
+// for the two that have to agree: the writer that creates the section and the
+// reader that locates it, across both record families. Record-lint names the
+// section in a remedy as literal prose, because core/lint does not import this
+// package and one message is not a reason to (iss-2608301836222858).
 const Heading = "Grounds"
 
 // headingRe matches the `## Grounds` heading at any heading depth.
@@ -155,6 +158,20 @@ func AppendToRecord(content string, g Grounds) (string, error) {
 				"close the comment or drop the marker; nothing written (text: %q)", g.Text)
 	}
 	head, body := frontmatter.Split(content)
+	// Two live headings leave no single section to append to. The reader takes
+	// the FIRST, so every entry under a second is invisible to every surface, and
+	// a writer that picks one is guessing which the operator meant. The intent
+	// half refuses to stamp an ambiguous `## Scope Conditions` on the same
+	// ground; this is grounds' half of it (iss-2608301803425790). The READER
+	// still takes the first and says nothing — a reader with no verdict to
+	// report has nowhere to raise this, so the refusal lives at the write.
+	bodyLines := strings.Split(body, "\n")
+	if n := mdrecord.CountHeadings(bodyLines, mdrecord.Mask(bodyLines), headingRe); n > 1 {
+		return "", fmt.Errorf(
+			"the record's body carries %d live `## %s` headings and the reader takes the first, so "+
+				"entries under the others are invisible to every surface; merge them into one section "+
+				"before recording another; nothing written", n, Heading)
+	}
 	updated := appendBullet(body, g)
 	if want, got := len(ParseSection(body))+1, len(ParseSection(updated)); got != want {
 		return "", readBackRefusal(body, got, want)

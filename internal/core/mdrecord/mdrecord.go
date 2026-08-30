@@ -178,8 +178,10 @@ func opensCommentFrom(ln string, start int) bool {
 	return false
 }
 
-// Masked reports whether a line is not live markdown, for any reason.
-func Masked(mask []uint8, i int) bool { return i < len(mask) && mask[i] != 0 }
+// masked reports whether a line is not live markdown, for any reason. It is the
+// package's own predicate: every consumer asks a question about a SECTION, a
+// BULLET or a RANGE (AnyMasked), and none has ever needed to ask about one line.
+func masked(mask []uint8, i int) bool { return i < len(mask) && mask[i] != 0 }
 
 // AnyMasked reports whether any line of [start, end) carries the given flag.
 func AnyMasked(mask []uint8, start, end int, flag uint8) bool {
@@ -198,9 +200,6 @@ func IsHeading(ln string) bool { return headingRe.MatchString(ln) }
 // IsTopLevelBullet reports whether a line opens a column-0 list item.
 func IsTopLevelBullet(ln string) bool { return bulletRe.MatchString(ln) }
 
-// IsAnyBullet reports whether a line opens a list item at any indent.
-func IsAnyBullet(ln string) bool { return anyBulletRe.MatchString(ln) }
-
 // TrimBulletPrefix strips a top-level list marker, leaving the bullet's prose.
 func TrimBulletPrefix(ln string) string { return bulletPrefixRe.ReplaceAllString(ln, "") }
 
@@ -208,7 +207,7 @@ func TrimBulletPrefix(ln string) string { return bulletPrefixRe.ReplaceAllString
 func CountHeadings(lines []string, mask []uint8, headRe *regexp.Regexp) int {
 	n := 0
 	for i, ln := range lines {
-		if !Masked(mask, i) && headRe.MatchString(strings.TrimRight(ln, "\r")) {
+		if !masked(mask, i) && headRe.MatchString(strings.TrimRight(ln, "\r")) {
 			n++
 		}
 	}
@@ -231,12 +230,12 @@ func SectionLineRange(lines []string, headRe *regexp.Regexp) (start, end int, ok
 // opens a section nor the heading that closes one.
 func SectionLineRangeIn(lines []string, mask []uint8, headRe *regexp.Regexp) (start, end int, ok bool) {
 	for i, ln := range lines {
-		if Masked(mask, i) || !headRe.MatchString(strings.TrimRight(ln, "\r")) {
+		if masked(mask, i) || !headRe.MatchString(strings.TrimRight(ln, "\r")) {
 			continue
 		}
 		end = len(lines)
 		for j := i + 1; j < len(lines); j++ {
-			if !Masked(mask, j) && headingRe.MatchString(strings.TrimRight(lines[j], "\r")) {
+			if !masked(mask, j) && headingRe.MatchString(strings.TrimRight(lines[j], "\r")) {
 				end = j
 				break
 			}
@@ -257,13 +256,13 @@ type BulletBlock struct{ Start, End int }
 func BulletBlocks(lines []string, mask []uint8, start, end int) []BulletBlock {
 	var blocks []BulletBlock
 	for i := start; i < end; i++ {
-		if Masked(mask, i) || !bulletRe.MatchString(strings.TrimRight(lines[i], "\r")) {
+		if masked(mask, i) || !bulletRe.MatchString(strings.TrimRight(lines[i], "\r")) {
 			continue
 		}
 		j := i + 1
 		for ; j < end; j++ {
 			cont := strings.TrimRight(lines[j], "\r")
-			if Masked(mask, j) || strings.TrimSpace(cont) == "" || anyBulletRe.MatchString(cont) {
+			if masked(mask, j) || strings.TrimSpace(cont) == "" || anyBulletRe.MatchString(cont) {
 				break
 			}
 		}

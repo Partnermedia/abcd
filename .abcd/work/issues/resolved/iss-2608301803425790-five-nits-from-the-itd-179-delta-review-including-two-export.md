@@ -7,6 +7,10 @@ category: "tech-debt"
 source: "user-observation"
 found_during: "itd-179-delta-ruthless"
 found_at: "internal/core/mdrecord"
+resolution: "all seven are settled: the claims.go citation now names IsTopLevelBullet and BulletBlocks for the rules they actually carry, IsAnyBullet is deleted and Masked unexported, the triage verbs pass the verb rather than the target state, the writer refuses an ambiguous second Grounds heading as the intent half already does, groundsEntries says which reader it asks, mdrecord has its own tests, and the backtick scan is measured and deliberately left"
+impact: internal
+resolved_by:
+  intent: "itd-179"
 ---
 
 five nits from the itd-179 delta review including two exported functions with no caller and a renamed citation that now names the wrong predicate
@@ -46,3 +50,6 @@ Two more from the delta SECURITY review, folded here rather than given ids:
    line. PRE-EXISTING, moved verbatim from `claims.go`; record files are small,
    so there is no practical consequence today.
 
+## Grounds
+
+- pursued: we expect an unused export and a mis-cited predicate to mislead the next reader in the same way a false message does, so both are settled at the ship commit rather than carried
