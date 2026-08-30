@@ -2230,3 +2230,71 @@ func TestABlankBucketFieldIsReportedOnceByTheLegAbsenceBelongsTo(t *testing.T) {
 		t.Fatalf("a blank bucket field is one finding, not two; got %d: %+v", n, fs)
 	}
 }
+
+// The duplicate-key finding's fallback branch told the author that "the lenient
+// scanner every record surface reads with keeps only the first value". That is a
+// universal over readers, and the disposition store falsifies it:
+// issueschema.ParseDisposition — the ONE reader of which disposition is in
+// force, shared by core/capture and core/lint precisely so the two cannot
+// diverge — returns DispositionRecord{ID: id} on a duplicated top-level key,
+// keeping NEITHER value, and the outstanding report routes the item to
+// Unreadable. So one lint run emitted two findings on one file that contradicted
+// each other: record_schema said the first value stands, reading_outstanding said
+// no reader can read the record at all, and the author acts on the false one
+// (iss-2608301813253101).
+//
+// What this rule may claim is what its OWN scanner does, which is what its godoc
+// said all along: it keeps the first value, so a second line can silence a
+// blocker armed on the value the first hides. That account is true of every
+// store, because this rule is the one doing that reading — and it is the whole of
+// what the fallback branch may say.
+//
+// Setting readerRefusesDuplicateKey on the dsp store is the wrong fix and is not
+// what this pins: that branch says the file is "skipped by every disposition
+// surface", and a duplicated-key disposition is not skipped — it is read, found
+// illegible, and reported as an unreadable answer. It would be a second wrong
+// sentence.
+//
+// The dsp record is the falsifier and carries the reader's own answer beside it.
+// The adm record is a store where the first-value account IS true of a real
+// reader (admittedProposals reads with the lenient scanner and counts the
+// record), so the narrowing is watched not to have gone mute on the store it was
+// always true of.
+func TestDuplicateKeyClaimIsScopedToThisRulesOwnScanner(t *testing.T) {
+	root := admissionCorpus(t)
+	const dupDisposition = "---\nschema_version: 1\nid: dsp-3\nitem: rdi-2\n" +
+		"state: accepted\nstate: declined\ndisposition_grounds: worth acting on\n---\n\n"
+	writeFile(t, root, "work/issues/dispositions/rdi-2/dsp-3.md", dupDisposition)
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-3.md",
+		"---\nschema_version: 1\nid: adm-3\nrun: rdg-1\nproposal: rdi-2\n"+
+			"grounds: it widens the frame\ngrounds: and again\n---\n\n")
+
+	// The evidence the claim has to answer to, read from the reader itself rather
+	// than asserted about it: neither value survives, and the record is not
+	// well-formed. If a first-value disposition reader ever lands, this goes red
+	// and points at the message that would have to change with it.
+	if got := issueschema.ParseDisposition("dsp-3", dupDisposition); got.WellFormed || got.State != "" {
+		t.Fatalf("the disposition reader discards BOTH values on a duplicated key, got %+v", got)
+	}
+
+	fs, err := Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, rel := range []string{
+		filepath.Join("work", "issues", "dispositions", "rdi-2", "dsp-3.md"),
+		filepath.Join("work", "issues", "admissions", "rdg-1", "adm-3.md"),
+	} {
+		if !findingWith(fs, rel, ruleRecordSchema, "duplicate top-level key") {
+			t.Errorf("the duplicate is still a finding on %s: %+v", rel, fs)
+		}
+		if !findingWith(fs, rel, ruleRecordSchema, "silence a blocker armed on the value the first hides") {
+			t.Errorf("the finding on %s keeps the account this rule can make: %+v", rel, fs)
+		}
+		for _, claim := range []string{"every record surface", "every disposition surface", "skipped", "refuses"} {
+			if findingWith(fs, rel, ruleRecordSchema, claim) {
+				t.Errorf("no reader of %s performs that, so the finding must not claim %q: %+v", rel, claim, fs)
+			}
+		}
+	}
+}

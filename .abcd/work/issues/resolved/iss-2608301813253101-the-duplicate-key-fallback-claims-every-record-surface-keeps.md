@@ -7,6 +7,10 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-189-delta-ruthless"
 found_at: "internal/core/lint/schema.go"
+resolution: "The duplicate-key fallback claims only what this rule's own scanner does — it keeps the first value, so a second line can silence a blocker armed on the value the first hides — which is what the rule's godoc licensed all along. Setting readerRefusesDuplicateKey on the dsp store was refused: that branch says the file is skipped by every disposition surface, and a duplicated-key disposition is read, found illegible, and reported as an unreadable answer. All nine stores are enumerated in the declaration's godoc with what each reader does, because the audit that split the flag out stopped one store short. Four answers exist, not one: capture refuses (iss); five stores and this rule's own scanner keep the first value (adr, itd, spc, rdi, adm); ParseDisposition keeps neither and calls the record illegible (dsp); and nothing reads the record at all (rdg, srp). TestDuplicateKeyClaimIsScopedToThisRulesOwnScanner pins the message against the disposition reader's own answer, watched failing on the old wording."
+impact: fix
+resolved_by:
+  intent: "itd-189"
 ---
 
 the duplicate key fallback claims every record surface keeps the first value while the disposition reader discards both and reports the record illegible

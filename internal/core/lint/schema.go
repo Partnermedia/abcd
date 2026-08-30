@@ -216,7 +216,37 @@ type recordStore struct {
 	//
 	// Where it is false the leg still reports the duplicate, on the account that is
 	// true of every store: this rule's own scanner keeps the first value, so a
-	// second line can silence a blocker armed on the value the first hides.
+	// second line can silence a blocker armed on the value the first hides. That
+	// clause is scoped to THIS rule's scanner rather than to "every record surface"
+	// because the surfaces do not answer alike, and the message that claimed they
+	// did was false of the one store below it had never been checked against
+	// (iss-2608301813253101). All nine stores, each with what its reader does with
+	// a record carrying one top-level key twice:
+	//
+	//	adr  record.describeADR → readRecordHead → frontmatter.Fields: keeps the
+	//	     first value, confirms the id, renders the record.
+	//	itd  intent.Load → parseIntent → frontmatter.Fields: keeps the first value
+	//	     and validates THAT one, so the record loads.
+	//	spc  spec.Load → parseSpec → frontmatter.Fields: as itd.
+	//	iss  capture's parseFrontmatterBlock: refuses the file by name, and
+	//	     scanLedger routes it to Skipped — the one store the refusal branch is
+	//	     true of.
+	//	rdi  lint's readingPosition → frontmatterFields: keeps the first value.
+	//	rdg  no reader opens a run record's content at all; the run is its
+	//	     directory name.
+	//	dsp  issueschema.ParseDisposition: keeps NEITHER value — it returns
+	//	     DispositionRecord{ID: id}, so the record is not well-formed, decides
+	//	     nothing, and the outstanding report routes the item to Unreadable.
+	//	adm  lint's admittedProposals → frontmatterFields: keeps the first value
+	//	     and counts the record.
+	//	srp  no reader of a surprise record exists anywhere in the tree.
+	//
+	// So four answers exist, not one: refuse (iss), keep the first (adr, itd, spc,
+	// rdi, adm, and this rule's own scanner), keep neither (dsp), and never read
+	// the record at all (rdg, srp). A message naming any one of them as the universal
+	// is false of the other three, which is why this leg claims only what the rule
+	// itself does — the one account that holds whatever the store's own reader
+	// makes of the file.
 	readerRefusesDuplicateKey bool
 	// bucketField is the frontmatter property that must name the bucket the
 	// record sits in, for a store that states its bucket twice. An admission is
@@ -1423,13 +1453,16 @@ func scanRecordStores(repoRoot string, cfg RuleConfig) ([]schemaRecord, []Findin
 					return err
 				}
 				lines := strings.Split(string(content), "\n")
-				// A duplicated top-level key is malformed to every record consumer: the
-				// lenient scanner keeps only the first value — so a second line can hide
-				// the value a blocker is armed to reject — and where the store's reader
-				// fails closed, a strict parser refuses the file outright, dropping it
-				// out of the corpus its surfaces read. The lenient read below is what the
-				// rest of this rule needs; the duplicate is reported alongside it so the
-				// gate refuses what its consumers refuse (GitHub #357).
+				// A duplicated top-level key is malformed to every record consumer, but the
+				// consumers do not agree on WHAT it makes of the record, so the message may
+				// not name one answer for all of them: this rule's own scanner keeps the
+				// first value — so a second line can hide the value a blocker is armed to
+				// reject — while a store whose reader fails closed has the file refused
+				// outright, and the disposition reader keeps NEITHER value and calls the
+				// record illegible (see readerRefusesDuplicateKey for the store-by-store
+				// account). The lenient read below is what the rest of this rule needs; the
+				// duplicate is reported alongside it so the gate refuses what its consumers
+				// refuse (GitHub #357).
 				//
 				// The refusal half is gated on readerRefusesDuplicateKey rather than on
 				// readerFailsClosed, because the two come apart on this malformation
@@ -1442,12 +1475,12 @@ func scanRecordStores(repoRoot string, cfg RuleConfig) ([]schemaRecord, []Findin
 				// because it is this rule's own scanner that does the silencing.
 				for _, dup := range frontmatterDuplicates(lines) {
 					msg := "frontmatter has a duplicate top-level key '" + dup.Key +
-						"'; the lenient scanner every record surface reads with keeps only the first value, " +
+						"'; this rule's own scanner keeps only the first value, " +
 						"so a second line can silence a blocker armed on the value the first hides"
 					if store.readerRefusesDuplicateKey {
 						msg = "frontmatter has a duplicate top-level key '" + dup.Key +
 							"'; the record reader refuses a duplicated key, so the file is skipped by every " +
-							store.noun + " surface while the lenient scanner keeps only the first value — a second line can silence a blocker armed on the value the first hides"
+							store.noun + " surface while this rule's own scanner keeps only the first value — a second line can silence a blocker armed on the value the first hides"
 					}
 					out = append(out, Finding{
 						File: rel, Line: dup.Line, RuleID: ruleRecordSchema, Severity: cfg.Severity, Message: msg,
