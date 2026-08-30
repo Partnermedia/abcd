@@ -547,10 +547,46 @@ func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
 	// the writing verb over what a caller supplies; a wontfix stamps its grounds
 	// from a reason whose own contract is merely non-empty, so a floor at this gate
 	// would block records the ledger has always accepted and the reader still reads.
-	if f, present := r.fields["grounds"]; present && !isAbsentValue(f.value) {
-		v := issueScalar(f.value)
-		if _, err := grounds.Parse(v); err != nil {
-			add(f.line, err.Error()+"; capture refuses the record and skips it")
+	//
+	// Every other decision below is the lapsed_at block's, for the same reasons
+	// spelled out there, because the two properties are the same shape — an
+	// optional scalar whose spelling decides whether the reader keeps the record
+	// (iss-2608300927577163):
+	//
+	//   - Absence is the frontmatter NULL set ALONE, never isAbsentValue, which
+	//     also reads an empty inline list as absent. `grounds: []` parses as a
+	//     list, and validateStrict refuses a non-string grounds and SKIPS the
+	//     record; reading it as absence leaves that record lint-green and unread.
+	//   - A key whose own line carries no value may carry one on the indented lines
+	//     below it. The shared scanner is a same-line scanner, so the block map is
+	//     what sees it; capture builds a MAPPING from those lines and refuses the
+	//     record. What the block spells is never parsed — it is present, and it is
+	//     no scalar, which is the whole of the finding.
+	//   - The value is read the way the READER reads it (readerScalar), not through
+	//     issueScalar: capture's decodeScalar unquotes double quotes only, so a
+	//     single-quoted value reaches it with the quote still on and the token
+	//     `'pursued`. Stripping single quotes here parses a value the reader never
+	//     sees, and passes a record it refuses.
+	//   - An empty value AGREES with the reader, which skips a blank grounds
+	//     rather than parsing it. Putting "" to the parser would block a record
+	//     capture reads perfectly well.
+	groundsField, hasGrounds := r.fields["grounds"]
+	groundsValue := ""
+	if hasGrounds && !isNull(strings.TrimSpace(groundsField.value)) {
+		groundsValue = strings.TrimSpace(readerScalar(groundsField.value))
+	}
+	groundsFromBlock := false
+	if hasGrounds && groundsValue == "" && strings.TrimSpace(groundsField.value) == "" {
+		if block := r.blocks["grounds"]; block != "" {
+			groundsValue, groundsFromBlock = block, true
+		}
+	}
+	switch {
+	case groundsFromBlock:
+		add(groundsField.line, "grounds is spelled as an indented block; capture reads a block-spelled value as a mapping rather than a string, refuses the record and skips it — grounds is `<token>: <text>` on the key's own line")
+	case groundsValue != "":
+		if _, err := grounds.Parse(groundsValue); err != nil {
+			add(groundsField.line, err.Error()+"; capture refuses the record and skips it")
 		}
 	}
 
@@ -621,6 +657,48 @@ func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
 // it — unquoted.
 func issueScalar(value string) string {
 	return strings.Trim(strings.TrimSpace(value), `"'`)
+}
+
+// readerScalar decodes a frontmatter scalar EXACTLY as capture's decodeScalar
+// does: a matched pair of DOUBLE quotes is removed and its backslash escaping
+// reversed; anything else — a single-quoted value included — is the bare token it
+// spells, quote characters and all.
+//
+// It exists beside issueScalar rather than replacing it because the two answer
+// different questions. issueScalar compares an enum leniently, where a
+// single-quoted `severity: 'minor'` is a spelling nobody needs a finding about.
+// A free-text value is different: the quote character survives into the value the
+// reader parses, so a gate that strips it judges a string that never existed
+// (iss-2608300927577163).
+func readerScalar(value string) string {
+	v := strings.TrimSpace(value)
+	if len(v) >= 2 && strings.HasPrefix(v, `"`) && strings.HasSuffix(v, `"`) {
+		return unescapeScalar(v[1 : len(v)-1])
+	}
+	return v
+}
+
+// unescapeScalar reverses the backslash escaping capture's yamlScalar emits, the
+// mirror of its unquote.
+func unescapeScalar(s string) string {
+	var b strings.Builder
+	esc := false
+	for _, r := range s {
+		if esc {
+			b.WriteRune(r)
+			esc = false
+			continue
+		}
+		if r == '\\' {
+			esc = true
+			continue
+		}
+		b.WriteRune(r)
+	}
+	if esc {
+		b.WriteRune('\\')
+	}
+	return b.String()
 }
 
 // inSet reports membership in a small value list.

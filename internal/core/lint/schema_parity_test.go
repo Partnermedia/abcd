@@ -281,3 +281,59 @@ func TestIssueRecordShapeFlagsLapseWithoutLapsedAt(t *testing.T) {
 		})
 	}
 }
+
+// resolvedIssue is a complete, well-formed RESOLVED-issue record carrying the
+// given extra frontmatter line, so a grounds spelling is the whole delta.
+func resolvedIssue(id, slug, extra string) string {
+	return "---\nschema_version: 1\nid: " + id + "\nslug: " + slug +
+		"\nseverity: minor\ncategory: bug\nsource: user-observation\nfound_during: t\n" +
+		"impact: fix\nresolution: done\n" + extra + "---\n\nan issue\n"
+}
+
+// TestRecordSchemaGroundsSpellingsMatchTheReader is the parity table for the
+// `grounds` scalar. Each row is a spelling the two gates could disagree about,
+// with the verdict capture's reader reaches on it; the gate must reach the same
+// one, because a record the reader refuses is a record it SKIPS — invisible to
+// every capture surface while it still sits in the ledger — and a record the
+// reader accepts must not be blocked by a gate that reads the value differently.
+//
+//   - single-quoted: capture's decodeScalar unquotes DOUBLE quotes only, so the
+//     reader sees the leading `'` and the token `'pursued`, and refuses. A gate
+//     that strips single quotes parses a value the reader never sees.
+//   - empty inline list: parseScalarOrList returns []string{}, and validateStrict
+//     refuses a non-string grounds. Reading `[]` as ABSENT leaves it lint-green.
+//   - block-spelled: `grounds:` over indented lines is a nested MAPPING to the
+//     reader, refused as a non-string. The same-line scanner reads it as empty,
+//     so the block map is what sees it at all.
+//   - empty string: validateStrict skips a blank grounds, so the reader ACCEPTS
+//     it. A gate that put "" to the parser would block a record the reader reads.
+func TestRecordSchemaGroundsSpellingsMatchTheReader(t *testing.T) {
+	const issues = "work/issues"
+	for _, tc := range []struct {
+		name  string
+		extra string
+		find  bool // does the reader refuse it, and therefore the gate too?
+	}{
+		{"single quoted", "grounds: 'pursued: we expect the reader to see the quote'\n", true},
+		{"empty list", "grounds: []\n", true},
+		{"block spelled", "grounds:\n  pursued: we expect a mapping rather than a string\n", true},
+		{"empty string", "grounds: \"\"\n", false},
+		{"bare null", "grounds: null\n", false},
+		{"well formed", "grounds: \"pursued: we expect the recorded reasoning to outlive the session\"\n", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			seedRecRoot(t, root)
+			writeFile(t, root, issues+"/resolved/iss-1-ok.md", resolvedIssue("iss-1", "ok", tc.extra))
+
+			fs, err := Lint(schemaConfig(), root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := countRule(fs, ruleRecordSchema) > 0
+			if got != tc.find {
+				t.Fatalf("gate finding = %v, want %v (the reader's own verdict): %+v", got, tc.find, fs)
+			}
+		})
+	}
+}
