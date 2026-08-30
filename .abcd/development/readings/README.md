@@ -52,6 +52,12 @@ A projected field ends where the redactor ends a section: at the next heading of
 the same level or shallower. A subsection therefore travels with the field it
 sits under, rather than being cut off at the first heading of any depth.
 
+Two heading shapes stay outside the floor and are disclosed rather than
+claimed: one nested inside a blockquote or a list item, which no scan here reads
+as a heading, and one reaching an excluded title through a homoglyph or an
+invisible format character, which slugs differently because the comparison is
+over code points.
+
 The heading signal is scoped to markdown. A heading and a frontmatter key are
 things a record carries, and a source or configuration file carries neither, so
 those travel whole with no section scan run over them. Within markdown a heading

@@ -155,10 +155,19 @@ var (
 	// The indent is SPACES, one to three. A tab makes an indented code block,
 	// not a heading, so `\s` would refuse a line no renderer treats as one.
 	indentedATXRe = regexp.MustCompile(`^[ ]{1,3}#{1,6}\s+(.*)$`)
-	// rawHeadingRe matches a raw HTML heading. The site's own markdown subset
-	// admits h1-h6, so one renders as the heading it is while the markdown scan
-	// never sees a heading at all.
-	rawHeadingRe = regexp.MustCompile(`(?is)<h[1-6][^>]*>(.*?)</h[1-6]>`)
+	// rawHeadingOpenRe matches a raw HTML heading's OPENING tag, attributes and
+	// self-closing slash included. Matching the opening tag alone, rather than a
+	// closed pair, is what covers the unclosed, self-closing and multi-line forms
+	// — and a document does not have to be well-formed for a reader to see a
+	// heading in it.
+	rawHeadingOpenRe = regexp.MustCompile(`(?is)<h[1-6](?:\s[^>]*)?/?>`)
+	// rawHeadingEndRe bounds the text such a tag introduces: its own close, the
+	// next heading tag, or a blank line.
+	rawHeadingEndRe = regexp.MustCompile(`(?is)</h[1-6]\s*>|<h[1-6](?:\s[^>]*)?/?>|\n[ \t]*\n`)
+	// unresolvableFrontmatterRe matches the YAML constructions whose keys this
+	// package cannot resolve without becoming a YAML parser: a tag, an anchor,
+	// and an explicit key whose name is a block scalar.
+	unresolvableFrontmatterRe = regexp.MustCompile(`^\s*(!!|&\S|\?\s*[|>])`)
 	// htmlCommentRe and htmlTagRe strip the markup a title can carry without
 	// changing how it reads on the page.
 	htmlCommentRe = regexp.MustCompile(`(?s)<!--.*?-->`)
@@ -180,6 +189,13 @@ var (
 	fenceOpenRe = regexp.MustCompile("^[ \t]*```")
 )
 
+// Two shapes this floor does NOT see, disclosed rather than claimed. A heading
+// nested inside a blockquote or a list item is indented and prefixed, so neither
+// the section scan nor the raw-line patterns read it as a heading. And a title
+// reaching the excluded one through a homoglyph or an invisible format character
+// slugs differently by construction, because the slug compares code points. Both
+// are residue; neither is caught.
+//
 // namesExcludedHeading reports whether a heading title is one of the excluded
 // ones, under the ONE equality this floor uses: a case fold, or the same
 // rendering. It exists so the three refusal paths — the section scan, the
@@ -282,6 +298,11 @@ func verifyRedaction(rel, original, redacted string, keys, headings map[string]b
 					"only the first occurrence is redactable, so the rest would travel", rel, dup.Key, dup.Line)
 			}
 		}
+		if line, shape, ok := unresolvableFrontmatterShape(lines, fenced); ok {
+			return fmt.Errorf("reading: %s uses the YAML construction %q at line %d in its frontmatter, "+
+				"whose keys this package cannot resolve without becoming a YAML parser; a record has no "+
+				"reason to use one, so it is refused rather than guessed at", rel, shape, line)
+		}
 		if line, key, ok := excludedKeyInFirstBlock(lines, fenced, keys); ok {
 			return fmt.Errorf("reading: %s still carries the excluded key %q at line %d after redaction; "+
 				"the frontmatter block is not closed the way the field reader expects it", rel, key, line)
@@ -295,6 +316,11 @@ func verifyRedaction(rel, original, redacted string, keys, headings map[string]b
 	// by. Reading raw lines instead made this floor fire on a fenced example of
 	// the record template — a heading inside a code block is an example, not a
 	// field, and the redactor rightly left it alone while this refused the run.
+	// Every raw-line scan below starts at `offset`, the first BODY line. Running
+	// them over the frontmatter finds constructions that are not what they look
+	// like: a block scalar whose last line is the excluded title, sitting above
+	// the closing `---`, was refused as an underlined heading — a true refusal
+	// reached by a false reading, which teaches whoever hits it the wrong fix.
 	body, offset := site.StripFrontmatter(redacted)
 	sections, err := site.Sections(rel, body, offset)
 	if err != nil {
@@ -317,7 +343,8 @@ func verifyRedaction(rel, original, redacted string, keys, headings map[string]b
 	// package's call to make, because the site renderer's own output turns on it.
 	// A refusal here costs an edit and names the line; the alternative is a leak
 	// under a manifest asserting the opposite.
-	for i, line := range lines {
+	for i := offset; i < len(lines); i++ {
+		line := lines[i]
 		if fenced[i] {
 			continue
 		}
@@ -331,19 +358,19 @@ func verifyRedaction(rel, original, redacted string, keys, headings map[string]b
 		}
 	}
 
-	// A raw HTML heading is refused on the same ground: the site's markdown
-	// subset admits h1-h6, so it renders as a heading while the markdown scan
-	// sees none, and there is again no span for the redactor to delete.
-	for i, line := range lines {
-		if fenced[i] {
-			continue
-		}
-		for _, m := range rawHeadingRe.FindAllStringSubmatch(line, -1) {
-			if want, ok := namesExcludedHeading(normaliseHeadingTitle(m[1]), headings); ok {
-				return fmt.Errorf("reading: %s carries the excluded heading %q as raw HTML at line %d; "+
-					"the floor names %q, and a heading is excluded however it is spelled",
-					rel, strings.TrimSpace(line), i+1, want)
-			}
+	// A raw HTML heading is refused on the same ground: the site's page reader
+	// REFUSES a raw HTML block rather than admitting one, so a heading spelled
+	// that way is a heading to every other reader of the file and nothing at all
+	// to the markdown scan — and there is again no span for the redactor.
+	//
+	// The scan runs over the unfenced body JOINED, not line by line, because
+	// `<h2>` and its text and its close need not share a line. The match offset
+	// maps back to a line so the refusal still names one.
+	if line, title, ok := rawHTMLHeading(lines, fenced, offset, headings); ok {
+		if want, hit := namesExcludedHeading(title, headings); hit {
+			return fmt.Errorf("reading: %s carries the excluded heading %q as raw HTML at line %d; "+
+				"the floor names %q, and a heading is excluded however it is spelled",
+				rel, title, line, want)
 		}
 	}
 
@@ -352,7 +379,7 @@ func verifyRedaction(rel, original, redacted string, keys, headings map[string]b
 	// heading scanner here to compute one is the second parser this package
 	// exists not to grow. A record underlining its Audit Notes is rare and a
 	// refusal names it; a leak would not.
-	for i := 0; i+1 < len(lines); i++ {
+	for i := offset; i+1 < len(lines); i++ {
 		if fenced[i] || fenced[i+1] || !setextRuleRe.MatchString(lines[i+1]) {
 			continue
 		}
@@ -395,6 +422,80 @@ func escapedQuotedKey(line string) (string, bool) {
 		return "", false
 	}
 	return m[1], true
+}
+
+// rawHTMLHeading finds the first raw HTML heading in the unfenced body whose
+// text names an excluded heading, and reports the line it sits on.
+//
+// The body is joined before scanning because a raw heading need not fit on one
+// line: `<h2>`, its text and its close can sit on three. Joining costs the line
+// number, so the match offset is mapped back to one by counting newlines ahead
+// of it — the refusal has to name a line a human can go and look at.
+//
+// A fenced line is replaced by an empty line rather than dropped, so the offset
+// arithmetic keeps working and an example inside a code block still cannot fire.
+func rawHTMLHeading(lines []string, fenced []bool, offset int, headings map[string]bool) (int, string, bool) {
+	scan := make([]string, len(lines))
+	for i := range lines {
+		if i >= offset && !fenced[i] {
+			scan[i] = lines[i]
+		}
+	}
+	joined := strings.Join(scan, "\n")
+
+	for _, open := range rawHeadingOpenRe.FindAllStringIndex(joined, -1) {
+		rest := joined[open[1]:]
+		end := len(rest)
+		if b := rawHeadingEndRe.FindStringIndex(rest); b != nil {
+			end = b[0]
+		}
+		title := normaliseHeadingTitle(renderedText(rest[:end]))
+		if title == "" {
+			continue
+		}
+		if _, ok := namesExcludedHeading(title, headings); ok {
+			return strings.Count(joined[:open[0]], "\n") + 1, title, true
+		}
+	}
+	return 0, "", false
+}
+
+// unresolvableFrontmatterShape reports a YAML construction in the first block
+// whose keys this package cannot resolve: a tag (`!!`), an anchor (`&`), or an
+// explicit key whose name is a block scalar (`? |`). It is the same reasoning as
+// the escaped quoted key — resolving these means a YAML parser, a record has no
+// reason to use one, so the construction itself is the signal and the answer is
+// a refusal rather than a guess.
+func unresolvableFrontmatterShape(lines []string, fenced []bool) (int, string, bool) {
+	open := -1
+	for i, line := range lines {
+		if fenced[i] {
+			continue
+		}
+		trimmed := strings.TrimSpace(line)
+		if i == 0 {
+			trimmed = strings.TrimSpace(frontmatter.TrimBOM(line))
+		}
+		if strings.HasPrefix(trimmed, "---") {
+			open = i
+			break
+		}
+	}
+	if open < 0 {
+		return 0, "", false
+	}
+	for i := open + 1; i < len(lines); i++ {
+		if fenced[i] {
+			continue
+		}
+		if strings.HasPrefix(strings.TrimSpace(lines[i]), "---") {
+			return 0, "", false
+		}
+		if m := unresolvableFrontmatterRe.FindStringSubmatch(lines[i]); m != nil {
+			return i + 1, strings.TrimSpace(m[1]), true
+		}
+	}
+	return 0, "", false
 }
 
 // excludedKeyInFirstBlock reports an excluded key sitting at column 0 inside the

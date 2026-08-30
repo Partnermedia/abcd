@@ -1048,3 +1048,70 @@ func TestYAMLKeySpellingsAreRecognised(t *testing.T) {
 		}
 	}
 }
+
+// TestRawHTMLHeadingFormsAreRecognised: the per-line closed-tag pattern is one
+// spelling of a raw HTML heading among several, and a scan that only sees that
+// one is a spelling check again.
+func TestRawHTMLHeadingFormsAreRecognised(t *testing.T) {
+	cases := map[string]string{
+		"split across lines":  "<h2>\nAudit Notes\n</h2>\n\n" + sentinelAuditNotes + "\n",
+		"never closed":        "<h2>Audit Notes\n\n" + sentinelAuditNotes + "\n",
+		"carrying attributes": "<h2 id=\"x\" class=\"y\">Audit Notes</h2>\n\n" + sentinelAuditNotes + "\n",
+		"opened on its own":   "<h2 >\nAudit Notes\n\n" + sentinelAuditNotes + "\n",
+	}
+	for what, body := range cases {
+		root := fixtureRepo(t)
+		writeFile(t, root, ".abcd/development/specs/open/spc-16-html.md",
+			"---\nid: spc-16\n---\n\n# A spec\n\nProse.\n\n"+body)
+		gitCommitAll(t, root)
+
+		res, err := Assemble(AssembleRequest{
+			RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+		})
+		if err != nil {
+			continue
+		}
+		if strings.Contains(bundleText(res.Bundle), sentinelAuditNotes) {
+			t.Errorf("a raw HTML heading %s let an excluded section travel", what)
+		}
+	}
+}
+
+// TestUnresolvableFrontmatterShapesRefuse: three YAML constructions whose keys
+// this package cannot resolve without becoming a YAML parser. The
+// escape-is-the-signal rationale covers them; the pattern set did not.
+func TestUnresolvableFrontmatterShapesRefuse(t *testing.T) {
+	cases := map[string]string{
+		"a tagged key":                "---\nid: spc-17\n!!str origin: " + sentinelOrigin + "\n---\n",
+		"an anchored key":             "---\nid: spc-17\n&a origin: " + sentinelOrigin + "\n---\n",
+		"a block-scalar explicit key": "---\nid: spc-17\n? |\n  origin\n: " + sentinelOrigin + "\n---\n",
+	}
+	for what, front := range cases {
+		root := fixtureRepo(t)
+		writeFile(t, root, ".abcd/development/specs/open/spc-17-shapes.md", front+"\n# A spec\n\nProse.\n")
+		gitCommitAll(t, root)
+
+		if _, err := Assemble(AssembleRequest{
+			RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+		}); err == nil {
+			t.Errorf("%s did not refuse", what)
+		}
+	}
+}
+
+// TestBlockScalarEndingInAnExcludedTitleIsNotASetextHeading: the setext scan ran
+// over frontmatter lines, so a block scalar whose last line is the excluded
+// title, sitting above the closing `---`, was refused as an underlined heading —
+// a true refusal reached by a false reading, which teaches the wrong fix.
+func TestBlockScalarEndingInAnExcludedTitleIsNotASetextHeading(t *testing.T) {
+	root := fixtureRepo(t)
+	writeFile(t, root, ".abcd/development/specs/open/spc-18-scalar.md",
+		"---\nid: spc-18\nsummary: |\n  a first line\n  Audit Notes\n---\n\n# A spec\n\nProse.\n")
+	gitCommitAll(t, root)
+
+	if _, err := Assemble(AssembleRequest{
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+	}); err != nil && strings.Contains(err.Error(), "underlines") {
+		t.Errorf("a block scalar inside the frontmatter was read as a setext heading: %v", err)
+	}
+}
