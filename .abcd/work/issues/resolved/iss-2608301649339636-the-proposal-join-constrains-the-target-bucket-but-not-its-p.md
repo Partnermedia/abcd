@@ -7,6 +7,10 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-189-round-5-security"
 found_at: "internal/core/lint/schema.go"
+resolution: "The proposal join now declares the reading POSITION its target must hold, and checkRecordJoins refuses an admission naming an item at any other. ReadReadingOutstanding consults the admissions tree only inside if position == PositionWidening, so an admission naming a detection, an entailment or a comparative is keyed on a pair nothing ever queries; the finding says that and stops there rather than claiming the item goes on being reported unanswered, which depends on the dispositions this leg has not read. The leg stands down where the target's filename is not a bare handle, on the padding leg's grounds: what reads the family never opens such a file."
+impact: fix
+resolved_by:
+  intent: "itd-189"
 ---
 
 the proposal join constrains the target bucket but not its position so an admission naming a non widening item passes clean and admits nothing

@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/intentdriven/abcd/internal/core/issueschema"
 )
 
 // schemaStores is the store map every record_schema fixture below shares.
@@ -1744,6 +1746,24 @@ func TestEveryJoinFamilyNamesADeclaredStore(t *testing.T) {
 	}
 }
 
+// The position leg quotes the position it requires, and a target's own position is
+// compared against it as a string. A declared position outside the closed set
+// would refuse every target the family can hold while quoting a position no record
+// may carry, so membership is pinned rather than trusted.
+func TestEveryJoinTargetPositionIsADeclaredPosition(t *testing.T) {
+	for _, store := range recordStores {
+		for _, join := range store.joins {
+			if join.targetPosition == "" {
+				continue
+			}
+			if !inSet(join.targetPosition, issueschema.Positions) {
+				t.Errorf("%s's %s join requires position %q, which is not one of %v",
+					store.prefix, join.field, join.targetPosition, issueschema.Positions)
+			}
+		}
+	}
+}
+
 // The missing-property message names a reader that refuses the record and skips
 // it. Two stores have such a reader — the issue ledger (capture's validateStrict)
 // and the ADR store (the dispatcher confirms the frontmatter id) — and for those
@@ -2024,5 +2044,72 @@ func TestAnEmptyFlowMappingAndAnExplicitNullTagAreAbsences(t *testing.T) {
 				t.Fatalf("grounds: %s — absent=%v, gate said %v: %+v", c.spelling, c.absent, got, fs)
 			}
 		})
+	}
+}
+
+// The admission's `proposal` join constrains the target's FAMILY and its BUCKET,
+// and the third coordinate of the same pair is its POSITION: the outstanding
+// report opens the admissions tree only for an item at `widening`, so an
+// admission naming a detection, an entailment or a comparative is keyed on a pair
+// nothing ever queries. It resolved, matched its bucket, spelled correctly and
+// drew nothing, while admitting nothing (iss-2608301649339636).
+//
+// An item whose file declares NO position reads the same way, because the report
+// compares the position it read — the empty string, there — against `widening`.
+//
+// The stand-down is the padding leg's: a target whose filename is not itself a
+// bare handle is a file the family's reader never opens, so no claim about what
+// the report does with it is available to make.
+func TestAnAdmissionNamingAnItemOutsideTheWideningPositionIsRefused(t *testing.T) {
+	root := admissionCorpus(t)
+	writeFile(t, root, "work/issues/readings/rdg-1/rdi-3.md",
+		"---\nschema_version: 1\nid: rdi-3\nrun: rdg-1\nmanifest: sha256:beef\nposition: detection\n"+
+			"regime: registrative\npattern: a stated constraint\n---\n\n")
+	writeFile(t, root, "work/issues/readings/rdg-1/rdi-5.md",
+		"---\nschema_version: 1\nid: rdi-5\nrun: rdg-1\nmanifest: sha256:beef\n---\n\n")
+	writeFile(t, root, "work/issues/readings/rdg-1/rdi-7-widen-the-frame.md",
+		"---\nschema_version: 1\nid: rdi-7\nrun: rdg-1\nmanifest: sha256:beef\nposition: detection\n---\n\n")
+
+	adm := func(id, proposal string) string {
+		return "---\nschema_version: 1\nid: " + id + "\nrun: rdg-1\nproposal: " + proposal +
+			"\ngrounds: the configuration it admits is one the frame does not already hold\n---\n\n"
+	}
+	for _, c := range []struct{ id, proposal string }{
+		{"adm-2", "rdi-2"}, {"adm-3", "rdi-3"}, {"adm-5", "rdi-5"}, {"adm-7", "rdi-7"},
+	} {
+		writeFile(t, root, "work/issues/admissions/rdg-1/"+c.id+".md", adm(c.id, c.proposal))
+	}
+
+	fs, err := Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	onFile := func(name string) int {
+		rel := filepath.Join("work", "issues", "admissions", "rdg-1", name)
+		n := 0
+		for _, f := range fs {
+			if f.File == rel && f.RuleID == ruleRecordSchema {
+				n++
+			}
+		}
+		return n
+	}
+	for _, c := range []struct{ file, quote string }{
+		{"adm-3.md", "'detection'"},
+		{"adm-5.md", "declares no position"},
+	} {
+		rel := filepath.Join("work", "issues", "admissions", "rdg-1", c.file)
+		if !findingWith(fs, rel, ruleRecordSchema, "position") {
+			t.Errorf("an admission naming an item outside the widening position must be a finding on %s: %+v", c.file, fs)
+		}
+		if !findingWith(fs, rel, ruleRecordSchema, c.quote) {
+			t.Errorf("the finding on %s must name what the target's file says: %+v", c.file, fs)
+		}
+	}
+	// The widening control, and the file the family's reader never opens.
+	for _, name := range []string{"adm-2.md", "adm-7.md"} {
+		if n := onFile(name); n != 0 {
+			t.Errorf("%s must draw no finding, got %d: %+v", name, n, fs)
+		}
 	}
 }
