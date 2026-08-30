@@ -9,7 +9,6 @@ found_during: "itd-179-round-2-security"
 found_at: "internal/core/intent/grounds.go"
 resolution: "RecordGrounds now runs read -> append -> read-back -> write inside withIntentMintLock, so a second concurrent grounds write can no longer discard the first"
 impact: fix
-grounds: "pursued: we expect an append-only contract to hold only where one advisory lock spans the whole read-modify-write, and a concurrent-loss reproduction that stays green after the lock is what would show it wrong"
 resolved_by:
   intent: "itd-179"
 ---
@@ -49,3 +48,7 @@ reproduction to 20/20 green with `go test` and `go test -race
 Two adversarial reviewers, in fresh contexts and by different routes, landed on
 the same defect and the same one-line remedy. That is the strongest signal this
 cycle has produced for a single finding.
+
+## Grounds
+
+- pursued: we expect an append-only contract to hold only where one advisory lock spans the whole read-modify-write, and a concurrent-loss reproduction that stays green after the lock is what would show it wrong

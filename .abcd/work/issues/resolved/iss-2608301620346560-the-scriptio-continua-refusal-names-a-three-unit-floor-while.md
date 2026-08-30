@@ -9,7 +9,6 @@ found_during: "itd-179-round-5-orchestrator"
 found_at: "internal/core/grounds/grounds.go"
 resolution: "The no-word-breaks refusal now names both floors in the unit each is measured in."
 impact: fix
-grounds: "pursued: We expect naming both floors to stop the second refusal, because the unit floor never binds for a script whose every unit is one letter, so an author supplied the only number the message gave and was refused again by a floor it had not mentioned."
 resolved_by:
   intent: "itd-179"
 ---
@@ -52,3 +51,7 @@ Class: this is the cycle's standing class, a message asserting a requirement
 that is not the case, reached this time by stating a real floor while omitting
 the one that actually binds. The remedy is for the scriptio-continua refusal to
 name both floors, in the unit each is measured in.
+
+## Grounds
+
+- pursued: We expect naming both floors to stop the second refusal, because the unit floor never binds for a script whose every unit is one letter, so an author supplied the only number the message gave and was refused again by a floor it had not mentioned.

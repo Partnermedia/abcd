@@ -12,9 +12,9 @@ import (
 // something other than the grounds argument itself.
 const testGrounds = "pursued: we expect the ledger to keep the reasoning the session would otherwise lose"
 
-// groundsScalar re-reads an issue's raw `grounds:` frontmatter line, so a test
+// groundsBullets re-reads an issue's `## Grounds` bullets off disk, so a test
 // asserts on what was WRITTEN rather than on what a reader chose to surface.
-func groundsScalar(t *testing.T, ir, issID string) string {
+func groundsBullets(t *testing.T, ir, issID string) []string {
 	t.Helper()
 	path, _, err := findIssue(ir, issID)
 	if err != nil {
@@ -24,12 +24,23 @@ func groundsScalar(t *testing.T, ir, issID string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var out []string
 	for _, ln := range strings.Split(string(data), "\n") {
-		if strings.HasPrefix(ln, "grounds:") {
-			return strings.Trim(strings.TrimSpace(strings.TrimPrefix(ln, "grounds:")), `"`)
+		if t, ok := strings.CutPrefix(strings.TrimSpace(ln), "- "); ok {
+			out = append(out, t)
 		}
 	}
-	return ""
+	return out
+}
+
+// theGround asserts the record carries exactly one grounds entry and returns it.
+func theGround(t *testing.T, ir, issID string) string {
+	t.Helper()
+	got := groundsBullets(t, ir, issID)
+	if len(got) != 1 {
+		t.Fatalf("the record carries %d grounds entr(ies), want exactly 1: %q", len(got), got)
+	}
+	return got[0]
 }
 
 // TestPromoteRefusesWithoutGrounds is itd-179's first acceptance criterion: a
@@ -63,8 +74,8 @@ func TestPromoteWithoutGroundsWritesNothing(t *testing.T) {
 	if iss := readIssue(t, ir, issID); iss.PromotedTo != "" {
 		t.Fatalf("a refused promote stamped promoted_to = %q", iss.PromotedTo)
 	}
-	if g := groundsScalar(t, ir, issID); g != "" {
-		t.Fatalf("a refused promote stamped grounds = %q", g)
+	if g := groundsBullets(t, ir, issID); len(g) != 0 {
+		t.Fatalf("a refused promote recorded grounds = %q", g)
 	}
 }
 
@@ -77,7 +88,7 @@ func TestPromoteStampsGrounds(t *testing.T) {
 	if _, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: issID, Grounds: testGrounds}); err != nil {
 		t.Fatalf("Promote: %v", err)
 	}
-	if got := groundsScalar(t, ir, issID); got != testGrounds {
+	if got := theGround(t, ir, issID); got != testGrounds {
 		t.Fatalf("grounds = %q, want %q", got, testGrounds)
 	}
 	// The stamped record still reads: an unknown key would make capture's reader
@@ -117,7 +128,7 @@ func TestResolveStampsGrounds(t *testing.T) {
 	if res.ToStatus != StateResolved {
 		t.Fatalf("ToStatus = %s, want resolved", res.ToStatus)
 	}
-	if got := groundsScalar(t, ir, issID); got != testGrounds {
+	if got := theGround(t, ir, issID); got != testGrounds {
 		t.Fatalf("grounds = %q, want %q", got, testGrounds)
 	}
 }
@@ -133,7 +144,7 @@ func TestWontfixStampsDeclinedFromReason(t *testing.T) {
 	if _, err := Wontfix(WontfixRequest{RepoRoot: repo, IssuesRoot: ir, ID: issID, Reason: reason}); err != nil {
 		t.Fatalf("Wontfix: %v", err)
 	}
-	if got, want := groundsScalar(t, ir, issID), "declined: "+reason; got != want {
+	if got, want := theGround(t, ir, issID), "declined: "+reason; got != want {
 		t.Fatalf("grounds = %q, want %q", got, want)
 	}
 	if iss := readIssue(t, ir, issID); iss.WontfixReason != reason {
@@ -153,7 +164,7 @@ func TestWontfixGroundsOverride(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Wontfix: %v", err)
 	}
-	if got := groundsScalar(t, ir, issID); got != conjecture {
+	if got := theGround(t, ir, issID); got != conjecture {
 		t.Fatalf("grounds = %q, want %q", got, conjecture)
 	}
 	if iss := readIssue(t, ir, issID); iss.WontfixReason != "out of scope" {
@@ -206,7 +217,7 @@ func TestGroundsTextIsRedacted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
-	if g := groundsScalar(t, ir, issID); strings.Contains(g, "/Users/alice") {
+	if g := theGround(t, ir, issID); strings.Contains(g, "/Users/alice") {
 		t.Fatalf("the committed grounds carried the raw home path: %q", g)
 	}
 	if res.Redacted == 0 {
@@ -219,38 +230,43 @@ func TestGroundsTextIsRedacted(t *testing.T) {
 	}
 }
 
-// TestReaderVerdictOnGroundsSpellings is the reader half of the parity the
-// record-lint table asserts (iss-2608300927577163). The gate's job is to refuse
-// exactly what this refuses — a refused record is SKIPPED, invisible to every
-// capture surface while it still sits in the ledger — so the verdicts are pinned
-// here rather than described in a comment over there.
-func TestReaderVerdictOnGroundsSpellings(t *testing.T) {
+// TestReaderToleratesALegacyGroundsKey is the reader half of the move off
+// frontmatter. Grounds live in the body's `## Grounds` section now, so a
+// frontmatter `grounds:` written by an older abcd is a value nothing reads —
+// and the reader TOLERATES it in every spelling rather than refusing, because a
+// refusal makes the reader skip the record, and a record invisible to every
+// capture surface while it still sits in the ledger is a worse outcome than a
+// value nothing reads. The gate that blocks the misplacement is record_schema,
+// proved on the lint side, which cannot import this package.
+//
+// The spellings are the ones that used to DECIDE the verdict: each of the first
+// three made the reader refuse. That none of them does now is the property, and
+// it is asserted over the spellings rather than over one of them, so a reader
+// that starts judging the value again fails here whichever spelling it judges.
+func TestReaderToleratesALegacyGroundsKey(t *testing.T) {
 	const head = "---\nschema_version: 1\nid: iss-1\nslug: ok\nseverity: minor\n" +
 		"category: bug\nsource: user-observation\nfound_during: t\n"
-	for _, tc := range []struct {
-		name    string
-		spell   string
-		refused bool
-	}{
-		{"single quoted", "grounds: 'pursued: the quote survives into the value'\n", true},
-		{"empty list", "grounds: []\n", true},
-		{"block spelled", "grounds:\n  pursued: an indented block is a mapping\n", true},
-		{"empty string", "grounds: \"\"\n", false},
-		{"backslash escaped", "grounds: \"pursued\\: the escape is reversed before the token is read\"\n", false},
-		{"bare null", "grounds: null\n", false},
-		{"well formed", "grounds: \"pursued: we expect the reasoning to outlive the session\"\n", false},
+	for _, spell := range []string{
+		"grounds: 'pursued: the quote survives into the value'\n",
+		"grounds: []\n",
+		"grounds:\n  pursued: an indented block is a mapping\n",
+		"grounds: \"\"\n",
+		"grounds: null\n",
+		"grounds: \"pursued: we expect the reasoning to outlive the session\"\n",
+		"grounds: \"no token at all here\"\n",
 	} {
-		t.Run(tc.name, func(t *testing.T) {
-			fm, _, err := parseFrontmatterAndBody(head + tc.spell + "---\n\nan issue\n")
+		t.Run(strings.TrimSpace(spell), func(t *testing.T) {
+			fm, body, err := parseFrontmatterAndBody(head + spell + "---\n\nan issue\n")
 			if err != nil {
-				if !tc.refused {
-					t.Fatalf("the reader refused at the parse: %v", err)
-				}
-				return
+				t.Fatalf("the reader refused a legacy grounds key at the parse: %v", err)
 			}
-			err = validateStrict(fm)
-			if (err != nil) != tc.refused {
-				t.Fatalf("reader refused = %v (%v), want %v", err != nil, err, tc.refused)
+			if err := validateStrict(fm); err != nil {
+				t.Fatalf("the reader refused a legacy grounds key: %v", err)
+			}
+			// And the value is not surfaced: nothing reads it, so reporting it
+			// would claim a recorded conjecture the record does not carry.
+			if got := groundsEntries(body); len(got) != 0 {
+				t.Fatalf("a frontmatter grounds value surfaced as %q, want none", got)
 			}
 		})
 	}
@@ -303,7 +319,7 @@ func TestWontfixDerivedGroundsCountRedactionOnce(t *testing.T) {
 	}
 	// Both written fields still carry the redacted text: the count is what was
 	// wrong, never the redaction.
-	if g := groundsScalar(t, ir, issID); strings.Contains(g, "/Users/alice") {
+	if g := theGround(t, ir, issID); strings.Contains(g, "/Users/alice") {
 		t.Fatalf("the committed grounds carried the raw home path: %q", g)
 	}
 	if iss := readIssue(t, ir, issID); strings.Contains(iss.WontfixReason, "/Users/alice") {
@@ -330,5 +346,75 @@ func TestWontfixEmptyReasonNamesItsOwnCause(t *testing.T) {
 	}
 	if iss := readIssue(t, ir, issID); iss.Status != StateOpen {
 		t.Fatalf("a refused wontfix moved the record to %s", iss.Status)
+	}
+}
+
+// TestGroundsAccumulateAcrossTriageRoutes is iss-2608301657354776: recording is
+// APPEND-ONLY, so the conjecture a promote recorded is still on the record after
+// the resolve that followed it.
+//
+// The two acts are the ledger's mainline sequence, not a corner — fourteen
+// records in resolved/ carry promoted_to — and the loss was unavoidable rather
+// than accidental, because all three routes REQUIRE grounds. Refusing the second
+// write was therefore never open: it would have made a promoted issue impossible
+// to resolve. The entries are asserted in ORDER, because what makes the earlier
+// one worth keeping is that a later reader checks the outcome against it.
+func TestGroundsAccumulateAcrossTriageRoutes(t *testing.T) {
+	repo, ir, issID := promoteFixture(t, "a thing that will be promoted and then fixed")
+
+	const promoted = "pursued: we expect a stamped identity to survive rewording, which nothing else does"
+	const resolved = "pursued: the loader now reads the identity rather than matching on the title text"
+
+	if _, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: issID, Grounds: promoted}); err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+	if _, err := Resolve(ResolveRequest{
+		RepoRoot: repo, IssuesRoot: ir, ID: issID, Resolution: "fixed", Impact: "fix", Grounds: resolved,
+	}); err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+
+	// Asserted through the READER as well as off disk: an entry that is written
+	// but not read back is not recorded, and the two halves are what the record
+	// form holds together.
+	want := []string{promoted, resolved}
+	for _, got := range [][]string{groundsBullets(t, ir, issID), readIssue(t, ir, issID).Grounds} {
+		if len(got) != len(want) {
+			t.Fatalf("the record carries %d grounds entr(ies) after promote+resolve, want %d: %q", len(got), len(want), got)
+		}
+		for i := range want {
+			if got[i] != want[i] {
+				t.Fatalf("entry %d = %q, want %q", i, got[i], want[i])
+			}
+		}
+	}
+}
+
+// TestWontfixAfterPromoteKeepsBothGrounds: the wontfix route is the third
+// grounds-bearing act and appends like the other two. It is asserted separately
+// from the resolve because its grounds are DERIVED from the reason rather than
+// supplied, and a derived value taking a different write path is exactly how one
+// of three routes keeps a behaviour the other two lost.
+func TestWontfixAfterPromoteKeepsBothGrounds(t *testing.T) {
+	repo, ir, issID := promoteFixture(t, "a thing that will be promoted and then declined")
+
+	const promoted = "pursued: we expect a stamped identity to survive rewording, which nothing else does"
+	const reason = "superseded by the successor design, which makes this unreachable"
+
+	if _, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: issID, Grounds: promoted}); err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+	if _, err := Wontfix(WontfixRequest{RepoRoot: repo, IssuesRoot: ir, ID: issID, Reason: reason}); err != nil {
+		t.Fatalf("Wontfix: %v", err)
+	}
+	got := readIssue(t, ir, issID).Grounds
+	want := []string{promoted, "declined: " + reason}
+	if len(got) != len(want) {
+		t.Fatalf("the record carries %d grounds entr(ies) after promote+wontfix, want %d: %q", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("entry %d = %q, want %q", i, got[i], want[i])
+		}
 	}
 }

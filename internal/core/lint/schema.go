@@ -33,7 +33,6 @@ import (
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/frontmatter"
-	"github.com/intentdriven/abcd/internal/core/grounds"
 	"github.com/intentdriven/abcd/internal/core/issueschema"
 	"github.com/intentdriven/abcd/internal/core/recordid"
 )
@@ -538,57 +537,24 @@ func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
 		}
 	}
 
-	// grounds: the closed vocabulary and the `<token>: <text>` grammar, read from
-	// the ONE copy in core/grounds — the same parser capture's validateStrict
-	// reads, so this gate refuses exactly the record the reader refuses (and
-	// therefore skips, making it invisible to every capture surface while it still
-	// sits in the ledger).
+	// grounds: the record BODY is where they live, as the append-only
+	// `## Grounds` section core/grounds holds for both record families. A
+	// frontmatter `grounds:` is therefore a MISPLACED value, and the gate blocks
+	// it and names the section.
 	//
-	// The SUBSTANCE FLOOR is deliberately not applied here. It is an input gate at
-	// the writing verb over what a caller supplies; a wontfix stamps its grounds
-	// from a reason whose own contract is merely non-empty, so a floor at this gate
-	// would block records the ledger has always accepted and the reader still reads.
+	// The key is still in the reader's allow-list, so a record carrying it reads
+	// perfectly well and stays visible to every capture surface — it is the VALUE
+	// that goes unread, which is the whole reason this has to be a gate rather
+	// than a reader refusal. A refusal would make the reader skip the record, and
+	// a record nothing can see is a worse outcome than a value nothing reads.
 	//
-	// Every other decision below is the lapsed_at block's, for the same reasons
-	// spelled out there, because the two properties are the same shape — an
-	// optional scalar whose spelling decides whether the reader keeps the record
-	// (iss-2608300927577163):
-	//
-	//   - Absence is the frontmatter NULL set ALONE, never isAbsentValue, which
-	//     also reads an empty inline list as absent. `grounds: []` parses as a
-	//     list, and validateStrict refuses a non-string grounds and SKIPS the
-	//     record; reading it as absence leaves that record lint-green and unread.
-	//   - A key whose own line carries no value may carry one on the indented lines
-	//     below it. The shared scanner is a same-line scanner, so the block map is
-	//     what sees it; capture builds a MAPPING from those lines and refuses the
-	//     record. What the block spells is never parsed — it is present, and it is
-	//     no scalar, which is the whole of the finding.
-	//   - The value is read the way the READER reads it (readerScalar), not through
-	//     issueScalar: capture's decodeScalar unquotes double quotes only, so a
-	//     single-quoted value reaches it with the quote still on and the token
-	//     `'pursued`. Stripping single quotes here parses a value the reader never
-	//     sees, and passes a record it refuses.
-	//   - An empty value AGREES with the reader, which skips a blank grounds
-	//     rather than parsing it. Putting "" to the parser would block a record
-	//     capture reads perfectly well.
-	groundsField, hasGrounds := r.fields["grounds"]
-	groundsValue := ""
-	if hasGrounds && !isNull(strings.TrimSpace(groundsField.value)) {
-		groundsValue = strings.TrimSpace(readerScalar(groundsField.value))
-	}
-	groundsFromBlock := false
-	if hasGrounds && groundsValue == "" && strings.TrimSpace(groundsField.value) == "" {
-		if block := r.blocks["grounds"]; block != "" {
-			groundsValue, groundsFromBlock = block, true
-		}
-	}
-	switch {
-	case groundsFromBlock:
-		add(groundsField.line, "grounds is spelled as an indented block; capture reads a block-spelled value as a mapping rather than a string, refuses the record and skips it — grounds is `<token>: <text>` on the key's own line")
-	case groundsValue != "":
-		if _, err := grounds.Parse(groundsValue); err != nil {
-			add(groundsField.line, err.Error()+"; capture refuses the record and skips it")
-		}
+	// The value's own spelling is deliberately not judged. Nothing parses it any
+	// more, so a well-formed one and a malformed one are equally unread, and a
+	// second finding about the grammar of a value that has no consumer would send
+	// the operator to fix the wrong thing. The remedy is the same either way:
+	// move it into the section.
+	if groundsField, present := r.fields["grounds"]; present {
+		add(groundsField.line, "grounds is in frontmatter; a frontmatter scalar is SET, so a later triage route overwrites the conjecture an earlier one recorded — grounds are appended as `- <token>: <text>` bullets under a `## Grounds` heading in the record body, and a frontmatter value is read by nothing")
 	}
 
 	// lapsed_at: required exactly when the category is lapse, and an RFC 3339

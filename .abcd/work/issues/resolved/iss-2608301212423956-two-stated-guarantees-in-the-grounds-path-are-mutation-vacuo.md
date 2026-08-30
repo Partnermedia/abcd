@@ -9,7 +9,6 @@ found_during: "itd-179-round-2-ruthless"
 found_at: "internal/core/intent/grounds.go"
 resolution: "both guards now have a test that goes red when the guard is short-circuited: a fresh-issue wontfix asserting ErrGroundsRefused on a non-declined token, and an unclosed-fence record asserting the read-back refusal and a byte-identical file"
 impact: internal
-grounds: "pursued: we expect a test that stays green when its guard is deleted to be measuring something other than the guard, and mutating each of these two turned both green tests red only after they were rewritten"
 resolved_by:
   intent: "itd-179"
 ---
@@ -50,3 +49,7 @@ unrelated reason is a guard that reports success while doing nothing. The
 builder's own note earlier in this cycle flagged exactly this as "the class to
 watch" after it happened twice. Every guard this branch adds should be proved
 by mutation before it is called covered.
+
+## Grounds
+
+- pursued: we expect a test that stays green when its guard is deleted to be measuring something other than the guard, and mutating each of these two turned both green tests red only after they were rewritten

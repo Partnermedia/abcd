@@ -91,7 +91,25 @@ func wontfixGrounds(repoRoot, raw, reason string) (g grounds.Grounds, redacted i
 	return g, redacted, degraded, nil
 }
 
-// groundsField renders the frontmatter entry a transition stamps. The value goes
-// through yamlScalar (a quoted string), never rawScalar: it is free prose whose
-// colons and spaces a bare scalar could not carry.
-func groundsField(g grounds.Grounds) kv { return kv{"grounds", g.String()} }
+// appendGrounds puts one entry in the record's append-only `## Grounds` body
+// section — core/grounds's record form, the same one the intent half writes
+// through, so the two record families cannot come to disagree about what an
+// entry is.
+//
+// It is an APPEND, and that is the whole of the fix for iss-2608301657354776.
+// The value used to be a single `grounds:` frontmatter scalar, and a scalar is
+// SET: promote recorded a conjecture, the resolve or wontfix that followed
+// overwrote it, and the promote's reasoning was gone from the record and from
+// everywhere — silently, with a success result, on the ledger's mainline
+// sequence. Refusing the second write was not open: all three routes REQUIRE
+// grounds, so refusing would have made a promoted issue impossible to resolve.
+// The earlier conjecture is precisely what a later reader checks the outcome
+// against, which is the argument the intent half already makes for the same
+// data.
+func appendGrounds(verb, content string, g grounds.Grounds) (string, error) {
+	updated, err := grounds.AppendToSection(content, g)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w: %v", verb, ErrGroundsRefused, err)
+	}
+	return updated, nil
+}

@@ -66,17 +66,20 @@ var Known = map[string]bool{
 	// what gates the move into resolved/ — but it must be a KNOWN property, or
 	// the reader drops every judged record as malformed.
 	"impact": true,
-	// grounds is the conjecture behind the triage that moved this record —
-	// `<token>: <text>` in the closed core/grounds vocabulary (spc-57). Stamped by
-	// promote, resolve and wontfix. It must be a KNOWN property or the reader
-	// drops every stamped record as malformed, which would make the three triage
-	// routes write records nothing can read.
-	"grounds": true,
-	// created/updated are no longer written, but legacy ledgers still carry
-	// them. Tolerate (accept, then drop) them on read so an existing committed
-	// ledger is not rejected as an unknown property; the reader ignores their
-	// values entirely.
-	"created": true, "updated": true,
+	// grounds/created/updated are no longer written, but a ledger written by an
+	// older abcd still carries them. Tolerate (accept, then drop) them on read so
+	// an existing committed ledger is not rejected as an unknown property; the
+	// reader ignores their values entirely.
+	//
+	// grounds moved to the record BODY, as the append-only `## Grounds` section
+	// core/grounds holds for both record families: a frontmatter scalar is SET,
+	// and setting is what let a resolve destroy the conjecture the promote before
+	// it recorded (iss-2608301657354776). Tolerating rather than refusing is
+	// deliberate — refusing makes the reader SKIP the record, which hides it from
+	// every capture surface while it still sits in the ledger. The gate that
+	// notices a misplaced key is the record lint's `record_schema`,
+	// which blocks a frontmatter `grounds:` and names the section, leaving the record readable meanwhile.
+	"grounds": true, "created": true, "updated": true,
 }
 
 // The closed enum value sets from issue.schema.json. capture validates a record's

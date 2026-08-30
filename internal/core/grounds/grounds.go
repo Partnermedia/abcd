@@ -7,8 +7,9 @@
 // ledger writer (core/capture), and the committed-record gate that reads them
 // back (core/lint) — and a vocabulary spelled three times is a vocabulary the
 // three can disagree about, which is how a value one surface writes becomes a
-// value another refuses. It imports only the standard library: no filesystem, no
-// transport, no record store.
+// value another refuses. It imports core/mdrecord — the record-body machinery the
+// `## Grounds` section is read and written through — and otherwise only the
+// standard library: no filesystem, no transport, no record store.
 //
 // The grounds name the CONJECTURE being acted on, not the route taken. "Planned
 // it because it is next" restates the decision; "planned it because we expect a
@@ -215,7 +216,7 @@ func Fold(text string) string {
 // each of them for its letters and that refusal would never be reached.
 //
 // Both halves of the feature inherit the floor from here — the writing verbs
-// through New, and the record reader through intent.ParseGrounds — which is why
+// through New, and the intent record reader through ParseSectionAboveFloor — which is why
 // it belongs at this one place: a floor the writer and the reader disagree about
 // is a gate reporting no recorded grounds about a record that visibly carries
 // one.

@@ -567,9 +567,15 @@ func TestCapturePromoteMissingGroundsExit2(t *testing.T) {
 	}
 }
 
-// TestCaptureGroundsReachTheRecord: the wired flag actually stamps, on all three
+// TestCaptureGroundsReachTheRecord: the wired flag actually records, on all three
 // triage routes, and wontfix derives its `declined:` grounds from the reason it
 // already takes.
+//
+// It asserts the BULLET in the record body, which is where grounds live: a
+// frontmatter scalar is set, and setting is what let one route overwrite
+// another's conjecture (iss-2608301657354776). The end-to-end path is what this
+// test is for — a writer that appended somewhere the record's own section reader
+// cannot see would still satisfy the core tests.
 func TestCaptureGroundsReachTheRecord(t *testing.T) {
 	repo := t.TempDir()
 	t.Chdir(repo)
@@ -610,20 +616,20 @@ func TestCaptureGroundsReachTheRecord(t *testing.T) {
 
 	promoted := mint("an observation worth graduating into an intent")
 	runCLI(t, "capture", "promote", promoted, "--grounds", cliGrounds)
-	if !strings.Contains(readRecord(promoted), "grounds: \""+cliGrounds+"\"") {
-		t.Fatalf("promote did not stamp the grounds:\n%s", readRecord(promoted))
+	if !strings.Contains(readRecord(promoted), "\n## Grounds\n\n- "+cliGrounds+"\n") {
+		t.Fatalf("promote did not record the grounds as a body bullet:\n%s", readRecord(promoted))
 	}
 
 	resolved := mint("an observation that will be fixed outright")
 	runCLI(t, "capture", "resolve", resolved, "fixed", "--impact", "fix", "--grounds", cliGrounds)
-	if !strings.Contains(readRecord(resolved), "grounds: \""+cliGrounds+"\"") {
-		t.Fatalf("resolve did not stamp the grounds:\n%s", readRecord(resolved))
+	if !strings.Contains(readRecord(resolved), "\n## Grounds\n\n- "+cliGrounds+"\n") {
+		t.Fatalf("resolve did not record the grounds as a body bullet:\n%s", readRecord(resolved))
 	}
 
 	declined := mint("an observation that will not be acted on")
 	runCLI(t, "capture", "wontfix", declined, "out of scope for this cycle")
-	if !strings.Contains(readRecord(declined), "grounds: \"declined: out of scope for this cycle\"") {
-		t.Fatalf("wontfix did not derive its declined grounds:\n%s", readRecord(declined))
+	if !strings.Contains(readRecord(declined), "\n## Grounds\n\n- declined: out of scope for this cycle\n") {
+		t.Fatalf("wontfix did not derive its declined grounds as a body bullet:\n%s", readRecord(declined))
 	}
 }
 

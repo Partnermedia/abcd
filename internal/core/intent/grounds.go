@@ -6,32 +6,24 @@ package intent
 // had no home and evaporated at the gate. It lives on the intent record because
 // the conjecture is the intent's, and the gate that reads it takes an itd-N.
 //
-// The vocabulary and the grammar are core/grounds's, held once for the three
-// writers; what this file owns is the record form — one top-level bullet under
-// `## Grounds` — and the append that puts an entry there. It borrows the section
-// and bullet machinery claims.go already owns (sectionLineRangeIn, maskLines,
-// conditionBlocks), so a fenced example or a bullet parked in an HTML comment is
-// no more a recorded ground than it is a scope condition.
+// The vocabulary, the grammar and the RECORD FORM are all core/grounds's, held
+// once for both record families: the same `## Grounds` section, the same
+// append-only bullet, the same reader. What this file owns is the intent half of
+// the write — which record a ground lands on, that shipped and superseded ones
+// take none, the redaction, and the lock the append runs under.
 
 import (
 	"fmt"
 	"path/filepath"
-	"regexp"
-	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/grounds"
-	"github.com/intentdriven/abcd/internal/core/mdrecord"
 	"github.com/intentdriven/abcd/internal/core/recordid"
 )
 
-// GroundsHeading is the section an intent record carries its grounds under. It
-// is spelled once: the writer creates it, the reader locates it, and the
-// readiness gate names it in a remedy.
-const GroundsHeading = "Grounds"
-
-// groundsHeadingRe matches the `## Grounds` heading at any heading depth, on the
-// mechanismHeadingRe pattern.
-var groundsHeadingRe = regexp.MustCompile(`^#{1,6}\s+` + GroundsHeading + `\s*$`)
+// GroundsHeading is the section an intent record carries its grounds under —
+// core/grounds's one spelling, so the intent half and the ledger half name the
+// same section.
+const GroundsHeading = grounds.Heading
 
 // GroundsResult is the outcome of one RecordGrounds call. Redacted counts the
 // spans the redactor rewrote before the write, so a surface can SAY the text was
@@ -111,9 +103,9 @@ func RecordGrounds(repoRoot, intentID string, g grounds.Grounds) (GroundsResult,
 			return err
 		}
 		content := string(data)
-		updated := appendGroundsBullet(content, validated)
-		if err := groundsWriteIsReadable(content, updated, validated); err != nil {
-			return err
+		updated, err := grounds.AppendToSection(content, validated)
+		if err != nil {
+			return fmt.Errorf("intent: %w", err)
 		}
 		if err := writeIntentFile(abs, it.Path, updated); err != nil {
 			return err
@@ -133,123 +125,15 @@ func RecordGrounds(repoRoot, intentID string, g grounds.Grounds) (GroundsResult,
 	}, nil
 }
 
-// groundsWriteIsReadable refuses a write that would leave the record LESS
-// readable than it was (iss-2608300927577980).
+// ParseGrounds reads an intent record's recorded grounds, in the order they were
+// written — core/grounds's section reader, held to the SUBSTANCE FLOOR.
 //
-// A grounds text is operator prose, and prose can carry an unclosed `<!--`. The
-// comment mask then runs to end of file: the entry disappears, every line after
-// it disappears with it — the scope-conditions and mechanism claims included —
-// and the result still reports success, so nothing anywhere says the record was
-// blinded. The check is two questions asked of the bytes about to be written,
-// before they are written, rather than a pattern ban on the text: a text that
-// leaves a comment open, and a write whose entry does not actually arrive.
-//
-// The count question subsumes more than the comment one: a bullet swallowed by a
-// fence, by a mask this reader does not yet model, or by anything else, fails to
-// raise the count and is refused for the same reason. The comment question is
-// still asked separately because it is the one whose remedy the caller can act
-// on — "close the comment, or drop the marker" — and a refusal that can name the
-// cause is worth more than one that can only say the entry did not arrive.
-func groundsWriteIsReadable(before, after string, g grounds.Grounds) error {
-	if mdrecord.OpensComment(g.Bullet()) {
-		return fmt.Errorf(
-			"intent: the grounds text leaves an HTML comment open (`<!--` with no `-->`); "+
-				"written, it would hide the entry and every line below it from every reader of this record — "+
-				"close the comment or drop the marker; nothing written (text: %q)", g.Text)
-	}
-	if want, got := len(ParseGrounds(before))+1, len(ParseGrounds(after)); got != want {
-		return fmt.Errorf(
-			"intent: the appended grounds entry does not read back (%d entries after the append, expected %d); "+
-				"nothing written", got, want)
-	}
-	return nil
-}
-
-// ParseGrounds reads a record's recorded grounds, in the order they were
-// written. It is the single reader every consumer asks — the readiness gate and
-// the result count alike — so no two of them can disagree about what an entry is.
-//
-// A bullet that does not parse is not an entry: it is prose under the heading,
-// and reporting it as a malformed ground would put a gate verdict on a sentence
-// somebody wrote for a human. What the gate asks is whether at least one
-// WELL-FORMED entry is there.
-//
-// Well-formed here includes the SUBSTANCE FLOOR, so the reader holds a
-// hand-typed bullet to exactly what the writer holds a supplied one to. Reading
-// the grammar alone let `- pursued: yes` satisfy the readiness check, which
-// claims the floor and would then have been enforcing only a colon
-// (iss-2608300930057882). This is the one reader that applies it, and it can:
-// the value it judges was written by this package's own writer, not stamped from
-// a wontfix reason whose contract is merely non-empty — which is why the ledger's
-// reader and its gate deliberately stop at the grammar.
+// The floor applies on this side and not on the ledger's: the value it judges
+// was written by this package's own writer, which validated it, whereas a
+// wontfix stamps its grounds from a reason whose contract is merely non-empty.
+// The readiness gate CLAIMS the floor, so a reader that did not apply it would
+// let `- pursued: yes` satisfy a check that was then enforcing only a colon
+// (iss-2608300930057882).
 func ParseGrounds(content string) []grounds.Grounds {
-	lines := strings.Split(content, "\n")
-	mask := mdrecord.Mask(lines)
-	start, end, ok := mdrecord.SectionLineRangeIn(lines, mask, groundsHeadingRe)
-	if !ok {
-		return nil
-	}
-	var out []grounds.Grounds
-	for _, b := range mdrecord.BulletBlocks(lines, mask, start, end) {
-		g, err := grounds.Parse(groundsBlockText(lines, b))
-		if err != nil {
-			continue
-		}
-		if grounds.ValidateText(g.Text) != nil {
-			continue
-		}
-		out = append(out, g)
-	}
-	return out
-}
-
-// groundsBlockText folds one top-level bullet — and the continuation lines
-// wrapped into it — back into the single line the grammar is written on.
-func groundsBlockText(lines []string, b mdrecord.BulletBlock) string {
-	parts := make([]string, 0, b.End-b.Start)
-	for i := b.Start; i < b.End; i++ {
-		ln := strings.TrimRight(lines[i], "\r")
-		if i == b.Start {
-			ln = mdrecord.TrimBulletPrefix(ln)
-		}
-		parts = append(parts, ln)
-	}
-	return grounds.Fold(strings.Join(parts, " "))
-}
-
-// appendGroundsBullet puts one entry at the end of the record's `## Grounds`
-// section, creating the section at end of file when it is absent. It mirrors
-// appendToAuditNotes, including the trailing link-reference peel: a `[ref]: url`
-// definition parked at the end of a section belongs below its prose, and
-// appending under it would detach the entry from the section it belongs to.
-func appendGroundsBullet(content string, g grounds.Grounds) string {
-	lines := strings.Split(content, "\n")
-	mask := mdrecord.Mask(lines)
-	start, end, ok := mdrecord.SectionLineRangeIn(lines, mask, groundsHeadingRe)
-	if !ok {
-		body := strings.TrimRight(content, "\n")
-		return body + "\n\n## " + GroundsHeading + "\n\n" + g.Bullet() + "\n"
-	}
-	section := append([]string{}, lines[start:end]...)
-	for len(section) > 0 && strings.TrimSpace(section[len(section)-1]) == "" {
-		section = section[:len(section)-1]
-	}
-	trailingRefs := mdrecord.PeelTrailingLinkRefs(&section)
-	rebuilt := make([]string, 0, len(lines)+6)
-	rebuilt = append(rebuilt, lines[:start]...)
-	rebuilt = append(rebuilt, section...)
-	if len(section) > 0 && strings.TrimSpace(section[len(section)-1]) != "" &&
-		!mdrecord.IsTopLevelBullet(strings.TrimRight(section[len(section)-1], "\r")) {
-		// Prose immediately above the first entry needs its blank line; a run of
-		// bullets is one list and must not be split by one.
-		rebuilt = append(rebuilt, "")
-	}
-	rebuilt = append(rebuilt, g.Bullet())
-	if len(trailingRefs) > 0 {
-		rebuilt = append(rebuilt, "")
-		rebuilt = append(rebuilt, trailingRefs...)
-	}
-	rebuilt = append(rebuilt, "")
-	rebuilt = append(rebuilt, lines[end:]...)
-	return strings.Join(rebuilt, "\n")
+	return grounds.ParseSectionAboveFloor(content)
 }

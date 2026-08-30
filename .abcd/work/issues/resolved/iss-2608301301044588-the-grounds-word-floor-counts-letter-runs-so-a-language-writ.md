@@ -9,7 +9,6 @@ found_during: "itd-179-round-3-ruthless"
 found_at: "internal/core/grounds/grounds.go"
 resolution: "the substance floor's unit is a word where the script separates words and a LETTER where it does not: textUnits counts one unit per letter-run in a spaced script and one per letter of a named scriptio-continua script (Han, Hiragana, Katakana, Thai, Lao, Khmer, Myanmar, Tibetan, Javanese), so a Chinese or Japanese conjecture — and mark-light text in the other seven, which prose in those scripts reached only by the accident of its Mn marks breaking the runs — clears the floor the writer and the reader both inherit from ValidateText. The letter test is load-bearing: a Unicode script table carries its script's digits, punctuation and marks too, so twenty Thai digits or twenty Tibetan tsheg still count nothing, as do zero-width padding and ideographic commas. The refusal asks for letters only when every counted unit is one, so a text carrying a word alongside an ideograph is still told to add a word."
 impact: fix
-grounds: "pursued: we expect a floor expressed over the text's letters rather than over its inter-word spaces to admit every script without re-opening the padding cases; appending one ideograph to a single long word, or one kanji to twenty zero-width spaces, would still clear it if that were wrong"
 resolved_by:
   intent: "itd-179"
 ---
@@ -70,3 +69,7 @@ Its added detail, which raises the severity of the consequence:
 
 Verified not to be a wedge on this corpus: all 10 populated records are Latin
 script and the measured figures are identical before and after the floor.
+
+## Grounds
+
+- pursued: we expect a floor expressed over the text's letters rather than over its inter-word spaces to admit every script without re-opening the padding cases; appending one ideograph to a single long word, or one kanji to twenty zero-width spaces, would still clear it if that were wrong

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/changelog"
+	"github.com/intentdriven/abcd/internal/core/grounds"
 	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
@@ -257,7 +258,7 @@ func Resolve(req ResolveRequest) (TransitionResult, error) {
 		return TransitionResult{}, fmt.Errorf(
 			"resolve: --shipped-in %q is not a release tag (want vMAJOR.MINOR.PATCH); nothing written", req.ShippedIn)
 	}
-	extras := []kv{{"impact", rawScalar(string(impact))}, groundsField(g)}
+	extras := []kv{{"impact", rawScalar(string(impact))}}
 	if req.ShippedIn != "" {
 		// rawScalar, like impact above: a plain string is double-quoted by
 		// yamlScalar, and the derivation reads the RAW scalar, so a quoted value
@@ -280,7 +281,7 @@ func Resolve(req ResolveRequest) (TransitionResult, error) {
 		extras = append(extras, kv{"resolved_by", members})
 	}
 	res, err := transition(req.RepoRoot, req.IssuesRoot, req.ID, "resolution", req.Resolution,
-		extras, StateResolved)
+		extras, &g, StateResolved)
 	if err != nil {
 		return TransitionResult{}, err
 	}
@@ -355,7 +356,7 @@ func Wontfix(req WontfixRequest) (TransitionResult, error) {
 		return TransitionResult{}, err
 	}
 	res, err := transition(req.RepoRoot, req.IssuesRoot, req.ID, "wontfix_reason", req.Reason,
-		[]kv{groundsField(g)}, StateWontfix)
+		nil, &g, StateWontfix)
 	if err != nil {
 		return TransitionResult{}, err
 	}
@@ -368,7 +369,7 @@ func Wontfix(req WontfixRequest) (TransitionResult, error) {
 
 // transition moves an open issue to target, setting the defining note field and
 // any extra frontmatter fields (e.g. resolved/'s impact) in one atomic write.
-func transition(repoRoot, issuesRoot, issID, field, note string, extra []kv, target State) (TransitionResult, error) {
+func transition(repoRoot, issuesRoot, issID, field, note string, extra []kv, g *grounds.Grounds, target State) (TransitionResult, error) {
 	rr, ir, err := resolveRoots(repoRoot, issuesRoot)
 	if err != nil {
 		return TransitionResult{}, err
@@ -416,6 +417,16 @@ func transition(repoRoot, issuesRoot, issID, field, note string, extra []kv, tar
 			} else {
 				newContent, err = setScalarField(newContent, f.key, f.val)
 			}
+			if err != nil {
+				return err
+			}
+		}
+		// The grounds entry is APPENDED to the body, not set in frontmatter, and
+		// it rides the same atomic write as the fields above. A record promoted
+		// before it was resolved carries both conjectures afterwards
+		// (iss-2608301657354776).
+		if g != nil {
+			newContent, err = appendGrounds(string(target), newContent, *g)
 			if err != nil {
 				return err
 			}

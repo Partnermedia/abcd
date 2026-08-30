@@ -2655,7 +2655,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	// flag's value placeholder and strips it from the prose, which printed
 	// `--grounds declined` and lost the word (iss-2608301212428844).
 	wontfixCmd.Flags().StringVar(&wontfixGrounds, "grounds", "",
-		"override the stamped grounds text (the token stays declined — a wontfix IS that non-action)")
+		"override the recorded grounds text (the token stays declined — a wontfix IS that non-action)")
 	captureCmd.AddCommand(wontfixCmd)
 
 	return captureCmd

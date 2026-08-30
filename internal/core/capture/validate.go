@@ -100,7 +100,7 @@ func validateStrict(fm map[string]any) error {
 	}
 
 	// Optional scalar strings.
-	for _, opt := range []string{"found_at", "lapsed_at", "details", "suggested_fix", "wontfix_reason", "resolution", "promoted_to", "grounds"} {
+	for _, opt := range []string{"found_at", "lapsed_at", "details", "suggested_fix", "wontfix_reason", "resolution", "promoted_to"} {
 		if v, present := fm[opt]; present {
 			if _, isStr := v.(string); !isStr {
 				return fmt.Errorf("%w: %q must be a string", ErrMalformedFrontmatter, opt)
@@ -122,24 +122,6 @@ func validateStrict(fm map[string]any) error {
 	if lapsedAt != "" && !issueschema.ValidLapsedAt(lapsedAt) {
 		return fmt.Errorf("%w: lapsed_at %q is not an RFC 3339 instant (want 2026-08-28T00:00:00Z)",
 			ErrMalformedFrontmatter, lapsedAt)
-	}
-
-	// grounds is optional but, when written, is checked against the ONE shared
-	// vocabulary in core/grounds rather than a private copy — the same set the
-	// record lint gates on, so the reader and the committed-ledger gate can never
-	// disagree about what a legal value is.
-	//
-	// The GRAMMAR and the VOCABULARY are checked here; the substance floor is not.
-	// The floor is an input gate at the writing verb, over what a caller supplies;
-	// a wontfix stamps its grounds from a reason whose own contract is merely
-	// non-empty, and applying the floor here would make the reader skip records the
-	// ledger has always accepted.
-	if v, present := fm["grounds"]; present {
-		if s, _ := v.(string); strings.TrimSpace(s) != "" {
-			if _, err := grounds.Parse(s); err != nil {
-				return fmt.Errorf("%w: %v", ErrMalformedFrontmatter, err)
-			}
-		}
 	}
 
 	if v, present := fm["promoted_to"]; present {
@@ -308,7 +290,7 @@ func issueFromFrontmatter(fm map[string]any, status State, path, body string) Is
 		FoundAt:       asString(fm["found_at"]),
 		LapsedAt:      asString(fm["lapsed_at"]),
 		PromotedTo:    asString(fm["promoted_to"]),
-		Grounds:       asString(fm["grounds"]),
+		Grounds:       groundsEntries(body),
 		Resolution:    asString(fm["resolution"]),
 		WontfixReason: asString(fm["wontfix_reason"]),
 		Status:        status,
@@ -340,4 +322,24 @@ func asStrList(v any) []string {
 		return nil
 	}
 	return l
+}
+
+// groundsEntries reads the record's `## Grounds` section — core/grounds's own
+// reader, the same one the intent half asks, so a bullet one writer appends is
+// an entry the other finds.
+//
+// It stops at the GRAMMAR and does not apply the substance floor. A wontfix
+// stamps its grounds from a reason whose own contract is merely non-empty, so a
+// floor here would drop entries the ledger has always accepted and leave a
+// surface reporting no recorded grounds about a record that visibly carries one.
+func groundsEntries(body string) []string {
+	entries := grounds.ParseSection(body)
+	if len(entries) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(entries))
+	for _, g := range entries {
+		out = append(out, g.String())
+	}
+	return out
 }

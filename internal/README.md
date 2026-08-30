@@ -25,9 +25,10 @@ plugin surface, and a future MCP server share one engine.
   carries, and a record they disagree about is one that sits in the ledger unread
   by every surface. It is not inside `core/capture` because that package's own
   tests import `core/lint`, so a lint importing capture back is an import cycle.
-- **`core/grounds/`** — the recorded-grounds vocabulary, and nothing else: the
+- **`core/grounds/`** — the recorded-grounds vocabulary and its record form: the
   three values (`pursued`, `deferred`, `declined`), the `<token>: <text>` grammar,
-  and the substance floor that refuses a degenerate text. A leaf on the
+  the substance floor that refuses a degenerate text, and the append-only
+  `## Grounds` section both record families accumulate entries in. A leaf on the
   `core/issueschema` precedent, because three sites record grounds — the intent
   record writer (`core/intent`), the ledger writer (`core/capture`), and the
   committed-record gate that reads them back (`core/lint`) — and a vocabulary
