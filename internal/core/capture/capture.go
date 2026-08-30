@@ -276,6 +276,14 @@ var (
 	ErrAllocatorContention = errors.New("allocator contention")
 	// ErrChecksumMismatch means a concurrent edit occurred during a transition.
 	ErrChecksumMismatch = errors.New("checksum mismatch")
+	// ErrGroundsRefused means the triage's grounds argument was absent, outside
+	// the closed vocabulary, malformed, or below the substance floor. It is one
+	// sentinel for every one of those because they are one thing to a caller —
+	// the argument was not usable and nothing was written — and a surface that
+	// distinguished them by exit code would teach a script that a misspelled
+	// token is a different KIND of failure from a missing one
+	// (iss-2608300930057882).
+	ErrGroundsRefused = errors.New("grounds refused")
 	// ErrInvariantViolation means frontmatter passed the schema but violates a
 	// folder-status cross-field invariant.
 	ErrInvariantViolation = errors.New("invariant violation")

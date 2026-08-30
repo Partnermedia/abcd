@@ -1602,6 +1602,7 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			var recorded *intent.GroundsResult
 			if strings.TrimSpace(readyGrounds) != "" {
 				g, perr := grounds.Parse(readyGrounds)
 				if perr != nil {
@@ -1611,18 +1612,29 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 				if rerr != nil {
 					return &exitError{Code: 2, Msg: "abcd intent ready: " + rerr.Error()}
 				}
-				// Redaction alters what the caller reasoned, so it is never silent.
-				if rec.Redacted > 0 {
-					fmt.Fprintf(cmd.ErrOrStderr(),
-						"abcd: redacted %d span(s) from the grounds text before writing (home paths and identifiers are never committed)\n",
-						rec.Redacted)
-				}
+				recorded = &rec
+				// The receipt is emitted HERE, before the gate is consulted. A
+				// structural fault in the gate exits 2 carrying no result at all, and
+				// a caller who never learns the write happened retries and appends a
+				// second entry to a record that is append-only by design
+				// (iss-2608300930057882). In --json the receipt goes to stderr, so
+				// stdout stays a single machine payload and the news still survives a
+				// fault that emits no envelope.
+				emitGroundsReceipt(cmd, *asJSON, rec)
 			}
 			res, err := intent.Ready(cwd, args[0])
 			if err != nil {
 				return &exitError{Code: 2, Msg: "abcd intent ready: " + err.Error()}
 			}
-			if rerr := render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+			// With the flag, the payload is an envelope carrying BOTH halves: the
+			// write the flag performed and the report the verb makes. Without it the
+			// payload is the readiness result unchanged, so no existing consumer's
+			// shape moves under it.
+			var payload any = res
+			if recorded != nil {
+				payload = readyGroundsEnvelope{Grounds: recorded, Ready: res}
+			}
+			if rerr := render(cmd.OutOrStdout(), *asJSON, payload, func(w io.Writer) {
 				verdict := "READY"
 				if !res.Ready {
 					verdict = "NOT READY"
@@ -2542,7 +2554,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 				ShippedIn: resolveShippedIn, Grounds: resolveGrounds,
 			})
 			if err != nil {
-				return err
+				return groundsUsageError("resolve", err)
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				fmt.Fprintf(w, "%s  %s -> %s — %s%s\n", res.ID, res.FromStatus, res.ToStatus, termsafe.Sanitize(res.Path), resolvedByNote(res.ResolvedBy))
@@ -2591,7 +2603,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 				RepoRoot: cwd, ID: args[0], LinkIntent: promoteIntent, Grounds: promoteGrounds,
 			})
 			if err != nil {
-				return err
+				return groundsUsageError("promote", err)
 			}
 			emitMintWarning(cmd, res.MintWarning)
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
@@ -2631,7 +2643,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 				RepoRoot: cwd, ID: args[0], Reason: args[1], Grounds: wontfixGrounds,
 			})
 			if err != nil {
-				return err
+				return groundsUsageError("wontfix", err)
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				fmt.Fprintf(w, "%s  %s -> %s — %s\n", res.ID, res.FromStatus, res.ToStatus, termsafe.Sanitize(res.Path))
@@ -2644,6 +2656,43 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	captureCmd.AddCommand(wontfixCmd)
 
 	return captureCmd
+}
+
+// readyGroundsEnvelope is `abcd intent ready --grounds --json`'s payload: the
+// grounds write beside the readiness report.
+//
+// It exists because the plugin surface tells the host to report the redaction
+// count, and the redaction-is-never-silent promise cannot be kept by a stderr
+// line on the plane a machine consumer reads. Without the flag the payload stays
+// the bare ReadyResult, so the envelope appears exactly when there is a write to
+// describe (iss-2608300930057882).
+//
+// There is deliberately no `degraded` member. The intent-side redactor is
+// FAIL-CLOSED: a scanner that cannot be built, or whose pattern set a per-repo
+// override weakened, refuses the write and exits 2 rather than writing under a
+// weakened detector. The ledger's redactor degrades and reports, and carries the
+// member for it; here a degraded scanner is an error, and a member that could
+// only ever be empty would be a second promise nothing keeps.
+type readyGroundsEnvelope struct {
+	Grounds *intent.GroundsResult `json:"grounds"`
+	Ready   intent.ReadyResult    `json:"ready"`
+}
+
+// emitGroundsReceipt says that a record was written, on the plane the caller can
+// still read after a later fault: stdout in text mode (before the report), stderr
+// in --json mode (where stdout must stay a single machine payload).
+func emitGroundsReceipt(cmd *cobra.Command, asJSON bool, rec intent.GroundsResult) {
+	w := cmd.OutOrStdout()
+	if asJSON {
+		w = cmd.ErrOrStderr()
+	}
+	// The path is a corpus filename, attacker-shapeable in a hostile clone.
+	fmt.Fprintf(w, "abcd intent ready — recorded grounds on %s (%d entries)\n",
+		termsafe.Sanitize(rec.Path), rec.Entries)
+	if rec.Redacted > 0 {
+		fmt.Fprintf(w, "  redacted %d span(s) before writing (home paths and identifiers are never committed)\n",
+			rec.Redacted)
+	}
 }
 
 // groundsFlagUsage is the one spelling of the argument's help text, so promote
@@ -2659,6 +2708,22 @@ const groundsFlagUsage = "REQUIRED — the conjecture being acted on, not the ro
 // cobra-required, which would break the tree's no-required-flags invariant
 // (TestLiveTreeMarksNoFlagRequired): the requirement is semantic, not a usage
 // annotation.
+// groundsUsageError maps a core grounds refusal to exit 2, leaving every other
+// failure on its existing path.
+//
+// A MISSING --grounds exited 2 (the flag check above) while a MALFORMED one
+// exited 1, so a caller distinguishing usage errors from real failures learned
+// the wrong thing from the same flag (iss-2608300930057882). Both are one thing:
+// the argument was not usable and nothing was written. The core carries one
+// sentinel for the whole class, so this needs no second copy of the vocabulary,
+// the grammar, or the floor.
+func groundsUsageError(verb string, err error) error {
+	if errors.Is(err, capture.ErrGroundsRefused) {
+		return &exitError{Code: 2, Msg: "abcd capture " + verb + ": " + scrubPaths(err)}
+	}
+	return err
+}
+
 func requireGroundsFlag(verb, value string) error {
 	if strings.TrimSpace(value) != "" {
 		return nil

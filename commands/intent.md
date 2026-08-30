@@ -110,11 +110,34 @@ then reports the gate exactly as it would without it: the report is unchanged by
 the flag, the exit code is the gate's own, and a failed write exits 2 rather than
 borrowing the gate's exit 1.
 
+**With the flag, `--json` emits an envelope, not the bare readiness result:**
+
+```json
+{ "grounds": { "intent_id": "…", "path": "…", "token": "pursued",
+               "text": "…", "entries": 1, "redacted": 0 },
+  "ready":   { "…the usual ReadyResult…" } }
+```
+
+Read the verdict from `ready`, and report `grounds.path` and `grounds.entries`
+so the user knows a record was written. **Report `grounds.redacted` whenever it
+is non-zero** — the text is scanned before it is committed, and the user needs to
+know their wording was changed. There is no `degraded` member here: a scanner
+that cannot be built, or whose pattern set a per-repo override weakened, refuses
+the write at exit 2 rather than writing under a weakened detector. Without the
+flag the payload is the readiness result unchanged.
+
+The write is also announced before the gate runs — on stdout in the text render,
+on stderr under `--json` — as `recorded grounds on <path> (<n> entries)`. Relay
+it. Recording is append-only, so a caller who retries after missing the receipt
+adds a second entry rather than replacing the first.
+
 **The gate refuses a planned record that carries no entry.** The `grounds` check
 is the seventh and last row of the report, and its remedy names this exact
 command. Terminal buckets are exempt on the same rule the claim checks follow:
 `shipped/` and `superseded/` records are never backfilled, and a discipline
-record carries no conjecture of its own.
+record carries no conjecture of its own. The write enforces that rule too: this
+verb REFUSES a `shipped/` or `superseded/` record, so the exemption stays a true
+statement about the corpus.
 
 **Ask for the expectation and its falsifier.** "Planned it because it is next"
 restates the decision and records nothing; "planned it because we expect a
@@ -122,13 +145,13 @@ stamped identity to survive rewording, which nothing else does" is a conjecture
 somebody can later find wrong. abcd refuses only the degenerate texts — empty,
 too short, or the vocabulary word repeated back — and cannot tell a conjecture
 from a restatement. That part is yours: put the question to the human and write
-down their answer, not a paraphrase of the route taken.
+down their answer, not a paraphrase of the route taken. A hand-typed bullet is
+held to the same floor: `- pursued: yes` is not an entry, and the gate reports
+the record as carrying none.
 
 Recording is append-only: a second decision on one record adds an entry beside
 the first, because the earlier conjecture is what a later reader checks the
-outcome against. Report `redacted` from the JSON whenever it is non-zero — the
-text is scanned before it is committed, and the user needs to know their wording
-was changed.
+outcome against.
 
 ## The claim recording gradient
 

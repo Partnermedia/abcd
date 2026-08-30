@@ -29,17 +29,18 @@ import (
 func requireGrounds(repoRoot, verb, raw string) (g grounds.Grounds, redacted int, degraded string, err error) {
 	if strings.TrimSpace(raw) == "" {
 		return grounds.Grounds{}, 0, "", fmt.Errorf(
-			"%s: grounds are required (nothing written) — say why this is being pursued as "+
-				"`<pursued|deferred|declined>: <the conjecture being acted on>`, not the route taken", verb)
+			"%s: %w — grounds are required (nothing written); say why this is being pursued as "+
+				"`<pursued|deferred|declined>: <the conjecture being acted on>`, not the route taken",
+			verb, ErrGroundsRefused)
 	}
 	parsed, err := grounds.Parse(raw)
 	if err != nil {
-		return grounds.Grounds{}, 0, "", fmt.Errorf("%s: %w; nothing written", verb, err)
+		return grounds.Grounds{}, 0, "", fmt.Errorf("%s: %w: %v; nothing written", verb, ErrGroundsRefused, err)
 	}
 	redText, n, deg := redactLedgerText(repoRoot, parsed.Text)
 	validated, err := grounds.New(parsed.Token, redText)
 	if err != nil {
-		return grounds.Grounds{}, 0, "", fmt.Errorf("%s: %w; nothing written", verb, err)
+		return grounds.Grounds{}, 0, "", fmt.Errorf("%s: %w: %v; nothing written", verb, ErrGroundsRefused, err)
 	}
 	return validated, n, deg, nil
 }
@@ -64,7 +65,8 @@ func wontfixGrounds(repoRoot, raw, reason string) (g grounds.Grounds, redacted i
 		if folded == "" {
 			// transition refuses an empty reason on its own; this only guards the
 			// case where redaction consumed the whole of it.
-			return grounds.Grounds{}, 0, "", fmt.Errorf("wontfix: the reason is empty after redaction; nothing written")
+			return grounds.Grounds{}, 0, "", fmt.Errorf(
+				"wontfix: %w: the reason is empty after redaction; nothing written", ErrGroundsRefused)
 		}
 		return grounds.Grounds{Token: grounds.Declined, Text: folded}, n, deg, nil
 	}
@@ -74,8 +76,8 @@ func wontfixGrounds(repoRoot, raw, reason string) (g grounds.Grounds, redacted i
 	}
 	if g.Token != grounds.Declined {
 		return grounds.Grounds{}, 0, "", fmt.Errorf(
-			"wontfix: grounds must be `declined: <text>` (a wontfix IS the non-action that value names), got %q; nothing written",
-			g.Token)
+			"wontfix: %w: grounds must be `declined: <text>` (a wontfix IS the non-action that value names), got %q; nothing written",
+			ErrGroundsRefused, g.Token)
 	}
 	return g, redacted, degraded, nil
 }

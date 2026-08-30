@@ -70,6 +70,18 @@ func RecordGrounds(repoRoot, intentID string, g grounds.Grounds) (GroundsResult,
 	if !ok {
 		return GroundsResult{}, fmt.Errorf("intent: %s not found in any bucket", intentID)
 	}
+	// Population is forward-only, and the readiness gate SAYS so: it exempts
+	// shipped/ and superseded/ records from the grounds check on the ground that
+	// they are never backfilled. A writer that backfills them anyway makes that
+	// exemption a false statement about the corpus, and an absent stamp stops
+	// being information (iss-2608300930057882). The rule is enforced where the
+	// write happens, not only claimed where the report is rendered.
+	switch it.Bucket {
+	case BucketShipped, BucketSuperseded:
+		return GroundsResult{}, fmt.Errorf(
+			"intent: %s is %s — grounds are recorded at the moment of pursuit and %s records are never backfilled; nothing written",
+			it.ID, it.Bucket, it.Bucket)
+	}
 	redText, redacted, err := redactIntentText(repoRoot, g.Text)
 	if err != nil {
 		return GroundsResult{}, err
@@ -145,6 +157,15 @@ func groundsWriteIsReadable(before, after string, g grounds.Grounds) error {
 // and reporting it as a malformed ground would put a gate verdict on a sentence
 // somebody wrote for a human. What the gate asks is whether at least one
 // WELL-FORMED entry is there.
+//
+// Well-formed here includes the SUBSTANCE FLOOR, so the reader holds a
+// hand-typed bullet to exactly what the writer holds a supplied one to. Reading
+// the grammar alone let `- pursued: yes` satisfy the readiness check, which
+// claims the floor and would then have been enforcing only a colon
+// (iss-2608300930057882). This is the one reader that applies it, and it can:
+// the value it judges was written by this package's own writer, not stamped from
+// a wontfix reason whose contract is merely non-empty — which is why the ledger's
+// reader and its gate deliberately stop at the grammar.
 func ParseGrounds(content string) []grounds.Grounds {
 	lines := strings.Split(content, "\n")
 	mask := maskLines(lines)
@@ -156,6 +177,9 @@ func ParseGrounds(content string) []grounds.Grounds {
 	for _, b := range conditionBlocks(lines, mask, start, end) {
 		g, err := grounds.Parse(groundsBlockText(lines, b))
 		if err != nil {
+			continue
+		}
+		if grounds.ValidateText(g.Text) != nil {
 			continue
 		}
 		out = append(out, g)
