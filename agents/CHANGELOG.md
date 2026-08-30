@@ -12,6 +12,30 @@ over the brief's earlier `1.0.0`-at-close expectation). The four M6 synthesis
 agents below entered at `0.1.0`, wired to their `abcd disembark` verbs and
 unmeasured; `lifeboat-oracle` has since become `lifeboat-reviewer` at `0.1.1`.
 
+## 0.3.0 — 2026-08-30 (itd-181 / spc-59 — scope-condition dispositions)
+
+### intent-auditor 0.3.0
+
+The verdict grows a fourth judgement surface: `scope_conditions`, one disposition
+per scope condition the intent records, keyed to the `cond-…` identity spc-55
+mints rather than to the condition's wording. The definition gains the
+`scope_conditions` input note (identities are host-supplied and echoed verbatim,
+never invented), a four-value rubric — `survived`, `narrowed`, `falsified`,
+`untested` — framed as harshly as the acceptance rubric (`untested` is the
+correct disposition for a vacuum, not `survived`), the extended output block, and
+two numbered rules naming what the ingest refuses: exact coverage of the supplied
+identities in both directions, the closed value set, a stated `narrowing` on
+`narrowed`, and cited evidence on everything but `untested`.
+
+MINOR in the `0.x` band: the output contract is extended rather than reshaped,
+and a verdict for an intent that records no conditions — every intent shipped
+before the identity mint existed — stays valid unchanged. The Go ingest is what
+actually rejects a bad block (`internal/core/intent/audit.go`), and a lockstep
+test decodes this definition's own output blocks into the struct the ingest
+decodes, so the two cannot drift apart silently.
+Unmeasured — no calibration corpus exists for disposition judgement, and no
+self-improvement pre-flight was run.
+
 ## 0.1.0 — 2026-08-30 (itd-188 / spc-66 — the ledger scribe)
 
 ### scribe 0.1.0

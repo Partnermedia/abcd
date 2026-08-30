@@ -232,6 +232,14 @@ it (the one-sided-link remedy `ready` reports). Report the linked pair.
 Ingest is fail-closed: report the returned status (`ingested`, `dead_letter`,
 or `noop`) and, for `dead_letter`, the reason.
 
+The verdict also disposes the intent's scope conditions, keyed to the `cond-…`
+identity each one carries: every condition receives exactly one of `survived`,
+`narrowed`, `falsified` or `untested`, and a `narrowed` condition states what it
+now holds under. Coverage is exact in both directions — a conditionless intent
+takes an empty block, a conditioned one a full one — so a partial or invented
+disposition quarantines the whole payload rather than applying half of it.
+Report the returned split alongside the acceptance rollup.
+
 **Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
 provisions the binary into the plugin root, so this is the rung that fires for a
 plugin user. If that path does not exist, try `abcd` on `PATH`; if that fails
