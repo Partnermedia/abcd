@@ -157,11 +157,55 @@ func AppendToRecord(content string, g Grounds) (string, error) {
 	head, body := frontmatter.Split(content)
 	updated := appendBullet(body, g)
 	if want, got := len(ParseSection(body))+1, len(ParseSection(updated)); got != want {
-		return "", fmt.Errorf(
-			"the appended grounds entry does not read back (%d entries after the append, expected %d); "+
-				"nothing written", got, want)
+		return "", readBackRefusal(body, got, want)
 	}
 	return head + updated, nil
+}
+
+// readBackRefusal explains an entry that did not read back. The count question
+// is deliberately broad — a bullet swallowed by anything at all fails to raise
+// the count — so the bare count is the honest thing to say when nothing more is
+// known. When something more IS known, saying only the count misattributes:
+// naming the appended entry sends the operator to rewrite the one part of the
+// record that cannot be at fault, and this cycle's standing defect class is
+// exactly that (iss-2608301803423101).
+//
+// What is known is what Mask already had to work out. An opener nothing closes
+// runs to end of file, so every line below it — including a line appended at the
+// end — is masked, and the reader skips it. The opener is in the record AS READ,
+// before the append: a grounds bullet cannot be one, because a comment opener in
+// its text is refused above and a fence delimiter must start its line, which a
+// bullet's `- ` prefix rules out. So the line this names is the operator's to
+// close, and the grounds text is not.
+//
+// The line is counted from the start of the BODY, and the opener's own text is
+// quoted beside it. A file-relative number would be wrong: the triage verbs
+// append after setting their note field, so the content in hand carries
+// frontmatter lines the record on disk — the one the operator opens, since
+// nothing is written — does not. The body is what those writes leave alone, so a
+// body-relative count is the number that holds, and the quoted text is what the
+// operator can search for either way.
+func readBackRefusal(body string, got, want int) error {
+	lines := strings.Split(body, "\n")
+	if i, flag, ok := mdrecord.Unclosed(lines); ok {
+		return fmt.Errorf(
+			"the record's body leaves %s open: the opener is body line %d, %q. An unclosed opener runs "+
+				"to end of file, so every line below it — the appended entry included — is masked and "+
+				"does not read back. Close it or remove it; the grounds text is not the fault; nothing written",
+			maskConstruct(flag), i+1, strings.TrimRight(lines[i], "\r"))
+	}
+	return fmt.Errorf(
+		"the appended grounds entry does not read back (%d entries after the append, expected %d); "+
+			"nothing written", got, want)
+}
+
+// maskConstruct names a mask flag the way the record spells it, so the operator
+// searches the file for the thing the message named.
+func maskConstruct(flag uint8) string {
+	if flag&mdrecord.MaskComment != 0 {
+		return "an HTML comment (`<!--` with no `-->`)"
+	}
+	return "a fenced code block"
 }
 
 // appendBullet puts one entry at the end of the record's `## Grounds` section,
