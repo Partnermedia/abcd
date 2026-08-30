@@ -299,7 +299,7 @@ func (e *probeEntropy) Read(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// stampPlanned is Plan's idempotent second face// stampPlanned is Plan's idempotent second face: it mints an identity for every
+// stampPlanned is Plan's idempotent second face: it mints an identity for every
 // unmarked scope-condition bullet of an already-planned record and writes it
 // back, touching nothing else — no spec, no frontmatter, no bucket move. An
 // already-marked bullet is left byte-identical, so re-running after an edit
