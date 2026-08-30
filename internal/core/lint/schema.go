@@ -1454,14 +1454,22 @@ func scanRecordStores(repoRoot string, cfg RuleConfig) ([]schemaRecord, []Findin
 				// sends the author looking for one nobody performs (iss-2608301519254418,
 				// iss-2608301656200729). The silenced-blocker half is true of every store,
 				// because it is this rule's own scanner that does the silencing.
+				//
+				// The refusal names the LEDGER reader, not every surface. It once said the
+				// file was "skipped by every issue surface", and the release cut reads the
+				// same resolved record with the lenient scanner and folds its impact into
+				// the changelog — so an author told the record was invisible everywhere
+				// found it in the generated section (iss-2608301901260678). Both halves are
+				// rows in TestDuplicateTopLevelKeyReaderByReader.
 				for _, dup := range frontmatterDuplicates(lines) {
 					msg := "frontmatter has a duplicate top-level key '" + dup.Key +
 						"'; this rule's own scanner keeps only the first value, " +
 						"so a second line can silence a blocker armed on the value the first hides"
 					if store.readerRefusesDuplicateKey {
 						msg = "frontmatter has a duplicate top-level key '" + dup.Key +
-							"'; the record reader refuses a duplicated key, so the file is skipped by every " +
-							store.noun + " surface while this rule's own scanner keeps only the first value — a second line can silence a blocker armed on the value the first hides"
+							"'; the " + store.noun + " ledger reader refuses a duplicated key, so capture skips the file — " +
+							"the release cut does not: it reads the same record on its first value, as this rule's own " +
+							"scanner does, so a second line can silence a blocker armed on the value the first hides"
 					}
 					out = append(out, Finding{
 						File: rel, Line: dup.Line, RuleID: ruleRecordSchema, Severity: cfg.Severity, Message: msg,
