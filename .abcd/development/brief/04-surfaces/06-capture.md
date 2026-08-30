@@ -57,6 +57,7 @@ category: bug|documentation|drift|inconsistency|tech-debt|security|ux|process|ar
 source: plan-review|impl-review|manual-test|review-followup|agent-finding|agent-observation|user-observation|drift-detection|memory-curation
 found_during: <session-or-command-context>
 found_at: <path-or-conceptual>
+lapsed_at: <rfc3339-utc>   # the instant a discipline gave way — the lapse, not the write-up
 details: "<text>"          # optional structured detail
 suggested_fix: "<text>"    # optional proposed remedy
 related_intents: [itd-N, ...]

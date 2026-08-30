@@ -192,3 +192,36 @@ func TestSetMapField(t *testing.T) {
 		t.Fatalf("setMapField must refuse non-scalar members")
 	}
 }
+
+// TestLapsedAtRoundTrips pins the lapse timestamp end to end: the instant the
+// discipline gave way is written, re-read and returned VERBATIM. The whole point
+// of the property (spc-60) is that it is not write-up time, so a value the writer
+// or reader quietly normalised — to the wall clock, to a truncated date, to a
+// re-zoned instant — would defeat the field while every other check stayed green.
+func TestLapsedAtRoundTrips(t *testing.T) {
+	const lapsedAt = "2026-08-28T09:15:00Z"
+	text, err := buildIssueText([]kv{
+		{"schema_version", 1},
+		{"id", "iss-1"},
+		{"slug", "lapse-x"},
+		{"severity", "minor"},
+		{"category", "lapse"},
+		{"source", "user-observation"},
+		{"found_during", "preparation"},
+		{"lapsed_at", lapsedAt},
+	}, "a lapse\n")
+	if err != nil {
+		t.Fatalf("buildIssueText: %v", err)
+	}
+	fm, body, err := parseFrontmatterAndBody(text)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if err := validateStrict(fm); err != nil {
+		t.Fatalf("a lapse record carrying lapsed_at was refused: %v", err)
+	}
+	iss := issueFromFrontmatter(fm, StateOpen, "open/iss-1-lapse-x.md", body)
+	if iss.LapsedAt != lapsedAt {
+		t.Fatalf("lapsed_at round-tripped as %q, want %q", iss.LapsedAt, lapsedAt)
+	}
+}

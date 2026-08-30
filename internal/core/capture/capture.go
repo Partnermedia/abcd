@@ -90,14 +90,18 @@ type ResolvedBy struct {
 
 // Issue is a fully-read ledger entry (frontmatter + provenance + body).
 type Issue struct {
-	SchemaVersion  int         `json:"schema_version"`
-	ID             string      `json:"id"`
-	Slug           string      `json:"slug"`
-	Severity       Severity    `json:"severity"`
-	Category       Category    `json:"category"`
-	Source         Source      `json:"source"`
-	FoundDuring    string      `json:"found_during"`
-	FoundAt        string      `json:"found_at,omitempty"`
+	SchemaVersion int      `json:"schema_version"`
+	ID            string   `json:"id"`
+	Slug          string   `json:"slug"`
+	Severity      Severity `json:"severity"`
+	Category      Category `json:"category"`
+	Source        Source   `json:"source"`
+	FoundDuring   string   `json:"found_during"`
+	FoundAt       string   `json:"found_at,omitempty"`
+	// LapsedAt is the RFC 3339 instant at which a recorded discipline gave way —
+	// the lapse itself, never the write-up (spc-60). Required exactly when
+	// Category is lapse; optional, and rarely meaningful, for every other.
+	LapsedAt       string      `json:"lapsed_at,omitempty"`
 	RelatedIntents []string    `json:"related_intents,omitempty"`
 	RelatedSpecs   []string    `json:"related_specs,omitempty"`
 	RelatedIssues  []string    `json:"related_issues,omitempty"`
@@ -117,15 +121,19 @@ type Issue struct {
 
 // CaptureRequest is the input to Capture (append a new issue).
 type CaptureRequest struct {
-	RepoRoot       string
-	IssuesRoot     string
-	Text           string // markdown body
-	Severity       Severity
-	Category       Category
-	Source         Source
-	Slug           string // caller-supplied; normalised to kebab-case
-	FoundDuring    string // required, non-empty
-	FoundAt        string // optional; "" omits the field
+	RepoRoot    string
+	IssuesRoot  string
+	Text        string // markdown body
+	Severity    Severity
+	Category    Category
+	Source      Source
+	Slug        string // caller-supplied; normalised to kebab-case
+	FoundDuring string // required, non-empty
+	FoundAt     string // optional; "" omits the field
+	// LapsedAt is the RFC 3339 instant the discipline gave way. There is no
+	// default and none may be invented: the wall clock at write-up is exactly the
+	// value the lapse log exists to distinguish itself from (spc-60).
+	LapsedAt       string
 	RelatedIntents []string
 	RelatedSpecs   []string
 	BlockedBy      []string // iss-N dependency edges; each must match ^iss-[0-9]+$

@@ -52,6 +52,10 @@ Required:
 Optional:
 
 - `found_at` — repo-relative path or conceptual location.
+- `lapsed_at` — the RFC 3339 instant, in UTC, at which a recorded discipline gave
+  way: the lapse itself, not its write-up. The record id is timestamp-numeric and
+  therefore already carries write-up time, which is the value this property
+  distinguishes itself from.
 - `related_intents` — list of `itd-N` ids.
 - `related_specs` — list of `spc-N` ids.
 - `related_issues` — list of `iss-N` ids.

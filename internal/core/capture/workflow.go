@@ -150,6 +150,13 @@ func commitCapture(issuesRoot string, req CaptureRequest, issID, slug, placehold
 		fields = append(fields, kv{"found_at", req.FoundAt})
 		fm["found_at"] = req.FoundAt
 	}
+	// lapsed_at is written verbatim and never defaulted: the value is the instant
+	// the discipline gave way, and inventing one at write-up would be the
+	// reconstruction the lapse log exists to measure (spc-60).
+	if req.LapsedAt != "" {
+		fields = append(fields, kv{"lapsed_at", req.LapsedAt})
+		fm["lapsed_at"] = req.LapsedAt
+	}
 	if req.RelatedIntents != nil {
 		fields = append(fields, kv{"related_intents", req.RelatedIntents})
 		fm["related_intents"] = req.RelatedIntents

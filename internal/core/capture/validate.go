@@ -99,7 +99,7 @@ func validateStrict(fm map[string]any) error {
 	}
 
 	// Optional scalar strings.
-	for _, opt := range []string{"found_at", "details", "suggested_fix", "wontfix_reason", "resolution", "promoted_to"} {
+	for _, opt := range []string{"found_at", "lapsed_at", "details", "suggested_fix", "wontfix_reason", "resolution", "promoted_to"} {
 		if v, present := fm[opt]; present {
 			if _, isStr := v.(string); !isStr {
 				return fmt.Errorf("%w: %q must be a string", ErrMalformedFrontmatter, opt)
@@ -270,6 +270,7 @@ func issueFromFrontmatter(fm map[string]any, status State, path, body string) Is
 		Source:        Source(asString(fm["source"])),
 		FoundDuring:   asString(fm["found_during"]),
 		FoundAt:       asString(fm["found_at"]),
+		LapsedAt:      asString(fm["lapsed_at"]),
 		PromotedTo:    asString(fm["promoted_to"]),
 		Resolution:    asString(fm["resolution"]),
 		WontfixReason: asString(fm["wontfix_reason"]),

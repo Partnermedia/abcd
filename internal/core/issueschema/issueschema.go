@@ -38,7 +38,14 @@ var RequiredStrings = Required[1:]
 var Known = map[string]bool{
 	"schema_version": true, "id": true, "slug": true, "severity": true,
 	"category": true, "source": true, "found_during": true, "found_at": true,
-	"details": true, "suggested_fix": true, "related_intents": true,
+	// lapsed_at is the instant a recorded discipline gave way, RFC 3339 in UTC —
+	// the lapse, not the write-up (spc-60). found_at cannot carry it (that
+	// property is a LOCATION), and the timestamp-numeric record id is write-up
+	// time by construction, which is the value the criterion distinguishes itself
+	// from. Optional for every category and required for one; LapsedAtRequired
+	// below is the single copy of which.
+	"lapsed_at": true,
+	"details":   true, "suggested_fix": true, "related_intents": true,
 	"promoted_to": true, "related_specs": true, "related_issues": true,
 	"synthesis_clusters": true, "wontfix_reason": true, "resolution": true,
 	"resolved_by": true, "blocked_by": true,
