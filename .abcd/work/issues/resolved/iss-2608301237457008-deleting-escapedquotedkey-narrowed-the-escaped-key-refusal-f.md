@@ -7,6 +7,10 @@ category: "security"
 source: "user-observation"
 found_during: "itd-183-round-9-security"
 found_at: "internal/core/reading/project.go"
+resolution: "The line-level escaped-key refusal is restored alongside the positional scanner's, and the scanner's blank skip covers YAML's whitespace rather than space and tab alone. The narrowing the deletion rested on is now disclosed where it happens."
+impact: fix
+resolved_by:
+  intent: "itd-183"
 ---
 
 deleting escapedQuotedKey narrowed the escaped-key refusal from regex whitespace to space and tab so a CR-preceded escaped excluded key is admitted

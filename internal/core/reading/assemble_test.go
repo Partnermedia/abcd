@@ -1544,3 +1544,22 @@ func TestCommentedOutExcludedHeadingRefuses(t *testing.T) {
 		refusesOrWithholds(t, root, "an excluded heading "+what, sentinelAuditNotes)
 	}
 }
+
+// TestEscapedAndCarriageReturnedKeysAreRecognised: deleting the line-anchored
+// escaped-key refusal was justified as a subsumption and was not one. A double
+// quoted key whose closing quote is itself escaped never closes its token, so
+// the positional scanner reports no quoted key at all and its escape refusal is
+// never reached; and a carriage return is YAML whitespace the scanner's own
+// blank skip did not cover.
+func TestEscapedAndCarriageReturnedKeysAreRecognised(t *testing.T) {
+	rows := map[string]string{
+		"an escaped closing quote": "---\nid: spc-41\n\"origin\\\": " + sentinelOrigin + "\n---\n",
+		"a carriage return before a colon in a flow map": "---\nid: spc-41\nmeta: {\"origin\"\r: " +
+			sentinelOrigin + "}\n---\n",
+	}
+	for what, front := range rows {
+		root := fixtureRepo(t)
+		spcWithFrontmatter(t, root, "spc-41-escaped.md", front)
+		refusesOrWithholds(t, root, what, sentinelOrigin)
+	}
+}

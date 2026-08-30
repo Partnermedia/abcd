@@ -180,6 +180,11 @@ var (
 	explicitYAMLKeyRe = regexp.MustCompile(`^\s*\?\s+["']?([A-Za-z_][A-Za-z0-9_-]*)["']?\s*$`)
 	// flowKeyRe matches a key inside a flow mapping, at top level or nested.
 	flowKeyRe = regexp.MustCompile(`[{,]\s*["']?([A-Za-z_][A-Za-z0-9_-]*)["']?\s*:`)
+	// doubleQuotedKeyRe captures a double-quoted key's raw spelling, escapes and
+	// all, so escapedQuotedKey can judge it. The whitespace is `\s`, YAML's own
+	// class, because a carriage return between the key and its colon is a break
+	// to a YAML reader and nothing at all to a scan over spaces and tabs.
+	doubleQuotedKeyRe = regexp.MustCompile(`^\s*"([^"]*)"\s*:`)
 	// fenceOpenRe matches a fenced code block's delimiter, on the section scan's
 	// own rule so the two agree about what is inside a fence.
 	fenceOpenRe = regexp.MustCompile("^[ \t]*```")
@@ -467,11 +472,19 @@ func verifyRedaction(rel, original, redacted string, keys, headings map[string]b
 // what YAML reads there — rather than the key `origin` a scan of the interior
 // would have found.
 //
-// Disclosed: the double-quoted form is escape-aware, as YAML is, so `\"`
-// continues the token. A line whose double-quoted token is never closed is
-// therefore read as unterminated, and NOTHING from the opening quote on is
-// blanked — the fail-closed direction, because the flow scan then reads the rest
-// of the line in full.
+// Disclosed, and NARROWER than it looks: the double-quoted form is escape-aware,
+// as YAML is, so `\"` continues the token. A line whose double-quoted token is
+// never closed is therefore read as unterminated, and NOTHING from the opening
+// quote on is blanked. For the flow scan that is the fail-closed direction — it
+// then reads the rest of the line in full — but for the QUOTED KEYS this
+// function reports it is not: an unterminated token is never reported as a key,
+// so `"origin\": x`, whose closing quote is itself escaped, yields no quoted key
+// and the escaped-key refusal carried on this path is never reached. The
+// line-level escapedQuotedKey is what covers that spelling, over the raw bytes;
+// neither rule subsumes the other.
+//
+// The blanks skipped between a token and its colon are skipBlanks's, which is
+// YAML's whitespace rather than space and tab alone.
 func blankQuoted(line string) (string, []string) {
 	out := []byte(line)
 	var quotedKeys []string
@@ -551,9 +564,12 @@ func quotedEnd(s string, i int) (int, bool) {
 }
 
 // skipBlanks returns the offset of the first character at or after i that is not
-// a space or a tab.
+// blank. Blank is YAML's own whitespace class rather than space and tab alone: a
+// line whose bytes are `"origin"\r: x` is a top-level `origin` key to a YAML
+// reader, and stopping at the carriage return read the token as a scalar instead
+// of a key, so the key was never reported and never refused.
 func skipBlanks(s string, i int) int {
-	for i < len(s) && (s[i] == ' ' || s[i] == '\t') {
+	for i < len(s) && (s[i] == ' ' || s[i] == '\t' || s[i] == '\r' || s[i] == '\f') {
 		i++
 	}
 	return i
@@ -581,6 +597,28 @@ func submatches(m []string) []string {
 		}
 	}
 	return out
+}
+
+// escapedQuotedKey refuses a double-quoted frontmatter key containing a
+// backslash. YAML decodes escapes inside double quotes, so "origin" IS
+// `origin` to the reader and is nothing at all to a pattern over the bytes.
+// Rather than grow a YAML decoder here, the escape itself is the signal: a
+// record has no reason to spell a key that way, and refusing is the fail-closed
+// answer to a name this package cannot resolve.
+//
+// The positional scanner carries the same refusal on the flow path, and does not
+// subsume this one. Its quoted token is escape-aware, as YAML is, so a key whose
+// own closing quote is escaped — `"origin\": x` — never closes and is never
+// reported as a key at all; the escape refusal it carries is then never reached.
+// A line-level pattern over the raw bytes sees that spelling exactly because it
+// does not model the escape. Two rules, because neither reaches the other's
+// class.
+func escapedQuotedKey(line string) (string, bool) {
+	m := doubleQuotedKeyRe.FindStringSubmatch(line)
+	if m == nil || !strings.Contains(m[1], `\`) {
+		return "", false
+	}
+	return m[1], true
 }
 
 // rawHeadingTitleEnds bounds the text one heading element introduces, and
@@ -945,6 +983,9 @@ func excludedKeyInFirstBlock(lines []string, fenced []bool, keys map[string]bool
 					return i + 1, key, true
 				}
 			}
+		}
+		if key, ok := escapedQuotedKey(lines[i]); ok {
+			return i + 1, key, true
 		}
 		// The flow scan runs UNANCHORED over the line with its quoted scalars
 		// blanked. Blanking is what closes the false positive — a quoted reason
