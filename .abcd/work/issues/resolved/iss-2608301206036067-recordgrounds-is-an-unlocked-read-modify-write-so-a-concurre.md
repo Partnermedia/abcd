@@ -7,6 +7,11 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-179-round-2-security"
 found_at: "internal/core/intent/grounds.go"
+resolution: "RecordGrounds now runs read -> append -> read-back -> write inside withIntentMintLock, so a second concurrent grounds write can no longer discard the first"
+impact: fix
+grounds: "pursued: we expect an append-only contract to hold only where one advisory lock spans the whole read-modify-write, and a concurrent-loss reproduction that stays green after the lock is what would show it wrong"
+resolved_by:
+  intent: "itd-179"
 ---
 
 RecordGrounds is an unlocked read-modify-write so a concurrent second grounds write silently discards the first

@@ -4,7 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/intentdriven/abcd/internal/core/grounds"
 )
@@ -260,5 +262,81 @@ func TestRecordGroundsRefusesTerminalBuckets(t *testing.T) {
 	// recording.
 	if _, err := RecordGrounds(root, "itd-12", g); err != nil {
 		t.Fatalf("RecordGrounds on a planned record = %v, want it accepted", err)
+	}
+}
+
+// TestRecordGroundsConcurrentAppendsBothLand reproduces iss-2608301206036067:
+// RecordGrounds is a read-modify-write over a record two sessions can reach at
+// once, and the entry is APPEND-ONLY by contract. Two concurrent calls that each
+// read the same bytes and each write their own snapshot lose one entry, and both
+// return clean — the per-writer read-back check compares that writer's own
+// before/after pair, which stays consistent. Twenty trials, because the loss is
+// a race and one trial proves nothing.
+func TestRecordGroundsConcurrentAppendsBothLand(t *testing.T) {
+	const trials = 20
+	for trial := 0; trial < trials; trial++ {
+		root := t.TempDir()
+		const rel = plannedDir + "/itd-10-alpha.md"
+		writeFile(t, root, rel, plannedUnlinked("itd-10", "alpha")+"\n## Grounds\n\n")
+
+		first := mustGrounds(t, grounds.Pursued, "we expect the first conjecture to survive a concurrent write")
+		second := mustGrounds(t, grounds.Deferred, "we expect the second conjecture to survive a concurrent write")
+
+		var wg sync.WaitGroup
+		errs := make([]error, 2)
+		start := make(chan struct{})
+		for i, g := range []grounds.Grounds{first, second} {
+			wg.Add(1)
+			go func(i int, g grounds.Grounds) {
+				defer wg.Done()
+				<-start
+				_, errs[i] = RecordGrounds(root, "itd-10", g)
+			}(i, g)
+		}
+		close(start)
+		wg.Wait()
+		for i, err := range errs {
+			if err != nil {
+				t.Fatalf("trial %d: writer %d: %v", trial, i, err)
+			}
+		}
+		body := readIntent(t, root, rel)
+		got := ParseGrounds(body)
+		if len(got) != 2 {
+			t.Fatalf("trial %d: %d entries survived two clean appends, want 2 — one write was discarded:\n%s",
+				trial, len(got), body)
+		}
+	}
+}
+
+// TestRecordGroundsHoldsTheMintLock is the deterministic half: the read, the
+// append and the write are one critical section under the same advisory lock
+// every other writer in this package takes, so a concurrent holder blocks it.
+func TestRecordGroundsHoldsTheMintLock(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, plannedDir+"/itd-10-alpha.md", plannedUnlinked("itd-10", "alpha"))
+
+	held := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		done <- withIntentMintLock(root, func() error {
+			close(held)
+			// Hold the lock long enough that an unlocked write would finish inside it.
+			time.Sleep(150 * time.Millisecond)
+			return nil
+		})
+	}()
+	<-held
+	start := time.Now()
+	g := mustGrounds(t, grounds.Pursued, "we expect the grounds write to serialize with every other writer")
+	if _, err := RecordGrounds(root, "itd-10", g); err != nil {
+		t.Fatal(err)
+	}
+	waited := time.Since(start)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if waited < 100*time.Millisecond {
+		t.Fatalf("the grounds write completed in %v while the mint lock was held — it took no lock", waited)
 	}
 }
