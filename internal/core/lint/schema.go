@@ -182,23 +182,42 @@ type recordStore struct {
 	// record dispatcher for the ADR store, which confirms the frontmatter id before
 	// it will render the record.
 	//
-	// It is declared rather than assumed because three findings STATE that
+	// It is declared rather than assumed because the findings STATE that
 	// consequence, and a rule may not state a consequence it has not established.
-	// ONE declaration stands behind all three — the missing required property
-	// (checkRecordRequiredFields), the key outside a closed schema
-	// (checkRecordUnknownFields) and the duplicated top-level key (the scan's own
-	// leg) — rather than one leg consulting it while the two beside it assume, which
-	// is how the first fix closed one spelling and left two (iss-2608301519254418).
-	// The three malformations differ; what the reader does about them does not.
+	// ONE declaration stands behind the two legs that read the record's PROPERTIES
+	// — the missing required property (checkRecordRequiredFields) and the key
+	// outside a closed schema (checkRecordUnknownFields) — rather than one leg
+	// consulting it while the one beside it assumes, which is how the first fix
+	// closed one spelling and left two (iss-2608301519254418).
+	//
+	// It does NOT stand behind the duplicated top-level key. The malformations
+	// differ and so do the readers' answers: capture's parse refuses a duplicate
+	// outright, while the ADR dispatcher reads with frontmatter.Fields, the lenient
+	// scanner, and renders the record on its first value — so one declaration across
+	// all three legs made the ADR store claim a refusal nobody performs
+	// (iss-2608301656200729). That leg reads readerRefusesDuplicateKey instead.
 	//
 	// The two stores this cycle added have no such reader: the only reader of
 	// admission records honours one carrying nothing but its run and its proposal
 	// (reading_outstanding_test.go), and no reader of surprise records exists at
 	// all — so a message telling their authors the record is skipped and invisible
 	// sends them to look for a refusal nobody performs (iss-2608301411010342).
-	// Where it is false each of the three legs states what the malformation IS,
-	// which is true of every store, and stops there.
+	// Where it is false each leg states what the malformation IS, which is true of
+	// every store, and stops there.
 	readerFailsClosed bool
+	// readerRefusesDuplicateKey declares that the store's reader refuses a record
+	// carrying a top-level key twice, and skips it. It is separate from
+	// readerFailsClosed because the two answers come apart: capture's
+	// parseFrontmatterBlock refuses a duplicate key by name, and the ADR dispatcher
+	// — which DOES validate the id before it renders — reads the frontmatter with
+	// the lenient scanner and so never sees the second line at all. An ADR carrying
+	// `status` twice renders, with the first value and a nil error
+	// (iss-2608301656200729).
+	//
+	// Where it is false the leg still reports the duplicate, on the account that is
+	// true of every store: this rule's own scanner keeps the first value, so a
+	// second line can silence a blocker armed on the value the first hides.
+	readerRefusesDuplicateKey bool
 	// bucketField is the frontmatter property that must name the bucket the
 	// record sits in, for a store that states its bucket twice. An admission is
 	// filed under the run whose candidate set it joins AND carries that run as a
@@ -318,7 +337,8 @@ var recordStores = []recordStore{
 	// the drift would show up as a silently unread record, which is the defect
 	// this invariant exists to catch.
 	{prefix: "iss", noun: "issue", nodeType: "issue", buckets: issueStatusDirs, fileNumRe: issueFileNumRe, fileFamily: "iss", filename: "iss-<N>-<slug>.md",
-		requiredFields: issueschema.Required, knownFields: issueschema.Known, readerFailsClosed: true},
+		requiredFields: issueschema.Required, knownFields: issueschema.Known, readerFailsClosed: true,
+		readerRefusesDuplicateKey: true},
 	// The three reading families (spc-58). Each buckets by GRAMMAR because its
 	// buckets are minted: a reading item and a run record live under the run that
 	// produced them, and a disposition lives under the item it answers.
@@ -1409,18 +1429,20 @@ func scanRecordStores(repoRoot string, cfg RuleConfig) ([]schemaRecord, []Findin
 				// rest of this rule needs; the duplicate is reported alongside it so the
 				// gate refuses what its consumers refuse (GitHub #357).
 				//
-				// The refusal half is gated on readerFailsClosed for the reason the
-				// missing-property and unknown-key legs are: the admission reader COUNTS
-				// a record carrying a duplicated key and no reader of surprise records
-				// exists, so naming a refusal there sends the author looking for one
-				// nobody performs (iss-2608301519254418). The silenced-blocker half is
-				// true of every store, because it is this rule's own scanner that does
-				// the silencing.
+				// The refusal half is gated on readerRefusesDuplicateKey rather than on
+				// readerFailsClosed, because the two come apart on this malformation
+				// alone: the admission reader COUNTS a record carrying a duplicated key,
+				// no reader of surprise records exists, and the ADR dispatcher — which
+				// does validate the id — reads the frontmatter with the lenient scanner
+				// and never sees the second line, so naming a refusal on any of the three
+				// sends the author looking for one nobody performs (iss-2608301519254418,
+				// iss-2608301656200729). The silenced-blocker half is true of every store,
+				// because it is this rule's own scanner that does the silencing.
 				for _, dup := range frontmatterDuplicates(lines) {
 					msg := "frontmatter has a duplicate top-level key '" + dup.Key +
 						"'; the lenient scanner every record surface reads with keeps only the first value, " +
 						"so a second line can silence a blocker armed on the value the first hides"
-					if store.readerFailsClosed {
+					if store.readerRefusesDuplicateKey {
 						msg = "frontmatter has a duplicate top-level key '" + dup.Key +
 							"'; the record reader refuses a duplicated key, so the file is skipped by every " +
 							store.noun + " surface while the lenient scanner keeps only the first value — a second line can silence a blocker armed on the value the first hides"

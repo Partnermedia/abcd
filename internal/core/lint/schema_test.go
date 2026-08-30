@@ -1807,8 +1807,9 @@ func TestMissingPropertyClaimsNoReaderWhereTheStoreHasNone(t *testing.T) {
 // The closed-schema leg and the duplicate-key leg make the SAME account of the
 // consequence the missing-property leg makes: the reader refuses the record and
 // skips it, so it is invisible to every surface of its family. That account is a
-// property of the STORE — readerFailsClosed is where the store declares it — and
-// it stands behind all three legs rather than behind the one that consults it.
+// property of the STORE, and the store declares it — readerFailsClosed for the
+// two legs that read the record's PROPERTIES, readerRefusesDuplicateKey for the
+// duplicate — rather than any leg assuming it.
 //
 // The admission store's only reader COUNTS a record carrying an unknown key or a
 // duplicated one, and no reader of surprise records exists anywhere in the tree,
@@ -1816,8 +1817,16 @@ func TestMissingPropertyClaimsNoReaderWhereTheStoreHasNone(t *testing.T) {
 // duplicated key ARE — a key nothing reads, and a second line the lenient scanner
 // drops — and not a refusal nobody performs (iss-2608301519254418).
 //
+// The ADR store is why the duplicate is declared apart. Its dispatcher DOES
+// validate the record before it renders it, and reads the frontmatter with the
+// lenient scanner: an ADR carrying `status` twice renders, with the first value
+// and a nil error, so one flag across both questions made this store claim a
+// refusal nobody performs (iss-2608301656200729). Both halves of the split run
+// here, on the same store.
+//
 // The issue store is the control on the same run: its reader does perform the
-// refusal, so it keeps the claim, and the gate is not simply mute everywhere.
+// refusal on both, so it keeps the claim, and the gate is not simply mute
+// everywhere.
 func TestClosedSchemaAndDuplicateKeyClaimNoReaderWhereTheStoreHasNone(t *testing.T) {
 	root := admissionCorpus(t)
 	writeFile(t, root, "work/issues/admissions/rdg-1/adm-3.md",
@@ -1836,6 +1845,18 @@ func TestClosedSchemaAndDuplicateKeyClaimNoReaderWhereTheStoreHasNone(t *testing
 		strings.Replace(validIssue("iss-42", "a-finding"), "found_during: t\n", "found_during: t\nverdict: yes\n", 1))
 	writeFile(t, root, "work/issues/open/iss-43-a-finding.md",
 		strings.Replace(validIssue("iss-43", "a-finding"), "found_during: t\n", "found_during: t\nseverity: major\n", 1))
+	// The ADR store is the fourth, and it parts the two legs. Its reader confirms
+	// the frontmatter id before it will render the record, so the MISSING-PROPERTY
+	// claim is true of it — but record.readRecordHead reads with frontmatter.Fields,
+	// the lenient scanner, and no ADR reader anywhere refuses a duplicated key: an
+	// ADR carrying `status` twice renders, with the first value and a nil error. The
+	// duplicate-key leg must therefore not claim the refusal on this store's behalf
+	// (iss-2608301656200729). Its closed-schema leg is not exercised: the store
+	// declares no knownFields, so checkRecordUnknownFields returns before it speaks.
+	writeFile(t, root, "rec/decisions/adrs/0009-a-decision.md",
+		"---\nid: adr-9\nstatus: accepted\nstatus: draft\n---\n\n# A decision\n")
+	writeFile(t, root, "rec/decisions/adrs/0010-another-decision.md",
+		"---\nstatus: accepted\n---\n\n# Another decision\n")
 
 	fs, err := Lint(admissionSchemaConfig(), root)
 	if err != nil {
@@ -1846,6 +1867,7 @@ func TestClosedSchemaAndDuplicateKeyClaimNoReaderWhereTheStoreHasNone(t *testing
 		{filepath.Join("work", "issues", "admissions", "rdg-1", "adm-4.md"), "duplicate top-level key 'grounds'"},
 		{filepath.Join("work", "issues", "surprises", "srp-5.md"), "unknown frontmatter property 'verdict'"},
 		{filepath.Join("work", "issues", "surprises", "srp-6.md"), "duplicate top-level key 'occasioned_by'"},
+		{filepath.Join("rec", "decisions", "adrs", "0009-a-decision.md"), "duplicate top-level key 'status'"},
 	} {
 		if !findingWith(fs, c.rel, ruleRecordSchema, c.quote) {
 			t.Errorf("the finding on %s must still be raised: %+v", c.rel, fs)
@@ -1860,6 +1882,10 @@ func TestClosedSchemaAndDuplicateKeyClaimNoReaderWhereTheStoreHasNone(t *testing
 	for _, c := range []struct{ rel, claim string }{
 		{filepath.Join("work", "issues", "open", "iss-42-a-finding.md"), "invisible"},
 		{filepath.Join("work", "issues", "open", "iss-43-a-finding.md"), "skipped"},
+		// The other half of the ADR split: the reader DOES confirm the id, so the
+		// missing-property leg keeps its account on the same store the duplicate-key
+		// leg above must not make it on.
+		{filepath.Join("rec", "decisions", "adrs", "0010-another-decision.md"), "skipped"},
 	} {
 		if !findingWith(fs, c.rel, ruleRecordSchema, c.claim) {
 			t.Errorf("the issue reader does perform the refusal, so the finding on %s must keep %q: %+v",
