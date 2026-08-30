@@ -18,8 +18,8 @@ eval, never by a case run, which is why the closing run of the cycle carries
 only purpose durability and convergence.
 
 The eval also pins the two determinism preconditions itd-187 places on the
-assembler ([itd-183](../../intents/planned/itd-183-the-cold-reading-sees-exactly-what-the-assembler-passes-posi.md),
-spec [spc-61](spc-61-the-cold-reading-sees-exactly-what-the-assembler-passes-posi.md)):
+assembler ([itd-183](../../intents/shipped/itd-183-the-cold-reading-sees-exactly-what-the-assembler-passes-posi.md),
+spec [spc-61](../closed/spc-61-the-cold-reading-sees-exactly-what-the-assembler-passes-posi.md)):
 hash-only manifests with no timestamps, and a lexicographic walk order. It lands
 in the existing smoke harness package ([`evals/`](../../../../evals/README.md))
 behind the `smoke` build tag, so `make smoke` and CI's `smoke` job run it with
