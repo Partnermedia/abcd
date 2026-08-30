@@ -95,6 +95,51 @@ Before implementing ANY `itd-N` — or whenever the user asks you to "build",
 - **Exit 2 (fault):** the id is malformed, the intent is unknown, or a record
   is unreadable — report the diagnostic; there is nothing to gate.
 
+## The claim recording gradient
+
+An intent carries up to three kinds of claim, and the gate holds each to its
+own recording requirement:
+
+| Claim | Section | Requirement |
+| --- | --- | --- |
+| Criterion | `## Acceptance Criteria` | Mandatory — at least one Given-When-Then bullet |
+| Mechanism | `## Mechanism` | Prompted, nullable — an absent section passes; a heading with nothing under it is a fault |
+| Context | `## Scope Conditions` | Mandatory — top-level bullets, or the explicit nullity |
+
+The nullity is one exact token, `None stated.`, alone on its line under the
+heading — the same grammar for both sections. Three byte states carry three
+meanings and are never collapsed: an absent section is a claim not carried, an
+empty section is a gate fault, and the token is a claim considered and
+declined. Discipline-kind records are exempt: their template carries no claim
+sections, and both checks report the exemption.
+
+Each scope condition carries a stamped identity marker
+(`<!-- cond: cond-<16 digits> -->`) so a later disposition attaches to the
+condition rather than to a sentence that may since have been reworded. The
+marker is read anywhere in the bullet, so rewrapping the text cannot orphan it.
+Two markers in one bullet, a near-miss of one, a fenced block or an HTML comment
+in the section, or a second `## Scope Conditions` heading are each reported by
+name. A fenced or commented section and a duplicated heading are refused by the
+stamp outright; a bullet carrying two markers, a near-miss, or an identity
+another bullet already uses is skipped by the stamp and named by the gate. Either
+way the gate never names a remedy that cannot run. **The
+markers are stamped by `abcd intent plan`, never hand-typed**, and the gate
+refuses a missing or duplicated one by name rather than repairing it — a
+reporter that writes is a reporter whose output depends on who ran it. That
+remedy runs on a planned record too: `abcd intent plan <itd-N>` on an intent
+already in `planned/` does the identity step alone — it mints for every
+unmarked bullet, moves no bucket and touches no spec — so a condition written
+after planning still reaches the mint. With nothing unmarked it refuses and
+says so, rather than exiting quietly having done nothing. The
+identities are rendered by `abcd intent ready <itd-N> --json` under
+`conditions`, which is where a consumer reads them; bare `abcd intent` is a
+corpus-wide count-and-link status and carries no per-record body.
+
+Population is forward-only: `shipped/` and `superseded/` records are never
+backfilled, because an absent stamp is information — so both checks report as
+not applicable there rather than naming work nobody may do. An unanswered
+scaffold prompt is reported as unanswered, never as a recorded claim.
+
 ## Planning interview (host-run, with the human present)
 
 The interview turns a draft into an intent the maintainer has signed off. Run
@@ -119,23 +164,35 @@ gate that will refuse the move mechanically is a recorded seed until built.
 3. **Press release:** confirm or refine the user moment with the human.
 4. **Open questions:** resolve each with the human, or record an explicit
    deferral in the draft. An open question that gates scope blocks planning.
-5. **Acceptance criteria:** walk EVERY Given-When-Then bullet; the human
+5. **Mechanism claim (prompted, nullable):** ask why the authors expect this
+   to work, and record the answer in `## Mechanism` as a falsifiable "we
+   expect X because Y" — not the outcome restated. Declining is a real
+   answer: record it as the exact token `None stated.` alone on its line.
+   Silence is not a decline, and the draft's scaffold line is not a claim.
+6. **Scope conditions (required):** elicit the population, platform, scale, or
+   assumptions the claim holds under, one per top-level bullet under
+   `## Scope Conditions`, so a later reuse outside them is a visible
+   re-decision. If the human states none, record the same exact token. Leave
+   the identity markers to `plan` — never type one; a condition added after
+   planning is stamped by re-running `abcd intent plan <itd-N>`.
+7. **Acceptance criteria:** walk EVERY Given-When-Then bullet; the human
    accepts, edits, or strikes each, and adds what is missing. Seeded criteria
    are proposals, never approvals.
-6. Edit the draft file to the confirmed content.
-7. Only after the human explicitly confirms the criteria are theirs, run:
+8. Edit the draft file to the confirmed content.
+9. Only after the human explicitly confirms the criteria are theirs, run:
 
    ```bash
    "${CLAUDE_PLUGIN_ROOT}/abcd" intent plan <itd-N> --json
    ```
 
    This invocation IS the maintainer's sign-off act — never run it unattended
-   or infer consent. It mints the spec stub, links both sides, and moves the
-   intent `drafts/ → planned/`.
-8. **Spec build:** replace the minted spec body's `_Draft:` placeholder with
-   the real design record — scope, approach, and how it satisfies each
-   acceptance criterion.
-9. Re-run `abcd intent ready <itd-N>` and report READY to the user.
+   or infer consent. It mints the spec stub, links both sides, stamps an
+   identity onto every unmarked scope condition, and moves the intent
+   `drafts/ → planned/`.
+10. **Spec build:** replace the minted spec body's `_Draft:` placeholder with
+    the real design record — scope, approach, and how it satisfies each
+    acceptance criterion.
+11. Re-run `abcd intent ready <itd-N>` and report READY to the user.
 
 ## Autonomous runs
 

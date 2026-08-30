@@ -44,6 +44,10 @@ impact: additive
 - Passing either key to a reading — both are excluded by the input
   assembler's field projection, and the read-block eval asserts it.
 
+## Scope Conditions
+
+None stated.
+
 ## Acceptance Criteria
 
 - **Given** a record written through a command, **when** it is committed,

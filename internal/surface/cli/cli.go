@@ -1548,7 +1548,7 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 	// plan <itd-N> — mint the spec, write both link sides, move drafts -> planned.
 	intentCmd.AddCommand(&cobra.Command{
 		Use:   "plan <itd-N>",
-		Short: "Plan a draft intent: mint its spec, link both sides, move drafts -> planned",
+		Short: "Plan a draft intent (mint its spec, link both sides, move drafts -> planned); on an already-planned intent, stamp its unmarked scope conditions",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
@@ -1561,9 +1561,20 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 			}
 			emitMintWarning(cmd, res.MintWarning)
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
-				fmt.Fprintf(w, "abcd intent plan — %s drafts -> planned, linked %s\n", res.Intent.ID, res.Spec.ID)
+				if res.StampOnly {
+					// The identity step alone, over a record already planned: say what
+					// was done and nothing more, so the line cannot read as a move.
+					fmt.Fprintf(w, "abcd intent plan — %s already planned; stamped its unmarked scope conditions\n", res.Intent.ID)
+				} else {
+					fmt.Fprintf(w, "abcd intent plan — %s drafts -> planned, linked %s\n", res.Intent.ID, res.Spec.ID)
+				}
 				fmt.Fprintf(w, "  intent: %s\n", termsafe.Sanitize(res.Intent.Path))
-				fmt.Fprintf(w, "  spec:   %s\n", termsafe.Sanitize(res.Spec.Path))
+				if res.Spec.Path != "" {
+					fmt.Fprintf(w, "  spec:   %s\n", termsafe.Sanitize(res.Spec.Path))
+				}
+				if res.ConditionsStamped > 0 {
+					fmt.Fprintf(w, "  scope-condition identities stamped: %d\n", res.ConditionsStamped)
+				}
 			})
 		},
 	})
@@ -1574,7 +1585,7 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 	// structural fault.
 	intentCmd.AddCommand(&cobra.Command{
 		Use:   "ready <itd-N>",
-		Short: "Report whether an intent is ready to implement (planned + AC + written spec); exit 1 when not",
+		Short: "Report whether an intent is ready to implement (planned + AC + claims + written spec); exit 1 when not",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
@@ -1601,6 +1612,17 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 					if c.Remedy != "" {
 						fmt.Fprintf(w, "         remedy: %s\n", termsafe.Sanitize(c.Remedy))
 					}
+				}
+				// The scope conditions with their stamped identities: what a later
+				// fidelity disposition attaches to, shown so a human reading the
+				// report sees the same claims the machine seam carries.
+				for _, cond := range res.Conditions {
+					id := cond.ID
+					if id == "" {
+						id = "unstamped"
+					}
+					// The condition's prose is a human's, not a validated charset.
+					fmt.Fprintf(w, "  cond %d [%s] %s\n", cond.Ordinal, termsafe.Sanitize(id), termsafe.Sanitize(cond.Text))
 				}
 			}); rerr != nil {
 				return rerr

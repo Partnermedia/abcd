@@ -30,6 +30,10 @@ impact: additive
 
 - Passing dispositions to a reading — warm; excluded by the assembler.
 
+## Scope Conditions
+
+None stated.
+
 ## Acceptance Criteria
 
 - **Given** a shipped intent with scope conditions, **when** the fidelity

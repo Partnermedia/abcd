@@ -159,6 +159,10 @@ register and the iss-2608220750029991 triage-route seed.
 - Passing dispositions to a reading — warm by definition; the assembler
   excludes them and the read-block eval asserts it.
 
+## Scope Conditions
+
+None stated.
+
 ## Acceptance Criteria
 
 - **Given** a validated reading output, **when** it is ingested, **then**

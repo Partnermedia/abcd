@@ -32,6 +32,10 @@ impact: additive
 - The field-level assertion over the assembler's output, wired into CI so
   the firewall is checked on every change, not per case run.
 
+## Scope Conditions
+
+None stated.
+
 ## Acceptance Criteria
 
 - **Given** the fixture state, **when** the eval runs, **then** it passes

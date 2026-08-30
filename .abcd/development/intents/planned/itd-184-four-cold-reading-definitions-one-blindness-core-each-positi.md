@@ -96,6 +96,10 @@ it — and it is disclosed as such.
 - Validating what a reading produced against its regime — the output
   contract's supply-regime gate.
 
+## Scope Conditions
+
+None stated.
+
 ## Acceptance Criteria
 
 - **Given** the four definitions, **when** they are diffed, **then** the

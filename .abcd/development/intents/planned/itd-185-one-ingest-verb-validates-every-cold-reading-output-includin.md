@@ -102,6 +102,10 @@ impact: additive
 - Whether the regime signatures lint cleanly — untested; the degradation
   path exists precisely because of it.
 
+## Scope Conditions
+
+None stated.
+
 ## Acceptance Criteria
 
 - **Given** a reading output, **when** it is ingested, **then** the verb

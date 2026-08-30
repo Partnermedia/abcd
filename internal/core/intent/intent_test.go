@@ -196,12 +196,19 @@ func TestPlanRefusesBulletlessAcceptanceCriteria(t *testing.T) {
 	}
 }
 
+// TestPlanRefusesNonDraft: only a draft can be PLANNED. (A planned record has
+// its own path — the stamp-only step — covered in claims_test.go; every other
+// bucket is refused outright.)
 func TestPlanRefusesNonDraft(t *testing.T) {
-	root := t.TempDir()
-	writeFile(t, root, plannedDir+"/itd-10-alpha.md",
-		"---\nid: itd-10\nslug: alpha\nspec_id: null\nkind: standalone\n---\n# alpha\n\n## Acceptance Criteria\n\n- ok\n")
-	if _, err := Plan(root, "itd-10"); err == nil {
-		t.Fatal("Plan must refuse an intent that is not in drafts/")
+	for _, dir := range []string{shippedDir, disciplinesDir, supersededDir} {
+		t.Run(dir, func(t *testing.T) {
+			root := t.TempDir()
+			writeFile(t, root, dir+"/itd-10-alpha.md",
+				"---\nid: itd-10\nslug: alpha\nspec_id: null\nkind: standalone\n---\n# alpha\n\n## Acceptance Criteria\n\n- ok\n")
+			if _, err := Plan(root, "itd-10"); err == nil {
+				t.Fatal("Plan must refuse an intent that is not in drafts/")
+			}
+		})
 	}
 }
 
@@ -358,7 +365,8 @@ func TestStatusCounts(t *testing.T) {
 // Plan leaves): kind + spec_id set, ready to ship.
 func plannedLinked(id, slug, specID string) string {
 	return "---\nid: " + id + "\nslug: " + slug + "\nspec_id: " + specID + "\nkind: standalone\n---\n" +
-		"# " + slug + "\n\n## Acceptance Criteria\n\n- ok\n\n## Audit Notes\n"
+		"# " + slug + "\n\n## Scope Conditions\n\n" + NullityToken +
+		"\n\n## Acceptance Criteria\n\n- ok\n\n## Audit Notes\n"
 }
 
 // specNaming is an open spec file whose intent: link names the given intent.

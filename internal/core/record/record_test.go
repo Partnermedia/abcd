@@ -156,7 +156,7 @@ func TestDescribeIntentLifecycleMoves(t *testing.T) {
 
 	// planned/ with a stub spec body → write the spec body.
 	intentFixture(t, repo, "planned", "itd-2", "planned-stub",
-		"---\nid: itd-2\nslug: planned-stub\nspec_id: spc-1\nkind: standalone\n---\n\n# P\n\n## Acceptance Criteria\n\n- **Given** x, **then** y.\n")
+		"---\nid: itd-2\nslug: planned-stub\nspec_id: spc-1\nkind: standalone\n---\n\n# P\n\n## Scope Conditions\n\nNone stated.\n\n## Acceptance Criteria\n\n- **Given** x, **then** y.\n")
 	write(t, repo, ".abcd/development/specs/open/spc-1-planned-stub.md",
 		"---\nid: spc-1\nslug: planned-stub\nintent: itd-2\n---\n# planned-stub\n\n_Draft: describe what shipping itd-2 means._\n")
 	d, err = Describe(repo, "itd-2")
@@ -170,7 +170,7 @@ func TestDescribeIntentLifecycleMoves(t *testing.T) {
 
 	// planned/ and ready → implement + spec close.
 	intentFixture(t, repo, "planned", "itd-3", "planned-ready",
-		"---\nid: itd-3\nslug: planned-ready\nspec_id: spc-2\nkind: standalone\n---\n\n# R\n\n## Acceptance Criteria\n\n- **Given** x, **then** y.\n")
+		"---\nid: itd-3\nslug: planned-ready\nspec_id: spc-2\nkind: standalone\n---\n\n# R\n\n## Scope Conditions\n\nNone stated.\n\n## Acceptance Criteria\n\n- **Given** x, **then** y.\n")
 	write(t, repo, ".abcd/development/specs/open/spc-2-planned-ready.md",
 		"---\nid: spc-2\nslug: planned-ready\nintent: itd-3\n---\n# planned-ready\n\nA real body: build the thing against these words.\n")
 	d, err = Describe(repo, "itd-3")
@@ -208,7 +208,7 @@ func TestDescribeIntentLifecycleMoves(t *testing.T) {
 func TestDescribeSpecMoves(t *testing.T) {
 	repo := t.TempDir()
 	intentFixture(t, repo, "planned", "itd-6", "for-spec",
-		"---\nid: itd-6\nslug: for-spec\nspec_id: spc-4\nkind: standalone\n---\n\n# S\n\n## Acceptance Criteria\n\n- **Given** x, **then** y.\n")
+		"---\nid: itd-6\nslug: for-spec\nspec_id: spc-4\nkind: standalone\n---\n\n# S\n\n## Scope Conditions\n\nNone stated.\n\n## Acceptance Criteria\n\n- **Given** x, **then** y.\n")
 	write(t, repo, ".abcd/development/specs/open/spc-4-for-spec.md",
 		"---\nid: spc-4\nslug: for-spec\nintent: itd-6\n---\n# for-spec\n\nWritten body, ready to build.\n")
 	d, err := Describe(repo, "spc-4")
