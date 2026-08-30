@@ -186,6 +186,9 @@ func IngestReading(req IngestReadingRequest) (IngestReadingResult, error) {
 		}
 		for _, p := range pending {
 			path := filepath.Join(runDir, p.id+".md")
+			if err := refuseExistingRecord(path, p.id); err != nil {
+				return err
+			}
 			if err := fsutil.WriteFileAtomic(path, []byte(p.content), 0o644); err != nil {
 				return err
 			}
@@ -270,6 +273,9 @@ func Disposition(req DispositionRequest) (DispositionResult, error) {
 		if req.Supersedes == "" && len(standing) > 0 {
 			return fmt.Errorf("%w: %s already carries a standing disposition (%s); a second answer must cite the one it replaces (supersedes_disposition), so the record can say which is in force",
 				ErrInvariantViolation, req.Item, renderList(standing))
+		}
+		if err := refuseExistingRecord(path, id); err != nil {
+			return err
 		}
 		return fsutil.WriteFileAtomic(path, []byte(content), 0o644)
 	})
@@ -647,6 +653,23 @@ func standingDispositions(itemDir string) ([]string, error) {
 	}
 	sort.Strings(out)
 	return out, nil
+}
+
+// refuseExistingRecord fails a write whose target is already taken. The id space
+// is a UTC second plus four random digits, so two same-second draws CAN coincide
+// — rare, and rare is exactly why it must refuse rather than overwrite: a
+// committed record silently replaced by another leaves no trace that either
+// happened, which is the one outcome a ledger must not produce. The check runs
+// under the ledger lock, so between it and the write no other abcd process can
+// claim the path.
+func refuseExistingRecord(path, id string) error {
+	if _, err := os.Lstat(path); err == nil {
+		return fmt.Errorf("%w: %s already exists in this ledger; the mint collided and the existing record is left untouched",
+			ErrDuplicateIssueID, id)
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 
 // ensureFamilyDir provisions <issuesRoot>/<family>/<key>, refusing a symlinked
