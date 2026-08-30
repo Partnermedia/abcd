@@ -24,13 +24,15 @@ bounding the attribute search leaves it wide open. It needs its own fix.
 `<!-- ... -->` span before `rawHeadingOpenRe` runs, so a heading that sits
 wholly inside a comment is never discovered:
 
-    <!-- open
+```
+<!-- open
 
-    <h2>Audit Notes</h2>
+<h2>Audit Notes</h2>
 
-    private provenance
+private provenance
 
-    close -->
+close -->
+```
 
 No opener is found, the run is admitted, and the section travels. Confirmed
 end to end; the parent 044ac6ed refuses.

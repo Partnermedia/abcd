@@ -21,9 +21,11 @@ REGRESSION INTRODUCED BY 2225d6cb -- the parent 044ac6ed refuses this input.
 `maskMarkupData` ends an attribute value at the next matching quote found
 anywhere in the joined document, not within the tag:
 
-    end := strings.IndexByte(s[q+1:], s[q])
-    if end < 0 { i++; continue }
-    maskAngles(out, q+1, q+1+end)
+```
+end := strings.IndexByte(s[q+1:], s[q])
+if end < 0 { i++; continue }
+maskAngles(out, q+1, q+1+end)
+```
 
 So one unclosed attribute quote blanks every `<` and `>` up to some unrelated
 quote thousands of bytes later, erasing a raw-HTML excluded heading from the
@@ -34,17 +36,19 @@ was refused.
 
 Minimal reproduction, verified admitted on HEAD and refused on the parent:
 
-    ---
-    id: x
-    ---
+```
+---
+id: x
+---
 
-    <div id="
+<div id="
 
-    <h2>Audit Notes</h2>
+<h2>Audit Notes</h2>
 
-    private provenance
+private provenance
 
-    ">
+">
+```
 
 Same result for `<a href='x" >`, `<img alt="...`, `<a x='...`, and for an
 opener sitting INSIDE a fenced code block -- the mask is fence-blind, so a

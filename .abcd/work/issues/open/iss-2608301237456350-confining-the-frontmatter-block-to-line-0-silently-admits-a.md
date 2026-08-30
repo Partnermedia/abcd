@@ -18,7 +18,9 @@ documented trade to re-confirm, not as a defect.
 `firstBlockRange` refuses to open a block unless line 0 starts with `---`
 (BOM allowed):
 
-    if !strings.HasPrefix(frontmatter.TrimBOM(lines[0]), "---") { return 0, 0, false }
+```
+if !strings.HasPrefix(frontmatter.TrimBOM(lines[0]), "---") { return 0, 0, false }
+```
 
 So an admitted .md whose first line is blank, a space, or a preamble, followed
 by `---` / `origin: <value>` / `---`, reaches the bundle intact. Verified

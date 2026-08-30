@@ -17,8 +17,10 @@ does not exist on main, so nothing here is inherited from main.
 
 1. A compact nested mapping in a block sequence leaks. In frontmatter,
 
-       items:
-         - origin: <value>
+```
+   items:
+     - origin: <value>
+```
 
    is a real `origin` key to YAML, but `excludedKeyLineRe`'s `^\s*` cannot
    cross the `- `, and `flowKeyRe` needs a `{` or a `,`. The reviewer notes

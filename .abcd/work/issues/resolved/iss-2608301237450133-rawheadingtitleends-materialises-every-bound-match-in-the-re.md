@@ -23,11 +23,13 @@ stops at the first match.
 of the document for EVERY heading opener, even though it breaks at the first
 hard bound. The scan becomes quadratic with a large constant. Measured:
 
-    body size   parent 044ac6ed   HEAD 2225d6cb
-    8 KB        1 ms              508 ms
-    32 KB       7 ms              5.7 s
-    128 KB      48 ms             92.5 s
-    4 MiB (cap) 33.9 s            did not finish
+```
+body size   parent 044ac6ed   HEAD 2225d6cb
+8 KB        1 ms              508 ms
+32 KB       7 ms              5.7 s
+128 KB      48 ms             92.5 s
+4 MiB (cap) 33.9 s            did not finish
+```
 
 ~1900x at 128 KB. A committed .md of repeated `<h2>` up to the 4 MiB
 MaxFileBytes cap the code itself sets does not finish. Severity is availability

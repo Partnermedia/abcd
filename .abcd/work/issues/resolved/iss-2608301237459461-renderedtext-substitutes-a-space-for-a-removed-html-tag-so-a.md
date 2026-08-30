@@ -22,9 +22,11 @@ trigger, and it defeats all four heading paths at once.
 `renderedText` now does `out = htmlTagRe.ReplaceAllString(out, " ")`. A tag
 INSIDE a word therefore splits the word, and the slug stops matching:
 
-    renderedText("Audi<i>t</i> Notes")
-      HEAD:   "Audi t  Notes"  -> slug audi-t-notes
-      parent: "Audit Notes"    -> slug audit-notes
+```
+renderedText("Audi<i>t</i> Notes")
+  HEAD:   "Audi t  Notes"  -> slug audi-t-notes
+  parent: "Audit Notes"    -> slug audit-notes
+```
 
 So `## Audit Note<sup>s</sup>` in any admitted file passes the section loop's
 exact-title lookup, then passes `namesExcludedHeading` -> `sameRendering`, and
