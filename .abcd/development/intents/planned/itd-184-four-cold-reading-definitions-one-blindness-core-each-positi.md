@@ -12,7 +12,7 @@ impact: additive
 
 # Four cold-reading definitions, one blindness core — each position licenses a different output, and none may hold another's licence
 
-Typed links: `refines` [itd-86](itd-86-cold-reading-surface.md) — the
+Typed links: `refines` [itd-86](../drafts/itd-86-cold-reading-surface.md) — the
 single-document cold reading generalises to four positions, instances
 within one detector context.
 
