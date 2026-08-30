@@ -7,7 +7,7 @@ category: "bug"
 source: "impl-review"
 found_during: "itd-189 adversarial security review, 2026-08-30"
 found_at: "internal/core/lint/schema.go (checkRecordRequiredFields, isAbsentValue)"
-resolution: "isAbsentValue now decides absence on the value the YAML scalar carries — quotes stripped with the rule's own issueScalar and the result re-trimmed — so an empty, whitespace-only or quoted-whitespace required field is refused in every store that shares the check, the pre-existing issue ledger included; a block-scalar header is judged by what its block holds rather than by the header byte."
+resolution: "isAbsentValue now decides absence on the value the YAML scalar carries — quotes stripped with the rule's own issueScalar and the result re-trimmed — so an empty, whitespace-only or quoted-whitespace required field is refused in every store that shares the check, the pre-existing issue ledger included. That is the whole of what this change closed: the empty flow mapping and the explicit null tag are two further spellings of the same blank, and they are iss-2608301649337965's to close. A block-scalar header is judged by what its block holds rather than by the header byte."
 impact: fix
 resolved_by:
   intent: "itd-189"
