@@ -160,9 +160,9 @@ func Fold(text string) string {
 // the empty text, the text below either half of the floor — the character count
 // and the WORD count, the second being the one a text of zero-width spaces
 // cannot satisfy — and the text made only of the vocabulary's own words or the
-// asking verb's name. Everything else passes: what
-// this cannot do is tell a conjecture from a restatement of the decision, and it
-// does not claim to.
+// asking verb's name, and the text carrying a control character no record field
+// can hold. Everything else passes: what this cannot do is tell a conjecture
+// from a restatement of the decision, and it does not claim to.
 func ValidateText(text string) error {
 	if text == "" {
 		return fmt.Errorf("grounds text is empty; name the conjecture being acted on, not the route taken")
