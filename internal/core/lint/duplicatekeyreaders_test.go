@@ -30,9 +30,9 @@ const (
 	refuses      answer = "refuses the file"
 	keepsNeither answer = "keeps neither value"
 	// unread is the answer for a store no reader outside this rule opens. It is an
-	// ABSENCE, so its probe bounds it rather than proving it: every entry point in
-	// the table below is run over a corpus whose record carries a marker, and the
-	// marker must reach none of them.
+	// ABSENCE, so its probe bounds it rather than proving it: the readers that walk
+	// a whole store unprompted are run over a corpus whose record carries a marker,
+	// and the marker must reach none of them.
 	unread answer = "no reader outside this rule opens the record"
 )
 
@@ -56,12 +56,28 @@ const (
 // on, and TestEveryStoreHasADuplicateKeyReaderRow is what keeps a NEW store from
 // arriving without one.
 func TestDuplicateTopLevelKeyReaderByReader(t *testing.T) {
-	cases := []struct {
-		store  string
-		reader string
-		want   answer
-		probe  func(t *testing.T) answer
-	}{{
+	for _, tc := range duplicateKeyReaderRows() {
+		t.Run(tc.store+"/"+tc.reader, func(t *testing.T) {
+			if got := tc.probe(t); got != tc.want {
+				t.Fatalf("%s: %s %s, and the row says it %s", tc.store, tc.reader, got, tc.want)
+			}
+		})
+	}
+}
+
+// readerRow is one (store, reader) pair with the answer the row claims and the
+// probe that establishes it.
+type readerRow struct {
+	store  string
+	reader string
+	want   answer
+	probe  func(t *testing.T) answer
+}
+
+// duplicateKeyReaderRows is the table itself, lifted out of the test so the
+// coverage check reads the rows' VALUES rather than the file's source text.
+func duplicateKeyReaderRows() []readerRow {
+	return []readerRow{{
 		store:  "adr",
 		reader: "record.Describe → describeADR → readRecordHead → frontmatter.Fields",
 		want:   keepsFirst,
@@ -135,13 +151,29 @@ func TestDuplicateTopLevelKeyReaderByReader(t *testing.T) {
 		want:   unread,
 		probe:  probeSurprise,
 	}}
+}
 
-	for _, tc := range cases {
-		t.Run(tc.store+"/"+tc.reader, func(t *testing.T) {
-			if got := tc.probe(t); got != tc.want {
-				t.Fatalf("%s: %s %s, and the row says it %s", tc.store, tc.reader, got, tc.want)
-			}
-		})
+// TestEveryStoreHasADuplicateKeyReaderRow refuses a store whose readers nobody
+// established. Adding a store therefore costs establishing what its readers do,
+// which is the step four prose corrections in a row skipped: each narrowed the
+// claim and none made it checkable, so the next store to arrive would have been
+// given an answer by analogy again (iss-2608301901264848).
+//
+// The store list comes from the rule's own recordStores, through a test-only
+// export — core/lint cannot import the packages the rows exercise, but the
+// dependency the other way is free. An earlier form of this check scanned this
+// file's SOURCE with a regexp, which a commented-out row satisfied while its
+// probe never ran.
+func TestEveryStoreHasADuplicateKeyReaderRow(t *testing.T) {
+	rows := map[string]int{}
+	for _, r := range duplicateKeyReaderRows() {
+		rows[r.store]++
+	}
+	for _, prefix := range lint.RecordStorePrefixesForTest() {
+		if rows[prefix] == 0 {
+			t.Errorf("the %s store has no row in the duplicate-key reader table: "+
+				"what does each reader of it do with a record carrying one top-level key twice?", prefix)
+		}
 	}
 }
 
@@ -369,7 +401,11 @@ func probeReadingItemOutstanding(t *testing.T) answer {
 		return keepsFirst // widening, the first value
 	}
 	if rep.Empty() {
-		return keepsNeither // neither position, so no widening proposal to admit
+		// `detection` needs no admission and neither does an unread position, so an
+		// empty board cannot tell the second value from no value. Either falsifies
+		// the row, and neither is "keeps neither" — say so rather than name one.
+		t.Fatalf("the board is empty, so the reader did not keep `widening`: it kept the second " +
+			"value or no value, and the row claims it keeps the first")
 	}
 	t.Fatalf("the outstanding board reported something this probe cannot read: %+v", rep)
 	return ""
@@ -415,28 +451,57 @@ func probeDispositionPromote(t *testing.T) answer {
 // probeAdmission reads an admission whose `proposal` is stated twice. The set the
 // board builds is keyed on the proposal, so whether rdi-2 counts as admitted says
 // which value the reader kept.
+//
+// The control runs FIRST, and it is the whole reason this probe means anything:
+// the passing condition is an ABSENCE (rdi-2 no longer outstanding), which any
+// corpus yielding no widening proposal at all satisfies just as well — an item at
+// `detection`, or a widening item whose acceptance stopped parsing, both empty the
+// report. Without the control the row would report "keeps the first value" about a
+// reader that never ran, in a table whose whole claim is that a wrong row is red.
 func probeAdmission(t *testing.T) answer {
 	root, _ := readingLedger(t, wideningItem)
 	writeRel(t, root, ".abcd/work/issues/dispositions/rdi-2/dsp-1.md", acceptedDisposition)
-	writeRel(t, root, ".abcd/work/issues/admissions/rdg-1/adm-1.md",
-		"---\nschema_version: 1\nid: adm-1\nrun: rdg-1\nproposal: rdi-2\nproposal: rdi-3\n"+
-			"grounds: it widens the frame\n---\n\n")
-	rep, err := lint.ReadReadingOutstanding(root, ".abcd/work/issues")
+
+	before, err := lint.ReadReadingOutstanding(root, ".abcd/work/issues")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rep.Unadmitted) == 0 {
+	if len(before.Unadmitted) != 1 || before.Unadmitted[0].Item != "rdi-2" {
+		t.Fatalf("with no admission in the tree rdi-2 must be outstanding, or clearing it says nothing "+
+			"about the admission reader: %+v", before)
+	}
+
+	writeRel(t, root, ".abcd/work/issues/admissions/rdg-1/adm-1.md",
+		"---\nschema_version: 1\nid: adm-1\nrun: rdg-1\nproposal: rdi-2\nproposal: rdi-3\n"+
+			"grounds: it widens the frame\n---\n\n")
+	after, err := lint.ReadReadingOutstanding(root, ".abcd/work/issues")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(after.Unadmitted) == 0 {
 		return keepsFirst // rdi-2 is admitted, so the first proposal was read
 	}
-	return keepsNeither
+	if len(after.Unadmitted) == 1 && after.Unadmitted[0].Item == "rdi-2" {
+		return keepsNeither // the admission keyed on nothing this corpus holds
+	}
+	t.Fatalf("the board reported something this probe cannot read: %+v", after)
+	return ""
 }
 
 // probeReadingRun and probeSurprise bound an ABSENCE. No reader outside this rule
 // opens either store's content, so there is nothing to exercise — what the probe
-// can do instead is run every reader in the table above over a corpus holding the
-// record and show that its content reaches none of them. A reader that lands
-// later is not caught by this; a STORE that lands later is caught by
-// TestEveryStoreHasADuplicateKeyReaderRow.
+// can do instead is run the readers that WALK a store unprompted over a corpus
+// holding the record, and show that its content reaches none of them.
+//
+// That is five of the table's readers, not all of them, and the difference is not
+// an omission: capture.Disposition, capture.Promote, issueschema.ParseDisposition
+// and changelog.ShippedSince are each handed the record they read, so running
+// them here would establish only that this probe did not hand them one. The four
+// are bounded structurally instead — the cut walks two named directories, and the
+// other three take a record id.
+//
+// A reader that lands later is not caught by this; a STORE that lands later is
+// caught by TestEveryStoreHasADuplicateKeyReaderRow.
 func probeReadingRun(t *testing.T) answer {
 	return probeUnread(t, ".abcd/development/readings/rdg-1/rdg-1.md",
 		"---\nschema_version: 1\nid: rdg-1\nmanifest: FIRST-MARKER\nmanifest: SECOND-MARKER\n---\n\n")
@@ -568,7 +633,8 @@ func changelogAnswer(t *testing.T, repo *gittest.Repo, id, first, second string)
 		}
 		return which(t, got, first, second)
 	}
-	return refuses
+	t.Fatalf("%s is not in the cut at all, so the fixture and not the reader decided this: %+v", id, set.Added)
+	return ""
 }
 
 // which maps an observed value onto the answer the reader gave, failing on
@@ -593,7 +659,8 @@ func which(t *testing.T, got, first, second string) answer {
 func errAnswer(t *testing.T, err error) answer {
 	t.Helper()
 	if err == nil {
-		return keepsFirst
+		t.Fatal("the verb succeeded, so its reader did not refuse the record — which value it kept " +
+			"is not established by this probe, and the row has to be re-established against it")
 	}
 	if strings.Contains(err.Error(), "duplicate key") {
 		return refuses
