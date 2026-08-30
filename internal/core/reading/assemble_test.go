@@ -962,3 +962,89 @@ func TestIndentedFrontmatterBlockIsRecognised(t *testing.T) {
 		t.Error("an indented frontmatter block let an excluded key travel")
 	}
 }
+
+// TestRawHTMLHeadingIsRecognised: the site's markdown subset admits h1-h6, so a
+// raw HTML heading renders as a heading and the markdown scan never sees one.
+func TestRawHTMLHeadingIsRecognised(t *testing.T) {
+	cases := map[string]string{
+		"an h2":             "<h2>Audit Notes</h2>\n\n" + sentinelAuditNotes + "\n",
+		"an h1":             "<h1>Audit Notes</h1>\n\n" + sentinelAuditNotes + "\n",
+		"an h3 with markup": "<h3><strong>Audit Notes</strong></h3>\n\n" + sentinelAuditNotes + "\n",
+	}
+	for what, body := range cases {
+		root := fixtureRepo(t)
+		writeFile(t, root, ".abcd/development/specs/open/spc-13-html.md",
+			"---\nid: spc-13\n---\n\n# A spec\n\nProse.\n\n"+body)
+		gitCommitAll(t, root)
+
+		res, err := Assemble(AssembleRequest{
+			RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+		})
+		if err != nil {
+			continue
+		}
+		if strings.Contains(bundleText(res.Bundle), sentinelAuditNotes) {
+			t.Errorf("a raw HTML heading (%s) let an excluded section travel", what)
+		}
+	}
+}
+
+// TestRenderEquivalenceCoversWrappersAndEntities: the slug comparison models
+// emphasis and code marks only, so a title carrying an HTML comment, a span
+// wrapper, a link wrapper or an entity slugs differently while rendering the
+// same.
+func TestRenderEquivalenceCoversWrappersAndEntities(t *testing.T) {
+	cases := map[string]string{
+		"a comment suffix": "## Audit Notes <!-- keep -->\n\n" + sentinelAuditNotes + "\n",
+		"a span wrapper":   "## <span>Audit Notes</span>\n\n" + sentinelAuditNotes + "\n",
+		"a link wrapper":   "## [Audit Notes](#audit-notes)\n\n" + sentinelAuditNotes + "\n",
+		"an entity":        "## Audit&nbsp;Notes\n\n" + sentinelAuditNotes + "\n",
+		"an amp entity":    "## Audit &amp; Notes\n\n" + sentinelAuditNotes + "\n",
+	}
+	for what, body := range cases {
+		root := fixtureRepo(t)
+		writeFile(t, root, ".abcd/development/specs/open/spc-14-wrapped.md",
+			"---\nid: spc-14\n---\n\n# A spec\n\nProse.\n\n"+body)
+		gitCommitAll(t, root)
+
+		res, err := Assemble(AssembleRequest{
+			RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+		})
+		if err != nil {
+			continue
+		}
+		if what == "an amp entity" {
+			continue // renders as "Audit & Notes", a different heading
+		}
+		if strings.Contains(bundleText(res.Bundle), sentinelAuditNotes) {
+			t.Errorf("a heading carrying %s let an excluded section travel", what)
+		}
+	}
+}
+
+// TestYAMLKeySpellingsAreRecognised: three top-level spellings of an excluded
+// key that neither the field reader nor a plain `key:` pattern reports.
+func TestYAMLKeySpellingsAreRecognised(t *testing.T) {
+	cases := map[string]string{
+		"an explicit key":          "---\nid: spc-15\n? origin\n: " + sentinelOrigin + "\n---\n",
+		"a top-level flow map":     "---\n{id: spc-15, origin: " + sentinelOrigin + "}\n---\n",
+		"a nested flow map":        "---\nid: spc-15\nmeta: {origin: " + sentinelOrigin + "}\n---\n",
+		"a quoted key with escape": "---\nid: spc-15\n\"ori\\u0067in\": " + sentinelOrigin + "\n---\n",
+	}
+	for what, front := range cases {
+		root := fixtureRepo(t)
+		writeFile(t, root, ".abcd/development/specs/open/spc-15-keys.md",
+			front+"\n# A spec\n\nProse.\n")
+		gitCommitAll(t, root)
+
+		res, err := Assemble(AssembleRequest{
+			RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+		})
+		if err != nil {
+			continue
+		}
+		if strings.Contains(bundleText(res.Bundle), sentinelOrigin) {
+			t.Errorf("%s let an excluded key travel", what)
+		}
+	}
+}

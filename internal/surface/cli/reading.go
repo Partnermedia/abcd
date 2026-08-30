@@ -104,11 +104,12 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 				resolvedOut = filepath.Join(cwd, filepath.FromSlash(resolvedOut))
 			}
 			res, err := reading.Assemble(reading.AssembleRequest{
-				RepoRoot: captureRoot(cwd),
-				Position: pos,
-				Target:   target,
-				OutDir:   resolvedOut,
-				DryRun:   dryRun,
+				RepoRoot:    captureRoot(cwd),
+				Position:    pos,
+				Target:      target,
+				OutDir:      resolvedOut,
+				OutDirLabel: outDir,
+				DryRun:      dryRun,
 			})
 			if err != nil {
 				return &exitError{Code: 2, Msg: "reading assemble: " + scrubPaths(err)}

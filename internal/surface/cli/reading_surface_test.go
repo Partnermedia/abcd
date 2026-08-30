@@ -319,3 +319,27 @@ func TestRelativeOutResolvesAgainstTheWorkingDirectory(t *testing.T) {
 		t.Errorf("out_dir %q is an absolute path the operator did not type", res.OutDir)
 	}
 }
+
+// TestOutRefusalsQuoteTheOperatorsOwnPath: a refusal that interpolates the
+// resolved absolute directory puts a local path on the error surface, and the
+// root redaction cannot reach it when the working directory is not a prefix.
+func TestOutRefusalsQuoteTheOperatorsOwnPath(t *testing.T) {
+	repo := readingRepo(t)
+	// Run from a SUBDIRECTORY, so the resolved path is not under the working
+	// directory and the root redaction has no prefix to strip. That is the case
+	// the leak actually lives in.
+	t.Chdir(filepath.Join(repo, "docs"))
+
+	out, err := runCLIErr(t, "reading", "assemble", "--position", "widening",
+		"--target", "HEAD", "--out", "../run-dir")
+	if err == nil {
+		t.Fatalf("an output directory inside the table's reach was accepted:\n%s", out)
+	}
+	msg := err.Error() + string(out)
+	if !strings.Contains(msg, "../run-dir") {
+		t.Errorf("the refusal does not quote the operator's own path: %s", msg)
+	}
+	if strings.Contains(msg, repo) {
+		t.Errorf("the refusal quotes a resolved absolute path: %s", msg)
+	}
+}

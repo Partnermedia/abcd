@@ -33,6 +33,12 @@ type AssembleRequest struct {
 	// OutDir is the operator-named directory the two artefacts are written to.
 	// Empty means the default local-tier run directory.
 	OutDir string
+	// OutDirLabel is how the OPERATOR spelled OutDir, used in refusal messages so
+	// a path they did not type is never quoted back at them. The front door
+	// resolves a relative --out against the working directory before calling in,
+	// and scrubPaths cannot redact the result when the working directory is not a
+	// prefix of it. Empty means OutDir is the operator's own spelling.
+	OutDirLabel string
 	// DryRun writes nothing into the repository's own tiers. With OutDir set the
 	// artefacts still land there; with OutDir empty nothing is written at all
 	// and the result is rendered only.
@@ -127,7 +133,7 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 	if err != nil {
 		return AssembleResult{}, err
 	}
-	if err := refuseSelfAdmittingOutDir(req.RepoRoot, req.OutDir); err != nil {
+	if err := refuseSelfAdmittingOutDir(req.RepoRoot, req.OutDir, outDirLabel(req)); err != nil {
 		return AssembleResult{}, err
 	}
 
@@ -194,12 +200,21 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 	if !writeIt {
 		return res, nil
 	}
-	if err := writeArtefacts(req.RepoRoot, outDir, bundle, manifest); err != nil {
+	if err := writeArtefacts(req.RepoRoot, outDir, outDirLabel(req), bundle, manifest); err != nil {
 		return AssembleResult{}, err
 	}
 	res.Written = true
 	res.Artefacts = []string{BundleFileName, ManifestFileName}
 	return res, nil
+}
+
+// outDirLabel is the spelling a refusal quotes back: the operator's own, where
+// the caller supplied one, and otherwise the directory itself.
+func outDirLabel(req AssembleRequest) string {
+	if req.OutDirLabel != "" {
+		return req.OutDirLabel
+	}
+	return req.OutDir
 }
 
 // resolveOutDir decides where the two artefacts go and whether they are written
@@ -218,12 +233,12 @@ func resolveOutDir(req AssembleRequest, runID string) (string, bool) {
 // writeArtefacts writes the assembled input and the manifest as two separate
 // files. A relative output directory is taken against the repository root; an
 // absolute one is used as given.
-func writeArtefacts(repoRoot, outDir string, b Bundle, m Manifest) error {
+func writeArtefacts(repoRoot, outDir, label string, b Bundle, m Manifest) error {
 	dir := outDir
 	if !filepath.IsAbs(dir) {
 		dir = filepath.Join(repoRoot, filepath.FromSlash(outDir))
 	}
-	if err := requireEmptyDir(outDir, dir); err != nil {
+	if err := requireEmptyDir(label, dir); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -286,7 +301,7 @@ func requireEmptyDir(named, dir string) error {
 //
 // Only a directory inside the repository can be reached, so an output path that
 // resolves outside it is always fine.
-func refuseSelfAdmittingOutDir(repoRoot, outDir string) error {
+func refuseSelfAdmittingOutDir(repoRoot, outDir, label string) error {
 	if outDir == "" {
 		return nil
 	}
@@ -317,7 +332,7 @@ func refuseSelfAdmittingOutDir(repoRoot, outDir string) error {
 			if Admits(p, candidate) {
 				return fmt.Errorf("reading: the output directory %s is inside the include table's reach "+
 					"(%s would be admitted at the %s position), so a committed run would become a later "+
-					"run's input; write outside the repository, or under %s", outDir, candidate, p, DefaultRunDir)
+					"run's input; write outside the repository, or under %s", label, candidate, p, DefaultRunDir)
 			}
 		}
 	}

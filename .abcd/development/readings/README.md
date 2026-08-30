@@ -60,6 +60,12 @@ away, a heading inside a fenced block is an example rather than a field and is
 left alone, and an underlined heading is refused rather than redacted, because
 the scan this projection spans by does not model one.
 
+The bare verb reads run-directory NAMES under the assembler's own scratch
+directory, and nothing else from `.abcd/.work.local/`. That is a listing of this
+instrument's own staging, not a reader of the local ledger tier, and it is
+stated here so it is not mistaken for one: no reading, and no part of this
+assembler, opens a file in that tier.
+
 A walk row's source directory must exist, and its absence refuses the run: a
 brief chapter or the glossary going missing would otherwise enumerate nothing
 and report clean. A record store's lifecycle BUCKET is different — an empty

@@ -151,7 +151,26 @@ var (
 	// reads such a line as prose — while every renderer, and every human, reads
 	// it as the heading it is. Four spaces would make it an indented code block,
 	// which is why the bound is three.
-	indentedATXRe = regexp.MustCompile(`^\s{1,3}#{1,6}\s+(.*)$`)
+	// The indent is SPACES, one to three. A tab makes an indented code block,
+	// not a heading, so `\s` would refuse a line no renderer treats as one.
+	indentedATXRe = regexp.MustCompile(`^[ ]{1,3}#{1,6}\s+(.*)$`)
+	// rawHeadingRe matches a raw HTML heading. The site's own markdown subset
+	// admits h1-h6, so one renders as the heading it is while the markdown scan
+	// never sees a heading at all.
+	rawHeadingRe = regexp.MustCompile(`(?is)<h[1-6][^>]*>(.*?)</h[1-6]>`)
+	// htmlCommentRe and htmlTagRe strip the markup a title can carry without
+	// changing how it reads on the page.
+	htmlCommentRe = regexp.MustCompile(`(?s)<!--.*?-->`)
+	htmlTagRe     = regexp.MustCompile(`</?[A-Za-z][^>]*>`)
+	// mdLinkRe unwraps `[text](target)` to the text a reader sees.
+	mdLinkRe = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)`)
+	// explicitYAMLKeyRe matches YAML's explicit-key form, `? origin`.
+	explicitYAMLKeyRe = regexp.MustCompile(`^\s*\?\s+["']?([A-Za-z_][A-Za-z0-9_-]*)["']?\s*$`)
+	// flowKeyRe matches a key inside a flow mapping, at top level or nested.
+	flowKeyRe = regexp.MustCompile(`[{,]\s*["']?([A-Za-z_][A-Za-z0-9_-]*)["']?\s*:`)
+	// doubleQuotedKeyRe captures a double-quoted key's raw spelling, escapes and
+	// all, so escapedQuotedKey can judge it.
+	doubleQuotedKeyRe = regexp.MustCompile(`^\s*"([^"]*)"\s*:`)
 	// fenceOpenRe matches a fenced code block's delimiter, on the section scan's
 	// own rule so the two agree about what is inside a fence.
 	fenceOpenRe = regexp.MustCompile("^[ \t]*```")
@@ -182,8 +201,30 @@ func namesExcludedHeading(title string, headings map[string]bool) (string, bool)
 // hyphen — which is exactly the equivalence "renders as the same heading" needs,
 // and it is one function rather than a table of markup shapes to keep current.
 func sameRendering(a, b string) bool {
-	slug := site.Slug(a)
-	return slug != "" && slug == site.Slug(b)
+	slug := site.Slug(renderedText(a))
+	return slug != "" && slug == site.Slug(renderedText(b))
+}
+
+// renderedText reduces a heading title to the text a reader sees: HTML comments
+// and tags removed, link wrappers unwrapped to their label, and the entities a
+// title plausibly carries decoded. The slug then compares what the page shows
+// rather than what the source happens to spell.
+//
+// The list of entities is short and deliberately so — the ones that change
+// whether two titles LOOK alike. An entity outside it leaves the title slugging
+// differently, which is a refusal this floor does not make rather than a leak it
+// permits: the section still has to get past the byte and fold comparisons too.
+func renderedText(title string) string {
+	out := htmlCommentRe.ReplaceAllString(title, "")
+	out = mdLinkRe.ReplaceAllString(out, "$1")
+	out = htmlTagRe.ReplaceAllString(out, "")
+	for entity, literal := range map[string]string{
+		"&nbsp;": "\u00a0", "&#160;": "\u00a0", "&#xa0;": "\u00a0",
+		"&amp;": "&", "&lt;": "<", "&gt;": ">", "&quot;": `"`, "&#39;": "'",
+	} {
+		out = strings.ReplaceAll(out, entity, literal)
+	}
+	return strings.TrimSpace(out)
 }
 
 // normaliseHeadingTitle reduces a heading to the text it names: surrounding
@@ -290,6 +331,22 @@ func verifyRedaction(rel, original, redacted string, keys, headings map[string]b
 		}
 	}
 
+	// A raw HTML heading is refused on the same ground: the site's markdown
+	// subset admits h1-h6, so it renders as a heading while the markdown scan
+	// sees none, and there is again no span for the redactor to delete.
+	for i, line := range lines {
+		if fenced[i] {
+			continue
+		}
+		for _, m := range rawHeadingRe.FindAllStringSubmatch(line, -1) {
+			if want, ok := namesExcludedHeading(normaliseHeadingTitle(m[1]), headings); ok {
+				return fmt.Errorf("reading: %s carries the excluded heading %q as raw HTML at line %d; "+
+					"the floor names %q, and a heading is excluded however it is spelled",
+					rel, strings.TrimSpace(line), i+1, want)
+			}
+		}
+	}
+
 	// Setext headings are a refusal rather than a redaction. The section scan
 	// does not model them, so there is no span to delete, and inventing a second
 	// heading scanner here to compute one is the second parser this package
@@ -309,6 +366,35 @@ func verifyRedaction(rel, original, redacted string, keys, headings map[string]b
 		}
 	}
 	return nil
+}
+
+// submatches returns a match's non-empty capture groups, so a pattern spelling
+// one name in several alternatives is read the same way as one that does not.
+func submatches(m []string) []string {
+	if len(m) < 2 {
+		return nil
+	}
+	out := make([]string, 0, len(m)-1)
+	for _, g := range m[1:] {
+		if g != "" {
+			out = append(out, g)
+		}
+	}
+	return out
+}
+
+// escapedQuotedKey refuses a double-quoted frontmatter key containing a
+// backslash. YAML decodes escapes inside double quotes, so "ori\u0067in" IS
+// `origin` to the reader and is nothing at all to a pattern over the bytes.
+// Rather than grow a YAML decoder here, the escape itself is the signal: a
+// record has no reason to spell a key that way, and refusing is the fail-closed
+// answer to a name this package cannot resolve.
+func escapedQuotedKey(line string) (string, bool) {
+	m := doubleQuotedKeyRe.FindStringSubmatch(line)
+	if m == nil || !strings.Contains(m[1], `\`) {
+		return "", false
+	}
+	return m[1], true
 }
 
 // excludedKeyInFirstBlock reports an excluded key sitting at column 0 inside the
@@ -346,14 +432,31 @@ func excludedKeyInFirstBlock(lines []string, fenced []bool, keys map[string]bool
 		if strings.HasPrefix(strings.TrimSpace(lines[i]), "---") {
 			return 0, "", false
 		}
-		m := excludedKeyLineRe.FindStringSubmatch(lines[i])
-		if m == nil {
-			continue
-		}
-		for _, key := range m[1:] {
-			if key != "" && keys[key] {
-				return i + 1, key, true
+		// Four spellings, because the field reader reports one of them. A plain
+		// or quoted key at any indent; YAML's explicit-key form; a key inside a
+		// flow mapping at top level or nested; and a double-quoted key whose name
+		// is spelled with an escape, which no pattern over the raw bytes can see
+		// — so a quoted key carrying a backslash is refused on the backslash
+		// rather than on the name it hides.
+		for _, m := range [][]string{
+			excludedKeyLineRe.FindStringSubmatch(lines[i]),
+			explicitYAMLKeyRe.FindStringSubmatch(lines[i]),
+		} {
+			for _, key := range submatches(m) {
+				if keys[key] {
+					return i + 1, key, true
+				}
 			}
+		}
+		for _, m := range flowKeyRe.FindAllStringSubmatch(lines[i], -1) {
+			for _, key := range submatches(m) {
+				if keys[key] {
+					return i + 1, key, true
+				}
+			}
+		}
+		if key, ok := escapedQuotedKey(lines[i]); ok {
+			return i + 1, key, true
 		}
 	}
 	return 0, "", false
