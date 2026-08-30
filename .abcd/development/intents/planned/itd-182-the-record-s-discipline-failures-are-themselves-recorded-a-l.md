@@ -1,8 +1,8 @@
 ---
 id: itd-182
 slug: the-record-s-discipline-failures-are-themselves-recorded-a-l
-spec_id: null
-kind: null
+spec_id: spc-60
+kind: standalone
 suggested_kind: standalone
 reclassification_history: []
 builds_on: []

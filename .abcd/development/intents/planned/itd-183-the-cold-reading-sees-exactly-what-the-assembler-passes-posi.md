@@ -1,8 +1,8 @@
 ---
 id: itd-183
 slug: the-cold-reading-sees-exactly-what-the-assembler-passes-posi
-spec_id: null
-kind: null
+spec_id: spc-61
+kind: bundle-member
 suggested_kind: bundle-member
 reclassification_history: []
 builds_on: [itd-86]

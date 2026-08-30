@@ -1,8 +1,8 @@
 ---
 id: itd-184
 slug: four-cold-reading-definitions-one-blindness-core-each-positi
-spec_id: null
-kind: null
+spec_id: spc-62
+kind: bundle-member
 suggested_kind: bundle-member
 reclassification_history: []
 builds_on: [itd-86]
@@ -12,7 +12,7 @@ impact: additive
 
 # Four cold-reading definitions, one blindness core — each position licenses a different output, and none may hold another's licence
 
-Typed links: `refines` [itd-86](itd-86-cold-reading-surface.md) — the
+Typed links: `refines` [itd-86](../drafts/itd-86-cold-reading-surface.md) — the
 single-document cold reading generalises to four positions, instances
 within one detector context.
 
