@@ -73,3 +73,12 @@ maintainer's instruction, rather than filed and left for someone to question.
 
 **Trigger:** the next phase's planning. The routing above is a proposal to
 confirm or overturn, not a decision already taken.
+
+## A sibling, parked the same day
+
+[A size classification for specs and tasks](2026-08-30-spec-size-classification-gap.md)
+is the other half of this. Metering records what a development act COST;
+classification predicts what it WILL cost. Either alone is weak — an estimate
+with no ground truth is `itd-29`'s hardcoded constant, and actuals with no
+scheme to test are a log nobody queries. They should be designed together.
+
