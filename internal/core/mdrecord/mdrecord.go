@@ -343,6 +343,19 @@ func backtickRunEnd(ln string, i int) int {
 }
 
 // findBacktickRun finds the next run of exactly n backticks at or after from.
+//
+// The search is per-run and walks the bytes between runs, so a line whose runs
+// all have DISTINCT lengths asks once per length and the cost is superlinear in
+// the line's length (iss-2608301803425790). That shape is left in place on a
+// MEASUREMENT rather than a shrug, and this package's own benchmarks are the
+// measurement: a line of 120 distinct-length runs costs ~200us, an ordinary
+// record line ~76ns, and both candidate fixes cost more than they save.
+// Precomputing the runs into a slice takes the bad line to ~7us and the ordinary
+// line to ~115ns with one allocation — every line paying for a shape no record
+// body has. Stepping between runs with strings.IndexByte leaves the ordinary
+// line alone and takes the bad line to ~243us, the gaps being too short to repay
+// the call. Re-run BenchmarkOpensCommentDistinctRuns and
+// BenchmarkOpensCommentTypicalLine before revisiting this.
 func findBacktickRun(ln string, from, n int) (start, end int, ok bool) {
 	for k := from; k < len(ln); {
 		if ln[k] != '`' {
