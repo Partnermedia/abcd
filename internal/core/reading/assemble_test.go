@@ -1484,3 +1484,63 @@ func TestRawHeadingCaseIsFolded(t *testing.T) {
 		refusesOrWithholds(t, root, "a raw heading with "+what, sentinelAuditNotes)
 	}
 }
+
+// TestTagInsideAWordDoesNotSplitTheTitle: a tag removed from a title stands for
+// a boundary in `Audit<br>Notes` and for no boundary at all in
+// `Audi<i>t</i> Notes`. Replacing every tag with a space closed the first and
+// opened the second on all four heading paths, so BOTH readings are taken and a
+// title is excluded if either one names an excluded heading.
+func TestTagInsideAWordDoesNotSplitTheTitle(t *testing.T) {
+	rows := map[string]string{
+		"a section heading":   "## Audi<i>t</i> Notes\n\n" + sentinelAuditNotes + "\n",
+		"an indented heading": "  ## Audi<i>t</i> Notes\n\n" + sentinelAuditNotes + "\n",
+		"a setext heading":    "Audi<i>t</i> Notes\n===\n\n" + sentinelAuditNotes + "\n",
+		"a raw HTML heading":  "<h2>Audit Note<sup>s</sup></h2>\n\n" + sentinelAuditNotes + "\n",
+	}
+	for what, body := range rows {
+		root := fixtureRepo(t)
+		writeFile(t, root, ".abcd/development/specs/open/spc-38-split.md",
+			"---\nid: spc-38\n---\n\n# A spec\n\nProse.\n\n"+body)
+		gitCommitAll(t, root)
+		refusesOrWithholds(t, root, "a tag inside a word in "+what, sentinelAuditNotes)
+	}
+}
+
+// TestUnclosedAttributeQuoteDoesNotEraseAHeading: an attribute value ends at its
+// own tag. Ending it at the next matching quote found anywhere in the document
+// let one unbalanced quote blank every angle bracket up to some unrelated quote
+// thousands of bytes later, erasing a raw HTML heading from the scan.
+func TestUnclosedAttributeQuoteDoesNotEraseAHeading(t *testing.T) {
+	rows := map[string]string{
+		"a double quote": "<div id=\"\n\n<h2>Audit Notes</h2>\n\n" + sentinelAuditNotes + "\n\n\">\n",
+		"a single quote": "<a href='x\n\n<h2>Audit Notes</h2>\n\n" + sentinelAuditNotes + "\n\n'>\n",
+	}
+	for what, body := range rows {
+		root := fixtureRepo(t)
+		writeFile(t, root, ".abcd/development/specs/open/spc-39-unclosed.md",
+			"---\nid: spc-39\n---\n\n# A spec\n\nProse.\n\n"+body)
+		gitCommitAll(t, root)
+		refusesOrWithholds(t, root, "an attribute value opened with "+what, sentinelAuditNotes)
+	}
+}
+
+// TestCommentedOutExcludedHeadingRefuses: the blind reader receives raw
+// markdown, not a rendered page, so a file that still CARRIES an excluded
+// heading refuses the run wherever the heading stands. The markup mask exists to
+// stop a comment's or an attribute value's brackets from being read as
+// STRUCTURE; it must never stop them from being read as CONTENT.
+func TestCommentedOutExcludedHeadingRefuses(t *testing.T) {
+	rows := map[string]string{
+		"inside an HTML comment": "<!-- open\n\n<h2>Audit Notes</h2>\n\n" +
+			sentinelAuditNotes + "\n\nclose -->\n",
+		"inside an attribute value": "<div title=\"<h2>Audit Notes</h2>\">\n\n" +
+			sentinelAuditNotes + "\n",
+	}
+	for what, body := range rows {
+		root := fixtureRepo(t)
+		writeFile(t, root, ".abcd/development/specs/open/spc-40-commented.md",
+			"---\nid: spc-40\n---\n\n# A spec\n\nProse.\n\n"+body)
+		gitCommitAll(t, root)
+		refusesOrWithholds(t, root, "an excluded heading "+what, sentinelAuditNotes)
+	}
+}

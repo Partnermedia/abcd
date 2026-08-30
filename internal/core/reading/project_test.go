@@ -33,8 +33,35 @@ func TestNumericCharacterReferenceIsRecognised(t *testing.T) {
 // TestRenderedTextLeavesAnAutolinkAlone: stripping tags must not eat an autolink,
 // which is a URL a heading may legitimately carry.
 func TestRenderedTextLeavesAnAutolinkAlone(t *testing.T) {
-	got := renderedText("See <https://example.invalid/x>")
+	got := strings.Join(renderedTexts("See <https://example.invalid/x>"), " ")
 	if !strings.Contains(got, "https://example.invalid/x") {
 		t.Errorf("the autolink was stripped as a tag: %q", got)
+	}
+}
+
+// TestAttributeMaskStaysOnItsOwnLine: an attribute value ends on the line it
+// opens on. Ending it at the next matching quote found anywhere in the document
+// let one unbalanced quote blank every angle bracket up to some unrelated quote
+// thousands of bytes later, erasing a raw HTML heading from the masked reading.
+//
+// The refusal itself no longer turns on this: the heading scan reads the
+// unmasked document too and refuses on either reading, so a runaway mask can no
+// longer hide a heading end to end. What it can still do is destroy the masked
+// reading, which is the reading that sees a `>` written inside an attribute
+// value — so the bound is asserted here, on the mask's own contract.
+func TestAttributeMaskStaysOnItsOwnLine(t *testing.T) {
+	const runaway = "<div id=\"\n\n<h2>Audit Notes</h2>\n\nprose\n\n\">\n"
+	got := maskMarkupData(runaway)
+	if len(got) != len(runaway) {
+		t.Fatalf("the mask changed the document length from %d to %d", len(runaway), len(got))
+	}
+	if !strings.Contains(got, "<h2>Audit Notes</h2>") {
+		t.Errorf("the mask crossed the tag its value opened in and erased a heading: %q", got)
+	}
+
+	// And it still masks the value it was built for, which closes on its own line.
+	const inline = "<h2 title=\"a>b\">Audit Notes</h2>"
+	if m := maskMarkupData(inline); !strings.Contains(m, "a b") {
+		t.Errorf("a greater-than inside a same-line attribute value was left as structure: %q", m)
 	}
 }

@@ -7,6 +7,10 @@ category: "security"
 source: "user-observation"
 found_during: "itd-183-round-9-ruthless"
 found_at: "internal/core/reading/project.go"
+resolution: "The heading scan reads the document masked AND unmasked and refuses on either, so the markup mask can only add a reading and never hide one."
+impact: fix
+resolved_by:
+  intent: "itd-183"
 ---
 
 the comment mask suppresses heading discovery so an excluded heading wholly inside an HTML comment is admitted though the file still carries it

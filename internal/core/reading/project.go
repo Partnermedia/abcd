@@ -223,14 +223,35 @@ func namesExcludedHeading(title string, headings map[string]bool) (string, bool)
 // hyphen — which is exactly the equivalence "renders as the same heading" needs,
 // and it is one function rather than a table of markup shapes to keep current.
 func sameRendering(a, b string) bool {
-	slug := site.Slug(renderedText(a))
-	return slug != "" && slug == site.Slug(renderedText(b))
+	for _, x := range renderedTexts(a) {
+		slug := site.Slug(x)
+		if slug == "" {
+			continue
+		}
+		for _, y := range renderedTexts(b) {
+			if slug == site.Slug(y) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
-// renderedText reduces a heading title to the text a reader sees: HTML comments
-// and tags removed, link wrappers unwrapped to their label, and character
-// references decoded. The slug then compares what the page shows rather than
-// what the source happens to spell.
+// renderedTexts reduces a heading title to the text a reader sees — HTML
+// comments and tags removed, link wrappers unwrapped to their label, character
+// references decoded — and returns EVERY reading of it rather than one. The
+// slug then compares what the page shows rather than what the source spells.
+//
+// A removed tag has two readings and neither is the title on its own. `<br>` is
+// a line break and `</em>` closes a word, so dropping either without the
+// boundary it stands for spells `Audit<br>Notes` as one word; and a tag written
+// INSIDE a word draws no boundary at all, so standing a space in for it splits
+// `Audi<i>t</i> Notes` into three. Replacing every tag with a space closed the
+// first shape and opened the second; replacing every tag with nothing did the
+// reverse. Both readings are returned and the caller refuses on either, which is
+// the doctrine the heading bound already uses: a title read two ways is excluded
+// if EITHER way names an excluded heading. A comment is dropped outright under
+// both, because a comment draws no boundary either way.
 //
 // Decoding is html.UnescapeString, one pass over the whole string. A hand list
 // of entities applied by ranging a map was not merely incomplete — it was
@@ -238,16 +259,15 @@ func sameRendering(a, b string) bool {
 // depending on whether `&amp;` was applied before `&nbsp;` that time round, so a
 // determinism instrument had a coin-flip refusal. One pass also covers the
 // numeric and hex character references a short list could never enumerate.
-func renderedText(title string) string {
+func renderedTexts(title string) []string {
 	out := htmlCommentRe.ReplaceAllString(title, "")
 	out = mdLinkRe.ReplaceAllString(out, "$1")
-	// A tag is replaced by a SPACE, not by nothing. `<br>` is a line break and
-	// `</em>` closes a word, so dropping either without the boundary it stands
-	// for spells `Audit<br>Notes` as one word and slugs it onto something that is
-	// not the excluded heading — while every renderer, and every reader, sees two
-	// words. A comment is dropped outright, because a comment draws no boundary.
-	out = htmlTagRe.ReplaceAllString(out, " ")
-	return strings.TrimSpace(html.UnescapeString(out))
+	spaced := strings.TrimSpace(html.UnescapeString(htmlTagRe.ReplaceAllString(out, " ")))
+	joined := strings.TrimSpace(html.UnescapeString(htmlTagRe.ReplaceAllString(out, "")))
+	if joined == spaced {
+		return []string{spaced}
+	}
+	return []string{spaced, joined}
 }
 
 // normaliseHeadingTitle reduces a heading to the text it names: surrounding
@@ -620,10 +640,21 @@ func rawHeadingTitleEnds(rest, name string) []int {
 //
 // Only the brackets are blanked, never the whole span: an attribute VALUE is
 // still read by the opener pattern, which recognises `role="heading"` by its
-// value, and a comment's text is still stripped by renderedText. And each
-// masking is bounded by its own terminator and skipped entirely when there is
-// none, so an unterminated comment or attribute value makes the scan see MORE
-// rather than less.
+// value, and a comment's text is still stripped when the title is rendered.
+//
+// Each masking is bounded by its own construct and skipped entirely when that
+// construct does not terminate. An attribute value ends ON THE LINE IT OPENS
+// ON: ending it at the next matching quote found anywhere in the document made
+// one unbalanced quote blank every angle bracket up to some unrelated quote
+// thousands of bytes later, which erased a raw HTML heading from the scan. The
+// tag's own `>` cannot serve as that bound, because a `>` written inside the
+// value is the very thing this mask exists to blank — so the line is the bound,
+// and a value that does not close on its own line masks nothing. A value the
+// mask therefore declines is a value the unmasked reading still reads in full.
+//
+// The mask is only ever a SECOND reading: its caller scans the unmasked text as
+// well and refuses on either, so masking can add a reading and can never take
+// one away.
 func maskMarkupData(s string) string {
 	out := []byte(s)
 	for i := 0; i < len(s); {
@@ -651,7 +682,15 @@ func maskMarkupData(s string) string {
 				i++
 				continue
 			}
-			end := strings.IndexByte(s[q+1:], s[q])
+			// The value's own LINE is the limit. The tag's own `>` cannot be the
+			// limit, because a `>` inside the value is the very thing this mask
+			// exists to blank; the line is the bound that separates a value from
+			// the document it was never part of.
+			lineEnd := len(s)
+			if n := strings.IndexByte(s[q+1:], '\n'); n >= 0 {
+				lineEnd = q + 1 + n
+			}
+			end := strings.IndexByte(s[q+1:lineEnd], s[q])
 			if end < 0 {
 				i++
 				continue
@@ -696,43 +735,87 @@ func maskAngles(out []byte, from, to int) {
 // number, so the match offset is mapped back to one by counting newlines ahead
 // of it — the refusal has to name a line a human can go and look at.
 //
-// A fenced line is replaced by an empty line rather than dropped, so the offset
-// arithmetic keeps working and an example inside a code block still cannot fire.
+// An opener sitting on a fenced line is skipped, so an example inside a code
+// block still cannot fire.
 //
-// The scan runs over the joined body with its markup DATA masked — see
-// maskMarkupData — because the opener and the bound are structure, and a `<` or
-// a `>` written inside a comment or an attribute value is not. Masking is
-// length- and newline-preserving, so the offsets it hands back still name the
-// line they came from.
+// The document is read TWICE: once as it stands, and once with its markup DATA
+// masked — see maskMarkupData — because the opener and the bound are structure
+// and a `<` or a `>` written inside a comment or an attribute value is not.
+// Masking is length- and newline-preserving, so one set of offsets names the
+// same lines in both readings.
+//
+// Both readings are taken because a mask that DECIDES is a mask that can hide.
+// Scanning only the masked copy meant a heading written wholly inside an HTML
+// comment was never discovered at all, and the section travelled — while the
+// blind reader receives raw markdown, so the file plainly still carries the
+// heading. The mask exists to stop a comment's brackets from being read as
+// structure; it must never stop them from being read as content. Reading both
+// makes the mask purely additive: every refusal the unmasked text supports still
+// stands, and the masked text can only add more.
 func rawHTMLHeading(lines []string, fenced []bool, offset int, headings map[string]bool) (int, string, bool) {
-	joined := maskMarkupData(strings.Join(lines, "\n"))
+	raw := strings.Join(lines, "\n")
+	readings := []string{raw}
+	if masked := maskMarkupData(raw); masked != raw {
+		readings = append(readings, masked)
+	}
 
-	for _, open := range rawHeadingOpenRe.FindAllStringSubmatchIndex(joined, -1) {
-		line := strings.Count(joined[:open[0]], "\n")
-		if line < offset || (line < len(fenced) && fenced[line]) {
-			continue
-		}
-		name := ""
-		for _, g := range [][2]int{{open[2], open[3]}, {open[4], open[5]}} {
-			if g[0] >= 0 {
-				name = joined[g[0]:g[1]]
-			}
-		}
-		if name == "" {
-			continue
-		}
-		rest := joined[open[1]:]
-		for _, end := range rawHeadingTitleEnds(rest, name) {
-			title := normaliseHeadingTitle(renderedText(rest[:end]))
-			if title == "" {
+	for _, text := range readings {
+		for _, open := range rawHeadingOpenRe.FindAllStringSubmatchIndex(text, -1) {
+			line := strings.Count(text[:open[0]], "\n")
+			if line < offset || (line < len(fenced) && fenced[line]) {
 				continue
 			}
-			if _, ok := namesExcludedHeading(title, headings); ok {
+			name := ""
+			for _, g := range [][2]int{{open[2], open[3]}, {open[4], open[5]}} {
+				if g[0] >= 0 {
+					name = text[g[0]:g[1]]
+				}
+			}
+			if name == "" {
+				continue
+			}
+			rests := make([]string, 0, len(readings))
+			for _, r := range readings {
+				rests = append(rests, r[open[1]:])
+			}
+			if title, ok := excludedRawTitle(rests, name, headings); ok {
 				return line + 1, title, true
 			}
 		}
 	}
 	return 0, "", false
+}
+
+// excludedRawTitle reports the excluded heading the text after one raw opener
+// names, under every reading of that text this floor takes: each reading of the
+// document bounds the title, and each reading is then read for the title itself.
+//
+// The two are separate questions. The mask answers where the title ENDS, since a
+// `</h2>` written inside an attribute value bounds nothing; the unmasked text
+// answers what the title SAYS, since a heading written inside a comment is still
+// carried by the file. Taking either alone lost the other.
+func excludedRawTitle(rests []string, name string, headings map[string]bool) (string, bool) {
+	seen := map[int]bool{}
+	for _, bound := range rests {
+		for _, end := range rawHeadingTitleEnds(bound, name) {
+			if seen[end] {
+				continue
+			}
+			seen[end] = true
+			for _, text := range rests {
+				for _, read := range renderedTexts(text[:end]) {
+					title := normaliseHeadingTitle(read)
+					if title == "" {
+						continue
+					}
+					if _, ok := namesExcludedHeading(title, headings); ok {
+						return title, true
+					}
+				}
+			}
+		}
+	}
+	return "", false
 }
 
 // unresolvableFrontmatterShape reports a construction in the first block whose

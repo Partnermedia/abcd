@@ -7,6 +7,10 @@ category: "security"
 source: "user-observation"
 found_during: "itd-183-round-9-security"
 found_at: "internal/core/reading/project.go"
+resolution: "An attribute value ends on the line it opens on, so an unbalanced quote can no longer blank the angle brackets of a heading its tag never reached."
+impact: fix
+resolved_by:
+  intent: "itd-183"
 ---
 
 maskMarkupData terminates an attribute value at the next matching quote anywhere in the document so one unclosed quote erases a raw HTML excluded heading from the scan

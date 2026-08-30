@@ -7,6 +7,10 @@ category: "security"
 source: "user-observation"
 found_during: "itd-183-round-9-security"
 found_at: "internal/core/reading/project.go"
+resolution: "Heading titles are compared under both readings of a removed tag: a tag standing for a boundary and a tag standing for none. All four heading paths refuse either way."
+impact: fix
+resolved_by:
+  intent: "itd-183"
 ---
 
 renderedText substitutes a space for a removed HTML tag so a tag inside a word splits it and the excluded heading escapes on all four heading paths
