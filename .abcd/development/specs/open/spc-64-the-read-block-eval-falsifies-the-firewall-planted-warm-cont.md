@@ -146,6 +146,22 @@ the diff classifier stands the `smoke` job down on a pull request confined to
 record-only pull request does not exercise this eval. The merge-queue entry runs
 the full set on the would-be merge result, so the property still gates the merge.
 
+**Ruled by the maintainer, 2026-08-30 — the evals get their own always-run CI
+job.** The `smoke` job stands down on a pull request confined to `docs/`,
+`.abcd/development/`, `.abcd/work/` and the root prose files, and those are
+precisely the paths these evals read: a record-only change is the diff most able
+to introduce warm content into material the assembler includes, so standing the
+eval down there is anti-correlated with the risk. A stood-down job still reports
+its check context green, which is a green for work that did not happen.
+
+The remedy follows the reasoning `ci.yml` already documents for the ubuntu unit
+lane, which never stands down because its tests read the live tree under the
+allowlist. So: a small CI job carrying no `inert` condition, running these two
+evals alone behind their own make target, while the rest of the smoke harness
+keeps standing down. The workflow edit lands with this spec's build, reviewed
+alongside the evals it serves; the merge-queue entry continues to run everything
+regardless.
+
 ## Acceptance criteria mapping
 
 | itd-186 criterion | How spc-64 satisfies it | Pinned by |
