@@ -1,8 +1,8 @@
 ---
 id: itd-180
 slug: a-cold-reading-s-findings-land-as-reading-records-and-the-re
-spec_id: null
-kind: null
+spec_id: spc-58
+kind: standalone
 suggested_kind: standalone
 reclassification_history: []
 builds_on: [itd-86]
@@ -12,7 +12,7 @@ impact: additive
 
 # A cold reading's findings land as reading records, and the researcher's response is a separate disposition record — two acts, two writes, never collapsed
 
-Typed links: `refines` [itd-86](itd-86-cold-reading-surface.md) (the
+Typed links: `refines` [itd-86](../drafts/itd-86-cold-reading-surface.md) (the
 detection shape); the hold state's axes are shared with the itd-142 hold
 register and the iss-2608220750029991 triage-route seed.
 

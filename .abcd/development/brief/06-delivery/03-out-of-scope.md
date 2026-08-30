@@ -97,19 +97,6 @@ gate. That is what keeps "not hand-counted" true after the day it was written.
 - `itd-163` — Reference-closure and acknowledgements-mirror gate: every citation resolves to the CSL references, the references and acknowledgements mirror both ways, and a committed influence registry backs the Inspirations list (supersedes itd-145; filed from the 2026-08-28 attribution review with the backfill issue iss-2608280824478819)
 - `itd-164` — Licence vetting at source admission: `docs cite refresh` records each source's licence verdict into the committed baseline, and the zero-network gate refuses a new entry without one (builds on itd-163)
 - `itd-159` — the repo visibility model has a committed-record mode between private and public, with the matching fence-suppression (graduated from iss-223)
-- `itd-177` — Claim typing and scope-condition identity: an intent's claims are typed and its scope conditions keep an identity that survives edits to their text, and the readiness gate refuses an intent leaving a context claim unrecorded (holds the itd-190 gradient)
-- `itd-178` — Origin and production-mode keys: every record written through a command carries its origin and its production mode, stamped by the command and never typed by hand
-- `itd-179` — Grounds at conjecture granularity: readiness and triage record the reasoning behind what was pursued, not only the decision it reached
-- `itd-180` — Reading records and disposition records: a cold reading's findings land as reading records and the researcher's response is a separate disposition record, two acts never collapsed into one write (builds on itd-86)
-- `itd-181` — Scope-condition disposition at the fidelity verdict: what a shipped intent assumed ex ante and what survived are recorded as different things
-- `itd-182` — The lapse capture category: the record's own discipline failures are recorded, timestamped at the lapse
-- `itd-183` — The cold-reading input assembler: positive inclusion, field projection and a per-run manifest, so a reading sees exactly what the assembler passes (builds on itd-86; settles its blindness question structurally)
-- `itd-184` — Four cold-reading definitions over one blindness core: each position licenses a different output, and none may hold another's licence (builds on itd-86)
-- `itd-185` — The cold-reading output contract: one ingest verb validates every reading's output, including the supply regime the reading was licensed to produce
-- `itd-186` — The read-block eval: planted warm content that reaches a reading fails the build loudly
-- `itd-187` — The amnesia eval: the same state assembled twice is byte-identical, so no case run is spent evidencing amnesia
-- `itd-188` — The scribe context: machine assistance in maintaining the ledger, in a context that never holds both ledger content and a reading
-- `itd-189` — Step-2 admission records: what the widening reading proposes is admitted or declined on the record, grounds on admission and dispositions on declines, surprises as their own entries
 <!-- /index -->
 
 **Later-phase items with no intent id.** These four were written into the brief

@@ -1,8 +1,8 @@
 ---
 id: itd-185
 slug: one-ingest-verb-validates-every-cold-reading-output-includin
-spec_id: null
-kind: null
+spec_id: spc-63
+kind: bundle-member
 suggested_kind: bundle-member
 reclassification_history: []
 builds_on: []

@@ -1,8 +1,8 @@
 ---
 id: itd-181
 slug: a-shipped-intent-s-scope-conditions-are-dispositioned-by-the
-spec_id: null
-kind: null
+spec_id: spc-59
+kind: standalone
 suggested_kind: standalone
 reclassification_history: []
 builds_on: []

@@ -1,8 +1,8 @@
 ---
 id: itd-188
 slug: machine-assistance-in-maintaining-the-ledger-without-any-con
-spec_id: null
-kind: null
+spec_id: spc-66
+kind: standalone
 suggested_kind: standalone
 reclassification_history: []
 builds_on: []

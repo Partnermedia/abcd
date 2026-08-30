@@ -1,8 +1,8 @@
 ---
 id: itd-179
 slug: the-reasoning-behind-what-was-pursued-no-longer-evaporates-a
-spec_id: null
-kind: null
+spec_id: spc-57
+kind: standalone
 suggested_kind: standalone
 reclassification_history: []
 builds_on: []

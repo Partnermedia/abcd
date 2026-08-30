@@ -1,8 +1,8 @@
 ---
 id: itd-177
 slug: an-intent-s-claims-are-typed-and-its-scope-conditions-keep-t
-spec_id: null
-kind: null
+spec_id: spc-55
+kind: standalone
 suggested_kind: standalone
 reclassification_history: []
 builds_on: []

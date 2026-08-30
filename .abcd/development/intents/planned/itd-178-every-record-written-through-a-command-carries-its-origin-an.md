@@ -1,8 +1,8 @@
 ---
 id: itd-178
 slug: every-record-written-through-a-command-carries-its-origin-an
-spec_id: null
-kind: null
+spec_id: spc-56
+kind: standalone
 suggested_kind: standalone
 reclassification_history: []
 builds_on: []

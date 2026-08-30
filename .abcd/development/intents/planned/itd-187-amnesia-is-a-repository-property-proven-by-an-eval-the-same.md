@@ -1,8 +1,8 @@
 ---
 id: itd-187
 slug: amnesia-is-a-repository-property-proven-by-an-eval-the-same
-spec_id: null
-kind: null
+spec_id: spc-65
+kind: standalone
 suggested_kind: standalone
 reclassification_history: []
 builds_on: []
