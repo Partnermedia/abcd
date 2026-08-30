@@ -87,7 +87,11 @@ func RecordGrounds(repoRoot, intentID string, g grounds.Grounds) (GroundsResult,
 	if err != nil {
 		return GroundsResult{}, err
 	}
-	updated := appendGroundsBullet(string(data), validated)
+	content := string(data)
+	updated := appendGroundsBullet(content, validated)
+	if err := groundsWriteIsReadable(content, updated, validated); err != nil {
+		return GroundsResult{}, err
+	}
 	if err := writeIntentFile(abs, it.Path, updated); err != nil {
 		return GroundsResult{}, err
 	}
@@ -99,6 +103,38 @@ func RecordGrounds(repoRoot, intentID string, g grounds.Grounds) (GroundsResult,
 		Entries:  len(ParseGrounds(updated)),
 		Redacted: redacted,
 	}, nil
+}
+
+// groundsWriteIsReadable refuses a write that would leave the record LESS
+// readable than it was (iss-2608300927577980).
+//
+// A grounds text is operator prose, and prose can carry an unclosed `<!--`. The
+// comment mask then runs to end of file: the entry disappears, every line after
+// it disappears with it — the scope-conditions and mechanism claims included —
+// and the result still reports success, so nothing anywhere says the record was
+// blinded. The check is two questions asked of the bytes about to be written,
+// before they are written, rather than a pattern ban on the text: a text that
+// leaves a comment open, and a write whose entry does not actually arrive.
+//
+// The count question subsumes more than the comment one: a bullet swallowed by a
+// fence, by a mask this reader does not yet model, or by anything else, fails to
+// raise the count and is refused for the same reason. The comment question is
+// still asked separately because it is the one whose remedy the caller can act
+// on — "close the comment, or drop the marker" — and a refusal that can name the
+// cause is worth more than one that can only say the entry did not arrive.
+func groundsWriteIsReadable(before, after string, g grounds.Grounds) error {
+	if opensComment(g.Bullet()) {
+		return fmt.Errorf(
+			"intent: the grounds text leaves an HTML comment open (`<!--` with no `-->`); "+
+				"written, it would hide the entry and every line below it from every reader of this record — "+
+				"close the comment or drop the marker; nothing written (text: %q)", g.Text)
+	}
+	if want, got := len(ParseGrounds(before))+1, len(ParseGrounds(after)); got != want {
+		return fmt.Errorf(
+			"intent: the appended grounds entry does not read back (%d entries after the append, expected %d); "+
+				"nothing written", got, want)
+	}
+	return nil
 }
 
 // ParseGrounds reads a record's recorded grounds, in the order they were

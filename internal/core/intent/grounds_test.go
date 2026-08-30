@@ -183,3 +183,34 @@ func TestParseGroundsIgnoresFencedAndCommentedBullets(t *testing.T) {
 		t.Fatalf("ParseGrounds read the wrong bullet: %+v", got)
 	}
 }
+
+// TestRecordGroundsRefusesTextThatMasksTheRecord is
+// iss-2608300927577980: a grounds text carrying an unclosed HTML comment opener
+// was written, and the comment mask then hid that entry and every line after it
+// from the grounds reader AND the claims readers — while the result reported
+// success and the surface said nothing. A write that makes the record less
+// readable than it was is refused before it happens.
+func TestRecordGroundsRefusesTextThatMasksTheRecord(t *testing.T) {
+	root := t.TempDir()
+	const rel = plannedDir + "/itd-10-alpha.md"
+	before := plannedUnlinked("itd-10", "alpha") +
+		"\n## Grounds\n\n- pursued: an earlier conjecture that must stay readable\n"
+	writeFile(t, root, rel, before)
+
+	masking := grounds.Grounds{Token: grounds.Pursued,
+		Text: "we expect the mask to swallow this <!-- and everything after it"}
+	if _, err := RecordGrounds(root, "itd-10", masking); err == nil {
+		t.Fatal("a text leaving a comment open = nil error, want a refusal")
+	}
+	if got := readIntent(t, root, rel); got != before {
+		t.Fatalf("a refused write still changed the record:\n%s", got)
+	}
+	// The record still reads exactly as it did: one entry, and the claim sections
+	// the mask would have swallowed.
+	if n := len(ParseGrounds(readIntent(t, root, rel))); n != 1 {
+		t.Fatalf("entries after the refusal = %d, want 1", n)
+	}
+	if c := ParseClaims(readIntent(t, root, rel)); c.ConditionsState != ClaimNullity {
+		t.Fatalf("the scope-conditions claim reads as %q, want the nullity it carried", c.ConditionsState)
+	}
+}
