@@ -325,6 +325,32 @@ func TestGroundsNoWordBreaksRefusalIsOnlyForScriptsWithout(t *testing.T) {
 	}
 }
 
+// TestScriptioContinuaOnlyNeedsTheWholeUnit is iss-2608301620343236. The
+// unit-length half of scriptioContinuaOnly's test has no fixture reaching it
+// through ValidateText: textUnits gives every scriptio-continua letter a unit of
+// its own, so a multi-rune unit never begins with one and the sibling letter
+// test already rejects it. Deleting the length test therefore leaves the whole
+// suite green.
+//
+// It is kept rather than deleted because it is not defensive scaffolding: it is
+// half of what the predicate MEANS. "Every unit is a single scriptio-continua
+// letter" and "every unit begins with one" are different claims that agree only
+// because of how textUnits splits today, and the weaker one would go on
+// agreeing silently if that ever changed. So the guard is pinned here directly,
+// at the helper, which is the only level a fixture for it exists at.
+func TestScriptioContinuaOnlyNeedsTheWholeUnit(t *testing.T) {
+	if scriptioContinuaOnly([]string{"字a"}) {
+		t.Error("a multi-rune unit beginning with an ideograph is not a script without word breaks; " +
+			"the predicate must read the whole unit, not its first rune")
+	}
+	if !scriptioContinuaOnly([]string{"字", "文"}) {
+		t.Error("units that are each one ideograph are a script without word breaks")
+	}
+	if scriptioContinuaOnly(nil) {
+		t.Error("no units is not a script without word breaks")
+	}
+}
+
 // TestScriptioContinuaRefusalNamesBothFloors is iss-2608301620346560. The
 // no-word-breaks refusal named the unit floor alone, and for a script with no
 // word breaks that is never the floor that binds: every unit is one letter, so
