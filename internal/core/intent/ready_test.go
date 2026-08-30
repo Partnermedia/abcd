@@ -624,3 +624,20 @@ func TestReadyNamesACommentedSection(t *testing.T) {
 		t.Fatal("the fault needs a remedy the reader can act on")
 	}
 }
+
+// TestReadyNamesADuplicateHiddenBehindANullity is iss-2608300259321329: the
+// structural faults were judged only after the claim-state switch, so a first
+// section reading `None stated.` returned OK and the second heading — carrying
+// real, unidentified bullets — was never reached. The gate passed while the
+// stamp refused.
+func TestReadyNamesADuplicateHiddenBehindANullity(t *testing.T) {
+	res := readyWithClaims(t, "", "## Scope Conditions\n\n"+NullityToken+"\n\n"+
+		"## Scope Conditions\n\n- holds only where a POSIX shell exists\n\n")
+	if res.Ready {
+		t.Fatal("a nullity in the first section must not hide a second one")
+	}
+	c := checkByName(t, res, "scope_conditions")
+	if c.OK || !strings.Contains(c.Detail, "more than one") {
+		t.Fatalf("scope_conditions = %+v, want fail naming the duplicated heading", c)
+	}
+}

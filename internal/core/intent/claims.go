@@ -75,7 +75,7 @@ var (
 	// malformedMarkerRe matches the opening of something SHAPED like an identity
 	// marker. Anything it matches that condMarkerRe did not is a hand-typed
 	// near-miss: prose to a parser, an identity to the human who wrote it.
-	malformedMarkerRe = regexp.MustCompile(`<!--\s*cond\s*:`)
+	malformedMarkerRe = regexp.MustCompile(`(?i)<!--\s*cond\s*:`)
 	// anyBulletRe matches a list item at ANY indent. A line that is a bullet ends
 	// the preceding bullet, so an indented sub-bullet is never folded into its
 	// parent's text.
@@ -328,10 +328,22 @@ func readConditionBlock(lines []string, b conditionBlock) (ids []string, malform
 	var parts []string
 	for i := b.start; i < b.end; i++ {
 		ln := strings.TrimRight(lines[i], "\r")
-		for _, m := range condMarkerRe.FindAllStringSubmatch(ln, -1) {
-			ids = append(ids, m[1])
+		spans := codeSpanRanges(ln)
+		var live []string
+		for _, m := range condMarkerRe.FindAllStringSubmatchIndex(ln, -1) {
+			// A marker quoted in backticks is DOCUMENTATION of the grammar, not an
+			// identity — the gradient's own prose writes it that way. Reading it as
+			// one hands a condition an id nobody minted.
+			if inAnyRange(spans, m[0]) {
+				malformed = true
+				continue
+			}
+			ids = append(ids, ln[m[2]:m[3]])
+			live = append(live, ln[m[0]:m[1]])
 		}
-		ln = condMarkerRe.ReplaceAllString(ln, " ")
+		for _, marker := range live {
+			ln = strings.Replace(ln, marker, " ", 1)
+		}
 		if malformedMarkerRe.MatchString(ln) {
 			malformed = true
 		}
@@ -341,6 +353,62 @@ func readConditionBlock(lines []string, b conditionBlock) (ids []string, malform
 		parts = append(parts, ln)
 	}
 	return ids, malformed, strings.TrimSpace(spaceRunRe.ReplaceAllString(strings.Join(parts, " "), " "))
+}
+
+// codeSpanRanges returns the byte ranges of the inline code spans on one line:
+// a run of backticks closed by a run of the same length (CommonMark).
+func codeSpanRanges(ln string) [][2]int {
+	var out [][2]int
+	for i := 0; i < len(ln); {
+		if ln[i] != '`' {
+			i++
+			continue
+		}
+		j := backtickRunEnd(ln, i)
+		closeStart, closeEnd, ok := findBacktickRun(ln, j, j-i)
+		if !ok {
+			i = j
+			continue
+		}
+		_ = closeStart
+		out = append(out, [2]int{i, closeEnd})
+		i = closeEnd
+	}
+	return out
+}
+
+// backtickRunEnd returns the index just past the run of backticks at i.
+func backtickRunEnd(ln string, i int) int {
+	for i < len(ln) && ln[i] == '`' {
+		i++
+	}
+	return i
+}
+
+// findBacktickRun finds the next run of exactly n backticks at or after from.
+func findBacktickRun(ln string, from, n int) (start, end int, ok bool) {
+	for k := from; k < len(ln); {
+		if ln[k] != '`' {
+			k++
+			continue
+		}
+		e := backtickRunEnd(ln, k)
+		if e-k == n {
+			return k, e, true
+		}
+		k = e
+	}
+	return 0, 0, false
+}
+
+// inAnyRange reports whether pos falls inside one of the ranges.
+func inAnyRange(ranges [][2]int, pos int) bool {
+	for _, r := range ranges {
+		if pos >= r[0] && pos < r[1] {
+			return true
+		}
+	}
+	return false
 }
 
 // DuplicateConditionIDs returns the identity markers carried by more than one
@@ -464,7 +532,14 @@ func stampScopeConditions(content string, minter recordid.Minter) (string, int, 
 	if stamped == 0 {
 		return content, 0, nil
 	}
-	return strings.Join(lines, "\n"), stamped, nil
+	out := strings.Join(lines, "\n")
+	// The writer must not produce a record its own reader refuses: readRepoFile
+	// caps every intent read, and a file written past that cap makes the next
+	// Load fail over the WHOLE corpus, not just this record.
+	if len(out) > maxIntentFileBytes {
+		return "", 0, fmt.Errorf("intent: stamping would grow the record to %d bytes, past the %d-byte cap its own reader enforces", len(out), maxIntentFileBytes)
+	}
+	return out, stamped, nil
 }
 
 // mintConditionID draws a fresh identity, redrawing past one already used in

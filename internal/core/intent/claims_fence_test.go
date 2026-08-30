@@ -270,3 +270,66 @@ func TestPlanLeavesACommentedSectionByteIdentical(t *testing.T) {
 		t.Fatalf("the record was rewritten by a refused stamp:\n%s", after)
 	}
 }
+
+// TestMarkerInsideACodeSpanIsNotAnIdentity: a marker quoted in backticks is
+// DOCUMENTATION of the grammar, not an identity. Read as one it hands a
+// condition an id nobody minted — and the gradient's own prose quotes the
+// grammar this way.
+func TestMarkerInsideACodeSpanIsNotAnIdentity(t *testing.T) {
+	body := "- the identity looks like `<!-- cond: cond-2608300102030405 -->`\n"
+	c := ParseClaims(claimRecord(nil, str(body)))
+	if len(c.Conditions) != 1 {
+		t.Fatalf("got %d conditions, want 1", len(c.Conditions))
+	}
+	if c.Conditions[0].ID != "" {
+		t.Errorf("a quoted marker was read as an identity: %q", c.Conditions[0].ID)
+	}
+	if !c.Conditions[0].MalformedMarker {
+		t.Error("a quoted marker must be reported, not silently ignored")
+	}
+	if _, n, err := stampScopeConditions(claimRecord(nil, str(body)), fixedMinter(7)); err != nil || n != 0 {
+		t.Fatalf("the bullet must be skipped, not stamped (n=%d, err=%v)", n, err)
+	}
+}
+
+// TestMalformedMarkerGuardIsCaseInsensitive: a capitalised near-miss is exactly
+// as hand-typed, and exactly as invisible to a case-sensitive guard.
+func TestMalformedMarkerGuardIsCaseInsensitive(t *testing.T) {
+	for _, near := range []string{"<!-- Cond: cond-1 -->", "<!-- COND: whatever -->"} {
+		t.Run(near, func(t *testing.T) {
+			c := ParseClaims(claimRecord(nil, str("- holds on POSIX "+near+"\n")))
+			if !c.Conditions[0].MalformedMarker {
+				t.Fatalf("%q was not reported as a malformed marker", near)
+			}
+		})
+	}
+}
+
+// TestStampRefusesToWritePastTheReadCap: the writer must not produce a record
+// its own reader will not accept — a record written past the cap makes the next
+// Load refuse the WHOLE corpus, not just this file.
+func TestStampRefusesToWritePastTheReadCap(t *testing.T) {
+	root := t.TempDir()
+	head := "---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n" +
+		"## Scope Conditions\n\n- holds on POSIX\n\n## Why This Matters\n\n"
+	tail := "\n\n## Acceptance Criteria\n\n- ok\n"
+	pad := strings.Repeat("x", maxIntentFileBytes-len(head)-len(tail)-10)
+	record := head + pad + tail
+	if len(record) > maxIntentFileBytes {
+		t.Fatalf("fixture is %d bytes, over the %d cap", len(record), maxIntentFileBytes)
+	}
+	writeFile(t, root, plannedDir+"/itd-10-alpha.md", record)
+
+	if _, err := Plan(root, "itd-10"); err == nil {
+		t.Fatal("stamping past the read cap must refuse")
+	} else if !strings.Contains(err.Error(), "cap") {
+		t.Fatalf("the refusal must name the cap, got %q", err)
+	}
+	after, err := os.ReadFile(filepath.Join(root, plannedDir, "itd-10-alpha.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != record {
+		t.Fatal("a refused stamp wrote anyway")
+	}
+}

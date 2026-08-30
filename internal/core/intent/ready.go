@@ -196,6 +196,29 @@ func scopeConditionsCheck(it Intent, claims Claims) ReadyCheck {
 		c.Detail = detail
 		return c
 	}
+	// The structural faults first — BEFORE the claim-state switch. Each is a thing
+	// the STAMP refuses, so the gate has to name it rather than fall through to a
+	// remedy that cannot run; and judging them after the switch let a first
+	// section reading `None stated.` return OK while a second heading below it
+	// carried real, unidentified bullets (iss-2608300259321329).
+	if claims.ConditionsDuplicated {
+		c.OK = false
+		c.Detail = "more than one '## Scope Conditions' heading — which one is the section is undecidable"
+		c.Remedy = "merge the duplicated '## Scope Conditions' sections into one"
+		return c
+	}
+	if claims.ConditionsFenced {
+		c.OK = false
+		c.Detail = "'## Scope Conditions' contains a fenced block — a bullet inside it is an example, not a condition"
+		c.Remedy = "move the fenced example out of '## Scope Conditions'"
+		return c
+	}
+	if claims.ConditionsCommented {
+		c.OK = false
+		c.Detail = "'## Scope Conditions' contains an HTML comment — a bullet parked inside one is not a live condition"
+		c.Remedy = "delete the commented-out block from '## Scope Conditions', or move it out of the section"
+		return c
+	}
 	if claims.ConditionsPrompt {
 		c.OK = false
 		c.Detail = "the '## Scope Conditions' prompt is unanswered — the context claim is unrecorded"
@@ -221,26 +244,6 @@ func scopeConditionsCheck(it Intent, claims Claims) ReadyCheck {
 		c.OK = false
 		c.Detail = "'## Scope Conditions' carries prose but no top-level bullet — a condition without a bullet has nothing to identify"
 		c.Remedy = scopeConditionsRemedy
-		return c
-	}
-	// The structural faults first: each is a thing the STAMP refuses, so the gate
-	// has to name it rather than fall through to a remedy that cannot run.
-	if claims.ConditionsDuplicated {
-		c.OK = false
-		c.Detail = "more than one '## Scope Conditions' heading — which one is the section is undecidable"
-		c.Remedy = "merge the duplicated '## Scope Conditions' sections into one"
-		return c
-	}
-	if claims.ConditionsFenced {
-		c.OK = false
-		c.Detail = "'## Scope Conditions' contains a fenced block — a bullet inside it is an example, not a condition"
-		c.Remedy = "move the fenced example out of '## Scope Conditions'"
-		return c
-	}
-	if claims.ConditionsCommented {
-		c.OK = false
-		c.Detail = "'## Scope Conditions' contains an HTML comment — a bullet parked inside one is not a live condition"
-		c.Remedy = "delete the commented-out block from '## Scope Conditions', or move it out of the section"
 		return c
 	}
 	if bad := MalformedMarkerOrdinals(claims.Conditions); len(bad) > 0 {
