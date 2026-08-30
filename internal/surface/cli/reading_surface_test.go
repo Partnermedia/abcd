@@ -30,6 +30,12 @@ func readingRepo(t *testing.T) string {
 	write(".abcd/development/brief/01-product/06-framing.md", "# Framing\n\n## Construal\n\nA gap in the record.\n")
 	write(".abcd/development/brief/02-constraints/03-invariants.md", "# Invariants\n\n1. One core.\n")
 	write(".abcd/development/specs/open/spc-1-a-spec.md", "---\nid: spc-1\n---\n\n# A spec\n\nThe mechanics.\n")
+	write(".abcd/development/intents/shipped/itd-1-an-intent.md",
+		"---\nid: itd-1\nspec_id: spc-1\n---\n\n# An intent\n\n## Press Release\n\nThe promise.\n")
+	write(".abcd/development/intents/disciplines/itd-2-a-discipline.md",
+		"---\nid: itd-2\n---\n\n# A discipline\n\nA standing commitment.\n")
+	write(".abcd/development/intents/drafts/itd-3-a-draft.md",
+		"---\nid: itd-3\n---\n\n# A draft\n\n## Press Release\n\nA candidate.\n")
 	write("README.md", "# The repository\n")
 	write("go.mod", "module example\n\ngo 1.24\n")
 

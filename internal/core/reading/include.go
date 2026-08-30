@@ -135,6 +135,13 @@ func (r Row) AdmittedAt(p Position) bool {
 // as. It is positive at field granularity: an intent's Audit Notes, its Open
 // Questions and its scope-condition dispositions carry no row here, so they
 // cannot travel however the record's shape changes around them.
+//
+// The list is a CONTRACT, not a census. `Scope Conditions` and `Mechanism` are
+// spc-55's headings and no shipped record carries them yet, so three fields
+// travel in this repository today and five will once that work lands. A field
+// the file does not carry simply contributes no item, which is what lets one
+// projection describe a record whose sections the record is still growing —
+// and what keeps the list from having to be edited on the day they appear.
 var intentProjection = []string{
 	"Press Release",
 	"Acceptance Criteria",

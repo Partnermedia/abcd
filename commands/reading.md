@@ -75,6 +75,12 @@ Write outside the repository, or under the local tier. Both artefacts are also
 refused as INPUT wherever they are found, by their `_type` tag, so a run
 committed before this was true cannot ride in either.
 
+`--out` must name an empty or absent directory: one run's artefacts are one
+run's evidence, and dropping them beside another run's leaves a directory whose
+manifest describes half of what is in it. Both files are written through a
+temporary name and renamed into place, so a reader never opens a half-written
+bundle.
+
 ### The host obligation this binary cannot discharge
 
 The assembled input carries no repository path: each item is an ordinal key, a

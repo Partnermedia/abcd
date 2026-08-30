@@ -94,12 +94,11 @@ var (
 
 // storeNodeType maps an include row's record-store prefix to the node type the
 // record graph reports. It is a translation, not a second declaration of which
-// stores exist: the graph owns that.
+// stores exist: the graph owns that, and an entry here for a store no row names
+// would be a claim this package reads a family it structurally cannot.
 var storeNodeType = map[string]string{
 	"itd": "intent",
 	"spc": "spec",
-	"adr": "adr",
-	"iss": "issue",
 }
 
 // candidate is one admitted (file, field) pair before it is keyed.
@@ -221,6 +220,9 @@ func writeArtefacts(repoRoot, outDir string, b Bundle, m Manifest) error {
 	if !filepath.IsAbs(dir) {
 		dir = filepath.Join(repoRoot, filepath.FromSlash(outDir))
 	}
+	if err := requireEmptyDir(outDir, dir); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("reading: creating the run directory: %w", err)
 	}
@@ -232,11 +234,33 @@ func writeArtefacts(repoRoot, outDir string, b Bundle, m Manifest) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(dir, BundleFileName), bundleRaw, 0o644); err != nil {
+	// Both artefacts go through the repository's one atomic write: temp file,
+	// then rename. A reader never opens a half-written bundle, and a run that
+	// dies mid-write leaves no artefact rather than a plausible short one whose
+	// hash nothing matches.
+	if err := fsutil.WriteFileAtomic(filepath.Join(dir, BundleFileName), bundleRaw, 0o644); err != nil {
 		return fmt.Errorf("reading: writing the assembled input: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, ManifestFileName), manifestRaw, 0o644); err != nil {
+	if err := fsutil.WriteFileAtomic(filepath.Join(dir, ManifestFileName), manifestRaw, 0o644); err != nil {
 		return fmt.Errorf("reading: writing the manifest: %w", err)
+	}
+	return nil
+}
+
+// requireEmptyDir refuses an output directory that already holds something. The
+// two artefacts are one run's evidence, and dropping them beside another run's
+// leaves a directory whose manifest describes only half of what is in it.
+func requireEmptyDir(named, dir string) error {
+	entries, err := os.ReadDir(dir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("reading: reading the output directory: %w", err)
+	}
+	if len(entries) > 0 {
+		return fmt.Errorf("reading: the output directory %s is not empty (%d entr(y|ies)); one run's "+
+			"artefacts are one run's evidence, so name an empty or absent directory", named, len(entries))
 	}
 	return nil
 }

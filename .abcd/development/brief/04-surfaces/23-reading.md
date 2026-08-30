@@ -63,8 +63,10 @@ reader detects it.
 
 `assemble` writes the assembled input (`bundle.json`) and the manifest
 (`manifest.json`) as two separate files: the input goes to a reader, the
-manifest stays with the auditor. `--out <dir>` names the directory; without it
-they land in
+manifest stays with the auditor. `--out <dir>` names the directory, which must
+be empty or absent — one run's artefacts are one run's evidence — and each file
+is written through a temporary name and renamed into place. Without `--out` they
+land in
 `.abcd/.work.local/scratch/reading-runs/<run-id>/`. With `--dry-run` and no
 `--out`, nothing is written and the result is rendered only.
 

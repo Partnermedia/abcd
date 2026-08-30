@@ -756,7 +756,8 @@ or a tag moves and the manifest's re-runnability rests on a reference that canno
 
 ```
       --dry-run           write nothing; with --out the two artefacts still land in that directory
-      --out string        the directory the assembled input and the manifest are written to (default: the local-tier run directory)
+      --out string        an empty or absent directory the assembled input and the manifest are written to
+                          (default: the local-tier run directory)
       --position string   the reading position: widening, entailment, comparative, detection
       --target string     the commit the assembly describes: HEAD, or a hexadecimal sha of 7 to 40 digits
 ```

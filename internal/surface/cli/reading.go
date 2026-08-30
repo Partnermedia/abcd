@@ -111,7 +111,8 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 	assembleCmd.Flags().StringVar(&target, "target", "",
 		"the commit the assembly describes: HEAD, or a hexadecimal sha of 7 to 40 digits")
 	assembleCmd.Flags().StringVar(&outDir, "out", "",
-		"the directory the assembled input and the manifest are written to (default: the local-tier run directory)")
+		"an empty or absent directory the assembled input and the manifest are written to\n"+
+			"(default: the local-tier run directory)")
 	assembleCmd.Flags().BoolVar(&dryRun, "dry-run", false,
 		"write nothing; with --out the two artefacts still land in that directory")
 

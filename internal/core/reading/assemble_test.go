@@ -622,3 +622,56 @@ func TestUntrackedFileInANewDirectoryRefuses(t *testing.T) {
 		t.Errorf("the refusal does not name the untracked file: %v", err)
 	}
 }
+
+// TestProjectionKeepsASubsectionOfAProjectedField: the redactor ends a section
+// at the next heading of level <= its own, and the projection must agree. Ending
+// at the next heading of ANY level drops a `###` under a projected `##` — the
+// item is silently short and the manifest hashes the short version.
+func TestProjectionKeepsASubsectionOfAProjectedField(t *testing.T) {
+	root := fixtureRepo(t)
+	const nested = "SENTINEL-NESTED-CRITERION"
+	writeFile(t, root, ".abcd/development/intents/shipped/itd-6-nested.md",
+		"---\nid: itd-6\nspec_id: spc-1\n---\n\n# A shipped intent\n\n"+
+			"## Acceptance Criteria\n\n- A top-level criterion.\n\n"+
+			"### A grouped set\n\n- "+nested+"\n\n"+
+			"## Audit Notes\n\n"+sentinelAuditNotes+"\n")
+	gitCommitAll(t, root)
+
+	res := assembleFixture(t, root, PositionWidening)
+	text := bundleText(res.Bundle)
+	if !strings.Contains(text, nested) {
+		t.Error("a subsection of a projected field was dropped; projection must end where the redactor ends")
+	}
+	if strings.Contains(text, sentinelAuditNotes) {
+		t.Error("the projection ran past its own section into an excluded one")
+	}
+}
+
+// TestAssembleRefusesANonEmptyOutputDirectory: the two artefacts are one run's
+// evidence, and writing them beside another run's leaves a directory whose
+// manifest describes only half of what is in it.
+func TestAssembleRefusesANonEmptyOutputDirectory(t *testing.T) {
+	root := fixtureRepo(t)
+	out := filepath.Join(t.TempDir(), "run")
+	writeFile(t, out, "leftover.txt", "from an earlier run\n")
+
+	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", OutDir: out})
+	if err == nil {
+		t.Fatal("a non-empty output directory was accepted")
+	}
+	if !strings.Contains(err.Error(), "empty") {
+		t.Errorf("the refusal does not say what is wrong with the directory: %v", err)
+	}
+
+	empty := filepath.Join(t.TempDir(), "fresh")
+	if _, err := Assemble(AssembleRequest{
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", OutDir: empty,
+	}); err != nil {
+		t.Errorf("an absent output directory was refused: %v", err)
+	}
+	if _, err := Assemble(AssembleRequest{
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", OutDir: empty,
+	}); err == nil {
+		t.Error("a second run over the same directory was accepted; it is no longer empty")
+	}
+}

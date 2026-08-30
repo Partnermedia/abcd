@@ -34,9 +34,21 @@ Two rules bind the table itself (ruled 2026-08-28):
    change. The drafts asymmetry and the Audit Notes exclusion are its two
    instances, which is what makes the table derivable rather than remembered.
 
+A row's field list is a contract rather than a census. The intent projection
+names five fields; `Scope Conditions` and `Mechanism` are headings no shipped
+record carries yet, so three fields travel in this repository today and five
+travel once those sections exist. A field a file does not carry contributes no
+item.
+
+A projected field ends where the redactor ends a section: at the next heading of
+the same level or shallower. A subsection therefore travels with the field it
+sits under, rather than being cut off at the first heading of any depth.
+
 The exclusion floor is asserted into every manifest, each entry with the signal
 by which a reader detects it, so the exclusions are checkable rather than taken
-on trust. Prose-borne warmth inside an admitted chapter has no structural
+on trust. Its key and heading half is fail-closed like its path half: a file
+that still carries an excluded key or heading after redaction refuses the run
+rather than travelling with the manifest asserting otherwise. Prose-borne warmth inside an admitted chapter has no structural
 signal: the chapter-level bound and the glossary discipline carry it, and it is
 disclosed as residue.
 

@@ -23,6 +23,19 @@ import (
 // the file does not carry contributes no item, which is what lets one
 // projection describe an intent whose sections the record is still growing.
 
+// trimBlankEdges joins a section body, dropping the blank lines at either end so
+// a projected field is the text and not the whitespace around it.
+func trimBlankEdges(lines []string) string {
+	start, end := 0, len(lines)
+	for start < end && strings.TrimSpace(lines[start]) == "" {
+		start++
+	}
+	for end > start && strings.TrimSpace(lines[end-1]) == "" {
+		end--
+	}
+	return strings.Join(lines[start:end], "\n")
+}
+
 // redactExcluded removes the exclusion floor's key-signalled and
 // heading-signalled material from a document before anything is taken out of
 // it.
@@ -82,18 +95,12 @@ func redactExcluded(rel, doc string, exclusions []Exclusion) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("reading: reading the sections of %s: %w", rel, err)
 	}
-	for i, s := range sections {
-		if s.Level == 0 || !headings[s.Title] {
+	for i, sec := range sections {
+		if sec.Level == 0 || !headings[sec.Title] {
 			continue
 		}
-		end := len(lines)
-		for _, next := range sections[i+1:] {
-			if next.Level > 0 && next.Level <= s.Level {
-				end = next.Line - 1
-				break
-			}
-		}
-		for j := s.Line - 1; j < end && j < len(lines); j++ {
+		start, end := sectionSpan(sections, i, len(lines))
+		for j := start; j < end; j++ {
 			if j >= 0 {
 				drop[j] = true
 			}
@@ -205,6 +212,26 @@ func excludedKeyInFirstBlock(doc string, keys map[string]bool) (int, string, boo
 	return 0, "", false
 }
 
+// sectionSpan is the half-open line range one heading OWNS: the heading itself
+// through everything under it, ending at the next heading of the same level or
+// shallower. Indices are 0-based over the whole document, frontmatter included.
+//
+// It is shared by the redactor and the projector because the two must agree
+// about where a section ends. The section scan's own Body ends at the next
+// heading of ANY level, which is right for rendering a page and wrong here: a
+// `###` under a projected `##` would be dropped from the item while the redactor
+// treated it as part of the section it belongs to, so a field would travel short
+// and the manifest would hash the short version.
+func sectionSpan(sections []site.Section, i, total int) (int, int) {
+	start := sections[i].Line - 1
+	for _, next := range sections[i+1:] {
+		if next.Level > 0 && next.Level <= sections[i].Level {
+			return start, next.Line - 1
+		}
+	}
+	return start, total
+}
+
 // projectField extracts one named field from a record's text. Only a record is
 // ever projected, and a record is markdown, so the same scope holds here.
 func projectField(rel, doc, field string) (string, bool, error) {
@@ -213,10 +240,13 @@ func projectField(rel, doc, field string) (string, bool, error) {
 	if err != nil {
 		return "", false, fmt.Errorf("reading: projecting %s from %s: %w", field, rel, err)
 	}
-	for _, s := range sections {
-		if s.Level >= 2 && s.Title == field {
-			return s.Body, true, nil
+	lines := strings.Split(doc, "\n")
+	for i, sec := range sections {
+		if sec.Level < 2 || sec.Title != field {
+			continue
 		}
+		start, end := sectionSpan(sections, i, len(lines))
+		return trimBlankEdges(lines[min(start+1, len(lines)):min(end, len(lines))]), true, nil
 	}
 	fields := frontmatter.Fields(strings.Split(doc, "\n"))
 	if f, ok := fields[field]; ok && !frontmatter.IsNull(f.Value) {
