@@ -128,6 +128,10 @@ instructed).
   fact; they do not prevent it. Disclosed residue, not a gap to be closed
   here.
 
+## Scope Conditions
+
+None stated.
+
 ## Acceptance Criteria
 
 - **Given** a repository state, **when** the assembler runs, **then** its

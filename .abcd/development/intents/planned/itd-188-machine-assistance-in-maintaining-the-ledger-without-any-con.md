@@ -39,6 +39,10 @@ impact: additive
   when the reading returns, not later — a protocol invented under time
   pressure is a protocol that gets skipped.
 
+## Scope Conditions
+
+None stated.
+
 ## Acceptance Criteria
 
 - **Given** a scribe invocation, **when** its context is assembled,

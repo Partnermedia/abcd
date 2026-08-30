@@ -31,6 +31,10 @@ impact: additive
   record it will read); any commitment made outside the tooling during the
   build.
 
+## Scope Conditions
+
+None stated.
+
 ## Acceptance Criteria
 
 - **Given** a lapse, **when** it is captured, **then** the entry carries
