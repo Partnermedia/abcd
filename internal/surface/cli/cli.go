@@ -1751,6 +1751,12 @@ func newIntentAuditCommand(asJSON *bool) *cobra.Command {
 				case "ingested":
 					fmt.Fprintf(w, "  criteria %d: MET %d · MET_WITH_CONCERNS %d · NOT_MET %d · INCONCLUSIVE %d\n",
 						res.Criteria, res.Met, res.MetWithConcern, res.NotMet, res.Inconclusive)
+					// Only an intent that records scope conditions has a disposition
+					// split to report; a conditionless one has no surface here.
+					if res.Conditions > 0 {
+						fmt.Fprintf(w, "  scope conditions %d: survived %d · narrowed %d · falsified %d · untested %d\n",
+							res.Conditions, res.Survived, res.Narrowed, res.Falsified, res.Untested)
+					}
 				case "dead_letter":
 					fmt.Fprintf(w, "  DEAD_LETTER: %s\n  raw payload: %s\n", res.Reason, res.DeadLetterPath)
 				}
