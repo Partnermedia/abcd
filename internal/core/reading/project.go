@@ -155,19 +155,27 @@ var (
 	// The indent is SPACES, one to three. A tab makes an indented code block,
 	// not a heading, so `\s` would refuse a line no renderer treats as one.
 	indentedATXRe = regexp.MustCompile(`^[ ]{1,3}#{1,6}\s+(.*)$`)
-	// rawHeadingOpenRe matches a raw HTML heading's OPENING tag, attributes and
-	// self-closing slash included. Matching the opening tag alone, rather than a
-	// closed pair, is what covers the unclosed, self-closing and multi-line forms
-	// — and a document does not have to be well-formed for a reader to see a
-	// heading in it.
-	rawHeadingOpenRe = regexp.MustCompile(`(?is)<h[1-6](?:\s[^>]*)?/?>`)
-	// rawHeadingEndRe bounds the text such a tag introduces: its own close, the
+	// rawHeadingOpenRe matches an element that OPENS a heading: an h1-h6 tag, or
+	// any element carrying a heading role, which renders and is announced as a
+	// heading while no h-tag appears. Matching the opening tag alone, rather
+	// than a closed pair, is what covers the unclosed, self-closing and
+	// multi-line forms — a document does not have to be well-formed for a reader
+	// to see a heading in it.
+	rawHeadingOpenRe = regexp.MustCompile(
+		`(?is)<h[1-6](?:\s[^>]*)?/?>|<[a-z][a-z0-9-]*\s[^>]*role\s*=\s*["']?heading\b[^>]*>`)
+	// rawHeadingEndRe bounds the text such a tag introduces: any closing tag, the
 	// next heading tag, or a blank line.
-	rawHeadingEndRe = regexp.MustCompile(`(?is)</h[1-6]\s*>|<h[1-6](?:\s[^>]*)?/?>|\n[ \t]*\n`)
-	// unresolvableFrontmatterRe matches the YAML constructions whose keys this
-	// package cannot resolve without becoming a YAML parser: a tag, an anchor,
-	// and an explicit key whose name is a block scalar.
-	unresolvableFrontmatterRe = regexp.MustCompile(`^\s*(!!|&\S|\?\s*[|>])`)
+	rawHeadingEndRe = regexp.MustCompile(`(?is)</[a-z][a-z0-9-]*\s*>|<h[1-6](?:\s[^>]*)?/?>|\n[ \t]*\n`)
+	// questionLineRe matches any explicit-key line. Whether it is READABLE is a
+	// second question, asked against explicitYAMLKeyRe: a `?` line that pattern
+	// cannot fully read is a key this package cannot resolve.
+	questionLineRe = regexp.MustCompile(`^\s*\?(\s|$)`)
+	// quotedSpanRe matches a quoted scalar. The flow scan blanks these before
+	// looking for keys, which is what lets it stay UNANCHORED: anchoring the
+	// scan to a brace at the start of a line fixed the quoted-scalar false
+	// positive by giving up every nested flow shape, and a floor that closes a
+	// false positive by dropping a class is not a trade worth making.
+	quotedSpanRe = regexp.MustCompile(`"[^"]*"|'[^']*'`)
 	// htmlCommentRe and htmlTagRe strip the markup a title can carry without
 	// changing how it reads on the page.
 	htmlCommentRe = regexp.MustCompile(`(?s)<!--.*?-->`)
@@ -179,12 +187,6 @@ var (
 	mdLinkRe = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)`)
 	// explicitYAMLKeyRe matches YAML's explicit-key form, `? origin`.
 	explicitYAMLKeyRe = regexp.MustCompile(`^\s*\?\s+["']?([A-Za-z_][A-Za-z0-9_-]*)["']?\s*$`)
-	// flowMapLineRe anchors the flow-mapping scan: the brace must open the line,
-	// or follow a key at the start of it. Unanchored, the key pattern below fired
-	// on a quoted scalar that merely QUOTES a flow mapping — and this corpus
-	// writes long quoted reason strings, so an unanchored scan is one sentence
-	// away from a repository that cannot assemble.
-	flowMapLineRe = regexp.MustCompile(`^\s*(?:["']?[A-Za-z_][A-Za-z0-9_-]*["']?\s*:\s*)?\{`)
 	// flowKeyRe matches a key inside a flow mapping, at top level or nested.
 	flowKeyRe = regexp.MustCompile(`[{,]\s*["']?([A-Za-z_][A-Za-z0-9_-]*)["']?\s*:`)
 	// doubleQuotedKeyRe captures a double-quoted key's raw spelling, escapes and
@@ -322,11 +324,11 @@ func verifyRedaction(rel, original, redacted string, keys, headings map[string]b
 	// by. Reading raw lines instead made this floor fire on a fenced example of
 	// the record template — a heading inside a code block is an example, not a
 	// field, and the redactor rightly left it alone while this refused the run.
-	// Every raw-line scan below starts at `offset`, the first BODY line. Running
-	// them over the frontmatter finds constructions that are not what they look
-	// like: a block scalar whose last line is the excluded title, sitting above
-	// the closing `---`, was refused as an underlined heading — a true refusal
-	// reached by a false reading, which teaches whoever hits it the wrong fix.
+	// `offset` is what the stripper reports as the first body line. The raw-HTML
+	// scan uses it as a floor; the setext scan does NOT, because that offset can
+	// overshoot a block the stripper did not recognise the close of, and a scan
+	// that trusts it then skips real body lines. Setext bounds itself by shape
+	// instead — see below.
 	body, offset := site.StripFrontmatter(redacted)
 	sections, err := site.Sections(rel, body, offset)
 	if err != nil {
@@ -385,8 +387,20 @@ func verifyRedaction(rel, original, redacted string, keys, headings map[string]b
 	// heading scanner here to compute one is the second parser this package
 	// exists not to grow. A record underlining its Audit Notes is rare and a
 	// refusal names it; a leak would not.
-	for i := offset; i+1 < len(lines); i++ {
+	// The setext scan runs from line 0 and skips only an INDENTED line inside the
+	// first block. Confining it to the stripper's offset trusted a closer that
+	// can overshoot; skipping by shape instead needs no offset at all, and still
+	// keeps a block scalar's last line — always indented — from being read as an
+	// underlined heading.
+	fmOpen, fmClose, hasBlock := firstBlockRange(lines, fenced)
+	inFirstBlock := func(i int) bool {
+		return hasBlock && i > fmOpen && (fmClose < 0 || i < fmClose)
+	}
+	for i := 0; i+1 < len(lines); i++ {
 		if fenced[i] || fenced[i+1] || !setextRuleRe.MatchString(lines[i+1]) {
+			continue
+		}
+		if inFirstBlock(i) && strings.HasPrefix(lines[i], " ") {
 			continue
 		}
 		title := normaliseHeadingTitle(lines[i])
@@ -399,6 +413,23 @@ func verifyRedaction(rel, original, redacted string, keys, headings map[string]b
 		}
 	}
 	return nil
+}
+
+// blankQuoted replaces every quoted scalar with spaces of the same length, so a
+// scan over the rest of the line cannot see inside a string. The length is kept
+// so a caller counting braces or offsets is measuring the same line it started
+// with.
+func blankQuoted(line string) string {
+	return quotedSpanRe.ReplaceAllStringFunc(line, func(m string) string {
+		return strings.Repeat(" ", len(m))
+	})
+}
+
+// blockCloser reports whether a line closes a frontmatter block. YAML closes a
+// document with `---` or `...`, and both end the block a key scan is walking.
+func blockCloser(line string) bool {
+	t := strings.TrimSpace(line)
+	return strings.HasPrefix(t, "---") || strings.HasPrefix(t, "...")
 }
 
 // submatches returns a match's non-empty capture groups, so a pattern spelling
@@ -441,15 +472,13 @@ func escapedQuotedKey(line string) (string, bool) {
 // A fenced line is replaced by an empty line rather than dropped, so the offset
 // arithmetic keeps working and an example inside a code block still cannot fire.
 func rawHTMLHeading(lines []string, fenced []bool, offset int, headings map[string]bool) (int, string, bool) {
-	scan := make([]string, len(lines))
-	for i := range lines {
-		if i >= offset && !fenced[i] {
-			scan[i] = lines[i]
-		}
-	}
-	joined := strings.Join(scan, "\n")
+	joined := strings.Join(lines, "\n")
 
 	for _, open := range rawHeadingOpenRe.FindAllStringIndex(joined, -1) {
+		line := strings.Count(joined[:open[0]], "\n")
+		if line < offset || (line < len(fenced) && fenced[line]) {
+			continue
+		}
 		rest := joined[open[1]:]
 		end := len(rest)
 		if b := rawHeadingEndRe.FindStringIndex(rest); b != nil {
@@ -460,19 +489,59 @@ func rawHTMLHeading(lines []string, fenced []bool, offset int, headings map[stri
 			continue
 		}
 		if _, ok := namesExcludedHeading(title, headings); ok {
-			return strings.Count(joined[:open[0]], "\n") + 1, title, true
+			return line + 1, title, true
 		}
 	}
 	return 0, "", false
 }
 
-// unresolvableFrontmatterShape reports a YAML construction in the first block
-// whose keys this package cannot resolve: a tag (`!!`), an anchor (`&`), or an
-// explicit key whose name is a block scalar (`? |`). It is the same reasoning as
-// the escaped quoted key — resolving these means a YAML parser, a record has no
-// reason to use one, so the construction itself is the signal and the answer is
-// a refusal rather than a guess.
+// unresolvableFrontmatterShape reports a construction in the first block whose
+// keys this package cannot resolve, or a block whose bounds it cannot trust.
+//
+// The reasoning is the escaped quoted key's, applied to its whole class:
+// resolving any of these means a YAML parser, a record has no reason to use one,
+// so the construction itself is the signal and the answer is a refusal rather
+// than a guess. Any line-initial `!` is a tag — the double-bang shorthand, a
+// single-bang local tag, a verbatim `!<…>` tag alike. Any `&` is an anchor. And
+// any explicit-key line the readable-key pattern cannot fully read is a key
+// whose name this package is not entitled to assume.
+//
+// The block BOUNDS matter for the same reason the keys do. The frontmatter
+// stripper closes on `---`, so a block closed by `...`, or opened and never
+// closed, makes the offset it reports overshoot into the body — and a scan that
+// trusted that offset skipped past real body lines. Refusing both shapes means
+// no scan downstream has to reason about an offset that lies.
 func unresolvableFrontmatterShape(lines []string, fenced []bool) (int, string, bool) {
+	open, close, ok := firstBlockRange(lines, fenced)
+	if !ok {
+		return 0, "", false
+	}
+	if close < 0 {
+		return open + 1, "a frontmatter block that is never closed", true
+	}
+	if strings.HasPrefix(strings.TrimSpace(lines[close]), "...") {
+		return close + 1, "a frontmatter block closed by `...`", true
+	}
+	for i := open + 1; i < close; i++ {
+		if fenced[i] {
+			continue
+		}
+		trimmed := strings.TrimLeft(lines[i], " \t")
+		switch {
+		case strings.HasPrefix(trimmed, "!"):
+			return i + 1, "a YAML tag", true
+		case strings.HasPrefix(trimmed, "&"):
+			return i + 1, "a YAML anchor", true
+		case questionLineRe.MatchString(lines[i]) && !explicitYAMLKeyRe.MatchString(lines[i]):
+			return i + 1, "an explicit key this package cannot read", true
+		}
+	}
+	return 0, "", false
+}
+
+// firstBlockRange locates the document's first delimiter-fenced region: the line
+// that opens it and the line that closes it, or -1 for a block never closed.
+func firstBlockRange(lines []string, fenced []bool) (int, int, bool) {
 	open := -1
 	for i, line := range lines {
 		if fenced[i] {
@@ -488,20 +557,14 @@ func unresolvableFrontmatterShape(lines []string, fenced []bool) (int, string, b
 		}
 	}
 	if open < 0 {
-		return 0, "", false
+		return 0, 0, false
 	}
 	for i := open + 1; i < len(lines); i++ {
-		if fenced[i] {
-			continue
-		}
-		if strings.HasPrefix(strings.TrimSpace(lines[i]), "---") {
-			return 0, "", false
-		}
-		if m := unresolvableFrontmatterRe.FindStringSubmatch(lines[i]); m != nil {
-			return i + 1, strings.TrimSpace(m[1]), true
+		if !fenced[i] && blockCloser(lines[i]) {
+			return open, i, true
 		}
 	}
-	return 0, "", false
+	return open, -1, true
 }
 
 // excludedKeyInFirstBlock reports an excluded key sitting at column 0 inside the
@@ -532,11 +595,12 @@ func excludedKeyInFirstBlock(lines []string, fenced []bool, keys map[string]bool
 	if open < 0 {
 		return 0, "", false
 	}
+	depth := 0
 	for i := open + 1; i < len(lines); i++ {
 		if fenced[i] {
 			continue
 		}
-		if strings.HasPrefix(strings.TrimSpace(lines[i]), "---") {
+		if blockCloser(lines[i]) {
 			return 0, "", false
 		}
 		// Four spellings, because the field reader reports one of them. A plain
@@ -555,14 +619,30 @@ func excludedKeyInFirstBlock(lines []string, fenced []bool, keys map[string]bool
 				}
 			}
 		}
-		if flowMapLineRe.MatchString(lines[i]) {
-			for _, m := range flowKeyRe.FindAllStringSubmatch(lines[i], -1) {
-				for _, key := range submatches(m) {
-					if keys[key] {
-						return i + 1, key, true
-					}
+		// The flow scan runs UNANCHORED over the line with its quoted scalars
+		// blanked. Blanking is what closes the false positive — a quoted reason
+		// string that merely quotes a flow mapping no longer matches — without
+		// giving up the nested shapes an anchored scan could not see: a map in a
+		// sequence, a map in a flow sequence, a tagged or anchored map.
+		//
+		// `depth` carries an open brace across lines, so a key on a continuation
+		// line is read as the flow key it is rather than as prose.
+		bare := blankQuoted(lines[i])
+		scan := bare
+		if depth > 0 {
+			scan = "," + bare
+		}
+		for _, m := range flowKeyRe.FindAllStringSubmatch(scan, -1) {
+			for _, key := range submatches(m) {
+				if keys[key] {
+					return i + 1, key, true
 				}
 			}
+		}
+		depth += strings.Count(bare, "{") + strings.Count(bare, "[") -
+			strings.Count(bare, "}") - strings.Count(bare, "]")
+		if depth < 0 {
+			depth = 0
 		}
 		if key, ok := escapedQuotedKey(lines[i]); ok {
 			return i + 1, key, true

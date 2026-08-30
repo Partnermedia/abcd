@@ -52,11 +52,16 @@ A projected field ends where the redactor ends a section: at the next heading of
 the same level or shallower. A subsection therefore travels with the field it
 sits under, rather than being cut off at the first heading of any depth.
 
-Two heading shapes stay outside the floor and are disclosed rather than
-claimed: one nested inside a blockquote or a list item, which no scan here reads
-as a heading, and one reaching an excluded title through a homoglyph or an
-invisible format character, which slugs differently because the comparison is
-over code points.
+Two headings are the same heading when they fold to one another or render to
+one another, the second measured by the site's own anchor slug — the equality the
+whole floor is stated against.
+
+Three shapes stay outside it and are disclosed rather than claimed: a heading
+nested inside a blockquote or a list item, which no scan here reads as a
+heading; one reaching an excluded title through a homoglyph or an invisible
+format character, which slugs differently because the comparison is over code
+points; and a double-encoded character reference, which decodes to the literal
+text it renders as and is therefore a different heading, left as one on purpose.
 
 The heading signal is scoped to markdown. A heading and a frontmatter key are
 things a record carries, and a source or configuration file carries neither, so

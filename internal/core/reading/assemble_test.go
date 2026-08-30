@@ -999,23 +999,17 @@ func TestRenderEquivalenceCoversWrappersAndEntities(t *testing.T) {
 		"a span wrapper":   "## <span>Audit Notes</span>\n\n" + sentinelAuditNotes + "\n",
 		"a link wrapper":   "## [Audit Notes](#audit-notes)\n\n" + sentinelAuditNotes + "\n",
 		"an entity":        "## Audit&nbsp;Notes\n\n" + sentinelAuditNotes + "\n",
-		"an amp entity":    "## Audit &amp; Notes\n\n" + sentinelAuditNotes + "\n",
+		// One pass decodes this to "Audit & Notes", which slugs onto the excluded
+		// title. Skipping the assertion when the run refuses would have made this
+		// probe check nothing at all, which is how it sat for a round.
+		"an amp entity": "## Audit &amp; Notes\n\n" + sentinelAuditNotes + "\n",
 	}
 	for what, body := range cases {
 		root := fixtureRepo(t)
 		writeFile(t, root, ".abcd/development/specs/open/spc-14-wrapped.md",
 			"---\nid: spc-14\n---\n\n# A spec\n\nProse.\n\n"+body)
 		gitCommitAll(t, root)
-
-		res, err := Assemble(AssembleRequest{
-			RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
-		})
-		if err != nil {
-			continue
-		}
-		if strings.Contains(bundleText(res.Bundle), sentinelAuditNotes) {
-			t.Errorf("a heading carrying %s let an excluded section travel", what)
-		}
+		refusesOrWithholds(t, root, "a heading carrying "+what, sentinelAuditNotes)
 	}
 }
 
@@ -1150,10 +1144,6 @@ func TestHeadingFollowedByAnAutolinkDoesNotRefuse(t *testing.T) {
 // run directory is the assembler's own, so it must name itself.
 func TestDefaultRunDirectoryRefusalNamesIt(t *testing.T) {
 	root := fixtureRepo(t)
-	res, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD"})
-	if err != nil {
-		t.Fatalf("assemble: %v", err)
-	}
 	// Re-run into the same directory by pinning the mint, so the default lands
 	// where a run already sits — the collision the fallback has to survive.
 	setMinter(t, fixedMinter("2608301200", 789))
@@ -1168,5 +1158,105 @@ func TestDefaultRunDirectoryRefusalNamesIt(t *testing.T) {
 	if !strings.Contains(err.Error(), first.RunID) {
 		t.Errorf("the refusal does not name the directory: %v", err)
 	}
-	_ = res
+}
+
+// spcWithFrontmatter writes one spec with the given frontmatter body and commits.
+func spcWithFrontmatter(t *testing.T, root, name, front string) {
+	t.Helper()
+	writeFile(t, root, ".abcd/development/specs/open/"+name, front+"\n# A spec\n\nProse.\n")
+	gitCommitAll(t, root)
+}
+
+// refusesOrWithholds asserts the sentinel never reaches the bundle, by refusal or
+// by redaction. A refusal IS the floor working; what must not happen is a clean
+// run carrying the field.
+func refusesOrWithholds(t *testing.T, root, what, sentinel string) {
+	t.Helper()
+	res, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	if err != nil {
+		return
+	}
+	if strings.Contains(bundleText(res.Bundle), sentinel) {
+		t.Errorf("%s let the excluded field travel", what)
+	}
+}
+
+// TestFlowMappingKeyShapesAreRecognised covers the flow-mapping spellings an
+// anchored scan gave up. Anchoring fixed a false positive by dropping a class.
+func TestFlowMappingKeyShapesAreRecognised(t *testing.T) {
+	rows := map[string]string{
+		"a flow map in a flow sequence":   "---\nid: spc-21\nmeta: [{origin: " + sentinelOrigin + "}]\n---\n",
+		"a tagged flow map":               "---\nid: spc-21\nmeta: !!map {origin: " + sentinelOrigin + "}\n---\n",
+		"an anchored flow map":            "---\nid: spc-21\nmeta: &m {origin: " + sentinelOrigin + "}\n---\n",
+		"a key after a newline in braces": "---\nid: spc-21\nmeta: {a: 1\n, origin: " + sentinelOrigin + "}\n---\n",
+		"a flow map in a sequence item":   "---\nid: spc-21\nmeta:\n  - {origin: " + sentinelOrigin + "}\n---\n",
+		"a flow map among others":         "---\nid: spc-21\nmeta: [{a: 1}, {origin: " + sentinelOrigin + "}]\n---\n",
+	}
+	for what, front := range rows {
+		root := fixtureRepo(t)
+		spcWithFrontmatter(t, root, "spc-21-flow.md", front)
+		refusesOrWithholds(t, root, what, sentinelOrigin)
+	}
+}
+
+// TestSetextSurvivesAnOvershootingFrontmatterCloser: the frontmatter closer the
+// stripper looks for is `---`, so a block closed by `...` or never closed makes
+// the reported offset overshoot into the body — past a setext heading, which
+// then travelled whole.
+func TestSetextSurvivesAnOvershootingFrontmatterCloser(t *testing.T) {
+	rows := map[string]string{
+		"a first block closed by three dots": "---\nid: spc-22\n...\n\n# A spec\n\nAudit Notes\n---\n\n" + sentinelAuditNotes + "\n",
+		"a first block never closed":         "---\nid: spc-22\n\n# A spec\n\nAudit Notes\n===\n\n" + sentinelAuditNotes + "\n",
+	}
+	for what, body := range rows {
+		root := fixtureRepo(t)
+		writeFile(t, root, ".abcd/development/specs/open/spc-22-closer.md", body)
+		gitCommitAll(t, root)
+		refusesOrWithholds(t, root, what, sentinelAuditNotes)
+	}
+}
+
+// TestTagAndExplicitKeyShapesAreRecognised: the unresolvable-shape floor caught
+// the double-bang shorthand only, and read an explicit-key line as safe whenever
+// its own pattern happened not to match.
+func TestTagAndExplicitKeyShapesAreRecognised(t *testing.T) {
+	rows := map[string]string{
+		"a local tag":                "---\nid: spc-23\n!local origin: " + sentinelOrigin + "\n---\n",
+		"a verbatim tag":             "---\nid: spc-23\n!<tag:example.invalid,2026:o> origin: " + sentinelOrigin + "\n---\n",
+		"an explicit key with a tag": "---\nid: spc-23\n? !!str origin\n: " + sentinelOrigin + "\n---\n",
+		"an explicit key anchored":   "---\nid: spc-23\n? &a origin\n: " + sentinelOrigin + "\n---\n",
+		"an explicit key escaped":    "---\nid: spc-23\n? \"ori\\u0067in\"\n: " + sentinelOrigin + "\n---\n",
+	}
+	for what, front := range rows {
+		root := fixtureRepo(t)
+		spcWithFrontmatter(t, root, "spc-23-tags.md", front)
+		refusesOrWithholds(t, root, what, sentinelOrigin)
+	}
+}
+
+// TestRawHeadingSpanningAFenceIsRecognised: blanking fenced lines before the
+// scan erased the heading's own text, so a block opened outside a fence that
+// runs through fence delimiters was mis-titled and admitted.
+func TestRawHeadingSpanningAFenceIsRecognised(t *testing.T) {
+	root := fixtureRepo(t)
+	writeFile(t, root, ".abcd/development/specs/open/spc-24-fence.md",
+		"---\nid: spc-24\n---\n\n# A spec\n\n<h2>\n```\nAudit Notes\n```\n</h2>\n\n"+sentinelAuditNotes+"\n")
+	gitCommitAll(t, root)
+	refusesOrWithholds(t, root, "a raw heading spanning a fence", sentinelAuditNotes)
+}
+
+// TestHeadingRoleDivIsRecognised: an element carrying a heading ROLE renders as
+// a heading to an assistive reader and to a human, and no h-tag appears.
+func TestHeadingRoleDivIsRecognised(t *testing.T) {
+	rows := map[string]string{
+		"a div with a heading role":  "<div role=\"heading\" aria-level=\"2\">Audit Notes</div>\n\n" + sentinelAuditNotes + "\n",
+		"a span with a heading role": "<span role=heading>Audit Notes</span>\n\n" + sentinelAuditNotes + "\n",
+	}
+	for what, body := range rows {
+		root := fixtureRepo(t)
+		writeFile(t, root, ".abcd/development/specs/open/spc-25-role.md",
+			"---\nid: spc-25\n---\n\n# A spec\n\nProse.\n\n"+body)
+		gitCommitAll(t, root)
+		refusesOrWithholds(t, root, what, sentinelAuditNotes)
+	}
 }
