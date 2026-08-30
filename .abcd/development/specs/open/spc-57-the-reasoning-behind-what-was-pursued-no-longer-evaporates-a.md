@@ -3,8 +3,165 @@ id: spc-57
 slug: the-reasoning-behind-what-was-pursued-no-longer-evaporates-a
 intent: itd-179
 ---
-# the-reasoning-behind-what-was-pursued-no-longer-evaporates-a
+
+# Grounds at conjecture granularity
 
 ## Summary
 
-_Draft: describe what spc-57 delivers for itd-179 — scope, approach, and how it satisfies the intent's Acceptance Criteria. This spec is the design record the fidelity review audits against._
+spc-57 delivers [itd-179](../../intents/planned/itd-179-the-reasoning-behind-what-was-pursued-no-longer-evaporates-a.md):
+a grounds argument on the readiness gate and on capture's triage routes, with a
+three-value vocabulary (`pursued`, `deferred`, `declined`) and a refusal when it
+is absent. Grounds are recorded today only for deliberate non-action, where a
+wontfix carries a note and an ADR carries its alternatives; the reasoning behind
+what went forward has no home and evaporates at the gate.
+
+The grounds name the conjecture being acted on, not the route taken. "Planned it
+because it is next" is a restatement of the decision; "planned it because we
+expect a stamped identity to survive rewording, which nothing else does" is a
+conjecture somebody can later find wrong.
+
+## Scope
+
+- **Vocabulary** (`internal/core/grounds/`, new leaf package): The three values,
+  the `<token>: <text>` grammar, the parser and the renderer, held once so the
+  intent writer, the ledger writer and the lint read one copy. Standard library
+  only; no new dependency.
+- **Intent side** (`internal/core/intent/grounds.go`, new):
+  `RecordGrounds(repoRoot, intentID string, g grounds.Grounds) (GroundsResult,
+  error)` appends one entry to the intent's `## Grounds` section, creating the
+  section when it is absent.
+- **Readiness gate** (`internal/core/intent/ready.go`): A `grounds` check,
+  reported last, failing when the record carries no well-formed entry.
+- **Ledger side** (`internal/core/capture`): A `Grounds` member on
+  `PromoteRequest`, `ResolveRequest` and `WontfixRequest`, stamped as a
+  `grounds` frontmatter scalar through the existing `setScalarField`, inside the
+  existing ledger lock and atomic transition.
+- **Issue schema** (`internal/core/issueschema/issueschema.go`): `grounds` added
+  to `Known`, without which capture's reader refuses every stamped record.
+- **Surfaces** (`internal/surface/cli/cli.go`, `commands/intent.md`,
+  `commands/capture.md`): `--grounds` on `abcd intent ready`,
+  `abcd capture promote`, `abcd capture resolve` and `abcd capture wontfix`.
+
+## Approach
+
+**Decision — `intent.Ready` stays read-only; the flag lives on its verb.**
+`Ready` is documented and tested as a reporter that never mutates the store, and
+that contract is worth more than flag placement. So `abcd intent ready <itd-N>
+--grounds pursued:"<text>"` is wired in the CLI as two calls: `RecordGrounds`
+first, then the unchanged `Ready`. The write is the flag's whole effect; the
+report is unchanged by it. The exit-code contract holds as it stands, with a
+failed grounds write mapping to 2 (a structural fault), never to 1.
+
+**Decision — the gate is a refusing check, not a prompt.** Without the flag, an
+intent carrying no grounds fails the `grounds` check with the remedy naming the
+flag and the vocabulary. This is the refusing-gate idiom the readiness gate
+already is: exit 1, the rendered report is the output, and no interactive
+question is asked of a possibly-unattended caller.
+
+**Decision — grounds live on the intent record, not on the spec.** The
+conjecture is the intent's, and the gate that reads it takes an `itd-N`. The
+`## Grounds (pursued)` sections currently carried by spc-55, spc-56, spc-57 and
+spc-59 are the pre-tooling stand-in named in their own text; the change that
+lands this spec moves those four entries up to their intents and retires the
+stand-in sections, so the corpus has one home for grounds rather than two.
+
+**Decision — wontfix is stamped `declined` and needs no new required flag.**
+`capture.transition` already refuses an empty `wontfix_reason`, so a wontfix can
+never be recorded without grounds; what it lacks is the type. Wontfix therefore
+stamps `grounds: declined: <reason>` from the reason it already takes, and
+`--grounds` overrides the text when the conjecture is worth stating separately
+from the user-facing reason. Promote and resolve, which have no such note,
+refuse without the flag.
+
+**The grammar is one line, parsed once.** `grounds: <token>: <text>` is a plain
+YAML scalar readable by `frontmatter.Fields` in every store; `grounds.Parse`
+splits on the first colon, validates the token against the closed set, and
+returns the text. On the intent side the same value renders as a bullet
+`- pursued: <text>` under `## Grounds`, so the record reads as prose and the
+gate reads it as data with no second parser.
+
+**The substance floor is a shape check, and it says so.** "Name the conjecture,
+not only the decision" is a review property; no machine reads a sentence and
+knows whether it names a conjecture. What ships is a floor that refuses the
+degenerate cases: empty or whitespace-only text, text shorter than the floor,
+and text that is only the vocabulary token or the verb's own name repeated. The
+substantive requirement is carried by the prompt in `commands/intent.md` and
+`commands/capture.md`, where the interview asks for the expectation and its
+falsifier. The spec claims the floor, not the judgement.
+
+**Free text is redacted before it is written.** A grounds text is operator prose
+landing in a committed record, so it goes through the same redactor the note
+already goes through: `redactLedgerText` on the ledger side and
+`redactIntentText` on the intent side, before validation, never after, so no
+rewritten span reaches a field the validator has already passed. The redaction
+counters surface on the result exactly as `Redacted` and `Degraded` already do,
+because rewriting somebody's reasoning silently is worse than not recording it.
+
+**Decision — ADR grounds are untouched.** Decision-granularity grounds stay in
+the ADR family's Alternatives Considered. This spec adds the finer grain beside
+them and takes no position on the coarser one.
+
+**Staging.** The recording path, the vocabulary and the stamping land first with
+the `grounds` check reporting `OK`; the refusal is promoted in a second commit
+once the `planned/` bucket carries entries, so the gate does not arrive as a
+wall of pre-existing failures. Promote and resolve refuse from the first commit,
+because they mint the grounds in the same call and have no corpus to fix.
+
+## Acceptance criteria mapping
+
+| itd-179 criterion | How spc-57 satisfies it | Test that pins it |
+| --- | --- | --- |
+| A capture routed to an intent draft, triaged without grounds → the command refuses | `PromoteRequest.Grounds` is validated before any mint or stamp, and an absent value returns an error with nothing written | `TestPromoteRefusesWithoutGrounds`, `TestPromoteWithoutGroundsWritesNothing`, CLI `TestCapturePromoteMissingGroundsExit2` |
+| A recorded gate decision → the grounds name the conjecture, not only the decision | The three-value token plus the substance floor, with the conjecture-naming prompt on both surfaces | `TestGroundsParseVocabulary`, `TestGroundsRefusesDegenerateText`, `TestRecordGroundsWritesEntry` |
+
+## Tests
+
+Each fails first: `internal/core/grounds` does not exist, `ReadyResult` has no
+`grounds` check, and the three ledger requests have no `Grounds` member.
+
+- `internal/core/grounds/grounds_test.go`: `TestGroundsParseVocabulary` (three
+  values in, everything else refused), `TestGroundsParseSplitsOnFirstColon` (a
+  text containing a colon survives), `TestGroundsRefusesDegenerateText` (empty,
+  whitespace, below the floor, token-only, verb-name-only),
+  `TestGroundsRenderRoundTrip`.
+- `internal/core/intent/grounds_test.go`: `TestRecordGroundsWritesEntry`,
+  `TestRecordGroundsCreatesSectionWhenAbsent`,
+  `TestRecordGroundsAppendsSecondEntry`,
+  `TestRecordGroundsRedactsText`, `TestRecordGroundsRefusesUnknownIntent`.
+- `internal/core/intent/ready_test.go`: `TestReadyGroundsAbsentFails`,
+  `TestReadyGroundsPresentPasses`, `TestReadyChecksOrderAndCount` extended for
+  the trailing check.
+- `internal/core/capture/promote_test.go`:
+  `TestPromoteRefusesWithoutGrounds`, `TestPromoteWithoutGroundsWritesNothing`
+  (no orphan draft), `TestPromoteStampsGrounds`.
+- `internal/core/capture/workflow_test.go`: `TestResolveRefusesWithoutGrounds`,
+  `TestResolveStampsGrounds`, `TestWontfixStampsDeclinedFromReason`,
+  `TestWontfixGroundsOverride`, `TestGroundsTextIsRedacted`.
+- `internal/core/lint/schema_test.go`:
+  `TestCaptureReaderAcceptsGroundsKey` (the `Known` allow-list proved through
+  the reader) and `TestRecordSchemaFlagsOutOfVocabularyGrounds`.
+- `internal/surface/cli/intent_cli_test.go`:
+  `TestIntentReadyGroundsFlagRecordsThenReports` (the write happens, the report
+  is unchanged, exit 0), `TestIntentReadyGroundsWriteFailureExits2`.
+
+## Grounds (pursued)
+
+_Pre-tooling: recorded in the plan record until the grounds argument (itd-179) ships._
+
+Pursued now because the reasoning behind what went forward is the half of the
+record that is never written down, and it is unrecoverable once the session
+ends: a wontfix keeps its note and an ADR keeps its alternatives, while every
+pursued conjecture leaves only its outcome. Recording it at the moment of
+pursuit is the only moment it is still known.
+
+## Out of scope
+
+- Rewriting the ADR family's grounds. Decision-granularity grounds stay where
+  they are.
+- Any semantic judgement of whether a grounds text really names a conjecture.
+  The floor refuses degenerate text; the rest is review.
+- A grounds argument on capture's create path. itd-179 scopes triage, and an
+  observation being filed is not yet a conjecture being pursued.
+- Retro-fitting grounds onto `shipped/`, `superseded/`, `resolved/` or
+  `wontfix/` records. Population is forward-only.
+- Reading grounds into a cold reading. They are warm context.
