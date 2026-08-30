@@ -7,6 +7,10 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-179-fix-delta-ruthless"
 found_at: "internal/core/grounds/grounds.go"
+resolution: "The comment is scoped to the two token refusals that render the vocabulary, and degenerateWords is named at its own site as the copy that is a gate, with the drift record's enumeration corrected from five code sites to six."
+impact: fix
+resolved_by:
+  intent: "itd-179"
 ---
 
 the vocabulary comment says every refusal renders it when two of thirteen do and the drift record omits the one copy that is a gate
@@ -35,3 +39,7 @@ was hiding a behavioural divergence.
 Remedy: scope the comment to the token refusals, and add `degenerateWords` to
 the enumeration in iss-2608301836222858 -- flagged as the gate copy, so whoever
 consolidates does that one first.
+
+## Grounds
+
+- pursued: We expect naming the gate copy where it lives to outlast the record that lists it, because the next person to add a token reads the map and not the ledger.

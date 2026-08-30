@@ -33,3 +33,16 @@ to avoid.
 spelling is a literal in record-lint's remedy string because `core/lint` does
 not import `core/grounds`. That one is left alone; its comment is narrowed to
 what it establishes rather than an import being added for one prose string.
+
+Amended 2026-08-30 after the fix-delta review: the enumeration above MISSES a
+copy, and it is the one that matters most. `degenerateWords`, in the same file
+eighty lines below `Vocabulary`, spells the three tokens again and its own doc
+calls it "the vocabulary itself".
+
+Every other copy is a MESSAGE -- a flag description, a usage string, a docs
+page. This one is a GATE. Add a fourth token to `Vocabulary` and forget this
+map, and `ValidateText` silently stops refusing a grounds text made solely of
+the new token, while the refusal it declines to raise still says the text only
+repeats the vocabulary. So the count is not five edits in code but six, and this
+is the one to consolidate first.
+

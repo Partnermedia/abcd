@@ -49,9 +49,13 @@ const (
 	Declined Token = "declined"
 )
 
-// Vocabulary is the closed set, in the order a surface should offer it. Every
-// refusal this package raises renders it (vocabularyList), so the values a
-// caller is TOLD about are the values ParseToken accepts.
+// Vocabulary is the closed set, in the order a surface should offer it. The two
+// refusals that reject a TOKEN -- Parse's grammar refusal and ParseToken's --
+// render it (vocabularyList), so a caller told their token is wrong is told
+// which tokens are right. The package's other eleven refusals speak about the
+// TEXT rather than the token and render nothing of the kind; the earlier
+// spelling of this comment claimed every refusal rendered it, which was the
+// same overclaim it was written to correct (iss-2608301908284034).
 //
 // It is not yet what the surfaces read: the CLI's flag descriptions and usage
 // strings, and the ledger's own missing-grounds refusal, each spell the three
@@ -135,6 +139,11 @@ var scriptioContinua = []*unicode.RangeTable{
 // itself, and the names of the verbs that ask for it. A text made only of these
 // has restated the route taken and recorded no reasoning at all — the exact
 // failure the argument exists to close.
+// The three tokens below are a COPY of Vocabulary, and the only copy that is a
+// gate rather than a message: add a fourth token to Vocabulary without adding it
+// here and ValidateText silently stops refusing a grounds text made solely of
+// it, while the refusal it declines to raise still says the text only repeats
+// the vocabulary. Consolidate this one first (iss-2608301836222858).
 var degenerateWords = map[string]bool{
 	"pursued": true, "deferred": true, "declined": true,
 	"ready": true, "promote": true, "resolve": true, "wontfix": true,
