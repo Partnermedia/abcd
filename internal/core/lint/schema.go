@@ -252,6 +252,23 @@ type recordJoin struct {
 	// FIELD == DIRECTORY; this is DIRECTORY == THE TARGET'S OWN BUCKET, and a
 	// record satisfies the first while failing the second.
 	sameBucketAs string
+	// targetPosition is the reading POSITION the join's target must hold, where
+	// what reads the join is scoped to one position. Empty means the join carries
+	// no such obligation.
+	//
+	// The admission's is `widening`, and it is the THIRD coordinate of the pair the
+	// run axis and the spelling axis already close. ReadReadingOutstanding consults
+	// the admissions tree only inside `if position == issueschema.PositionWidening`,
+	// so an admission naming an item at `detection`, `entailment` or `comparative`
+	// resolves, matches its bucket, spells correctly, draws nothing — and is never
+	// queried (iss-2608301649339636). AdmissionRequired's own doc already says
+	// `proposal` names the WIDENING item admitted; this is the leg that enforces it.
+	//
+	// It is asked only where the target's FILENAME is a bare handle, for the padding
+	// leg's reason: what reads the family never opens a file whose name is not one,
+	// so nothing about what the report does with such a target is available to
+	// claim.
+	targetPosition string
 }
 
 // bucketed reports whether the store holds its records in lifecycle
@@ -346,7 +363,8 @@ var recordStores = []recordStore{
 			field: "proposal",
 			why: "an admission is keyed to the proposal it admits, and one naming no record admits nothing in particular — " +
 				"the candidate set it claims to have joined cannot be reconstructed from it",
-			sameBucketAs: issueschema.ReadingItemFamily,
+			sameBucketAs:   issueschema.ReadingItemFamily,
+			targetPosition: issueschema.PositionWidening,
 		}}},
 	{prefix: "srp", noun: "surprise", nodeType: "surprise",
 		fileNumRe: surpriseFileNumRe, fileFamily: "srp", filename: "srp-<N>.md",
@@ -844,7 +862,7 @@ func checkRecordUnknownFields(r schemaRecord, severity string) []Finding {
 // keying field nothing resolved while the surprise's `occasioned_by` was
 // (iss-2608300935215868).
 //
-// Resolution asks three questions, because a join can fail in three ways.
+// Resolution asks four questions, because a join can fail in four ways.
 //
 // The first is SPELLING, and it is asked only of a join that declares a family
 // (sameBucketAs): such a join's value is a handle of that family by declaration,
@@ -863,6 +881,11 @@ func checkRecordUnknownFields(r schemaRecord, severity string) []Finding {
 // about the target's FILE, so it is asked once the target is resolved, below.
 //
 // The second is PRESENCE: a target that is not in the corpus joins nothing.
+//
+// The fourth is the POSITION, where the join declares one: what reads such a join
+// consults it only for a target at that position, so a target at any other is
+// never queried and the record counts for nothing — the third coordinate of the
+// pair the run and spelling axes already close (iss-2608301649339636).
 //
 // The third is the BUCKET. A target that is in the corpus but in ANOTHER BUCKET
 // joins something nobody will ever look for: what reads that family keys what it
@@ -957,15 +980,42 @@ func checkRecordJoins(r schemaRecord, index map[recordRef]schemaRecord, retired 
 		// spelling of this join admits it and none is more right than another. That
 		// divergence between this rule's filename grammar and the report's is
 		// iss-2608300929274006's to close.
+		stemIsHandle := false
 		if join.sameBucketAs != "" {
 			stem := strings.TrimSuffix(filepath.Base(target.rel), ".md")
-			if spellsHandleOf(join.sameBucketAs, stem) && value != stem {
+			stemIsHandle = spellsHandleOf(join.sameBucketAs, stem)
+			if stemIsHandle && value != stem {
 				out = append(out, Finding{
 					File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: cfg.Severity,
 					Message: join.field + " declares '" + value + "' while the " + target.noun() +
 						" it names is filed as '" + filepath.Base(target.rel) + "'; what reads this " + r.noun() +
 						" matches the value as written against the name that file carries, so this spelling admits " +
 						"nothing and the " + target.noun() + " it names goes on being reported as unanswered",
+				})
+				continue
+			}
+		}
+		// The POSITION obligation, where the join declares one. It is the third
+		// coordinate of the pair, beside the run the record is filed under and the
+		// spelling of the value: what reads this join consults it only for a target at
+		// the declared position, so a target at any other is never queried and the
+		// record counts for nothing. It is asked only where the target's filename is a
+		// bare handle, for the padding leg's reason one block above — what reads the
+		// family never opens such a file, so its position decides nothing.
+		if join.targetPosition != "" && stemIsHandle {
+			posField := target.fields["position"]
+			if pos := issueScalar(posField.value); pos != join.targetPosition {
+				declares := "declares position '" + pos + "'"
+				if isAbsentValue(posField.value) {
+					declares = "declares no position"
+				}
+				out = append(out, Finding{
+					File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: cfg.Severity,
+					Message: join.field + " names '" + ref.String() + "', which " + declares +
+						"; what reads this " + r.noun() + " consults it only for a " + target.noun() +
+						" at position '" + join.targetPosition + "', so this " + r.noun() +
+						" is keyed on a pair nothing ever queries: it counts for nothing, and no line reports " +
+						"that an answer was written for the " + target.noun() + " it names",
 				})
 				continue
 			}
