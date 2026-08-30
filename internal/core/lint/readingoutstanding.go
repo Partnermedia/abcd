@@ -57,13 +57,21 @@ type OpenHold struct {
 type OutstandingReadings struct {
 	Undispositioned []OutstandingItem `json:"undispositioned"`
 	OpenHolds       []OpenHold        `json:"open_holds"`
+	// Unsafe names the repo-relative directories the walk declined to enter
+	// because they are not real directories. core/capture REFUSES these outright,
+	// because its read is followed by a write; this walk is genuinely read-only,
+	// so it declines and SAYS SO instead. Going quiet is the thing it must not do:
+	// a tree nobody walked looks exactly like a tree with nothing in it, and "no
+	// outstanding items" is the one answer this report must never give by
+	// accident.
+	Unsafe []string `json:"unsafe,omitempty"`
 }
 
 // Empty reports whether there is nothing outstanding — the ordinary state of a
 // repository that has commissioned no reading, and the state a surface renders
 // as silence rather than as a heading with nothing under it.
 func (r OutstandingReadings) Empty() bool {
-	return len(r.Undispositioned) == 0 && len(r.OpenHolds) == 0
+	return len(r.Undispositioned) == 0 && len(r.OpenHolds) == 0 && len(r.Unsafe) == 0
 }
 
 // ReadReadingOutstanding builds the report from the ledger at issuesDir
@@ -75,6 +83,10 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 	var report OutstandingReadings
 	issuesRoot := filepath.Join(repoRoot, filepath.FromSlash(issuesDir))
 	readingsRoot := filepath.Join(issuesRoot, issueschema.ReadingsDir)
+	if !realDir(readingsRoot) {
+		report.Unsafe = append(report.Unsafe, filepath.ToSlash(filepath.Join(issuesDir, issueschema.ReadingsDir)))
+		return report, nil
+	}
 	runs, err := os.ReadDir(readingsRoot)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -82,12 +94,27 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 		}
 		return report, err
 	}
+	// The dispositions family root answers for every item below, so a link there
+	// silently empties the standing set of ALL of them — every item would read as
+	// unanswered. It is checked once, before any item is judged.
+	dispositionsRoot := filepath.Join(issuesRoot, issueschema.DispositionsDir)
+	dispositionsReadable := realDir(dispositionsRoot)
+	if !dispositionsReadable {
+		report.Unsafe = append(report.Unsafe, filepath.ToSlash(filepath.Join(issuesDir, issueschema.DispositionsDir)))
+	}
 
 	for _, run := range runs {
-		if !run.IsDir() || !readingRunDirRe.MatchString(run.Name()) {
+		if !readingRunDirRe.MatchString(run.Name()) {
 			continue
 		}
-		entries, err := os.ReadDir(filepath.Join(readingsRoot, run.Name()))
+		runDir := filepath.Join(readingsRoot, run.Name())
+		// A symlink is a directory to ReadDir, so the check is on the entry
+		// itself, not on whether the walk would descend into it.
+		if !realDir(runDir) {
+			report.Unsafe = append(report.Unsafe, filepath.ToSlash(filepath.Join(issuesDir, issueschema.ReadingsDir, run.Name())))
+			continue
+		}
+		entries, err := os.ReadDir(runDir)
 		if err != nil {
 			return OutstandingReadings{}, err
 		}
@@ -98,6 +125,12 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 			}
 			item := m[1]
 			rel := filepath.Join(issuesDir, issueschema.ReadingsDir, run.Name(), e.Name())
+			if !dispositionsReadable {
+				// The item's answer is unreadable, which is not the same fact as
+				// "unanswered" — reporting it outstanding would be a confident
+				// wrong statement, and the Unsafe line above already says why.
+				continue
+			}
 			standing, err := standingDisposition(issuesRoot, issuesDir, item)
 			if err != nil {
 				return OutstandingReadings{}, err
@@ -123,7 +156,19 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 	sort.Slice(report.OpenHolds, func(i, j int) bool {
 		return report.OpenHolds[i].Item < report.OpenHolds[j].Item
 	})
+	sort.Strings(report.Unsafe)
 	return report, nil
+}
+
+// realDir reports whether path is a directory the walk may enter — present, and
+// not a symlink. An ABSENT path is not unsafe: an unpopulated tree is a state,
+// and the caller distinguishes the two by probing separately.
+func realDir(path string) bool {
+	fi, err := os.Lstat(path)
+	if err != nil {
+		return os.IsNotExist(err)
+	}
+	return fi.IsDir() && fi.Mode()&os.ModeSymlink == 0
 }
 
 // standingRecord is the disposition currently in force for one item.
@@ -138,6 +183,9 @@ type standingRecord struct {
 // supersedes, or nil when the item is unanswered.
 func standingDisposition(issuesRoot, issuesDir, item string) (*standingRecord, error) {
 	itemDir := filepath.Join(issuesRoot, issueschema.DispositionsDir, item)
+	if !realDir(itemDir) {
+		return nil, nil
+	}
 	entries, err := os.ReadDir(itemDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -149,7 +197,13 @@ func standingDisposition(issuesRoot, issuesDir, item string) (*standingRecord, e
 	rel := map[string]string{}
 	for _, e := range entries {
 		id, ok := issueschema.DispositionFileID(e.Name())
-		if e.IsDir() || !ok {
+		if !ok {
+			continue
+		}
+		// A symlinked record file sources the answer from outside the ledger just
+		// as a symlinked directory does, so it is not read.
+		fi, lerr := os.Lstat(filepath.Join(itemDir, e.Name()))
+		if lerr != nil || !fi.Mode().IsRegular() {
 			continue
 		}
 		content, err := os.ReadFile(filepath.Join(itemDir, e.Name()))
@@ -197,6 +251,14 @@ func checkReadingOutstanding(repoRoot string, cfg RuleConfig) ([]Finding, error)
 				"An item nobody has answered has no state to sit in, because nothing in this " +
 				"vocabulary means \"already covered\"; answer it with `abcd capture disposition " +
 				o.Item + " --state <state> ...`",
+		})
+	}
+	for _, u := range report.Unsafe {
+		out = append(out, Finding{
+			File: u, Line: 1, RuleID: ruleReadingOutstanding, Severity: severityInfo,
+			Message: "this is not a real directory (a symlink, or not a directory at all), so the reading walk did not enter it — " +
+				"the items under it are neither reported outstanding nor confirmed answered. " +
+				"`abcd capture` refuses to read the reading trees through a link, because its read is followed by a write",
 		})
 	}
 	for _, h := range report.OpenHolds {

@@ -375,3 +375,54 @@ func TestReadingPathsRefuseASymlinkedTree(t *testing.T) {
 		_ = repo
 	})
 }
+
+// The dispositions FAMILY root was not guarded — only the item leaf below it —
+// so promote read an item's standing state through a symlinked dispositions/,
+// and the answer that licenses the stamp came from outside the ledger.
+func TestDispositionsFamilyRootSymlinkRefused(t *testing.T) {
+	repo, ir, item := readingFixture(t, "detection")
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(ir, issueschema.DispositionsDir)); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	if _, err := standingDispositions(filepath.Join(ir, issueschema.DispositionsDir, item)); !errors.Is(err, ErrPathUnsafe) {
+		t.Fatalf("standingDispositions through a symlinked family root: err = %v, want ErrPathUnsafe", err)
+	}
+	if _, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: item}); !errors.Is(err, ErrPathUnsafe) {
+		t.Fatalf("Promote through a symlinked dispositions root: err = %v, want ErrPathUnsafe", err)
+	}
+	if _, err := Disposition(DispositionRequest{
+		RepoRoot: repo, IssuesRoot: ir, Item: item,
+		State: issueschema.DispositionAccepted, Grounds: "because",
+	}); !errors.Is(err, ErrPathUnsafe) {
+		t.Fatalf("Disposition through a symlinked dispositions root: err = %v, want ErrPathUnsafe", err)
+	}
+}
+
+// A disposition FILE that is a symlink is read out of the ledger just as surely
+// as a directory that is one: the standing computation, promote's state read and
+// the board's exit-condition line all take their answer from whatever it points
+// at. It is refused rather than followed.
+func TestSymlinkedDispositionFileRefused(t *testing.T) {
+	repo, ir, item := readingFixture(t, "detection")
+	if _, err := Disposition(DispositionRequest{
+		RepoRoot: repo, IssuesRoot: ir, Item: item,
+		State: issueschema.DispositionAccepted, Grounds: "the tension is real",
+	}); err != nil {
+		t.Fatalf("Disposition: %v", err)
+	}
+	itemDir := filepath.Join(ir, issueschema.DispositionsDir, item)
+
+	outside := filepath.Join(t.TempDir(), "elsewhere.md")
+	if err := os.WriteFile(outside, []byte("---\nid: \"dsp-2608300000000009\"\nstate: \"accepted\"\n---\n\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(itemDir, "dsp-2608300000000009.md")); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	if _, err := standingDispositions(itemDir); !errors.Is(err, ErrPathUnsafe) {
+		t.Fatalf("a symlinked disposition file: err = %v, want ErrPathUnsafe", err)
+	}
+}

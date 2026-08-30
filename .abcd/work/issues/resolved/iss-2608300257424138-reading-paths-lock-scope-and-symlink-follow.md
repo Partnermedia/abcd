@@ -7,7 +7,7 @@ category: "security"
 source: "impl-review"
 found_during: "itd-180 second-round reviews, 2026-08-30"
 found_at: "internal/core/capture/reading.go (IngestReading, readingItemPaths), internal/core/capture/promote.go (promoteReadingItem)"
-resolution: "Redaction moved outside the ledger lock with one scanner per batch (50 items now build one, none while locked); promote recomputes the standing state inside its locked closure and refuses anything but accepted there; and the readings root, every run directory and the disposition directory are Lstat-refused when symlinked."
+resolution: "Redaction moved outside the ledger lock with one scanner per batch (50 items now build one, none while locked); promote recomputes the standing state inside its locked closure and refuses anything but accepted there; and the readings root, every run directory and an item's own disposition directory are Lstat-refused when symlinked — the dispositions FAMILY root and the record files below it were left unguarded until iss-2608300326346554 and iss-2608300320011217."
 impact: internal
 ---
 

@@ -1,6 +1,8 @@
 package lint
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -131,5 +133,52 @@ func TestOpenHoldRendersItsExitCondition(t *testing.T) {
 	}
 	if n := countRule(fs, ruleReadingOutstanding); n != 0 {
 		t.Fatalf("a superseded hold must leave the report, got %d finding(s): %+v", n, fs)
+	}
+}
+
+// capture refuses to read the reading trees through a symlink, because the read
+// is followed by a write. lint's walk is genuinely read-only, so it does not have
+// to refuse — but it must not go quiet either: a tree it declined to walk looks
+// exactly like a tree with nothing in it, and "no outstanding items" is the one
+// answer this report must never give by accident.
+func TestSymlinkedReadingTreesAreReportedNotSkippedSilently(t *testing.T) {
+	for _, tc := range []struct{ name, link string }{
+		{"the readings root", ".abcd/work/issues/readings"},
+		{"a run directory", ".abcd/work/issues/readings/rdg-2608300000000001"},
+		{"the dispositions root", ".abcd/work/issues/dispositions"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			run, item := "rdg-2608300000000001", "rdi-2608300000000002"
+			root := readingLedger(t, run, item, "detection")
+			// A standing hold, so the dispositions-root case has something to lose.
+			writeFile(t, root, ".abcd/work/issues/dispositions/"+item+"/dsp-2608300000000003.md",
+				"---\nschema_version: 1\nid: \"dsp-2608300000000003\"\nitem: \""+item+"\"\n"+
+					"state: \"held\"\nexit_condition: \"the closing run returns it again\"\n---\n\n")
+
+			link := filepath.Join(root, filepath.FromSlash(tc.link))
+			if err := os.RemoveAll(link); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(t.TempDir(), link); err != nil {
+				t.Skipf("symlinks unavailable: %v", err)
+			}
+
+			fs, err := Lint(readingOutstandingConfig(severityBlocker), root)
+			if err != nil {
+				t.Fatalf("a symlinked tree must not fail the whole lint: %v", err)
+			}
+			var said bool
+			for _, f := range fs {
+				if f.RuleID == ruleReadingOutstanding && strings.Contains(f.Message, "symlink") {
+					said = true
+					if f.Severity != severityInfo {
+						t.Errorf("severity = %q, want %q — this report never gates", f.Severity, severityInfo)
+					}
+				}
+			}
+			if !said {
+				t.Fatalf("a symlinked tree was walked past in silence; findings: %+v", fs)
+			}
+		})
 	}
 }

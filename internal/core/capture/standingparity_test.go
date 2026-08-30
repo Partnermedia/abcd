@@ -111,10 +111,19 @@ func TestStandingDispositionAgreesAcrossBothReaders(t *testing.T) {
 			}
 
 			// lint walks the same directory for its own report, and the OBSERVABLE
-			// consequence must follow the same answer: an item is reported
-			// outstanding exactly when nothing stands, and held exactly when the
-			// single standing record is a hold. A walk that saw a different set
-			// would land on the other side of one of these.
+			// consequence must follow the SAME STANDING SET — not merely the same
+			// verdict about whether exactly one record stands.
+			//
+			// That distinction is the whole assertion. An earlier version compared
+			// against `got`, which is "" whenever the set is not a single record;
+			// on precisely the three rows this table exists for, two records stand,
+			// so the expectation collapsed to "no hold" and a lint walk standing
+			// only the NEWEST record also reported no hold. All six rows passed
+			// under a mutation that reintroduced the divergence.
+			//
+			// So the expectation is built from mine[0] — the first standing id,
+			// which is the one lint's report renders — and it is non-trivial on
+			// every row.
 			writeReadingFor(t, repo, "rdi-9")
 			report, err := lint.ReadReadingOutstanding(repo, LedgerRelPath)
 			if err != nil {
@@ -125,10 +134,19 @@ func TestStandingDispositionAgreesAcrossBothReaders(t *testing.T) {
 				t.Fatalf("lint reports outstanding=%v, capture stands %v — the two walks disagree",
 					gotOutstanding, mine)
 			}
-			wantHeld := got != "" && stateOf(t, itemDir, got) == issueschema.DispositionHeld
-			if gotHeld := len(report.OpenHolds) == 1 && report.OpenHolds[0].Disposition == got; gotHeld != wantHeld {
-				t.Fatalf("lint reports held=%v for standing %q, want %v — the two walks disagree",
-					gotHeld, got, wantHeld)
+			wantHeld, wantHeldID := false, ""
+			if len(mine) > 0 {
+				wantHeldID = mine[0]
+				wantHeld = stateOf(t, itemDir, wantHeldID) == issueschema.DispositionHeld
+			}
+			gotHeld := len(report.OpenHolds) == 1 && report.OpenHolds[0].Disposition == wantHeldID
+			if gotHeld != wantHeld {
+				var holds []string
+				for _, h := range report.OpenHolds {
+					holds = append(holds, h.Disposition)
+				}
+				t.Fatalf("lint reports holds %v, want a hold on %q = %v — capture stands %v, and the two walks must render the same standing set",
+					holds, wantHeldID, wantHeld, mine)
 			}
 		})
 	}

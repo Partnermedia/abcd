@@ -2358,6 +2358,12 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 						fmt.Fprintf(w, "  outstanding %s (run %s) — no disposition\n",
 							termsafe.Sanitize(o.Item), termsafe.Sanitize(o.Run))
 					}
+					// A tree the walk declined to enter is named, because a tree
+					// nobody walked looks exactly like a tree with nothing in it.
+					for _, u := range board.Outstanding.Unsafe {
+						fmt.Fprintf(w, "  unread %s — not a real directory; the items under it are neither outstanding nor answered\n",
+							termsafe.Sanitize(u))
+					}
 					for _, h := range board.Outstanding.OpenHolds {
 						fmt.Fprintf(w, "  held %s (%s) — exits when: %s\n",
 							termsafe.Sanitize(h.Item), termsafe.Sanitize(h.Disposition),
@@ -2858,6 +2864,9 @@ func captureBoardOf(repoRoot string, st capture.StatusResult) (captureBoard, err
 	}
 	if report.OpenHolds == nil {
 		report.OpenHolds = []lint.OpenHold{}
+	}
+	if report.Unsafe == nil {
+		report.Unsafe = []string{}
 	}
 	return captureBoard{StatusResult: st, Outstanding: report}, nil
 }

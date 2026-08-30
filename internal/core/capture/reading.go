@@ -699,6 +699,25 @@ func readingItemPaths(issuesRoot, item string) ([]string, error) {
 	return matches, nil
 }
 
+// refuseSymlinkedFile refuses a record path that exists and is a symlink. A
+// directory guard is not enough on its own: the standing computation, promote's
+// state read and the board's exit-condition line all take their answer from a
+// record FILE, so a symlinked dsp-N.md sources that answer from outside the
+// ledger — and the verb would then accept a supersession citing the link.
+func refuseSymlinkedFile(path string) error {
+	fi, err := os.Lstat(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("%w: lstat failed for %s: %v", ErrPathUnsafe, path, err)
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("%w: record path is a symlink: %s", ErrPathUnsafe, path)
+	}
+	return nil
+}
+
 // refuseSymlinkedDir is safeMkdirLeaf's guard without the mkdir: it refuses a
 // path that exists and is not a real directory. The write paths provision their
 // directories and meet that guard on the way in; the READ paths never did, and a
@@ -740,6 +759,12 @@ func standingDispositions(itemDir string) ([]string, error) {
 // readDispositions reads one item's disposition directory into the shared record
 // shape. A directory that does not exist is an unanswered item, not a fault.
 func readDispositions(itemDir string) ([]issueschema.DispositionRecord, error) {
+	// The FAMILY root as well as the item leaf. Guarding only the leaf left
+	// promote reading an item's standing state through a symlinked dispositions/,
+	// so the answer that licenses its stamp came from outside the ledger.
+	if err := refuseSymlinkedDir(filepath.Dir(itemDir)); err != nil {
+		return nil, err
+	}
 	if err := refuseSymlinkedDir(itemDir); err != nil {
 		return nil, err
 	}
@@ -753,10 +778,18 @@ func readDispositions(itemDir string) ([]issueschema.DispositionRecord, error) {
 	var records []issueschema.DispositionRecord
 	for _, e := range entries {
 		id, ok := issueschema.DispositionFileID(e.Name())
-		if e.IsDir() || !ok {
+		if !ok {
 			continue
 		}
-		content, err := os.ReadFile(filepath.Join(itemDir, e.Name()))
+		path := filepath.Join(itemDir, e.Name())
+		if err := refuseSymlinkedFile(path); err != nil {
+			return nil, err
+		}
+		fi, err := os.Lstat(path)
+		if err != nil || !fi.Mode().IsRegular() {
+			continue
+		}
+		content, err := os.ReadFile(path)
 		if err != nil {
 			return nil, err
 		}
