@@ -10,8 +10,8 @@ intent: itd-186
 spc-64 delivers [itd-186](../../intents/planned/itd-186-the-read-block-eval-falsifies-the-firewall-planted-warm-cont.md):
 a repository eval that plants sentinel warm content across every warm location
 class in a fixture repository state, runs the cold-reading input assembler
-([itd-183](../../intents/planned/itd-183-the-cold-reading-sees-exactly-what-the-assembler-passes-posi.md),
-spec [spc-61](spc-61-the-cold-reading-sees-exactly-what-the-assembler-passes-posi.md))
+([itd-183](../../intents/shipped/itd-183-the-cold-reading-sees-exactly-what-the-assembler-passes-posi.md),
+spec [spc-61](../closed/spc-61-the-cold-reading-sees-exactly-what-the-assembler-passes-posi.md))
 over it, and asserts that no sentinel and no excluded field reaches the
 assembled input. It is the only component in the workstream capable of
 falsifying the read-block rather than restating it, so its oracle is the planted

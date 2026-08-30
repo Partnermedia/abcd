@@ -170,3 +170,7 @@ None stated.
   the recorded fallback if the evaluative position proves to need candidates
   at invocation.
 
+## Audit Notes
+
+<!-- abcd-review: OWED receipt=rcp-139d9b40f0e8 -->
+Fidelity review OWED (receipt rcp-139d9b40f0e8).
