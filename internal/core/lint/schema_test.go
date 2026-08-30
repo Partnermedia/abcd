@@ -1458,43 +1458,48 @@ func TestQuotedPaddingIsNotTrimmedOutOfAValueTheReaderRefuses(t *testing.T) {
 }
 
 // An ABSENT property and an EMPTY one are both findings, and they are not the
-// same finding. The reader refuses a record that omits a required property
-// outright (capture's validateStrict: `missing required property`) and skips it,
-// so that message's account of the consequence is true for every store and every
-// field.
+// same finding — WHERE the store's reader validates before it reads. The issue
+// ledger's does (capture's validateStrict), and it refuses a record that omits a
+// required property outright and skips it, so the missing-property message's
+// account of the consequence is true there and true of every field, because that
+// loop asks nothing about which property it is.
 //
-// A BLANK has no such store-wide account, because the reader's required-property
-// loop type-checks a present value without judging it while the checks either
-// side of it DO judge — so what a blank does to the record is a property of the
-// FIELD. `grounds` is one no leg judges, so the finding here states what a blank
-// IS and claims nothing about the reader in either direction: neither the refusal
-// that would send the author looking for a record that is being read, nor the
-// acceptance that would send them looking for one that is not. The parity across
-// all twenty-eight combinations is pinned against the reader itself in
-// core/capture (TestBlankRequiredPropertyFindingsMatchTheReadersVerdict).
+// A BLANK has no such account. The same reader type-checks a present value
+// without judging it while the checks either side of it DO judge, so what a blank
+// does to the record is a property of the FIELD. `found_during` is a field no leg
+// judges, so the finding states what a blank IS and claims nothing about the
+// reader in either direction: neither the refusal that would send the author
+// looking for a record that is being read, nor the acceptance that would send
+// them looking for one that is not. The parity across all twenty-eight
+// combinations is pinned against the reader itself in core/capture
+// (TestBlankRequiredPropertyFindingsMatchTheReadersVerdict); the store half of
+// the question is TestMissingPropertyClaimsNoReaderWhereTheStoreHasNone.
 func TestAbsentAndEmptyRequiredPropertiesGiveDifferentReasons(t *testing.T) {
-	root := admissionCorpus(t)
-	writeFile(t, root, "work/issues/admissions/rdg-1/adm-3.md",
-		"---\nschema_version: 1\nid: adm-3\nrun: rdg-1\nproposal: rdi-2\n---\n\n")
-	writeFile(t, root, "work/issues/admissions/rdg-1/adm-4.md",
-		"---\nschema_version: 1\nid: adm-4\nrun: rdg-1\nproposal: rdi-2\ngrounds: \"\"\n---\n\n")
+	root := t.TempDir()
+	seedRecRoot(t, root)
+	writeFile(t, root, "work/issues/open/iss-3-absent.md",
+		"---\nschema_version: 1\nid: iss-3\nslug: absent\nseverity: minor\ncategory: bug\n"+
+			"source: user-observation\n---\n\nan issue\n")
+	writeFile(t, root, "work/issues/open/iss-4-blank.md",
+		"---\nschema_version: 1\nid: iss-4\nslug: blank\nseverity: minor\ncategory: bug\n"+
+			"source: user-observation\nfound_during: \"\"\n---\n\nan issue\n")
 
-	fs, err := Lint(admissionSchemaConfig(), root)
+	fs, err := Lint(schemaConfig(), root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	absent := filepath.Join("work", "issues", "admissions", "rdg-1", "adm-3.md")
-	empty := filepath.Join("work", "issues", "admissions", "rdg-1", "adm-4.md")
+	absent := filepath.Join("work", "issues", "open", "iss-3-absent.md")
+	empty := filepath.Join("work", "issues", "open", "iss-4-blank.md")
 	if !findingWith(fs, absent, ruleRecordSchema, "skipped") {
-		t.Errorf("an omitted property IS refused by the reader, and the finding should say so: %+v", fs)
+		t.Errorf("this reader DOES refuse a record that omits a required property, and the finding should say so: %+v", fs)
 	}
 	if findingWith(fs, empty, ruleRecordSchema, "skipped") {
-		t.Errorf("no leg judges a blank grounds, so the finding must not claim the record is skipped: %+v", fs)
+		t.Errorf("no leg judges a blank found_during, so the finding must not claim the record is skipped: %+v", fs)
 	}
 	if findingWith(fs, empty, ruleRecordSchema, "this record is read") {
-		t.Errorf("no leg judges a blank grounds, so the finding must not claim the record is read either: %+v", fs)
+		t.Errorf("no leg judges a blank found_during, so the finding must not claim the record is read either: %+v", fs)
 	}
-	if !findingWith(fs, empty, ruleRecordSchema, "'grounds'") {
+	if !findingWith(fs, empty, ruleRecordSchema, "'found_during'") {
 		t.Errorf("a blank required property is still a finding: %+v", fs)
 	}
 	if n := countRule(fs, ruleRecordSchema); n != 2 {
@@ -1609,5 +1614,45 @@ func TestSameBucketJoinIsSilentOnACrossFamilyTarget(t *testing.T) {
 	}
 	if n := countRule(fs, ruleRecordSchema); n != 0 {
 		t.Fatalf("expected no findings on a cross-family target, got %d: %+v", n, fs)
+	}
+}
+
+// The missing-property message names a reader that refuses the record and skips
+// it. Two stores have such a reader — the issue ledger (capture's validateStrict)
+// and the ADR store (the dispatcher confirms the frontmatter id) — and for those
+// the account is true. The admission store has none: its only reader in the tree
+// honours a record carrying nothing but its run and its proposal
+// (TestAdmissionReaderHonoursARecordMissingRequiredProperties), and the surprise
+// store has no reader at all.
+//
+// So the clause is a property of the STORE, exactly as the blank branch's is a
+// property of the field. A record is still a finding either way — a required
+// property exists because the record has to state something — but a gate that
+// names a refusal nobody performs sends the author looking for a record that is
+// being read (iss-2608301411010342).
+func TestMissingPropertyClaimsNoReaderWhereTheStoreHasNone(t *testing.T) {
+	root := admissionCorpus(t)
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-3.md",
+		"---\nschema_version: 1\nid: adm-3\nrun: rdg-1\nproposal: rdi-2\n---\n\n")
+	writeFile(t, root, "work/issues/surprises/srp-4.md",
+		"---\nschema_version: 1\nid: srp-4\n---\n\n")
+
+	fs, err := Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ rel, prop string }{
+		{filepath.Join("work", "issues", "admissions", "rdg-1", "adm-3.md"), "'grounds'"},
+		{filepath.Join("work", "issues", "surprises", "srp-4.md"), "'occasioned_by'"},
+	} {
+		if !findingWith(fs, c.rel, ruleRecordSchema, c.prop) {
+			t.Errorf("an omitted required property is still a finding on %s: %+v", c.rel, fs)
+		}
+		for _, claim := range []string{"skipped", "invisible"} {
+			if findingWith(fs, c.rel, ruleRecordSchema, claim) {
+				t.Errorf("this store's reader performs no such refusal, so the finding on %s must not claim %q: %+v",
+					c.rel, claim, fs)
+			}
+		}
 	}
 }

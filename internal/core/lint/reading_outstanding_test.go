@@ -891,3 +891,33 @@ func TestEmptyConsidersEveryFaultTheReportCarries(t *testing.T) {
 		})
 	}
 }
+
+// The evidence the record_schema rule's missing-property message rests on: what
+// the admission READER does with a record that omits a required property.
+//
+// It honours it. admittedProposals validates a non-empty `proposal` and the run
+// agreement and nothing else, so an admission carrying neither schema_version
+// nor id nor grounds is read and silences the proposal it names. That is why the
+// gate's absent-property finding must not tell an admission's author their record
+// is skipped and invisible: the record is not skipped, it is actively counted
+// (iss-2608301411010342).
+//
+// The pin cuts both ways. If a validating admission reader lands, this test goes
+// red and points at the message that has to change with it.
+func TestAdmissionReaderHonoursARecordMissingRequiredProperties(t *testing.T) {
+	run, item := "rdg-2608300000000001", "rdi-2608300000000002"
+	root := readingLedger(t, run, item, "widening")
+	dispositionRecord(t, root, item, "dsp-2608300000000003", "accepted")
+	// Neither schema_version, nor id, nor grounds.
+	writeFile(t, root, ".abcd/work/issues/admissions/"+run+"/adm-2608300000000004.md",
+		"---\nrun: \""+run+"\"\nproposal: \""+item+"\"\n---\n\n")
+
+	report, err := ReadReadingOutstanding(root, ".abcd/work/issues")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Unadmitted) != 0 {
+		t.Fatalf("the admission reader honours a record missing every property but run and proposal, "+
+			"so the proposal is admitted: %+v", report.Unadmitted)
+	}
+}

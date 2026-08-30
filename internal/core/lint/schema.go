@@ -175,6 +175,23 @@ type recordStore struct {
 	// vocabulary every store shares: a join is the ONE value that makes a record
 	// a record about something else, and each store spells its own.
 	joins []recordJoin
+	// readerFailsClosed declares that the store's reader VALIDATES a record's
+	// required properties before it reads it, and skips one that omits any — so a
+	// committed record missing a property is invisible to every surface of its
+	// family while it still sits in the store. Two readers do this: capture's
+	// validateStrict for the issue ledger, and the record dispatcher for the ADR
+	// store, which confirms the frontmatter id before it will render the record.
+	//
+	// It is declared rather than assumed because the missing-property finding
+	// STATES it, and a rule may not state a consequence it has not established.
+	// The two stores this cycle added have no such reader: the only reader of
+	// admission records honours one carrying nothing but its run and its proposal
+	// (reading_outstanding_test.go), and no reader of surprise records exists at
+	// all — so a message telling their authors the record is skipped and invisible
+	// sends them to look for a refusal nobody performs (iss-2608301411010342).
+	// It is consulted only where requiredFields is non-nil, which is the only
+	// place the claim is made.
+	readerFailsClosed bool
 	// bucketField is the frontmatter property that must name the bucket the
 	// record sits in, for a store that states its bucket twice. An admission is
 	// filed under the run whose candidate set it joins AND carries that run as a
@@ -251,7 +268,7 @@ var recordStores = []recordStore{
 	// whose loaders (intent.Load) fail closed on a missing id: the id is a required
 	// property, and its absence must be a finding, not silent invisibility.
 	{prefix: "adr", noun: "ADR", nodeType: "adr", buckets: nil, fileNumRe: adrFileNumRe, fileFamily: "", filename: "<NNNN>-<slug>.md",
-		requiredFields: []string{"id"}},
+		requiredFields: []string{"id"}, readerFailsClosed: true},
 	{prefix: "itd", noun: "intent", nodeType: "intent", buckets: intentBucketNames, fileNumRe: intentFileNumRe, fileFamily: "itd", filename: "itd-<N>-<slug>.md"},
 	{prefix: "spc", noun: "spec", nodeType: "spec", buckets: specBucketNames, fileNumRe: specFileNumRe, fileFamily: "spc", filename: "spc-<N>-<slug>.md"},
 	// The issue store's required properties come from the schema's ONE definition
@@ -260,7 +277,7 @@ var recordStores = []recordStore{
 	// the drift would show up as a silently unread record, which is the defect
 	// this invariant exists to catch.
 	{prefix: "iss", noun: "issue", nodeType: "issue", buckets: issueStatusDirs, fileNumRe: issueFileNumRe, fileFamily: "iss", filename: "iss-<N>-<slug>.md",
-		requiredFields: issueschema.Required, knownFields: issueschema.Known},
+		requiredFields: issueschema.Required, knownFields: issueschema.Known, readerFailsClosed: true},
 	// The three reading families (spc-58). Each buckets by GRAMMAR because its
 	// buckets are minted: a reading item and a run record live under the run that
 	// produced them, and a disposition lives under the item it answers.
@@ -684,22 +701,25 @@ func checkRecordFilenameSlug(r schemaRecord, severity string, judged map[string]
 //
 // A property present but EMPTY is a finding too, on different grounds, and the
 // two say so differently. An OMITTED property is refused by the reader's
-// required-property check whatever it names, so that message's account of the
-// consequence — skipped, invisible to every surface — holds for every store and
-// every field.
+// required-property check WHERE THERE IS ONE, so that message's account of the
+// consequence — skipped, invisible to every surface — is made only by a store
+// that declares readerFailsClosed. It holds for every field of such a store: the
+// reader's own required-property loop asks nothing about which property it is.
 //
 // A BLANK one has no such store-wide account, and this leg must not invent one.
 // The reader's required-property loop type-checks without judging content, but
 // the checks either side of it DO judge: capture refuses `severity: ""` on its
 // enum, `slug: ""` on its grammar, `id: ""` on its pattern and `schema_version:
 // ""` on its version, and accepts a found_during written as a bare single-quote
-// pair, because its decoder leaves those two apostrophes intact. Twenty of the twenty-one required-issue-field ×
-// blank-spelling combinations are refusals and one is an acceptance, so a single
+// pair, because its decoder leaves those two apostrophes intact. Twenty-seven of
+// the twenty-eight required-issue-field × blank-spelling combinations (four
+// spellings: the three quoted ones and the indented block) are refusals and one
+// is an acceptance, so a single
 // sentence about "what the reader does with a blank" is a confident false
 // statement in whichever set it does not match — first claiming a refusal that
 // never happens, then, once that was fixed, an acceptance that never happens
 // (iss-2608301308369559). So this leg states only what a blank IS, which is true
-// of all twenty-one; the consequence is stated by the leg that judges the field,
+// of all twenty-eight; the consequence is stated by the leg that judges the field,
 // and where such a leg has already spoken (judged) this one stays silent rather
 // than adding a second, weaker finding on the same line.
 //
@@ -720,9 +740,13 @@ func checkRecordRequiredFields(r schemaRecord, severity string, judged map[strin
 		if line == 0 {
 			line = 1
 		}
-		msg := "frontmatter is missing required property '" + field + "'; the " + r.store.noun +
-			" reader validates before it reads, so a record without it is skipped — invisible to every " +
-			r.store.noun + " surface while it still sits in the store"
+		msg := "frontmatter is missing required property '" + field + "'; the schema declares it required " +
+			"because the record has to state it, and a record that omits it never states it"
+		if r.store.readerFailsClosed {
+			msg = "frontmatter is missing required property '" + field + "'; the " + r.store.noun +
+				" reader validates before it reads, so a record without it is skipped — invisible to every " +
+				r.store.noun + " surface while it still sits in the store"
+		}
 		if present {
 			msg = "required property '" + field + "' carries no value once its YAML scalar is read; " +
 				"the schema declares it required because the record has to state it, and a blank states nothing"
