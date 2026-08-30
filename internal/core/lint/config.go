@@ -90,6 +90,9 @@ type RuleConfig struct {
 	// issue_id_unique and issue_impact_valid; it holds the open/, resolved/, and
 	// wontfix/ status directories. Default .abcd/work/issues. It lies outside Roots
 	// — the rules read the ledger and run once, sharing one scan of it.
+	// reading_outstanding reads the same root's SIBLING families (readings/,
+	// dispositions/), which is why they are named relative to it rather than
+	// configured twice.
 	IssuesDir string `json:"issues_dir"`
 	// Allowlist is the stray_root_docs permitted basename-stem list (upper-cased,
 	// extension-stripped) for top-level markdown files.
@@ -463,6 +466,16 @@ func strictRuleAndTokenKeys(data []byte) error {
 	return nil
 }
 
+// severityPinnedRules are the rules that set their own finding severity in CODE
+// and never read it from the configuration. There is one, and it is a REPORT:
+// reading_outstanding says which reading items nobody has answered, and a
+// reading must never fail a push that has nothing to do with it. Pinning the
+// severity in code is what makes that structural — a config that could raise it
+// to blocker is a gate waiting to happen — and this set is why declaring "info"
+// for such a rule is a correct declaration rather than the off-enum value the
+// check below exists to refuse.
+var severityPinnedRules = map[string]string{ruleReadingOutstanding: severityInfo}
+
 // validateSeverities refuses a severity outside the engine's enum on any
 // enabled rule or banned token. The exit paths count Severity == "blocker"
 // verbatim, so an off-enum value would emit findings that serialize yet count
@@ -470,9 +483,20 @@ func strictRuleAndTokenKeys(data []byte) error {
 // the sibling engines (repolint.Evaluate, guard.Validate, banlist.AddPublic)
 // name a rule bug and fail closed on. A disabled rule is inert and its
 // severity is not consulted, so it is not checked.
+//
+// A severity-pinned rule is checked against its OWN pinned value instead: it
+// counts toward no exit code deliberately, and a config that declared it
+// blocker or warn would be describing a gate the engine will not run.
 func (c Config) validateSeverities() error {
 	for id, rc := range c.Rules {
 		if !rc.Enabled {
+			continue
+		}
+		if pinned, isPinned := severityPinnedRules[id]; isPinned {
+			if rc.Severity != pinned {
+				return &configError{"rule " + id + " has severity " + strconv.Quote(rc.Severity) +
+					"; it is a report, not a gate, and its severity is pinned in code to " + strconv.Quote(pinned)}
+			}
 			continue
 		}
 		if rc.Severity != severityBlocker && rc.Severity != severityWarn {

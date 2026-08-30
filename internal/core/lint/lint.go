@@ -528,6 +528,19 @@ func LintAt(cfg Config, repoRoot string, now time.Time) ([]Finding, error) {
 		findings = append(findings, checkIssueIDUnique(repoRoot, ledger, iiCfg)...)
 	}
 
+	// reading_outstanding reads the same ledger root's SIBLING families
+	// (readings/, dispositions/), also outside cfg.Roots, so it runs once here.
+	// It is a report, never a gate: its severity is pinned in code and its
+	// findings are info, so it can never fail a push that has nothing to do with
+	// a reading.
+	if roCfg, ok := cfg.Rules[ruleReadingOutstanding]; ok && roCfg.Enabled {
+		ro, err := checkReadingOutstanding(repoRoot, roCfg)
+		if err != nil {
+			return nil, err
+		}
+		findings = append(findings, ro...)
+	}
+
 	if impactCfg, ok := cfg.Rules["issue_impact_valid"]; ok && impactCfg.Enabled {
 		ledger, err := scanIssues(issuesDirOf(impactCfg))
 		if err != nil {

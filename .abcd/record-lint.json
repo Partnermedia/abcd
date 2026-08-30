@@ -234,6 +234,11 @@
       "severity": "blocker",
       "issues_dir": ".abcd/work/issues"
     },
+    "reading_outstanding": {
+      "enabled": true,
+      "severity": "info",
+      "issues_dir": ".abcd/work/issues"
+    },
     "spec_lifecycle": {
       "enabled": true,
       "severity": "blocker",

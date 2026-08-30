@@ -2322,7 +2322,15 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 				if err != nil {
 					return err
 				}
-				return render(cmd.OutOrStdout(), *asJSON, st, func(w io.Writer) {
+				// The outstanding-readings report rides the same board. It is the
+				// SAME function the lint rule calls, not a second scan: an item
+				// nobody has answered has no state to sit in, and two readings of
+				// that one question would be two answers to it.
+				board, err := captureBoardOf(cwd, st)
+				if err != nil {
+					return err
+				}
+				return render(cmd.OutOrStdout(), *asJSON, board, func(w io.Writer) {
 					fmt.Fprintf(w, "abcd capture — open %d · resolved %d · wontfix %d\n",
 						st.OpenCount, st.ResolvedCount, st.WontfixCount)
 					if len(st.RecentOpen) > 0 {
@@ -2339,6 +2347,21 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 					// own name and bytes, so both are sanitised before the terminal.
 					for _, sk := range st.Skipped {
 						fmt.Fprintf(w, "  skipped %s: %s\n", termsafe.Sanitize(sk.Path), termsafe.Sanitize(sk.Error))
+					}
+					// Beside the skipped roster, and for the same reason it is
+					// there: a record the board does not name is one nobody is
+					// counting. An unanswered reading item is reported as
+					// outstanding because no state means "already covered", and an
+					// open hold renders WITH its exit condition, which is the only
+					// thing that distinguishes a hold from a parking space.
+					for _, o := range board.Outstanding.Undispositioned {
+						fmt.Fprintf(w, "  outstanding %s (run %s) — no disposition\n",
+							termsafe.Sanitize(o.Item), termsafe.Sanitize(o.Run))
+					}
+					for _, h := range board.Outstanding.OpenHolds {
+						fmt.Fprintf(w, "  held %s (%s) — exits when: %s\n",
+							termsafe.Sanitize(h.Item), termsafe.Sanitize(h.Disposition),
+							termsafe.Sanitize(h.ExitCondition))
 					}
 					fmt.Fprint(w, ledgerDecisionRule)
 					fmt.Fprint(w, ideateRoutingRule)
@@ -2809,6 +2832,32 @@ func parseBlockedBy(raw string) ([]string, error) {
 		ids = append(ids, tok)
 	}
 	return ids, nil
+}
+
+// captureBoard is the bare status board: the ledger counts and the
+// outstanding-readings report, flattened into one envelope so the --json and
+// text renders answer the same question. The report is embedded rather than
+// re-derived — ReadReadingOutstanding is the one implementation, shared with the
+// reading_outstanding lint rule.
+type captureBoard struct {
+	capture.StatusResult
+	Outstanding lint.OutstandingReadings `json:"reading_outstanding"`
+}
+
+// captureBoardOf composes the board, normalising the report's collections to
+// empty slices: a collection is never null in this surface's envelope.
+func captureBoardOf(repoRoot string, st capture.StatusResult) (captureBoard, error) {
+	report, err := lint.ReadReadingOutstanding(repoRoot, capture.LedgerRelPath)
+	if err != nil {
+		return captureBoard{}, err
+	}
+	if report.Undispositioned == nil {
+		report.Undispositioned = []lint.OutstandingItem{}
+	}
+	if report.OpenHolds == nil {
+		report.OpenHolds = []lint.OpenHold{}
+	}
+	return captureBoard{StatusResult: st, Outstanding: report}, nil
 }
 
 // parseRecurs splits the comma-separated --recurs list into prior reading-item
