@@ -3,6 +3,7 @@ package capture
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/intentdriven/abcd/internal/core/issueschema"
@@ -134,19 +135,37 @@ func TestStandingDispositionAgreesAcrossBothReaders(t *testing.T) {
 				t.Fatalf("lint reports outstanding=%v, capture stands %v — the two walks disagree",
 					gotOutstanding, mine)
 			}
-			wantHeld, wantHeldID := false, ""
-			if len(mine) > 0 {
-				wantHeldID = mine[0]
-				wantHeld = stateOf(t, itemDir, wantHeldID) == issueschema.DispositionHeld
-			}
-			gotHeld := len(report.OpenHolds) == 1 && report.OpenHolds[0].Disposition == wantHeldID
-			if gotHeld != wantHeld {
-				var holds []string
-				for _, h := range report.OpenHolds {
-					holds = append(holds, h.Disposition)
+			// Every standing hold, not just the first: an item with two standing
+			// answers publishes the exit condition of each one that is a hold.
+			var wantHolds []string
+			for _, id := range mine {
+				if stateOf(t, itemDir, id) == issueschema.DispositionHeld {
+					wantHolds = append(wantHolds, id)
 				}
-				t.Fatalf("lint reports holds %v, want a hold on %q = %v — capture stands %v, and the two walks must render the same standing set",
-					holds, wantHeldID, wantHeld, mine)
+			}
+			var gotHolds []string
+			for _, h := range report.OpenHolds {
+				gotHolds = append(gotHolds, h.Disposition)
+			}
+			if !slices.Equal(gotHolds, wantHolds) {
+				t.Fatalf("lint reports holds %v, want %v — capture stands %v, and the two walks must render the same standing set",
+					gotHolds, wantHolds, mine)
+			}
+
+			// And the contested fault carries the WHOLE standing set. Without this
+			// the table could not see a walk that stood a different subset, so long
+			// as the subset agreed about holds.
+			var wantContested []string
+			if len(mine) > 1 {
+				wantContested = mine
+			}
+			var gotContested []string
+			if len(report.Contested) == 1 {
+				gotContested = report.Contested[0].Standing
+			}
+			if !slices.Equal(gotContested, wantContested) {
+				t.Fatalf("lint reports contested %v, want %v — capture stands %v",
+					gotContested, wantContested, mine)
 			}
 		})
 	}

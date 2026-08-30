@@ -220,3 +220,60 @@ func TestSupersessionCycleIsReportedAsAFaultNotAsOutstanding(t *testing.T) {
 		t.Fatalf("the supersession cycle went unreported; findings: %+v", fs)
 	}
 }
+
+// Two independent standing answers on one item is not exotic: two branches each
+// answer it, both merge without conflict, and neither cites the other. The report
+// took the first by id and said nothing — so an `accepted` record sorting first
+// hid a `held` record and its exit condition, and no line said two answers stood.
+// Silence is the one answer this report must never give by accident.
+func TestContestedItemIsNamedNotSilentlyResolved(t *testing.T) {
+	run, item := "rdg-2608300000000001", "rdi-2608300000000002"
+	first, second := "dsp-2608300000000003", "dsp-2608300000000004"
+	root := readingLedger(t, run, item, "detection")
+	writeFile(t, root, ".abcd/work/issues/dispositions/"+item+"/"+first+".md",
+		"---\nschema_version: 1\nid: \""+first+"\"\nitem: \""+item+"\"\n"+
+			"state: \"accepted\"\ndisposition_grounds: \"one branch answered\"\n---\n\n")
+	writeFile(t, root, ".abcd/work/issues/dispositions/"+item+"/"+second+".md",
+		"---\nschema_version: 1\nid: \""+second+"\"\nitem: \""+item+"\"\n"+
+			"state: \"held\"\nexit_condition: \"the closing run returns it again\"\n---\n\n")
+
+	report, err := ReadReadingOutstanding(root, ".abcd/work/issues")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Contested) != 1 {
+		t.Fatalf("two standing answers must be reported as contested, got %+v", report)
+	}
+	if got := report.Contested[0].Standing; len(got) != 2 || got[0] != first || got[1] != second {
+		t.Fatalf("contested standing = %v, want both %s and %s — every standing id, not the first", got, first, second)
+	}
+	if len(report.Undispositioned) != 0 {
+		t.Fatalf("an item answered twice is not unanswered: %+v", report.Undispositioned)
+	}
+
+	fs, err := Lint(readingOutstandingConfig(severityBlocker), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var namedBoth, showedExit bool
+	for _, f := range fs {
+		if f.RuleID != ruleReadingOutstanding {
+			continue
+		}
+		if f.Severity != severityInfo {
+			t.Errorf("severity = %q, want %q — this report never gates", f.Severity, severityInfo)
+		}
+		if strings.Contains(f.Message, first) && strings.Contains(f.Message, second) {
+			namedBoth = true
+		}
+		if strings.Contains(f.Message, "the closing run returns it again") {
+			showedExit = true
+		}
+	}
+	if !namedBoth {
+		t.Errorf("no finding names both standing answers; findings: %+v", fs)
+	}
+	if !showedExit {
+		t.Errorf("the held answer's exit condition is hidden behind the accepted one; findings: %+v", fs)
+	}
+}

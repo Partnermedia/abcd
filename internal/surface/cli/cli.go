@@ -2358,6 +2358,14 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 						fmt.Fprintf(w, "  outstanding %s (run %s) — no disposition\n",
 							termsafe.Sanitize(o.Item), termsafe.Sanitize(o.Run))
 					}
+					// More than one standing answer is named in full, never resolved
+					// by picking one: which is in force is a judgement the ledger
+					// does not contain.
+					for _, c := range board.Outstanding.Contested {
+						fmt.Fprintf(w, "  contested %s (run %s) — %d standing answers: %s\n",
+							termsafe.Sanitize(c.Item), termsafe.Sanitize(c.Run),
+							len(c.Standing), termsafe.Sanitize(strings.Join(c.Standing, ", ")))
+					}
 					// An item answered twice and standing none is a fault, not an
 					// unanswered item, and saying "carries no disposition" about it
 					// would be a confident wrong statement.
@@ -2877,6 +2885,9 @@ func captureBoardOf(repoRoot string, st capture.StatusResult) (captureBoard, err
 	}
 	if report.Cyclic == nil {
 		report.Cyclic = []lint.OutstandingItem{}
+	}
+	if report.Contested == nil {
+		report.Contested = []lint.ContestedItem{}
 	}
 	return captureBoard{StatusResult: st, Outstanding: report}, nil
 }

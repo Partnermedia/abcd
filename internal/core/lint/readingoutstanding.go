@@ -21,6 +21,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/issueschema"
 )
@@ -71,6 +73,23 @@ type OutstandingReadings struct {
 	// an item that has been answered twice, and would invite exactly the fresh
 	// uncited answer the write path refuses.
 	Cyclic []OutstandingItem `json:"cyclic,omitempty"`
+	// Contested names items on which more than one disposition stands. It is not
+	// an exotic state: two branches each answer an item, both merge without
+	// conflict, and neither cites the other. Picking the first by id resolved that
+	// silently — an `accepted` sorting first hid a `held` and its exit condition,
+	// and no line said two answers stood. The report names every standing id and
+	// resolves nothing, because which answer is in force is the researcher's
+	// judgement and there is nothing here to make it from.
+	Contested []ContestedItem `json:"contested,omitempty"`
+}
+
+// ContestedItem is one item with more than one standing answer.
+type ContestedItem struct {
+	Item string `json:"item"`
+	Run  string `json:"run"`
+	Path string `json:"path"`
+	// Standing is every standing id, sorted — the whole fault, not a sample.
+	Standing []string `json:"standing"`
 }
 
 // Empty reports whether there is nothing outstanding — the ordinary state of a
@@ -78,7 +97,7 @@ type OutstandingReadings struct {
 // as silence rather than as a heading with nothing under it.
 func (r OutstandingReadings) Empty() bool {
 	return len(r.Undispositioned) == 0 && len(r.OpenHolds) == 0 &&
-		len(r.Unsafe) == 0 && len(r.Cyclic) == 0
+		len(r.Unsafe) == 0 && len(r.Cyclic) == 0 && len(r.Contested) == 0
 }
 
 // ReadReadingOutstanding builds the report from the ledger at issuesDir
@@ -138,26 +157,32 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 				// wrong statement, and the Unsafe line above already says why.
 				continue
 			}
-			standing, cyclic, err := standingDisposition(issuesRoot, issuesDir, item)
+			answer, err := standingDisposition(issuesRoot, issuesDir, item)
 			if err != nil {
 				return OutstandingReadings{}, err
 			}
 			switch {
-			case cyclic:
+			case answer.cyclic:
 				report.Cyclic = append(report.Cyclic, OutstandingItem{
 					Item: item, Run: run.Name(), Path: filepath.ToSlash(rel),
 				})
-			case standing == nil:
+			case len(answer.contested) > 1:
+				report.Contested = append(report.Contested, ContestedItem{
+					Item: item, Run: run.Name(), Path: filepath.ToSlash(rel),
+					Standing: answer.contested,
+				})
+			case answer.standing == nil:
 				report.Undispositioned = append(report.Undispositioned, OutstandingItem{
 					Item: item, Run: run.Name(), Path: filepath.ToSlash(rel),
 				})
-			case standing.state == issueschema.DispositionHeld:
-				report.OpenHolds = append(report.OpenHolds, OpenHold{
-					Item: item, Disposition: standing.id,
-					ExitCondition: standing.exitCondition,
-					Path:          filepath.ToSlash(standing.rel),
-				})
 			}
+			// Every standing hold is rendered, whatever else is true of the item —
+			// including an item the walk has just called contested. Naming the
+			// contest and then withholding the one thing a hold exists to publish
+			// would trade one silence for another. It sits outside the switch
+			// because a hold is not an alternative to the facts above; it is an
+			// additional one.
+			report.OpenHolds = append(report.OpenHolds, answer.holds...)
 		}
 	}
 
@@ -168,6 +193,7 @@ func ReadReadingOutstanding(repoRoot, issuesDir string) (OutstandingReadings, er
 		return report.OpenHolds[i].Item < report.OpenHolds[j].Item
 	})
 	sort.Slice(report.Cyclic, func(i, j int) bool { return report.Cyclic[i].Item < report.Cyclic[j].Item })
+	sort.Slice(report.Contested, func(i, j int) bool { return report.Contested[i].Item < report.Contested[j].Item })
 	sort.Strings(report.Unsafe)
 	return report, nil
 }
@@ -191,23 +217,38 @@ type standingRecord struct {
 	rel           string
 }
 
-// standingDisposition returns the disposition of item that no sibling
-// supersedes, or nil when the item is unanswered. It also reports whether the
-// item's dispositions form a supersession CYCLE — records present and none
-// standing — which is a different fact from "nobody has answered it".
-func standingDisposition(issuesRoot, issuesDir, item string) (*standingRecord, bool, error) {
+// itemAnswer is everything the walk learned about one item's dispositions. It is
+// a struct rather than a tuple because the facts are not alternatives to be
+// squeezed into one return value: an item can be contested AND carry a hold, and
+// collapsing that pair is exactly how the hold went missing.
+type itemAnswer struct {
+	// standing is the single record in force, or nil when none is.
+	standing *standingRecord
+	// contested is every standing id when more than one stands.
+	contested []string
+	// cyclic reports records present with none standing — a supersession cycle.
+	cyclic bool
+	// holds is every standing record that is a hold, so an exit condition is
+	// published whatever else is true of the item.
+	holds []OpenHold
+}
+
+// standingDisposition reads one item's dispositions and says what stands.
+func standingDisposition(issuesRoot, issuesDir, item string) (itemAnswer, error) {
+	var answer itemAnswer
 	itemDir := filepath.Join(issuesRoot, issueschema.DispositionsDir, item)
 	if !realDir(itemDir) {
-		return nil, false, nil
+		return answer, nil
 	}
 	entries, err := os.ReadDir(itemDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, false, nil
+			return answer, nil
 		}
-		return nil, false, err
+		return answer, err
 	}
 	var records []issueschema.DispositionRecord
+	byID := map[string]issueschema.DispositionRecord{}
 	rel := map[string]string{}
 	for _, e := range entries {
 		id, ok := issueschema.DispositionFileID(e.Name())
@@ -222,9 +263,11 @@ func standingDisposition(issuesRoot, issuesDir, item string) (*standingRecord, b
 		}
 		content, err := os.ReadFile(filepath.Join(itemDir, e.Name()))
 		if err != nil {
-			return nil, false, err
+			return itemAnswer{}, err
 		}
-		records = append(records, issueschema.ParseDisposition(id, string(content)))
+		r := issueschema.ParseDisposition(id, string(content))
+		records = append(records, r)
+		byID[id] = r
 		rel[id] = filepath.Join(issuesDir, issueschema.DispositionsDir, item, e.Name())
 	}
 
@@ -237,20 +280,33 @@ func standingDisposition(issuesRoot, issuesDir, item string) (*standingRecord, b
 		// Records present with nothing standing is a supersession CYCLE; no
 		// records at all is simply an item nobody has answered. Rendering the two
 		// the same way would announce an item answered twice as unanswered.
-		return nil, len(records) > 0, nil
+		answer.cyclic = len(records) > 0
+		return answer, nil
 	}
-	// More than one standing answer is a ledger fault the write path refuses.
-	// Reporting the FIRST by id keeps this report deterministic; naming the fault
-	// belongs to the writer, which is where it can still be prevented.
-	for _, r := range records {
-		if r.ID != standing[0] {
+
+	for _, id := range standing {
+		r := byID[id]
+		if r.State != issueschema.DispositionHeld {
 			continue
 		}
-		return &standingRecord{
-			id: r.ID, state: r.State, exitCondition: r.ExitCondition, rel: rel[r.ID],
-		}, false, nil
+		answer.holds = append(answer.holds, OpenHold{
+			Item: item, Disposition: id, ExitCondition: r.ExitCondition,
+			Path: filepath.ToSlash(rel[id]),
+		})
 	}
-	return nil, false, nil
+	if len(standing) > 1 {
+		// No first-by-id tie-break. Which answer is in force is the researcher's
+		// judgement, and there is nothing here to make it from; choosing one would
+		// publish a verdict the ledger does not contain.
+		answer.contested = standing
+		return answer, nil
+	}
+
+	r := byID[standing[0]]
+	answer.standing = &standingRecord{
+		id: r.ID, state: r.State, exitCondition: r.ExitCondition, rel: rel[r.ID],
+	}
+	return answer, nil
 }
 
 // checkReadingOutstanding renders the report as findings, every one of them at
@@ -276,6 +332,15 @@ func checkReadingOutstanding(repoRoot string, cfg RuleConfig) ([]Finding, error)
 			Message: "this is not a real directory (a symlink, or not a directory at all), so the reading walk did not enter it — " +
 				"the items under it are neither reported outstanding nor confirmed answered. " +
 				"`abcd capture` refuses to read the reading trees through a link, because its read is followed by a write",
+		})
+	}
+	for _, c := range report.Contested {
+		out = append(out, Finding{
+			File: c.Path, Line: 1, RuleID: ruleReadingOutstanding, Severity: severityInfo,
+			Message: c.Item + " (run " + c.Run + ") has " + strconv.Itoa(len(c.Standing)) +
+				" standing answers, none superseding another: " + strings.Join(c.Standing, ", ") +
+				". Which one is in force is a judgement the ledger does not contain, so nothing here picks one — " +
+				"supersede the answers that are no longer meant to stand",
 		})
 	}
 	for _, c := range report.Cyclic {
