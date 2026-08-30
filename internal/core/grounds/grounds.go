@@ -167,6 +167,21 @@ func ValidateText(text string) error {
 	if text == "" {
 		return fmt.Errorf("grounds text is empty; name the conjecture being acted on, not the route taken")
 	}
+	// The control-character refusal belongs HERE, at the argument boundary every
+	// route crosses, and not at the serialiser that ultimately refuses it. Fold
+	// normalises the whitespace Go's `\s` knows, which excludes the vertical tab,
+	// so U+000B reached capture's pre-mint gate clean and was refused by
+	// yamlScalar afterwards — under the ledger lock, with the draft already
+	// minted and an orphan left behind. Refusing what yamlScalar refuses, before
+	// anything is written, closes the class for all three writers
+	// (iss-2608301206032013).
+	for _, r := range text {
+		if r < 0x20 {
+			return fmt.Errorf(
+				"grounds text carries the control character U+%04X, which no record field can hold; "+
+					"remove it and restate the conjecture being acted on", r)
+		}
+	}
 	if len([]rune(text)) < MinTextLen {
 		return fmt.Errorf(
 			"grounds text %q is shorter than the %d-character floor; name the conjecture being acted on, not the route taken",

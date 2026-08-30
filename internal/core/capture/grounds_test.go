@@ -1,6 +1,7 @@
 package capture
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -228,5 +229,33 @@ func TestReaderVerdictOnGroundsSpellings(t *testing.T) {
 				t.Fatalf("reader refused = %v (%v), want %v", err != nil, err, tc.refused)
 			}
 		})
+	}
+}
+
+// TestPromoteControlCharacterGroundsWriteNothing is iss-2608301206032013: the
+// pre-mint gate exists so a refusal raised later cannot orphan a draft, and a
+// control character walked through it — Go's `\s` excludes the vertical tab, so
+// Fold kept U+000B and yamlScalar refused it afterwards, under the ledger lock,
+// with the draft already minted. The refusal now lands at the argument boundary,
+// where nothing has been written yet.
+func TestPromoteControlCharacterGroundsWriteNothing(t *testing.T) {
+	for name, bad := range map[string]string{
+		"vertical tab": "pursued: we expect the gate\vto refuse a control character",
+		"NUL":          "pursued: we expect the gate\x00to refuse a control character",
+	} {
+		repo, ir, issID := promoteFixture(t, "the loader drops rules silently when the config is stale")
+		_, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: issID, Grounds: bad})
+		if err == nil {
+			t.Fatalf("%s: Promote = nil error, want a refusal", name)
+		}
+		if !errors.Is(err, ErrGroundsRefused) {
+			t.Fatalf("%s: Promote = %v, want the grounds refusal (the pre-mint gate), not a later fault", name, err)
+		}
+		if n := draftCount(t, repo); n != 0 {
+			t.Fatalf("%s: a refused promote minted %d draft(s), want 0", name, n)
+		}
+		if iss := readIssue(t, ir, issID); iss.PromotedTo != "" {
+			t.Fatalf("%s: a refused promote stamped promoted_to = %q", name, iss.PromotedTo)
+		}
 	}
 }
