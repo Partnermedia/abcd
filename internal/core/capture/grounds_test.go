@@ -236,6 +236,7 @@ func TestReaderVerdictOnGroundsSpellings(t *testing.T) {
 		{"empty list", "grounds: []\n", true},
 		{"block spelled", "grounds:\n  pursued: an indented block is a mapping\n", true},
 		{"empty string", "grounds: \"\"\n", false},
+		{"backslash escaped", "grounds: \"pursued\\: the escape is reversed before the token is read\"\n", false},
 		{"bare null", "grounds: null\n", false},
 		{"well formed", "grounds: \"pursued: we expect the reasoning to outlive the session\"\n", false},
 	} {
