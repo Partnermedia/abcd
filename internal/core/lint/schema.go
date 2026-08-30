@@ -286,7 +286,9 @@ type recordJoin struct {
 	// It is asked only where the target's FILENAME is a bare handle, for the padding
 	// leg's reason: what reads the family never opens a file whose name is not one,
 	// so nothing about what the report does with such a target is available to
-	// claim.
+	// claim. That test needs the target's family, so this obligation is carried by a
+	// join that ALSO declares sameBucketAs; declared alone it would be inert, which
+	// TestEveryJoinTargetPositionIsADeclaredPosition refuses.
 	targetPosition string
 }
 
