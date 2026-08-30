@@ -13,7 +13,6 @@ import (
 
 	"github.com/intentdriven/abcd/internal/core/changelog"
 	"github.com/intentdriven/abcd/internal/core/recordid"
-	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // mintLockTimeout bounds how long CreateFromText waits for the intent-store mint
@@ -155,8 +154,8 @@ func CreateDraft(repoRoot string, opts DraftOptions) (Intent, string, error) {
 			return fmt.Errorf("intent: refusing to overwrite existing %s", rel)
 		}
 		content := seedDraft(id, opts)
-		if err := fsutil.WriteFileAtomic(abs, []byte(content), 0o644); err != nil {
-			return fmt.Errorf("intent: writing %s: %w", rel, err)
+		if err := writeIntentFile(abs, rel, content); err != nil {
+			return err
 		}
 		created = Intent{
 			ID:           id,
@@ -282,6 +281,14 @@ func seedDraft(id string, opts DraftOptions) string {
 	b.WriteString("> " + seedNote(opts) + "\n\n")
 	b.WriteString("## Why This Matters\n\n")
 	b.WriteString(opts.SeedBody + "\n\n")
+	// The two claim sections the claim-recording gradient prompts for, each with
+	// its one-line contract. They sit above the criteria, matching the record
+	// template, and they arrive as a PROMPT: a seeded nullity token would record a
+	// decline nobody made, which is precisely the collapse the gradient forbids.
+	b.WriteString("## Mechanism\n\n")
+	b.WriteString(MechanismPrompt + "\n\n")
+	b.WriteString("## Scope Conditions\n\n")
+	b.WriteString(ScopeConditionsPrompt + "\n\n")
 	b.WriteString("## Acceptance Criteria\n\n")
 	b.WriteString("> _Required (the itd-1 discipline): add at least one Given-When-Then bullet describing the verifiable bar for \"shipped\" before this draft can be planned._\n\n")
 	b.WriteString("## Open Questions\n\n")
@@ -289,6 +296,26 @@ func seedDraft(id string, opts DraftOptions) string {
 	b.WriteString("## Audit Notes\n\n")
 	b.WriteString("_Empty. Populated by intent-auditor when intent moves to shipped/._\n")
 	return b.String()
+}
+
+// The two claim-section prompts this package seeds. They are the contract a
+// human replaces, not a claim a human made, so a gate that reads one has to be
+// able to say which it is looking at.
+const (
+	MechanismPrompt       = "> _Prompted (the claim-recording gradient): why the authors expect this to work, as a falsifiable \"we expect X because Y\" — not the outcome restated. Replace this line with the claim, or with the exact token `None stated.` alone on its line to record the claim as considered and declined._"
+	ScopeConditionsPrompt = "> _Required (the claim-recording gradient): the population, platform, scale, or assumptions this claim holds under, one per top-level bullet — `abcd intent plan` stamps each with a persistent identity. Replace this line with those bullets, or with the exact token `None stated.` alone on its line._"
+)
+
+// IsClaimPrompt reports whether a claim section's body is still one of the
+// prompts above, rather than something somebody wrote.
+//
+// It lives HERE, with the templates, for the reason IsSeedNote does: a consumer
+// comparing against its own copy of the sentence would keep matching the old
+// wording the moment these are reworded, and the symptom would be an unanswered
+// prompt reported to a reader as a recorded claim.
+func IsClaimPrompt(body string) bool {
+	trimmed := strings.TrimSpace(body)
+	return trimmed == MechanismPrompt || trimmed == ScopeConditionsPrompt
 }
 
 // The two Press Release placeholders this package mints, in their parts: a

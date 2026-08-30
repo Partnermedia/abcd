@@ -34,6 +34,10 @@ impact: additive
 - Rewriting the ADR family's grounds — decision-granularity grounds stay
   where they are; this intent adds the finer grain beside them.
 
+## Scope Conditions
+
+None stated.
+
 ## Acceptance Criteria
 
 - **Given** a capture routed to an intent draft, **when** triage runs

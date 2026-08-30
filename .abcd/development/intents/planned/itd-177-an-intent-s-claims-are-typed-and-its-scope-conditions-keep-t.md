@@ -59,6 +59,10 @@ adr-45 mint.
 - Scope-condition dispositions — a separate intent (scope-condition disposition); this one only makes
   them attachable.
 
+## Scope Conditions
+
+None stated.
+
 ## Acceptance Criteria
 
 - **Given** an intent without context conditions or an explicit nullity,

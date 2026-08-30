@@ -35,7 +35,10 @@ has something stable to key on when the fidelity verdict arrives.
   the checks report, they never stamp.
 - **Identity mint** (`internal/core/intent/lifecycle.go`): `Plan` stamps a
   marker onto every unmarked scope-condition bullet before it moves the record
-  drafts → planned, using `recordid.Minter.Mint` (the
+  drafts → planned, and does that step alone — no spec, no bucket move — when
+  run on a record already in `planned/`, so a condition written after planning
+  still reaches the mint and the gate's remedy is a command that works. A run
+  with nothing unmarked refuses. It uses `recordid.Minter.Mint` (the
   [adr-45](../../decisions/adrs/0045-record-ids-are-timestamp-numeric-and-capture-stable.md)
   mint). Markers are never hand-typed.
 - **Create-path scaffold** (`internal/core/intent/create.go`): `seedDraft`
@@ -65,7 +68,10 @@ a heading with nothing but blank lines under it is `empty`. The three states
 map to three gate outcomes and are never collapsed.
 
 **Decision — the marker grammar.** A condition's identity is an HTML comment
-closing the bullet's first line: `<!-- cond: cond-<16 digits> -->`. The comment
+carried anywhere in the bullet, written at the end of its first line:
+`<!-- cond: cond-<16 digits> -->`. It is READ anywhere in the bullet, including
+a folded continuation line, because a file wrapped at 80 columns gets rewrapped
+and a positional read would orphan the identity (iss-2608300235377731). The comment
 form is the repository's existing machine-marker idiom (`audit.go`'s
 `<!-- abcd-review: … -->`), it survives markdown rendering invisibly, and it
 keeps the condition's prose exactly what a human wrote. The family tag `cond`
@@ -87,15 +93,19 @@ identity criteria assert against that payload.
 reported by name with the remedy `abcd intent plan <itd-N>` (the write-capable
 verb), never silently minted at read time: a reporter that writes is a reporter
 whose output depends on who ran it. `Plan` is idempotent here, so re-running it
-on a record whose conditions were edited stamps only the unmarked bullets.
+on a record whose conditions were edited stamps only the unmarked bullets —
+which is why the verb accepts a planned record for the stamp step and not only
+a draft (iss-2608300210588874).
 
 **Identity lifecycle is a stamping rule, not a diffing engine.** An edit keeps
 its marker because the marker is bytes in the bullet and nothing rewrites it. A
 split keeps the marker on the first part and `Plan` mints for the unmarked
 second. A merge keeps the surviving marker; the retired one simply stops
 appearing, and its absence surfaces as `narrowed` at the next fidelity verdict
-(spc-59's business). A deletion is reported by the gate as a marker known to
-the record's history but absent now. No text similarity is computed anywhere:
+(spc-59's business). A deletion is the same shape: the marker stops appearing,
+and nothing here reads the record's history to notice — the gate judges the
+record in front of it, and a retired identity is spc-59's to account for. No
+text similarity is computed anywhere:
 the intent asks for identity that survives rewording, and a stamped token
 delivers exactly that with no heuristic to be wrong.
 
@@ -129,18 +139,33 @@ does not exist, `ReadyResult.Checks` is asserted at length four in
 - `internal/core/intent/claims_test.go`: `TestParseClaimsThreeByteStates`
   (absent, empty, nullity, stated for both sections), `TestNullityTokenIsExact`
   (a "none stated" line without the full stop, or with trailing prose, is
-  `stated`), `TestParseConditionsMarkerExtraction`.
+  `stated`), `TestParseConditionsMarkerExtraction`,
+  `TestConditionIdentitySurvivesEdit`, `TestConditionMarkerSurvivesAReflow`,
+  `TestConditionWithTwoMarkersIsAFault`; the stamp's own cases
+  (`TestStampScopeConditionsMarksOnlyUnmarkedBullets` — the split case,
+  `TestStampScopeConditionsIsIdempotent`,
+  `TestStampScopeConditionsRedrawsOnCollision`) and `Plan` end to end
+  (`TestPlanStampsConditionIdentities`, `TestPlanStampsAPlannedRecordInPlace`,
+  `TestPlanOnAPlannedRecordWithNothingToStampRefuses`,
+  `TestSeedDraftCarriesClaimSections`). They live beside the code under test
+  rather than in a `lifecycle_test.go`/`create_test.go` split, matching where
+  this package already keeps its `Plan` and create cases.
+- `internal/core/intent/claims_fence_test.go`: the fence, duplicate-heading,
+  malformed-marker and mint-lock cases, plus
+  `TestFenceAwareBoundLeavesEveryAuditReceiptUnchanged`, which pins every
+  section body in the real corpus byte-identical across the fence-aware bound —
+  the acceptance-criteria body's sha256 is a parked review receipt.
 - `internal/core/intent/ready_test.go`: The five gate cases in the table, plus
-  `TestReadyChecksOrderAndCount` (six checks, fixed order) and
-  `TestReadyDisciplineExemptFromClaimChecks`.
-- `internal/core/intent/lifecycle_test.go`: `TestPlanStampsConditionIdentities`
-  (markers minted, one per bullet, matching the `cond-` grammar),
-  `TestPlanStampIsIdempotent` (a second run mints nothing new),
-  `TestPlanStampsOnlyUnmarkedBullets` (the split case).
-- `internal/core/intent/create_test.go`: `TestSeedDraftCarriesClaimSections`.
+  `TestReadyChecksOrderAndCount` (six checks, fixed order),
+  `TestReadyDisciplineExemptFromClaimChecks`,
+  `TestReadyClaimChecksNotApplicableInTerminalBuckets`,
+  `TestReadyScaffoldPromptIsNotAClaim` and
+  `TestReadyReportsStructuralConditionFaults`.
 - `internal/surface/cli/intent_cli_test.go`:
   `TestIntentReadyJSONRendersConditionIdentities` (the identity's observable
-  surface), and the exit-code cases for the two new refusals.
+  surface), `TestIntentPlanStampsAPlannedRecord` (the remedy the gate names
+  runs on the record that printed it) and the exit-code cases for the two new
+  refusals.
 
 ## Grounds (pursued)
 

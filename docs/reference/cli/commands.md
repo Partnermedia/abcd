@@ -626,13 +626,13 @@ Deprecated alias for `abcd intent "<text>"` (files a draft from the text)
 
 #### `abcd intent plan`
 
-Plan a draft intent: mint its spec, link both sides, move drafts -> planned
+Plan a draft intent (mint its spec, link both sides, move drafts -> planned); on an already-planned intent, stamp its unmarked scope conditions
 
 **Usage:** `abcd intent plan <itd-N>`
 
 #### `abcd intent ready`
 
-Report whether an intent is ready to implement (planned + AC + written spec); exit 1 when not
+Report whether an intent is ready to implement (planned + AC + claims + written spec); exit 1 when not
 
 **Usage:** `abcd intent ready <itd-N>`
 

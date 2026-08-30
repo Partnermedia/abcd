@@ -38,6 +38,10 @@ impact: additive
 - Schema now; **[HAND]** in Iteration 1 (no reading runs, so nothing to
   record yet); enforced at the command in Iteration 2.
 
+## Scope Conditions
+
+None stated.
+
 ## Acceptance Criteria
 
 - **Given** a widening proposal admitted to the candidate set, **when**

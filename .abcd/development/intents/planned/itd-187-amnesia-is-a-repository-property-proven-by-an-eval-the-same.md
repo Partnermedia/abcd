@@ -30,6 +30,10 @@ impact: additive
 - The determinism preconditions it enforces on the assembler: hash-only
   manifests, lexicographic walk order.
 
+## Scope Conditions
+
+None stated.
+
 ## Acceptance Criteria
 
 - **Given** an unchanged repository state, **when** one definition is

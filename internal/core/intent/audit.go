@@ -230,8 +230,8 @@ func emitAuditForIntent(repoRoot string, it Intent) (AuditEmitResult, error) {
 	res := AuditEmitResult{ReceiptID: rcp, IntentID: it.ID}
 	block := owedBlock(rcp)
 	updated := upsertReviewBlock(content, rcp, block)
-	if err := fsutil.WriteFileAtomic(abs, []byte(updated), 0o644); err != nil {
-		return AuditEmitResult{}, fmt.Errorf("intent: writing OWED stub to %s: %w", it.Path, err)
+	if err := writeIntentFile(abs, it.Path, updated); err != nil {
+		return AuditEmitResult{}, err
 	}
 	if err := writeAuditRequest(repoRoot, it, rcp, updated); err != nil {
 		return AuditEmitResult{}, err
@@ -363,8 +363,8 @@ func IngestVerdict(repoRoot, verdictPath string) (IngestVerdictResult, error) {
 	rollup := countVerdicts(v)
 	block := ingestedBlock(rcp, v, rollup)
 	updated := upsertReviewBlock(content, rcp, block)
-	if err := fsutil.WriteFileAtomic(filepath.Join(repoRoot, it.Path), []byte(updated), 0o644); err != nil {
-		return IngestVerdictResult{}, fmt.Errorf("intent: writing verdict to %s: %w", it.Path, err)
+	if err := writeIntentFile(filepath.Join(repoRoot, it.Path), it.Path, updated); err != nil {
+		return IngestVerdictResult{}, err
 	}
 	return IngestVerdictResult{
 		Status: "ingested", ReceiptID: rcp, IntentID: it.ID, Criteria: len(v.Criteria),
@@ -493,8 +493,8 @@ func deadLetter(repoRoot string, it Intent, content, rcp string, raw []byte, rea
 	}
 	block := deadLetterBlock(rcp, reason, dlRel)
 	updated := upsertReviewBlock(content, rcp, block)
-	if err := fsutil.WriteFileAtomic(filepath.Join(repoRoot, it.Path), []byte(updated), 0o644); err != nil {
-		return IngestVerdictResult{}, fmt.Errorf("intent: writing dead-letter marker to %s: %w", it.Path, err)
+	if err := writeIntentFile(filepath.Join(repoRoot, it.Path), it.Path, updated); err != nil {
+		return IngestVerdictResult{}, err
 	}
 	return IngestVerdictResult{
 		Status: "dead_letter", ReceiptID: rcp, IntentID: it.ID,
@@ -758,23 +758,17 @@ func renderEvidence(e verdictEvidence) string {
 // ---------------------------------------------------------------------------
 
 // sectionBody returns the text of the section introduced by the first heading
-// matching headRe, up to the next heading or end of file.
+// matching headRe, up to the next heading or end of file. It reads the section
+// through sectionLineRange (claims.go), the package's single notion of where a
+// section starts and stops; an absent section and an empty one both read as ""
+// here, and a caller that must tell them apart asks for the bounds directly.
 func sectionBody(content string, headRe *regexp.Regexp) string {
 	lines := strings.Split(content, "\n")
-	for i, ln := range lines {
-		if !headRe.MatchString(strings.TrimRight(ln, "\r")) {
-			continue
-		}
-		var body []string
-		for _, b := range lines[i+1:] {
-			if headingRe.MatchString(strings.TrimRight(b, "\r")) {
-				break
-			}
-			body = append(body, b)
-		}
-		return strings.Join(body, "\n")
+	start, end, ok := sectionLineRange(lines, headRe)
+	if !ok {
+		return ""
 	}
-	return ""
+	return strings.Join(lines[start:end], "\n")
 }
 
 // countAcceptanceCriteria counts the top-level list bullets in the intent's
