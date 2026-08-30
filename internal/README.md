@@ -25,6 +25,16 @@ plugin surface, and a future MCP server share one engine.
   carries, and a record they disagree about is one that sits in the ledger unread
   by every surface. It is not inside `core/capture` because that package's own
   tests import `core/lint`, so a lint importing capture back is an import cycle.
+- **`core/grounds/`** — the recorded-grounds vocabulary, and nothing else: the
+  three values (`pursued`, `deferred`, `declined`), the `<token>: <text>` grammar,
+  and the substance floor that refuses a degenerate text. A leaf on the
+  `core/issueschema` precedent, because three sites record grounds — the intent
+  record writer (`core/intent`), the ledger writer (`core/capture`), and the
+  committed-record gate that reads them back (`core/lint`) — and a vocabulary
+  spelled three times is one the three can disagree about. It holds a FLOOR, not
+  a judgement: whether a text names a conjecture rather than restating the
+  decision is a review property, carried by the interview prompts on the plugin
+  surface, and this package claims nothing about it.
 - **`core/surface/`** — the compatibility surface as DATA: the snapshot of every
   command, flag, and manifest entry a consumer binds to, and the diff that names
   what a release narrowed. It shares a word with the `surface/` front-door tier
