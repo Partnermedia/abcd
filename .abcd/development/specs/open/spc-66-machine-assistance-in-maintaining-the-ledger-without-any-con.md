@@ -18,8 +18,11 @@ record. There is no ingest verb this cycle, by the intent's own scoping, so the
 scribe's output is not a new contract: it emits the reading-record and
 disposition shapes
 [spc-58](spc-58-a-cold-reading-s-findings-land-as-reading-records-and-the-re.md)
-already declares, and `record_schema` refuses a malformed one the moment it is
-committed. That is the validation path, and it exists today.
+already declares. The validation path for those shapes is spc-58's own, and it
+arrives with spc-58: until its reading and disposition stores land, `record_schema`
+has no schema for either shape and refuses their directory as an undeclared
+bucket, so a malformed record and a well-formed one are refused alike. Until then
+the shapes are held by this definition and by whoever reviews the commit.
 
 Brief invariant 15
 ([`02-constraints/03-invariants.md`](../../brief/02-constraints/03-invariants.md))
@@ -75,11 +78,13 @@ repository as an object of judgement, any path outside that tree, and the
 session-transcript store, which it is not a consumer of.
 
 The declaration is machine-checked as far as a prompt file can be: a test reads
-the definition's inputs block and refuses any repository path outside
-`.abcd/work/`. That is a real gate over a real artefact, and it is honest about
-its reach: it proves the definition says the right thing, not that a host
-assembled the right context. Mechanical assembly is the ingest verb's job and
-the ingest verb is the next cycle's.
+the whole definition and refuses any repository path outside `.abcd/work/issues/`.
+It reads the whole file rather than one section because a section boundary is
+itself a bypass, and it folds every separator spelling it knows before it looks,
+because an obfuscated path is still a path. That is a real gate over a real
+artefact, and it is honest about its reach: it proves the definition says the
+right thing, not that a host assembled the right context. Mechanical assembly is
+the ingest verb's job and the ingest verb is the next cycle's.
 
 ### Authors nothing, may flag, never resolves
 
@@ -112,8 +117,10 @@ is user-facing only, and this is a development-record convention.
 The protocol states four things. Entries are transcribed **when the reading
 returns**, not later. The scribe session and the reading session are separate
 host sessions, always. The transcribed material is committed through the
-ordinary record path, so `record_schema` judges it. A fidelity flag is carried
-to the researcher unresolved.
+ordinary record path, which on this base carries no schema for either shape:
+`record_schema` gains one with spc-58's stores, and until then the shapes are
+held by the definition and by review. A fidelity flag is carried to the
+researcher unresolved.
 
 ### Session separation, and what can actually prove it
 
@@ -201,7 +208,8 @@ that claim be checked rather than asserted.
 ## Out of scope
 
 - The ingest verb. Deferred by the intent; until it lands, the scribe's output
-  is committed through the ordinary record path and judged by `record_schema`.
+  is committed through the ordinary record path, and held by the definition and
+  by review until spc-58's stores give `record_schema` a schema to judge it by.
 - The `origin` and `scribe-transcribed` frontmatter keys (itd-178). The
   contribution stamp is their hand-run precursor and retires when they ship.
 - Any transcript consumption. The scribe is not on invariant 15's enumerated
