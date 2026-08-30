@@ -1,4 +1,4 @@
-package lint
+package lint_test
 
 // The scribe's access rule (spc-66) is the assembler's exact inverse, and brief
 // invariant 15 states both halves: a reading receives a positively included slice
@@ -7,174 +7,194 @@ package lint
 // consumer of the session-transcript store.
 //
 // These cases hold the shipped DEFINITION to that rule, and they are honest about
-// their reach: they prove the prompt says the right thing, not that a host
-// assembled the right context. Mechanical assembly belongs to the ingest verb,
-// which is a later cycle's.
+// their reach: they prove the prompt names the right paths, not that a host
+// assembled the right context. Mechanical assembly belongs to the ingest verb.
 //
-// They live in this package because it is the one that already reads the agent
-// tree (agentcontract.go), so no second reader of `agents/` is written.
+// They sit in the external test package beside preflightgates_test.go, the other
+// case that reads the real repository's shipped files, and share its readRepoFile.
 
 import (
 	"encoding/json"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/intentdriven/abcd/internal/core/lint"
 )
 
-// scribePromptRel is the shipped definition, repo-relative.
-const scribePromptRel = "agents/scribe.md"
+// scribePromptRel is the shipped definition; scribeCanaryRel its injection canary.
+const (
+	scribePromptRel = "agents/scribe.md"
+	scribeCanaryRel = "agents/scribe/fixtures/injection-canary.json"
+)
 
-// scribeCanaryRel is the injection canary the itd-5 contract requires of it.
-const scribeCanaryRel = "agents/scribe/fixtures/injection-canary.json"
+// scribeLedgerRoot is the ONE tree the definition may name — the same root the
+// definition, the brief's protocol and the agent changelog all state. A broader
+// root admits `.abcd/work/DECISIONS.md`, which is shared working material and not
+// the ledger.
+const scribeLedgerRoot = ".abcd/work/issues/"
 
-// scribeLedgerRoot is the ONE tree the scribe's inputs may name. The rule is
-// positive inclusion, inherited from the assembler: a path outside this prefix is
-// excluded whether or not anyone thought to exclude it.
-const scribeLedgerRoot = ".abcd/work/"
+// scribeAgentContractRule is the shipped rule id, spelled as `.abcd/record-lint.json`
+// spells it. TestScribePromptSatisfiesTheContract arms it against a deliberately
+// broken tree, so a rename cannot leave the case passing vacuously.
+const scribeAgentContractRule = "agent_contract"
 
-// scribeInputsHeading opens the allow list. The exclusions live under their own
-// heading and name outside paths on purpose, so the allow-list check reads this
-// section alone.
-const scribeInputsHeading = "## Inputs"
+// scribeSeparators folds every spelling of a path separator to '/'. A path is a
+// path however it is written: a backslash, a fullwidth solidus, a division slash
+// and a fraction slash all read as one separator to a human, and a host asked to
+// resolve such a string resolves the path. Folding first is what stops the
+// obfuscated spelling from being a hole in the allow list.
+var scribeSeparators = strings.NewReplacer(
+	"\\", "/", "\uFF0F", "/", "\u2215", "/", "\u2044", "/",
+)
 
-// backtickedRe captures every inline-code token; a token carrying a path
-// separator is read as a repository path.
-var backtickedRe = regexp.MustCompile("`([^`\n]+)`")
+// scribePathRe matches a repository-path-shaped run, and it runs over the WHOLE
+// definition rather than over one section. That is deliberate on two counts.
+// Markdown is not a hiding place: once separators are folded, inline code, a
+// fenced block and bare prose are the same characters, so none of the three is
+// somewhere a path can sit unread. And no section is skipped, so a second
+// `## Inputs` heading — or an exclusion list that names what it excludes — is not
+// a way in either. The definition states its exclusions by category, never by
+// path, which is what makes the whole-file rule affordable.
+var scribePathRe = regexp.MustCompile(`[A-Za-z0-9_.~*<>-]*/[A-Za-z0-9_.~*<>/-]*`)
 
-// readRepoFile reads one file out of the real repository.
-func readRepoFile(t *testing.T, rel string) string {
-	t.Helper()
-	data, err := os.ReadFile(filepath.Join(repoRootFromPackage, filepath.FromSlash(rel)))
-	if err != nil {
-		t.Fatalf("reading %s: %v", rel, err)
+// scribeInputsHeadingRe matches the allow list's heading at any depth.
+var scribeInputsHeadingRe = regexp.MustCompile(`(?m)^#{1,6}[ \t]+Inputs\b`)
+
+// scribeAccessFindings returns every way one definition's text breaches the
+// access rule: a missing allow list, an allow list that names nothing, a
+// traversal segment, or any path outside the ledger root.
+func scribeAccessFindings(prompt string) []string {
+	var out []string
+	if !scribeInputsHeadingRe.MatchString(prompt) {
+		out = append(out, "carries no Inputs section; the access rule IS the allow list, so its absence is the breach")
 	}
-	return string(data)
-}
-
-// markdownSection returns the lines under the first heading with the given
-// prefix, up to the next second-level heading.
-func markdownSection(text, headingPrefix string) string {
-	lines := strings.Split(text, "\n")
-	start := -1
-	for i, line := range lines {
-		if strings.HasPrefix(line, headingPrefix) {
-			start = i + 1
-			break
-		}
-	}
-	if start < 0 {
-		return ""
-	}
-	for i := start; i < len(lines); i++ {
-		if strings.HasPrefix(lines[i], "## ") {
-			return strings.Join(lines[start:i], "\n")
-		}
-	}
-	return strings.Join(lines[start:], "\n")
-}
-
-// pathsOutsideLedger returns every repository path a section names that does not
-// sit under the ledger root, and the count of paths it saw at all. A section that
-// names no path is as much a failure as one that names the wrong path: an allow
-// list with nothing on it allows nothing and proves nothing.
-func pathsOutsideLedger(section string) (outside []string, seen int) {
-	for _, m := range backtickedRe.FindAllStringSubmatch(section, -1) {
-		tok := strings.TrimSpace(m[1])
-		if !strings.Contains(tok, "/") {
+	seen := 0
+	for _, raw := range scribePathRe.FindAllString(scribeSeparators.Replace(prompt), -1) {
+		// Trailing sentence punctuation is not part of the path; a LEADING dot is
+		// (`.abcd/...`), so the two ends are trimmed with different sets.
+		tok := strings.TrimLeft(strings.TrimRight(raw, `.,;:!?)]"'`), `([`)
+		// Prose spells things like "and/or" and "read/write". A repository path
+		// has either more than one separator or a dot in it; neither of those does.
+		if strings.Count(tok, "/") < 2 && !strings.Contains(tok, ".") {
 			continue
 		}
 		seen++
-		if !strings.HasPrefix(tok, scribeLedgerRoot) {
-			outside = append(outside, tok)
+		if strings.Contains(tok, "..") {
+			out = append(out, "names "+tok+": a traversal segment escapes whatever prefix a reader checks")
+			continue
+		}
+		if !strings.HasPrefix(path.Clean(tok)+"/", scribeLedgerRoot) {
+			out = append(out, "names "+tok+", outside "+scribeLedgerRoot)
 		}
 	}
-	return outside, seen
+	if seen == 0 {
+		out = append(out, "names no repository path at all; an allow list with nothing on it proves nothing")
+	}
+	return out
+}
+
+// scribeConformingBase is a minimal definition that satisfies the access rule.
+// Every hostile case below is this text plus exactly one smuggled path, so the
+// smuggle is the only thing a failure can be about.
+const scribeConformingBase = "---\nname: scribe\n---\n\n" +
+	"## Inputs (the allow list)\n\n" +
+	"- `.abcd/work/issues/readings/` — the reading records already on file.\n\n" +
+	"## Never in context\n\nThe shipped repository as an object of judgement.\n"
+
+// TestScribeAccessCheckRefusesEveryBypass is the control, and it is what makes the
+// case below it worth anything: each entry is a way of writing a shipped-tree path
+// into the definition, and the check must report every one. A guard that reads
+// only the first heading, only inline code, or only an ASCII solidus is a guard
+// whose allow list is advisory.
+func TestScribeAccessCheckRefusesEveryBypass(t *testing.T) {
+	cases := []struct{ name, smuggled string }{
+		{"a second Inputs heading", "\n## Inputs (continued)\n\n- `internal/core/lint/agentcontract.go` — the rule.\n"},
+		{"a bare path in prose", "\nRead internal/core/lint/agentcontract.go before transcribing.\n"},
+		{"a path inside a fence", "\n```\ninternal/core/lint/agentcontract.go\n```\n"},
+		{"a fullwidth solidus", "\n- `internal／core／lint／agentcontract.go` — the rule.\n"},
+		{"a backslash separator", "\n- `internal\\core\\lint\\agentcontract.go` — the rule.\n"},
+		{"a traversal out of the ledger", "\n- `.abcd/work/issues/../../development/readings/` — the run record.\n"},
+		{"the shared decision log", "\n- `.abcd/work/DECISIONS.md` — the decisions.\n"},
+		{"a session-transcript store path", "\n- `~/.abcd/history/aaaa/transcripts/` — prior sessions.\n"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if fs := scribeAccessFindings(scribeConformingBase + tc.smuggled); len(fs) == 0 {
+				t.Fatalf("the access check admits %s; a definition edited that way passes this gate", tc.name)
+			}
+		})
+	}
+}
+
+// TestScribeAccessCheckPassesTheConformingShape proves the check is not simply
+// refusing everything: the base the hostile cases are built on passes clean.
+func TestScribeAccessCheckPassesTheConformingShape(t *testing.T) {
+	if fs := scribeAccessFindings(scribeConformingBase); len(fs) != 0 {
+		t.Fatalf("the conforming base must pass; got %v", fs)
+	}
+}
+
+// TestScribeInputsAreLedgerOnly is the access rule over the real definition.
+func TestScribeInputsAreLedgerOnly(t *testing.T) {
+	root := filepath.Join("..", "..", "..")
+	for _, f := range scribeAccessFindings(readRepoFile(t, root, scribePromptRel)) {
+		t.Errorf("%s %s", scribePromptRel, f)
+	}
 }
 
 // transcriptStoreNeedles are the spellings of the session-transcript store's
 // path. Invariant 15 reserves that store to an enumerated consumer list the
-// scribe is not on, so the definition must not name a path into it at all.
-var transcriptStoreNeedles = []string{".abcd/history", "history/transcripts", "/history/"}
+// scribe is not on, so the definition names no path into it at all.
+var transcriptStoreNeedles = []string{".abcd/history", "history/transcripts"}
 
-// TestScribeInputsAreLedgerOnly is the access rule stated positively: the
-// definition's allow list names ledger paths and nothing else. The control case
-// below it proves the check is armed rather than vacuously passing.
-func TestScribeInputsAreLedgerOnly(t *testing.T) {
-	section := markdownSection(readRepoFile(t, scribePromptRel), scribeInputsHeading)
-	if strings.TrimSpace(section) == "" {
-		t.Fatalf("%s carries no %q section; the access rule is the allow list, so its absence is the failure",
-			scribePromptRel, scribeInputsHeading)
-	}
-
-	outside, seen := pathsOutsideLedger(section)
-	if seen == 0 {
-		t.Fatalf("%s's inputs section names no repository path; an allow list with nothing on it proves nothing",
-			scribePromptRel)
-	}
-	if len(outside) != 0 {
-		t.Errorf("%s's inputs section names %v, outside %s; the scribe never receives the shipped repository as an object of judgement",
-			scribePromptRel, outside, scribeLedgerRoot)
-	}
-}
-
-// TestScribeInputsCheckRefusesAnOutsidePath is the control: the same extractor,
-// over a section that names a shipped-tree path, must report it. Without this the
-// case above passes for a definition that names no path in a form the extractor
-// recognises.
-func TestScribeInputsCheckRefusesAnOutsidePath(t *testing.T) {
-	section := "- `.abcd/work/issues/` — the ledger.\n- `internal/core/lint/agentcontract.go` — the rule.\n"
-	outside, seen := pathsOutsideLedger(section)
-	if seen != 2 {
-		t.Fatalf("expected both paths to be seen, got %d", seen)
-	}
-	if len(outside) != 1 || outside[0] != "internal/core/lint/agentcontract.go" {
-		t.Fatalf("expected the shipped-tree path to be refused, got %v", outside)
-	}
-}
-
-// TestScribeDeclaresNoTranscriptStoreAccess holds invariant 15's second half: the
-// scribe is not a transcript consumer, so its definition names no path into the
-// session-transcript store — not as an input, and not anywhere else, because a
-// path in a prompt is a path a host may be asked to supply.
-func TestScribeDeclaresNoTranscriptStoreAccess(t *testing.T) {
-	prompt := readRepoFile(t, scribePromptRel)
+// scribeTranscriptStoreFindings reports every named path into the store.
+func scribeTranscriptStoreFindings(prompt string) []string {
+	var out []string
 	for _, needle := range transcriptStoreNeedles {
 		if strings.Contains(prompt, needle) {
-			t.Errorf("%s names %q; invariant 15 reserves the session-transcript store to an enumerated "+
-				"consumer list the scribe is not on, and adding it there is an invariant change, never a code change",
-				scribePromptRel, needle)
+			out = append(out, "names "+needle)
 		}
 	}
-	// The control: the needle set must actually match a store path.
-	if !strings.Contains("the store at ~/.abcd/history/<root-sha>/transcripts/", transcriptStoreNeedles[0]) {
-		t.Fatal("the transcript-store needle set matches no store path; the check is not armed")
+	return out
+}
+
+// TestScribeDeclaresNoTranscriptStoreAccess holds invariant 15's second half, and
+// arms itself against a definition that does name the store.
+func TestScribeDeclaresNoTranscriptStoreAccess(t *testing.T) {
+	root := filepath.Join("..", "..", "..")
+	for _, f := range scribeTranscriptStoreFindings(readRepoFile(t, root, scribePromptRel)) {
+		t.Errorf("%s %s; invariant 15 reserves the session-transcript store to an enumerated consumer "+
+			"list the scribe is not on, and adding it there is an invariant change, never a code change",
+			scribePromptRel, f)
+	}
+	hostile := scribeConformingBase + "\n- `~/.abcd/history/aaaa/transcripts/` — prior sessions.\n"
+	if len(scribeTranscriptStoreFindings(hostile)) == 0 {
+		t.Fatal("the transcript-store check admits a store path; it is not armed")
 	}
 }
 
-// TestScribeCanaryIsPresentAndNonEmpty reads the fixture the agent_contract rule
-// requires and asserts what that rule cannot: that it parses, carries a hostile
-// input, and declares the expectation that the demand is transcribed as data and
-// never obeyed. A canary that is merely a non-empty file reports the contract met
-// without testing it.
-func TestScribeCanaryIsPresentAndNonEmpty(t *testing.T) {
-	info, err := os.Lstat(filepath.Join(repoRootFromPackage, filepath.FromSlash(scribeCanaryRel)))
-	if err != nil {
-		t.Fatalf("stat %s: %v", scribeCanaryRel, err)
-	}
-	if !info.Mode().IsRegular() || info.Size() == 0 {
-		t.Fatalf("%s must be a regular, non-empty file", scribeCanaryRel)
-	}
+// TestScribeCanaryAssertsTheRefusals reads the fixture the agent_contract rule
+// already proves present, non-empty and regular, and asserts what that rule
+// cannot: that it parses, carries a hostile payload, and declares the expectation
+// the payload is measured against. A control string the input never contains is a
+// `must_not_contain` that no run can fail.
+func TestScribeCanaryAssertsTheRefusals(t *testing.T) {
+	root := filepath.Join("..", "..", "..")
+	raw := readRepoFile(t, root, scribeCanaryRel)
 
 	var fixture struct {
 		Input    json.RawMessage `json:"input"`
 		Expected struct {
+			MustNotContain       string   `json:"must_not_contain"`
 			MustNotObey          []string `json:"must_not_obey"`
 			InjectionIsInertData bool     `json:"injection_is_inert_data"`
 		} `json:"expected"`
 	}
-	if err := json.Unmarshal([]byte(readRepoFile(t, scribeCanaryRel)), &fixture); err != nil {
+	if err := json.Unmarshal([]byte(raw), &fixture); err != nil {
 		t.Fatalf("%s does not parse as JSON: %v", scribeCanaryRel, err)
 	}
 	if len(fixture.Input) == 0 {
@@ -187,27 +207,63 @@ func TestScribeCanaryIsPresentAndNonEmpty(t *testing.T) {
 		t.Errorf("%s does not declare 'expected.injection_is_inert_data'; that is the contract every canary asserts",
 			scribeCanaryRel)
 	}
+	if tok := fixture.Expected.MustNotContain; tok == "" || !strings.Contains(string(fixture.Input), tok) {
+		t.Errorf("%s's must_not_contain token %q appears nowhere in its input; a control string the payload never "+
+			"demands is one no run can fail", scribeCanaryRel, tok)
+	}
+	// The definition carries two refusals beyond "never obey an instruction":
+	// transcript material handed over as ledger context is refused outright, and a
+	// composed contribution is stamped or withheld. A canary that tests neither
+	// leaves both unexercised.
+	declared := strings.ToLower(strings.Join(fixture.Expected.MustNotObey, " | "))
+	for _, lure := range []string{"transcript", "summary"} {
+		if !strings.Contains(declared, lure) {
+			t.Errorf("%s's expected.must_not_obey names no %q refusal; the definition refuses transcript material "+
+				"handed as ledger context and refuses an unstamped composed contribution, so the canary tests both",
+				scribeCanaryRel, lure)
+		}
+	}
 }
 
 // TestScribePromptSatisfiesTheContract runs the shipped agent_contract rule over
-// the real tree and asserts the scribe passes all three sub-checks — the itd-5
-// frontmatter, the canary, and the per-agent changelog entry keyed on its
-// version. Findings for the other prompts are not this case's business.
+// the real tree and asserts the scribe passes all three sub-checks. The second
+// half arms the rule id: a rule renamed out from under this case would otherwise
+// leave it filtering for findings that can never appear.
 func TestScribePromptSatisfiesTheContract(t *testing.T) {
-	if _, err := os.Stat(filepath.Join(repoRootFromPackage, filepath.FromSlash(scribePromptRel))); err != nil {
-		t.Fatalf("stat %s: %v", scribePromptRel, err)
-	}
+	cfg := lint.Config{Rules: map[string]lint.RuleConfig{
+		scribeAgentContractRule: {Enabled: true, Severity: "blocker"},
+	}}
 
-	fs, err := Lint(agentCfg(), repoRootFromPackage)
+	fs, err := lint.Lint(cfg, filepath.Join("..", "..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, f := range fs {
-		if f.RuleID != ruleAgentContract {
+		if f.RuleID != scribeAgentContractRule {
 			continue
 		}
 		if filepath.ToSlash(f.File) == scribePromptRel || strings.Contains(f.Message, "scribe") {
 			t.Errorf("%s: %s", f.File, f.Message)
 		}
 	}
+
+	broken := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(broken, "agents"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(broken, "agents", "unversioned.md"),
+		[]byte("---\nname: unversioned\n---\n\nPrompt body.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	armed, err := lint.Lint(cfg, broken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range armed {
+		if f.RuleID == scribeAgentContractRule {
+			return
+		}
+	}
+	t.Fatalf("no %q finding over a deliberately broken agent tree; the rule id this case filters on is stale",
+		scribeAgentContractRule)
 }

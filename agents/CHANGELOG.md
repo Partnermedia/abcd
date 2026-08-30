@@ -31,9 +31,12 @@ the hand-run precursor of the record's origin keys, with an unstamped contributi
 refused rather than delivered. Carries `reads_untrusted_input: true`,
 `capability_scope.task_classes: [surface_render]`, and an injection-canary fixture
 whose payload demands the scribe author dispositions, fetch shipped-tree material,
-and move a ledger record. There is no ingest verb: the emitted records are
-committed through the ordinary record path, where `record_schema` judges them, and
-the written protocol in the brief's agents chapter is followed by hand.
+and move a ledger record. There is no ingest verb, and no schema for these
+shapes either until spc-58's reading and disposition stores land: the emitted
+records are committed through the ordinary record path, where `record_schema`
+refuses their directory as an undeclared bucket rather than judging the record, so
+the shapes are held by the definition and by review. The written protocol in the
+brief's agents chapter is followed by hand.
 Unmeasured — no calibration corpus exists for ledger transcription, and no
 self-improvement pre-flight was run.
 
