@@ -538,3 +538,87 @@ func TestCaseVariantExcludedHeadingRefusesTheFile(t *testing.T) {
 		t.Errorf("the refusal does not name the surviving heading: %v", err)
 	}
 }
+
+// TestStagedRenameOutOfTheIncludeSetRefuses: a rename's SOURCE path is the one
+// that was in the target commit. Discarding it leaves an included file that is
+// neither in the bundle nor refused, and the manifest names HEAD for a bundle
+// that is not HEAD.
+func TestStagedRenameOutOfTheIncludeSetRefuses(t *testing.T) {
+	root := fixtureRepo(t)
+	gitRun(t, root, "mv", "docs/reference/thing.md", ".abcd/development/plans/thing.md")
+
+	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	if err == nil {
+		t.Fatal("an included file renamed out of the include set did not refuse the assembly")
+	}
+	if !strings.Contains(err.Error(), "docs/reference/thing.md") {
+		t.Errorf("the refusal does not name the rename's source path: %v", err)
+	}
+}
+
+// TestWorktreeRenameRefuses holds the same case in the second status column,
+// which the source-consuming branch has to read as well as the first.
+func TestWorktreeRenameRefuses(t *testing.T) {
+	root := fixtureRepo(t)
+	gitRun(t, root, "mv", "README.md", "READYOU.md")
+	gitRun(t, root, "reset", "-q")
+
+	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	if err == nil {
+		t.Fatal("a worktree rename of an included file did not refuse the assembly")
+	}
+	if !strings.Contains(err.Error(), "README.md") {
+		t.Errorf("the refusal does not name the renamed path: %v", err)
+	}
+}
+
+// TestRetargetedStoreDirectoryRefuses: a store key present but pointed at a
+// directory that is not there enumerates nothing and reports a clean run.
+func TestRetargetedStoreDirectoryRefuses(t *testing.T) {
+	root := fixtureRepo(t)
+	writeFile(t, root, LintConfigPath, `{"schema_version": 1, "rules": {"record_schema":
+  {"enabled": true, "severity": "blocker", "record_stores": {"itd": ".abcd/development/intents",
+   "spc": ".abcd/development/specifications"}}}}`)
+	gitCommitAll(t, root)
+
+	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	if err == nil {
+		t.Fatal("a store pointed at an absent directory assembled silently")
+	}
+	if !strings.Contains(err.Error(), "specifications") {
+		t.Errorf("the refusal does not name the absent store directory: %v", err)
+	}
+}
+
+// TestUncommittedLintConfigRefuses: the record configuration decides what the
+// record scan sees, and it sits under the deny, so no include row puts it in the
+// dirty set. An uncommitted retarget would silently reshape the assembly.
+func TestUncommittedLintConfigRefuses(t *testing.T) {
+	root := fixtureRepo(t)
+	writeFile(t, root, LintConfigPath, `{"schema_version": 1, "rules": {"record_schema":
+  {"enabled": true, "severity": "blocker", "record_stores": {"itd": ".abcd/development/intents",
+   "spc": ".abcd/development/specs"}}}}`)
+
+	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	if err == nil {
+		t.Fatal("an uncommitted record configuration did not refuse the assembly")
+	}
+	if !strings.Contains(err.Error(), LintConfigPath) {
+		t.Errorf("the refusal does not name the configuration: %v", err)
+	}
+}
+
+// TestUntrackedFileInANewDirectoryRefuses: git collapses an untracked directory
+// to a single entry, so an admitted file inside it is never named.
+func TestUntrackedFileInANewDirectoryRefuses(t *testing.T) {
+	root := fixtureRepo(t)
+	writeFile(t, root, "docs/newdir/page.md", "# A page\n\nUncommitted, in a new directory.\n")
+
+	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	if err == nil {
+		t.Fatal("an untracked admitted file in a new directory did not refuse the assembly")
+	}
+	if !strings.Contains(err.Error(), "docs/newdir/page.md") {
+		t.Errorf("the refusal does not name the untracked file: %v", err)
+	}
+}

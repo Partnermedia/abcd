@@ -314,7 +314,11 @@ func resolveTarget(repoRoot, target string) (string, error) {
 // the commit the manifest names, so a run over it would describe a target it
 // never read.
 func refuseDirtyIncludedPaths(repoRoot string, position Position, cands []candidate) error {
-	out, err := gitutil.RunCapped(repoRoot, 8<<20, "status", "--porcelain=v1", "-z")
+	// -uall, not the default -unormal: git collapses an untracked DIRECTORY to a
+	// single entry, and an admitted file inside a newly created directory would
+	// then never be named — the prefix check below can only test paths the
+	// assembly already holds, and an untracked file is not one of them.
+	out, err := gitutil.RunCapped(repoRoot, 8<<20, "status", "--porcelain=v1", "-z", "-uall")
 	if err != nil {
 		return fmt.Errorf("reading: reading the working-tree status: %w", err)
 	}
@@ -322,6 +326,11 @@ func refuseDirtyIncludedPaths(repoRoot string, position Position, cands []candid
 	for _, c := range cands {
 		included[c.path] = true
 	}
+	// The record configuration decides which stores the record scan reads, so an
+	// uncommitted edit to it reshapes the assembly as surely as an edit to a
+	// record does. It sits under the deny, so no include row ever puts it in this
+	// set; it is named here instead.
+	included[LintConfigPath] = true
 	var dirty []string
 	for _, entry := range dirtyPaths(out) {
 		if strings.HasSuffix(entry, "/") {
@@ -362,8 +371,16 @@ func dirtyPaths(out string) []string {
 		}
 		status := rec[:2]
 		paths = append(paths, rec[3:])
-		if status[0] == 'R' || status[0] == 'C' {
-			i++ // the source path of a rename or copy
+		// A rename or copy carries its SOURCE as the following record, and either
+		// status column can declare one: `R ` is a staged rename, ` R` a worktree
+		// one. The source is the path that was in the target commit, so dropping
+		// it loses exactly the file whose disappearance from the include set this
+		// gate exists to catch.
+		if status[0] == 'R' || status[0] == 'C' || status[1] == 'R' || status[1] == 'C' {
+			i++
+			if i < len(records) && records[i] != "" {
+				paths = append(paths, records[i])
+			}
 		}
 	}
 	return paths
@@ -484,15 +501,25 @@ func refuseOwnArtefact(rel string, raw []byte) error {
 // the include table names. It is the same refusal as an absent configuration,
 // arriving one level in: an unnamed store contributes nothing to the record
 // scan, and a row enumerating nothing is a hole the run would not report.
-func requireConfiguredStores(cfg lint.Config) error {
+func requireConfiguredStores(repoRoot string, cfg lint.Config) error {
 	configured := cfg.Rules[lintRecordSchemaRule].RecordStores
 	for _, row := range Table {
 		if row.Store == "" {
 			continue
 		}
-		if _, ok := configured[row.Store]; !ok {
+		dir, ok := configured[row.Store]
+		if !ok {
 			return fmt.Errorf("reading: %s names no %q record store, so the include row %q would "+
 				"enumerate nothing", LintConfigPath, row.Store, row.Source)
+		}
+		// A key present is not a store present. A retarget — a typo, a rename the
+		// configuration did not follow — leaves the key in place and points it at
+		// nothing, and the scan then reports an empty store exactly as it reports
+		// a store with no records.
+		info, err := os.Stat(filepath.Join(repoRoot, filepath.FromSlash(dir)))
+		if err != nil || !info.IsDir() {
+			return fmt.Errorf("reading: %s points the %q record store at %s, which is not a directory, "+
+				"so the include row %q would enumerate nothing", LintConfigPath, row.Store, dir, row.Source)
 		}
 	}
 	return nil
@@ -552,7 +579,7 @@ func loadGraph(repoRoot string) (lint.RecordGraph, error) {
 	if closeErr != nil {
 		return lint.RecordGraph{}, fmt.Errorf("reading: closing the repository root: %w", closeErr)
 	}
-	if err := requireConfiguredStores(cfg); err != nil {
+	if err := requireConfiguredStores(repoRoot, cfg); err != nil {
 		return lint.RecordGraph{}, err
 	}
 	graph, err := lint.LoadRecordGraph(cfg, repoRoot)

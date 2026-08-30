@@ -195,3 +195,13 @@ func gitCommitAll(t *testing.T, root string) {
 		}
 	}
 }
+
+// gitRun runs one git command against a fixture repository under the test
+// identity, failing the test on error.
+func gitRun(t *testing.T, root string, args ...string) {
+	t.Helper()
+	full := append([]string{"-c", "user.name=abcd test", "-c", "user.email=test@example.invalid"}, args...)
+	if out, err := gitutil.Run(root, full...); err != nil {
+		t.Fatalf("git %s: %v (%s)", strings.Join(args, " "), err, out)
+	}
+}
