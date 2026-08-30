@@ -136,8 +136,17 @@ is the seventh and last row of the report, and its remedy names this exact
 command. Terminal buckets are exempt on the same rule the claim checks follow:
 `shipped/` and `superseded/` records are never backfilled, and a discipline
 record carries no conjecture of its own. The write enforces that rule too: this
-verb REFUSES a `shipped/` or `superseded/` record, so the exemption stays a true
-statement about the corpus.
+verb REFUSES a `shipped/` or `superseded/` record, so no grounds this tool
+writes can ever land on one.
+
+That is a statement about the TOOL, not about the corpus, and the difference is
+the migration exception. Three shipped intents do carry a `## Grounds` section —
+itd-177, itd-182 and itd-188 — relocated by hand from the pre-tooling
+`## Grounds (pursued)` section on the matching spec. A relocation is not a
+backfill: the text was authored at the moment of pursuit and nothing was
+reconstructed. The refusal covers both, deliberately, because nothing in the
+enforcement can tell relocated text from invented text — which is why the state
+those three records are in is not reachable through this verb.
 
 **Ask for the expectation and its falsifier.** "Planned it because it is next"
 restates the decision and records nothing; "planned it because we expect a

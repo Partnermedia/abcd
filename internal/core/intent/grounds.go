@@ -65,10 +65,19 @@ func RecordGrounds(repoRoot, intentID string, g grounds.Grounds) (GroundsResult,
 	}
 	// Population is forward-only, and the readiness gate SAYS so: it exempts
 	// shipped/ and superseded/ records from the grounds check on the ground that
-	// they are never backfilled. A writer that backfills them anyway makes that
-	// exemption a false statement about the corpus, and an absent stamp stops
-	// being information (iss-2608300930057882). The rule is enforced where the
-	// write happens, not only claimed where the report is rendered.
+	// they are never backfilled. A writer that backfills them anyway makes an
+	// absent stamp stop being information (iss-2608300930057882), so the rule is
+	// enforced where the write happens and not only claimed where the report is
+	// rendered.
+	//
+	// What that establishes is a property of this WRITER, not of the corpus: no
+	// grounds this package writes can land on a terminal record. Three shipped
+	// intents DO carry a `## Grounds` section — itd-177, itd-182 and itd-188 —
+	// relocated by hand from the pre-tooling `## Grounds (pursued)` section on the
+	// matching spec. That is a relocation rather than a backfill: the text was
+	// authored at the moment of pursuit and nothing was reconstructed. The refusal
+	// below covers both, deliberately, because nothing here can tell relocated
+	// text from invented text (iss-2608301657357989).
 	switch it.Bucket {
 	case BucketShipped, BucketSuperseded:
 		return GroundsResult{}, fmt.Errorf(
