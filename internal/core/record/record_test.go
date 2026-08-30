@@ -10,6 +10,10 @@ import (
 )
 
 // write writes a file under repo, creating parents.
+// recordGrounds is the recorded-grounds section a READY fixture carries: the
+// readiness gate refuses a planned record that names no conjecture.
+const recordGrounds = "\n## Grounds\n\n- pursued: we expect the recorded conjecture to outlive the session that had it\n"
+
 func write(t *testing.T, repo, rel, content string) {
 	t.Helper()
 	abs := filepath.Join(repo, rel)
@@ -171,7 +175,7 @@ func TestDescribeIntentLifecycleMoves(t *testing.T) {
 
 	// planned/ and ready → implement + spec close.
 	intentFixture(t, repo, "planned", "itd-3", "planned-ready",
-		"---\nid: itd-3\nslug: planned-ready\nspec_id: spc-2\nkind: standalone\n---\n\n# R\n\n## Scope Conditions\n\nNone stated.\n\n## Acceptance Criteria\n\n- **Given** x, **then** y.\n")
+		"---\nid: itd-3\nslug: planned-ready\nspec_id: spc-2\nkind: standalone\n---\n\n# R\n\n## Scope Conditions\n\nNone stated.\n\n## Acceptance Criteria\n\n- **Given** x, **then** y.\n"+recordGrounds)
 	write(t, repo, ".abcd/development/specs/open/spc-2-planned-ready.md",
 		"---\nid: spc-2\nslug: planned-ready\nintent: itd-3\n---\n# planned-ready\n\nA real body: build the thing against these words.\n")
 	d, err = Describe(repo, "itd-3")
@@ -209,7 +213,7 @@ func TestDescribeIntentLifecycleMoves(t *testing.T) {
 func TestDescribeSpecMoves(t *testing.T) {
 	repo := t.TempDir()
 	intentFixture(t, repo, "planned", "itd-6", "for-spec",
-		"---\nid: itd-6\nslug: for-spec\nspec_id: spc-4\nkind: standalone\n---\n\n# S\n\n## Scope Conditions\n\nNone stated.\n\n## Acceptance Criteria\n\n- **Given** x, **then** y.\n")
+		"---\nid: itd-6\nslug: for-spec\nspec_id: spc-4\nkind: standalone\n---\n\n# S\n\n## Scope Conditions\n\nNone stated.\n\n## Acceptance Criteria\n\n- **Given** x, **then** y.\n"+recordGrounds)
 	write(t, repo, ".abcd/development/specs/open/spc-4-for-spec.md",
 		"---\nid: spc-4\nslug: for-spec\nintent: itd-6\n---\n# for-spec\n\nWritten body, ready to build.\n")
 	d, err := Describe(repo, "spc-4")

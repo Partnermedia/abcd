@@ -351,7 +351,7 @@ func TestIntentReadyGreenExit0(t *testing.T) {
 	t.Chdir(repo)
 	writeRepoFile(t, repo, cliPlanned+"/itd-10-alpha.md",
 		"---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n"+
-			"## Scope Conditions\n\nNone stated.\n\n## Acceptance Criteria\n\n- ok\n")
+			"## Scope Conditions\n\nNone stated.\n\n## Acceptance Criteria\n\n- ok\n"+cliGroundsSection)
 	writeRepoFile(t, repo, cliSpecsOpen+"/spc-1-alpha.md",
 		"---\nid: spc-1\nslug: alpha\nintent: itd-10\n---\n# alpha\n\n## Summary\n\nA written design record.\n")
 
@@ -430,7 +430,7 @@ func TestIntentReadyJSONRendersConditionIdentities(t *testing.T) {
 			"## Scope Conditions\n\n"+
 			"- holds on a POSIX shell <!-- cond: cond-2608300102030405 -->\n"+
 			"- holds below 10k records <!-- cond: cond-2608300102030406 -->\n\n"+
-			"## Acceptance Criteria\n\n- ok\n")
+			"## Acceptance Criteria\n\n- ok\n"+cliGroundsSection)
 	writeRepoFile(t, repo, cliSpecsOpen+"/spc-1-alpha.md",
 		"---\nid: spc-1\nslug: alpha\nintent: itd-10\n---\n# alpha\n\n## Summary\n\nA written design record.\n")
 
@@ -470,7 +470,7 @@ func TestIntentPlanStampsAPlannedRecord(t *testing.T) {
 	t.Chdir(repo)
 	writeRepoFile(t, repo, cliPlanned+"/itd-10-alpha.md",
 		"---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n"+
-			"## Scope Conditions\n\n- written after planning\n\n## Acceptance Criteria\n\n- ok\n")
+			"## Scope Conditions\n\n- written after planning\n\n## Acceptance Criteria\n\n- ok\n"+cliGroundsSection)
 	writeRepoFile(t, repo, cliSpecsOpen+"/spc-1-alpha.md",
 		"---\nid: spc-1\nslug: alpha\nintent: itd-10\n---\n# alpha\n\n## Summary\n\nA written design record.\n")
 
@@ -501,7 +501,7 @@ func TestIntentPlanStampOnlyJSONNamesTheLinkedSpec(t *testing.T) {
 	t.Chdir(repo)
 	writeRepoFile(t, repo, cliPlanned+"/itd-10-alpha.md",
 		"---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n"+
-			"## Scope Conditions\n\n- written after planning\n\n## Acceptance Criteria\n\n- ok\n")
+			"## Scope Conditions\n\n- written after planning\n\n## Acceptance Criteria\n\n- ok\n"+cliGroundsSection)
 	writeRepoFile(t, repo, cliSpecsOpen+"/spc-1-alpha.md",
 		"---\nid: spc-1\nslug: alpha\nintent: itd-10\n---\n# alpha\n\n## Summary\n\nA written design record.\n")
 
@@ -577,3 +577,8 @@ func TestIntentReadyGroundsWriteFailureExits2(t *testing.T) {
 		t.Fatalf("a refused operand still wrote to the record:\n%s", body)
 	}
 }
+
+// cliGroundsSection is the recorded-grounds section a fixture carries when the
+// test is about a gate check other than the grounds one — the readiness gate
+// refuses a planned record that names no conjecture.
+const cliGroundsSection = "\n## Grounds\n\n- pursued: we expect the recorded conjecture to outlive the session that had it\n"

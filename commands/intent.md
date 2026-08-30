@@ -110,6 +110,12 @@ then reports the gate exactly as it would without it: the report is unchanged by
 the flag, the exit code is the gate's own, and a failed write exits 2 rather than
 borrowing the gate's exit 1.
 
+**The gate refuses a planned record that carries no entry.** The `grounds` check
+is the seventh and last row of the report, and its remedy names this exact
+command. Terminal buckets are exempt on the same rule the claim checks follow:
+`shipped/` and `superseded/` records are never backfilled, and a discipline
+record carries no conjecture of its own.
+
 **Ask for the expectation and its falsifier.** "Planned it because it is next"
 restates the decision and records nothing; "planned it because we expect a
 stamped identity to survive rewording, which nothing else does" is a conjecture
