@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/grounds"
+	"github.com/intentdriven/abcd/internal/core/mdrecord"
 	"github.com/intentdriven/abcd/internal/core/recordid"
 )
 
@@ -150,7 +151,7 @@ func RecordGrounds(repoRoot, intentID string, g grounds.Grounds) (GroundsResult,
 // on — "close the comment, or drop the marker" — and a refusal that can name the
 // cause is worth more than one that can only say the entry did not arrive.
 func groundsWriteIsReadable(before, after string, g grounds.Grounds) error {
-	if opensComment(g.Bullet()) {
+	if mdrecord.OpensComment(g.Bullet()) {
 		return fmt.Errorf(
 			"intent: the grounds text leaves an HTML comment open (`<!--` with no `-->`); "+
 				"written, it would hide the entry and every line below it from every reader of this record — "+
@@ -183,13 +184,13 @@ func groundsWriteIsReadable(before, after string, g grounds.Grounds) error {
 // reader and its gate deliberately stop at the grammar.
 func ParseGrounds(content string) []grounds.Grounds {
 	lines := strings.Split(content, "\n")
-	mask := maskLines(lines)
-	start, end, ok := sectionLineRangeIn(lines, mask, groundsHeadingRe)
+	mask := mdrecord.Mask(lines)
+	start, end, ok := mdrecord.SectionLineRangeIn(lines, mask, groundsHeadingRe)
 	if !ok {
 		return nil
 	}
 	var out []grounds.Grounds
-	for _, b := range conditionBlocks(lines, mask, start, end) {
+	for _, b := range mdrecord.BulletBlocks(lines, mask, start, end) {
 		g, err := grounds.Parse(groundsBlockText(lines, b))
 		if err != nil {
 			continue
@@ -204,12 +205,12 @@ func ParseGrounds(content string) []grounds.Grounds {
 
 // groundsBlockText folds one top-level bullet — and the continuation lines
 // wrapped into it — back into the single line the grammar is written on.
-func groundsBlockText(lines []string, b conditionBlock) string {
-	parts := make([]string, 0, b.end-b.start)
-	for i := b.start; i < b.end; i++ {
+func groundsBlockText(lines []string, b mdrecord.BulletBlock) string {
+	parts := make([]string, 0, b.End-b.Start)
+	for i := b.Start; i < b.End; i++ {
 		ln := strings.TrimRight(lines[i], "\r")
-		if i == b.start {
-			ln = bulletPrefixRe.ReplaceAllString(ln, "")
+		if i == b.Start {
+			ln = mdrecord.TrimBulletPrefix(ln)
 		}
 		parts = append(parts, ln)
 	}
@@ -223,8 +224,8 @@ func groundsBlockText(lines []string, b conditionBlock) string {
 // appending under it would detach the entry from the section it belongs to.
 func appendGroundsBullet(content string, g grounds.Grounds) string {
 	lines := strings.Split(content, "\n")
-	mask := maskLines(lines)
-	start, end, ok := sectionLineRangeIn(lines, mask, groundsHeadingRe)
+	mask := mdrecord.Mask(lines)
+	start, end, ok := mdrecord.SectionLineRangeIn(lines, mask, groundsHeadingRe)
 	if !ok {
 		body := strings.TrimRight(content, "\n")
 		return body + "\n\n## " + GroundsHeading + "\n\n" + g.Bullet() + "\n"
@@ -233,12 +234,12 @@ func appendGroundsBullet(content string, g grounds.Grounds) string {
 	for len(section) > 0 && strings.TrimSpace(section[len(section)-1]) == "" {
 		section = section[:len(section)-1]
 	}
-	trailingRefs := peelTrailingLinkRefs(&section)
+	trailingRefs := mdrecord.PeelTrailingLinkRefs(&section)
 	rebuilt := make([]string, 0, len(lines)+6)
 	rebuilt = append(rebuilt, lines[:start]...)
 	rebuilt = append(rebuilt, section...)
 	if len(section) > 0 && strings.TrimSpace(section[len(section)-1]) != "" &&
-		!bulletRe.MatchString(strings.TrimRight(section[len(section)-1], "\r")) {
+		!mdrecord.IsTopLevelBullet(strings.TrimRight(section[len(section)-1], "\r")) {
 		// Prose immediately above the first entry needs its blank line; a run of
 		// bullets is one list and must not be split by one.
 		rebuilt = append(rebuilt, "")
