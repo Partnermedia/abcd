@@ -87,6 +87,17 @@ resolution note, by contrast, is new text with its own production mode, so
 leaves it alone otherwise. This keeps the pair meaningful without making either
 key a running log.
 
+**Decision — a restamp of a record carrying no `origin` is REFUSED, before any
+write.** Forward-only population means every record committed before these keys
+existed carries neither, and none is backfilled. Restamping such a record would
+append a lone `production_mode`, which is precisely the shape `record_provenance`
+reports as a state no command produced — the gate firing on a record the command
+had just written. The pair is written together or not at all, so the transition
+refuses (`this record predates disclosure; nothing to restamp`) and names the
+remedy: re-run without `--production-mode`. The refusal is about the RESTAMP and
+never about the transition — an unstamped record stays resolvable, because
+forward-only population must not strand a record nobody can close.
+
 **The attribution seam is extended, not duplicated.** `identity.Pin` gains an
 optional `ProductionMode` member; `LoadPin` validates it against the vocabulary
 and returns an error on an unknown value, exactly as it already errors on a
@@ -153,7 +164,8 @@ refuses both keys today, and no write path emits them.
 - `internal/core/capture/promote_test.go`:
   `TestPromoteStampsExtractedFromRecord`.
 - `internal/core/capture/workflow_test.go`:
-  `TestTransitionRestampsProductionMode`, `TestTransitionLeavesOriginAlone`.
+  `TestTransitionRestampsProductionMode`, `TestTransitionLeavesOriginAlone`,
+  `TestTransitionRefusesRestampOnUnstampedRecord`.
 - `internal/core/identity/identity_test.go`:
   `TestLoadPinReadsProductionModeDefault`,
   `TestLoadPinRefusesUnknownProductionMode`,

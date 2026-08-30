@@ -8,6 +8,7 @@ import (
 
 	"github.com/intentdriven/abcd/internal/core/frontmatter"
 	"github.com/intentdriven/abcd/internal/core/lint"
+	"github.com/intentdriven/abcd/internal/core/provenance"
 )
 
 // TestCreateFromTextSeedsDraft is the itd-46 AC1 core: a quoted-text create files
@@ -16,7 +17,7 @@ import (
 func TestCreateFromTextSeedsDraft(t *testing.T) {
 	root := t.TempDir()
 
-	it, _, err := CreateFromText(root, "I want users to feel the card respects their time", "")
+	it, _, err := CreateFromText(root, "I want users to feel the card respects their time", "", "")
 	if err != nil {
 		t.Fatalf("CreateFromText: %v", err)
 	}
@@ -59,7 +60,7 @@ func TestCreateFromTextAllocatesNextID(t *testing.T) {
 	writeFile(t, root, plannedDir+"/itd-9-beta.md",
 		"---\nid: itd-9\nslug: beta\nspec_id: spc-1\nkind: standalone\n---\n# beta\n")
 
-	it, _, err := CreateFromText(root, "another product intent", "")
+	it, _, err := CreateFromText(root, "another product intent", "", "")
 	if err != nil {
 		t.Fatalf("CreateFromText: %v", err)
 	}
@@ -73,7 +74,7 @@ func TestCreateFromTextAllocatesNextID(t *testing.T) {
 func TestCreateFromTextRefusesEmpty(t *testing.T) {
 	root := t.TempDir()
 	for _, in := range []string{"", "   ", "\t\n"} {
-		if _, _, err := CreateFromText(root, in, ""); err == nil {
+		if _, _, err := CreateFromText(root, in, "", ""); err == nil {
 			t.Fatalf("CreateFromText(%q) must be refused", in)
 		}
 	}
@@ -97,7 +98,7 @@ func TestCreateFromTextRedactsSecretsAndHomePaths(t *testing.T) {
 	const fakeHome = "/Users/alice/.ssh/id_rsa"
 	text := "leftover " + fakeToken + " and " + fakeHome + " in the install receipt"
 
-	it, _, err := CreateFromText(root, text, "")
+	it, _, err := CreateFromText(root, text, "", "")
 	if err != nil {
 		t.Fatalf("CreateFromText: %v", err)
 	}
@@ -133,7 +134,7 @@ func TestCreateFromTextRedactsSecretsAndHomePaths(t *testing.T) {
 // over a freshly seeded draft — the "abcd lint stays green" guarantee.
 func TestCreateFromTextPassesRecordLint(t *testing.T) {
 	root := t.TempDir()
-	if _, _, err := CreateFromText(root, "seeded from a quoted-text capture", ""); err != nil {
+	if _, _, err := CreateFromText(root, "seeded from a quoted-text capture", "", ""); err != nil {
 		t.Fatalf("CreateFromText: %v", err)
 	}
 	cfg := lint.Config{
@@ -183,7 +184,7 @@ func TestCreateDraftPromotedFromRoundTrip(t *testing.T) {
 		t.Fatalf("parsed-back PromotedFrom = %q, want iss-7", got.PromotedFrom)
 	}
 	// Absent on every existing record: a draft minted from text has none.
-	plain, _, err := CreateFromText(root, "a plain quoted-text draft", "")
+	plain, _, err := CreateFromText(root, "a plain quoted-text draft", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,4 +210,80 @@ func TestCreateDraftValidatesInputs(t *testing.T) {
 	if entries, err := os.ReadDir(filepath.Join(root, IntentsRelDir, BucketDrafts)); err == nil && len(entries) > 0 {
 		t.Fatalf("a refused CreateDraft wrote %d file(s)", len(entries))
 	}
+}
+
+// TestSeedDraftStampsProvenance is the itd-178 core on the intent side: a draft
+// written through the command carries BOTH disclosure keys, neither of them
+// supplied as free text. origin has no flag at all — it is derived from which
+// command ran — and the production mode is a closed choice validated before
+// anything is written.
+func TestSeedDraftStampsProvenance(t *testing.T) {
+	root := t.TempDir()
+	it, _, err := CreateFromText(root, "a draft worth stamping with its provenance", "", "")
+	if err != nil {
+		t.Fatalf("CreateFromText: %v", err)
+	}
+	fields := readDraftFields(t, root, it.Path)
+	if got := fields[provenance.KeyOrigin].Value; got != string(provenance.KindResearcherAuthored) {
+		t.Errorf("origin = %q, want %q", got, provenance.KindResearcherAuthored)
+	}
+	if got := fields[provenance.KeyProductionMode].Value; got != string(provenance.DefaultMode) {
+		t.Errorf("production_mode = %q, want the default %q", got, provenance.DefaultMode)
+	}
+
+	// A declared mode is stamped; the origin does not move with it.
+	it2, _, err := CreateFromText(root, "a dictated draft worth stamping", "", "dictated-and-formatted")
+	if err != nil {
+		t.Fatalf("CreateFromText with a declared mode: %v", err)
+	}
+	fields = readDraftFields(t, root, it2.Path)
+	if got := fields[provenance.KeyProductionMode].Value; got != "dictated-and-formatted" {
+		t.Errorf("production_mode = %q, want dictated-and-formatted", got)
+	}
+	if got := fields[provenance.KeyOrigin].Value; got != string(provenance.KindResearcherAuthored) {
+		t.Errorf("origin = %q, want it unmoved at %q", got, provenance.KindResearcherAuthored)
+	}
+
+	// A promote-shaped draft declares the other arrival path.
+	it3, _, err := CreateDraft(root, DraftOptions{
+		Slug: "graduated", Title: "Graduated", SeedBody: "from a record",
+		PromotedFrom: "iss-1", Origin: provenance.KindExtractedFromRecord,
+	})
+	if err != nil {
+		t.Fatalf("CreateDraft: %v", err)
+	}
+	fields = readDraftFields(t, root, it3.Path)
+	if got := fields[provenance.KeyOrigin].Value; got != string(provenance.KindExtractedFromRecord) {
+		t.Errorf("promoted draft origin = %q, want %q", got, provenance.KindExtractedFromRecord)
+	}
+
+	// An out-of-vocabulary mode is refused before anything is written.
+	before := draftCount(t, root)
+	if _, _, err := CreateFromText(root, "a draft with a bogus production mode", "", "typed"); err == nil {
+		t.Error("an out-of-vocabulary production mode must be refused")
+	}
+	if after := draftCount(t, root); after != before {
+		t.Errorf("a refused create wrote a draft: %d -> %d", before, after)
+	}
+}
+
+// readDraftFields reads a written record's frontmatter through the shared line
+// scanner — the same reader every consumer uses, so a key it cannot see is a
+// key that was not really written.
+func readDraftFields(t *testing.T, root, rel string) map[string]frontmatter.Field {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(root, rel))
+	if err != nil {
+		t.Fatalf("reading %s: %v", rel, err)
+	}
+	return frontmatter.Fields(strings.Split(string(data), "\n"))
+}
+
+func draftCount(t *testing.T, root string) int {
+	t.Helper()
+	entries, err := os.ReadDir(filepath.Join(root, IntentsRelDir, BucketDrafts))
+	if err != nil {
+		t.Fatalf("reading drafts: %v", err)
+	}
+	return len(entries)
 }

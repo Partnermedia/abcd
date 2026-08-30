@@ -24,7 +24,7 @@ func TestCreateFromTextRefusesAtIntegerCeiling(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, _, err := CreateFromText(root, "a fresh intent worth shipping", "")
+	_, _, err := CreateFromText(root, "a fresh intent worth shipping", "", "")
 	if err == nil {
 		t.Fatal("CreateFromText must refuse at the integer ceiling, not mint a wrapped negative id")
 	}
