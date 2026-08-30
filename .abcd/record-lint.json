@@ -264,6 +264,10 @@
         "rdg": ".abcd/development/readings"
       }
     },
+    "record_provenance": {
+      "enabled": true,
+      "severity": "blocker"
+    },
     "agent_contract": {
       "enabled": true,
       "severity": "blocker",
