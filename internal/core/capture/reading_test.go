@@ -1,16 +1,13 @@
 package capture
 
 import (
-	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/intentdriven/abcd/internal/core/issueschema"
-	"github.com/intentdriven/abcd/internal/core/recordid"
 )
 
 // readingFixture ingests one run of one detection item into a fresh ledger and
@@ -237,36 +234,31 @@ func TestDispositionLandsInTheItemKeyedDirectory(t *testing.T) {
 	}
 }
 
-// A mint that collides must refuse, never overwrite. The id space is a UTC
-// second plus four random digits, so two same-second draws CAN coincide — rare,
-// but a silent overwrite is a committed record replaced by another record with
-// no trace that either happened, which is the one outcome a ledger must not
-// produce. The pinned minter here makes the coincidence certain rather than rare.
-func TestReadingRecordRefusesToOverwriteAColludingID(t *testing.T) {
-	repo, ir := ledger(t)
-	setMinter(t, recordid.Minter{
-		Now:     func() time.Time { return time.Date(2026, 8, 30, 11, 0, 0, 0, time.UTC) },
-		Entropy: bytes.NewReader([]byte{0x00, 0x07, 0x00, 0x07}),
-	})
-	req := IngestReadingRequest{
-		RepoRoot: repo, IssuesRoot: ir,
-		Run: "rdg-2608300000000001", Manifest: "sha256:beef",
-		Position: "detection", Regime: "supplied",
-		Items: []ReadingItem{{Pattern: "the first item", Body: bodyFor("detection")}},
+// The last guard before an irreversible write. The mint now proves every id free
+// across the whole ledger under the same lock, so this can only fire against a
+// writer that did not take that lock — a hand-edit, or another tool. That race is
+// not reachable in-process, which is exactly why the guard is tested directly
+// rather than through an ingest that cannot reach it: an atomic write would
+// otherwise replace a file nobody knows about, leaving no trace that it existed.
+func TestRefuseExistingRecordGuardsAnIrreversibleWrite(t *testing.T) {
+	dir := t.TempDir()
+	free := filepath.Join(dir, "rdi-2608300000000001.md")
+	if err := refuseExistingRecord(free, "rdi-2608300000000001"); err != nil {
+		t.Fatalf("a free path must not be refused: %v", err)
 	}
-	first, err := IngestReading(req)
-	if err != nil {
-		t.Fatalf("first ingest: %v", err)
-	}
-	req.Items = []ReadingItem{{Pattern: "a different item", Body: bodyFor("detection")}}
-	if _, err := IngestReading(req); !errors.Is(err, ErrDuplicateIssueID) {
-		t.Fatalf("a colliding mint: err = %v, want ErrDuplicateIssueID", err)
-	}
-	content, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(first.Records[0].Path)))
-	if err != nil {
+	taken := filepath.Join(dir, "rdi-2608300000000002.md")
+	if err := os.WriteFile(taken, []byte("a file abcd did not write\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(content), "the first item") {
-		t.Fatalf("the first record must survive a colliding mint:\n%s", content)
+	err := refuseExistingRecord(taken, "rdi-2608300000000002")
+	if !errors.Is(err, ErrDuplicateIssueID) {
+		t.Fatalf("a taken path: err = %v, want ErrDuplicateIssueID", err)
+	}
+	content, readErr := os.ReadFile(taken)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if !strings.Contains(string(content), "a file abcd did not write") {
+		t.Fatal("the refused write must leave the existing file untouched")
 	}
 }

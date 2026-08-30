@@ -148,56 +148,57 @@ func IngestReading(req IngestReadingRequest) (IngestReadingResult, error) {
 		return IngestReadingResult{}, err
 	}
 
-	// Assemble and validate EVERY item before anything is written: a run that is
-	// half-written is a visible world nobody can reconstruct.
+	// Everything below runs UNDER the ledger lock, mint included. The mint has to
+	// see the tree it is about to write into: an id is a UTC second plus four
+	// uniform digits (adr-45) and nothing sequences two ingests, so two runs
+	// landing in one second can draw the same suffix. Minting outside the lock and
+	// probing only the current run's directory let exactly that through — one
+	// rdi-N in two run directories, an item that could afterwards be neither
+	// dispositioned nor promoted, and no tree gate to refuse it.
 	type staged struct {
 		id      string
 		content string
 	}
-	var pending []staged
 	result := IngestReadingResult{Run: req.Run}
-	// The mint is stateless — a UTC second plus four uniform digits — so two items
-	// of ONE run can draw the same id, and the odds are not exotic: about 3% at 25
-	// items in a second, better than a third at 100. Two items staged under one id
-	// is a run that cannot be reconstructed, so the batch redraws on a repeat,
-	// exactly as the issue allocator's reservation does (spc-33 ruling 2: a redraw
-	// keeps candidates independent, where a bump would re-derive from occupancy).
-	minted := map[string]bool{}
-	for i, item := range req.Items {
-		id, err := mintUnusedItemID(minted)
-		if err != nil {
-			return IngestReadingResult{}, err
-		}
-		minted[id] = true
-		fields, fm, redacted, degraded, err := readingFields(repoRoot, id, req, item)
-		if err != nil {
-			return IngestReadingResult{}, fmt.Errorf("item %d: %w", i+1, err)
-		}
-		if err := validateReadingStrict(fm); err != nil {
-			return IngestReadingResult{}, fmt.Errorf("item %d: %w", i+1, err)
-		}
-		content, err := buildIssueText(fields, "")
-		if err != nil {
-			return IngestReadingResult{}, fmt.Errorf("item %d: %w", i+1, err)
-		}
-		pending = append(pending, staged{id: id, content: content})
-		result.Redacted += redacted
-		if degraded != "" {
-			result.Degraded = degraded
-		}
-	}
-
 	runDir := filepath.Join(issuesRoot, issueschema.ReadingsDir, req.Run)
 	err = withLedgerLock(issuesRoot, func() error {
 		if err := ensureFamilyDir(issuesRoot, issueschema.ReadingsDir, req.Run); err != nil {
 			return err
 		}
-		// Clear the WHOLE batch before the first byte lands. Interleaving the
-		// check with the write leaves a refused run half-written: the caller gets
-		// an error carrying no record list, so nothing can say which items landed,
-		// and a retry mints fresh ids for the ones that did — duplicating them
-		// inside the run directory. That is precisely the unreconstructable visible
-		// world the staging pass above exists to prevent.
+
+		// Assemble and validate EVERY item before anything is written: a run that
+		// is half-written is a visible world nobody can reconstruct.
+		var pending []staged
+		minted := map[string]bool{}
+		for i, item := range req.Items {
+			id, err := mintUnusedItemID(issuesRoot, minted)
+			if err != nil {
+				return err
+			}
+			minted[id] = true
+			fields, fm, redacted, degraded, err := readingFields(repoRoot, id, req, item)
+			if err != nil {
+				return fmt.Errorf("item %d: %w", i+1, err)
+			}
+			if err := validateReadingStrict(fm); err != nil {
+				return fmt.Errorf("item %d: %w", i+1, err)
+			}
+			content, err := buildIssueText(fields, "")
+			if err != nil {
+				return fmt.Errorf("item %d: %w", i+1, err)
+			}
+			pending = append(pending, staged{id: id, content: content})
+			result.Redacted += redacted
+			if degraded != "" {
+				result.Degraded = degraded
+			}
+		}
+
+		// The mint above already proved every id free across the whole ledger, so
+		// this pass can only fire against a writer that did not take the lock — a
+		// hand-edit, or another tool. The lock is advisory and scoped to abcd, so
+		// the guard is the last thing between a foreign file and an atomic write
+		// that would replace it without a trace.
 		for _, p := range pending {
 			if err := refuseExistingRecord(filepath.Join(runDir, p.id+".md"), p.id); err != nil {
 				return err
@@ -205,8 +206,12 @@ func IngestReading(req IngestReadingRequest) (IngestReadingResult, error) {
 		}
 		for _, p := range pending {
 			path := filepath.Join(runDir, p.id+".md")
-			if err := fsutil.WriteFileAtomic(path, []byte(p.content), 0o644); err != nil {
-				return err
+			if err := writeReadingRecord(path, []byte(p.content)); err != nil {
+				// Name what LANDED. A bare error leaves the caller unable to say
+				// what is on disk, and a retry then mints fresh ids for the items
+				// that already wrote — duplicating them inside the run directory.
+				return fmt.Errorf("wrote %s before failing on %s: %w",
+					renderList(recordIDs(result.Records)), p.id, err)
 			}
 			result.Records = append(result.Records, ReadingRecordRef{
 				ID: p.id, Path: fsutil.RepoRel(repoRoot, path),
@@ -215,7 +220,9 @@ func IngestReading(req IngestReadingRequest) (IngestReadingResult, error) {
 		return nil
 	})
 	if err != nil {
-		return IngestReadingResult{}, err
+		// result carries the records that landed before the failure, so a caller
+		// can see the partial state rather than guess at it.
+		return result, err
 	}
 	return result, nil
 }
@@ -588,21 +595,44 @@ func readingItemPosition(issuesRoot, item string) (string, error) {
 	return asString(fm["position"]), nil
 }
 
-// findReadingItem locates a reading record by id across the run directories. The
-// id is run-scoped only in the sense that it was minted DURING a run: two runs
-// can never mint one id, so the search needs no run argument and a caller
-// dispositioning an item does not have to know which run returned it.
+// findReadingItem locates a reading record by id across the run directories.
+//
+// The search needs no run argument: an id is unique to the LEDGER, not to the run
+// that minted it, so a caller dispositioning an item does not have to know which
+// run returned it. That uniqueness is enforced, not assumed — the mint probes the
+// whole tree before it claims an id (mintUnusedItemID) — and the
+// more-than-one-run arm below is what says so if it ever stops holding.
 func findReadingItem(issuesRoot, item string) (string, error) {
+	matches, err := readingItemPaths(issuesRoot, item)
+	if err != nil {
+		return "", err
+	}
+	switch len(matches) {
+	case 0:
+		return "", fmt.Errorf("%w: %s is not a reading item this ledger holds", ErrUnknownIssueID, item)
+	case 1:
+		return matches[0], nil
+	default:
+		return "", fmt.Errorf("%w: %s is present in more than one run directory", ErrDuplicateIssueID, item)
+	}
+}
+
+// readingItemPaths returns every file in the ledger that claims item, across all
+// run directories. Zero matches means the id is free, which is what the mint
+// asks; one is the ordinary case; more is a ledger fault findReadingItem names.
+// An absent readings tree is no matches, not an error — a repository that has
+// commissioned no reading is in a state, not a fault.
+func readingItemPaths(issuesRoot, item string) ([]string, error) {
 	if !reReadingItemID.MatchString(item) {
-		return "", fmt.Errorf("invalid %s-N identifier: %q", issueschema.ReadingItemFamily, item)
+		return nil, fmt.Errorf("invalid %s-N identifier: %q", issueschema.ReadingItemFamily, item)
 	}
 	readingsRoot := filepath.Join(issuesRoot, issueschema.ReadingsDir)
 	runs, err := os.ReadDir(readingsRoot)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return "", fmt.Errorf("%w: %s is not a reading item this ledger holds", ErrUnknownIssueID, item)
+			return nil, nil
 		}
-		return "", err
+		return nil, err
 	}
 	var matches []string
 	for _, run := range runs {
@@ -614,14 +644,7 @@ func findReadingItem(issuesRoot, item string) (string, error) {
 			matches = append(matches, cand)
 		}
 	}
-	switch len(matches) {
-	case 0:
-		return "", fmt.Errorf("%w: %s is not a reading item this ledger holds", ErrUnknownIssueID, item)
-	case 1:
-		return matches[0], nil
-	default:
-		return "", fmt.Errorf("%w: %s is present in more than one run directory", ErrDuplicateIssueID, item)
-	}
+	return matches, nil
 }
 
 // standingDispositions lists the dispositions of one item that no sibling
@@ -671,22 +694,65 @@ func standingDispositions(itemDir string) ([]string, error) {
 	return out, nil
 }
 
-// mintUnusedItemID draws an item id this batch has not already taken, redrawing
-// on a repeat within a bounded budget. The budget is the allocator's own: a draw
-// that keeps colliding is a broken entropy source, and looping forever on one
-// would hang the ingest instead of reporting it.
-func mintUnusedItemID(minted map[string]bool) (string, error) {
+// mintUnusedItemID draws an item id that neither this batch nor the LEDGER has
+// already taken, redrawing on a repeat within a bounded budget.
+//
+// Both halves matter and for one reason: the mint reads no maximum (adr-45), so
+// two draws in one second are separated by four random digits alone. Within a
+// batch that is a few percent at 25 items; across two runs ingested in the same
+// second it is the same coincidence with no batch to notice it. The ledger probe
+// walks every run directory, because an id is unique to the LEDGER, not to the
+// run that happened to mint it.
+//
+// A redraw rather than a refusal, exactly as the issue allocator's reservation
+// does (spc-33 ruling 2): redrawing keeps candidates independent and uniform,
+// where re-deriving from occupancy would be a miniature max+1. The budget is the
+// allocator's own — a draw that keeps colliding is a broken entropy source, and
+// looping forever on one would hang the ingest instead of reporting it.
+//
+// It must be called under the ledger lock: the probe and the write that claims
+// the id are only one decision if nothing can land between them.
+func mintUnusedItemID(issuesRoot string, minted map[string]bool) (string, error) {
 	for attempt := 0; attempt < placeholderRetryBudget; attempt++ {
 		id, err := minter.Mint(issueschema.ReadingItemFamily)
 		if err != nil {
 			return "", err
 		}
-		if !minted[id] {
+		if minted[id] {
+			continue
+		}
+		taken, err := readingItemPaths(issuesRoot, id)
+		if err != nil {
+			return "", err
+		}
+		if len(taken) == 0 {
 			return id, nil
 		}
 	}
 	return "", fmt.Errorf("%w: could not mint a free %s id after %d draws",
 		ErrAllocatorContention, issueschema.ReadingItemFamily, placeholderRetryBudget)
+}
+
+// recordIDs projects written records to their ids, for an error that says what
+// landed.
+func recordIDs(records []ReadingRecordRef) []string {
+	out := make([]string, 0, len(records))
+	for _, r := range records {
+		out = append(out, r.ID)
+	}
+	return out
+}
+
+// readingWriteHook, when non-nil, replaces the atomic write inside IngestReading.
+// It is a test-only seam (nil in production, zero overhead) used to force a
+// deterministic mid-batch write failure, mirroring stampWriteHook in promote.go.
+var readingWriteHook func(path string, data []byte) error
+
+func writeReadingRecord(path string, data []byte) error {
+	if readingWriteHook != nil {
+		return readingWriteHook(path, data)
+	}
+	return fsutil.WriteFileAtomic(path, data, 0o644)
 }
 
 // refuseExistingRecord fails a write whose target is already taken. The id space

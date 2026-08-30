@@ -167,47 +167,41 @@ func TestIngestRedrawsAnIntraBatchIDCollision(t *testing.T) {
 	}
 }
 
-// A collision with a record ALREADY in the ledger refuses, and refuses the whole
-// run. A partially written run is the state the staging pass exists to prevent:
-// the caller gets an error with no record list, so nothing can say which items
-// landed, and a retry mints fresh ids for the ones that did — duplicating them.
-func TestIngestWritesNothingWhenOneItemCollidesOnDisk(t *testing.T) {
+// Two runs ingested inside one UTC second can draw the same suffix: the mint is
+// a second plus four digits and nothing sequences ingests. Probing only the
+// CURRENT run's directory let that land — one rdi-N in two run directories, an
+// item that could afterwards be neither dispositioned nor promoted, and no tree
+// gate to refuse it. The probe is ledger-wide, and a hit redraws exactly as an
+// intra-batch repeat does.
+func TestTwoRunsAtOneInstantMintDistinctIDs(t *testing.T) {
 	repo, ir := ledger(t)
-	// 0007 for the first (successful) run; then 0008 and 0007 for the second,
-	// whose SECOND item collides with what the first run wrote.
-	pinnedMinter(t, 0x00, 0x07, 0x00, 0x08, 0x00, 0x07)
-	run := "rdg-2608300000000001"
+	// 0007 for the first run; the second run draws 0007 again (the collision),
+	// then 0008 on the redraw.
+	pinnedMinter(t, 0x00, 0x07, 0x00, 0x07, 0x00, 0x08)
 
-	first, err := IngestReading(IngestReadingRequest{
-		RepoRoot: repo, IssuesRoot: ir, Run: run, Manifest: "sha256:beef",
-		Position: "detection", Regime: "supplied",
-		Items: []ReadingItem{{Pattern: "the first item", Body: bodyFor("detection")}},
-	})
-	if err != nil {
-		t.Fatalf("first ingest: %v", err)
-	}
-
-	_, err = IngestReading(IngestReadingRequest{
-		RepoRoot: repo, IssuesRoot: ir, Run: run, Manifest: "sha256:beef",
-		Position: "detection", Regime: "supplied",
-		Items: []ReadingItem{
-			{Pattern: "a fresh item", Body: bodyFor("detection")},
-			{Pattern: "the colliding item", Body: bodyFor("detection")},
-		},
-	})
-	if !errors.Is(err, ErrDuplicateIssueID) {
-		t.Fatalf("a colliding batch: err = %v, want ErrDuplicateIssueID", err)
-	}
-
-	entries, err := os.ReadDir(filepath.Join(ir, issueschema.ReadingsDir, run))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(entries) != 1 || entries[0].Name() != first.Records[0].ID+".md" {
-		var names []string
-		for _, e := range entries {
-			names = append(names, e.Name())
+	ingest := func(run, pattern string) ReadingRecordRef {
+		t.Helper()
+		res, err := IngestReading(IngestReadingRequest{
+			RepoRoot: repo, IssuesRoot: ir, Run: run, Manifest: "sha256:beef",
+			Position: "detection", Regime: "registrative",
+			Items: []ReadingItem{{Pattern: pattern, Body: bodyFor("detection")}},
+		})
+		if err != nil {
+			t.Fatalf("IngestReading(%s): %v", run, err)
 		}
-		t.Fatalf("a refused run left %v behind; the write is all-or-nothing", names)
+		return res.Records[0]
+	}
+
+	first := ingest("rdg-2608300000000001", "the first run's item")
+	second := ingest("rdg-2608300000000002", "the second run's item")
+	if first.ID == second.ID {
+		t.Fatalf("two runs at one instant minted one id (%s); the collision probe must be ledger-wide", first.ID)
+	}
+
+	// And the item is findable: one id, one record, in one run directory.
+	for _, id := range []string{first.ID, second.ID} {
+		if _, err := findReadingItem(ir, id); err != nil {
+			t.Fatalf("findReadingItem(%s): %v", id, err)
+		}
 	}
 }
