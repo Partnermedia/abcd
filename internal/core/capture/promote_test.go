@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/intentdriven/abcd/internal/core/intent"
+	"github.com/intentdriven/abcd/internal/core/issueschema"
 )
 
 // promoteFixture captures one issue into a fresh ledger and returns the roots
@@ -265,5 +266,82 @@ func TestPromoteSerializesOnLedgerLock(t *testing.T) {
 	_, err = Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: issID})
 	if !errors.Is(err, ErrAllocatorContention) {
 		t.Fatalf("promote must serialize on the ledger lock, got err=%v", err)
+	}
+}
+
+// dispositionedReadingFixture ingests one detection item and answers it, so the
+// promote path has an item that has actually been dispositioned.
+func dispositionedReadingFixture(t *testing.T) (repo, ir, item string) {
+	t.Helper()
+	repo, ir, item = readingFixture(t, "detection")
+	if _, err := Disposition(DispositionRequest{
+		RepoRoot: repo, IssuesRoot: ir, Item: item,
+		State: issueschema.DispositionAccepted, Grounds: "the tension is real and worth acting on",
+	}); err != nil {
+		t.Fatalf("Disposition: %v", err)
+	}
+	return repo, ir, item
+}
+
+// Item-to-intent without a disposition is the collapse this record family exists
+// to prevent: it would make the action the answer, and leave nothing able to show
+// that the finding was ever weighed. promote refuses, and names the collapse.
+func TestPromoteRefusesUndispositionedReadingItem(t *testing.T) {
+	repo, ir, item := readingFixture(t, "detection")
+	before := draftCount(t, repo)
+
+	_, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: item})
+	if err == nil {
+		t.Fatal("promoting an undispositioned reading item must be refused")
+	}
+	if !strings.Contains(err.Error(), item) || !strings.Contains(err.Error(), "disposition") {
+		t.Fatalf("the refusal must name the item and the collapse it prevents; got %v", err)
+	}
+	if after := draftCount(t, repo); after != before {
+		t.Fatalf("a refused promote minted a draft (%d -> %d); the probe runs before anything is minted", before, after)
+	}
+}
+
+// Acceptance is one record; the action is a separate admission, joined by the
+// item id stamped forward on promoted_to and back in the draft's promoted_from.
+func TestPromoteStampsReadingItemPromotedTo(t *testing.T) {
+	repo, ir, item := dispositionedReadingFixture(t)
+
+	res, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: item})
+	if err != nil {
+		t.Fatalf("Promote(%s): %v", item, err)
+	}
+	if res.IntentID == "" {
+		t.Fatal("promote must mint an intent draft")
+	}
+
+	path, err := findReadingItem(ir, item)
+	if err != nil {
+		t.Fatalf("findReadingItem: %v", err)
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fm, _, err := parseFrontmatterAndBody(string(content))
+	if err != nil {
+		t.Fatalf("parse reading record: %v", err)
+	}
+	if got := asString(fm["promoted_to"]); got != res.IntentID {
+		t.Fatalf("reading record promoted_to = %q, want %q", got, res.IntentID)
+	}
+
+	draft, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(res.IntentPath)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(draft), "promoted_from: "+item) {
+		t.Fatalf("the minted draft must carry the back edge promoted_from: %s\n%s", item, draft)
+	}
+
+	// A second promote is refused with the existing id, exactly as it is for an
+	// issue: the join is one-to-one in both directions.
+	if _, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: item}); err == nil {
+		t.Fatal("a second promote of one reading item must be refused")
 	}
 }

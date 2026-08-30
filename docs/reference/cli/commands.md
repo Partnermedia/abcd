@@ -188,9 +188,9 @@ List issues by state (one of --open/--resolved/--wontfix/--all required)
 
 #### `abcd capture promote`
 
-Graduate an issue into an intent draft (mints + stamps promoted_to)
+Graduate an issue or a dispositioned reading item into an intent draft (mints + stamps promoted_to)
 
-**Usage:** `abcd capture promote <iss-N> [flags]`
+**Usage:** `abcd capture promote <iss-N|rdi-N> [flags]`
 
 **Flags:**
 

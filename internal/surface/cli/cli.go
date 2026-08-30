@@ -2499,14 +2499,16 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	resolveCmd.Flags().StringVar(&resolveShippedIn, "shipped-in", "", "MIGRATION USE: the release that already carried this work (vX.Y.Z), leaving the record out of the current cut; unnecessary in a repo abcd managed from the start")
 	captureCmd.AddCommand(resolveCmd)
 
-	// promote — graduate an issue into an intent draft (spc-24, step 2 of the
-	// record walk). Default mode mints a draft and stamps the issue's
+	// promote — graduate an issue, or a dispositioned reading item, into an
+	// intent draft (spc-24, step 2 of the record walk; spc-58 for the reading
+	// item). Default mode mints a draft and stamps the source record's
 	// promoted_to in one invocation; --intent is the stamp-only repair/link
-	// mode. The issue keeps its status folder — promotion is not resolution.
+	// mode. The issue keeps its status folder — promotion is not resolution —
+	// and an undispositioned rdi-N is refused before anything is minted.
 	var promoteIntent string
 	promoteCmd := &cobra.Command{
-		Use:   "promote <iss-N>",
-		Short: "Graduate an issue into an intent draft (mints + stamps promoted_to)",
+		Use:   "promote <iss-N|rdi-N>",
+		Short: "Graduate an issue or a dispositioned reading item into an intent draft (mints + stamps promoted_to)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()

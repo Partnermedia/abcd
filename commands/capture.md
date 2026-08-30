@@ -1,7 +1,7 @@
 ---
 name: capture
 description: Capture issues to the structured per-repo ledger and query them, by invoking the abcd binary. Bare invocation is a read-only status render; list/promote/resolve/wontfix act on the ledger.
-argument-hint: "[text] | list --open|--resolved|--wontfix|--all | promote <iss-N> [--intent <itd-N>] | resolve <iss-N> <note> --impact <additive|breaking|fix|internal> [--intent <itd-N>] [--spec <spc-N>] [--commit <sha>] | wontfix <iss-N> <reason>"
+argument-hint: "[text] | list --open|--resolved|--wontfix|--all | promote <iss-N|rdi-N> [--intent <itd-N>] | resolve <iss-N> <note> --impact <additive|breaking|fix|internal> [--intent <itd-N>] [--spec <spc-N>] [--commit <sha>] | wontfix <iss-N> <reason>"
 ---
 
 # `/abcd:capture` — issue ledger
@@ -122,6 +122,7 @@ retyping:
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/abcd" capture promote <iss-N> --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" capture promote <rdi-N> --json   # a dispositioned reading item
 ```
 
 One invocation mints a new intent draft under
@@ -132,6 +133,15 @@ frontmatter records `promoted_from: iss-N`, so the edge is two-sided. The issue
 keeps its status folder: promotion is orthogonal to fix-status and is not
 resolution. An issue already carrying `promoted_to` is refused with the
 existing `itd-N`.
+
+A reading item (`rdi-N`) graduates the same way, with one refusal in front: an
+item that carries no disposition is refused and nothing is minted. Acceptance is
+one record and the action is a separate admission; promoting an undispositioned
+item collapses the two, and then nothing can show the finding was weighed before
+it was acted on. Record the disposition first
+(`capture disposition <rdi-N> --state …`). The `issue_status` field carries the
+standing disposition's state for a reading item, because that family's status
+signal is the keyed disposition rather than a folder.
 
 `--intent <itd-N>` is the stamp-only mode: it links an *existing* draft instead
 of minting — the repair path when a stamp failed after the mint (the error
