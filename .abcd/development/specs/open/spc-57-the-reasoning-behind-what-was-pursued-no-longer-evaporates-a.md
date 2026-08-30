@@ -85,8 +85,11 @@ gate reads it as data with no second parser.
 **The substance floor is a shape check, and it says so.** "Name the conjecture,
 not only the decision" is a review property; no machine reads a sentence and
 knows whether it names a conjecture. What ships is a floor that refuses the
-degenerate cases: empty or whitespace-only text, text shorter than the floor,
-and text that is only the vocabulary token or the verb's own name repeated. The
+degenerate cases: empty or whitespace-only text, text below either half of the
+floor — the character count and the LETTER-RUN count, the second being what a
+text of twenty zero-width spaces cannot clear — text carrying a control
+character no record field can hold, and text that is only the vocabulary token
+or the verb's own name repeated. The
 substantive requirement is carried by the prompt in `commands/intent.md` and
 `commands/capture.md`, where the interview asks for the expectation and its
 falsifier. The spec claims the floor, not the judgement.
