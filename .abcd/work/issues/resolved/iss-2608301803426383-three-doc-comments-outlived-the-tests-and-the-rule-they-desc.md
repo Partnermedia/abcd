@@ -7,6 +7,10 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-179-delta-ruthless"
 found_at: "internal/core/lint/schema_test.go"
+resolution: "the three orphaned doc comments are deleted: two in schema_test.go naming tests that no longer exist and claiming a reader-mirroring the gate deliberately does not do, and one in schema_parity_test.go contradicting the live test eight lines below it"
+impact: internal
+resolved_by:
+  intent: "itd-179"
 ---
 
 three doc comments outlived the tests and the rule they describe and one contradicts the comment eight lines below it
@@ -28,3 +32,7 @@ this is the point of the rule. One file, two opposite claims, eight lines apart.
 
 Left by the delta's own deletions rather than written wrong, which is the usual
 way this class arrives.
+
+## Grounds
+
+- pursued: we expect a comment describing a deleted test to mislead a reader more than its absence would, so the deletion is the correction

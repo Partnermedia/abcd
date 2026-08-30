@@ -710,14 +710,3 @@ func TestRecordSchemaFilenameSlugAgrees(t *testing.T) {
 		t.Fatalf("expected exactly 2 record_schema findings (the two drifted records), got %d: %+v", n, fs)
 	}
 }
-
-// TestCaptureReaderAcceptsGroundsKey proves the allow-list half through the
-// READER: `grounds` must be a known property, or capture refuses every stamped
-// record and skips it — invisible to every capture surface while it still sits
-// in the ledger. The gate is proved the same way in the same fixture: a
-// well-formed value raises no finding.
-
-// TestRecordSchemaFlagsOutOfVocabularyGrounds: the committed-ledger gate refuses
-// exactly what capture's reader refuses. The vocabulary is closed and read from
-// the ONE copy in core/grounds, so the two can never disagree about what a legal
-// value is.
