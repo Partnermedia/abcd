@@ -8,7 +8,7 @@ intent: itd-178
 
 ## Summary
 
-spc-56 delivers [itd-178](../../intents/planned/itd-178-every-record-written-through-a-command-carries-its-origin-an.md):
+spc-56 delivers [itd-178](../../intents/shipped/itd-178-every-record-written-through-a-command-carries-its-origin-an.md):
 two frontmatter keys, `origin` and `production_mode`, written only by the
 commands that mint records, plus the lint that reports a record carrying them in
 a shape no command could have produced. Neither key touches authorship. They are
