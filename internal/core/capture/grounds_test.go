@@ -159,12 +159,35 @@ func TestWontfixGroundsOverride(t *testing.T) {
 	if iss := readIssue(t, ir, issID); iss.WontfixReason != "out of scope" {
 		t.Fatalf("wontfix_reason = %q, want the reason untouched by the override", iss.WontfixReason)
 	}
-	// A non-action is declined by construction: the other two values would record
-	// a route the folder contradicts.
-	if _, err := Wontfix(WontfixRequest{
-		RepoRoot: repo, IssuesRoot: ir, ID: issID, Reason: "out of scope", Grounds: testGrounds,
-	}); err == nil {
-		t.Fatal("a pursued ground on a wontfix = nil error, want a refusal")
+}
+
+// TestWontfixRefusesANonDeclinedToken: a non-action is declined by construction,
+// and the other two values would record a route the folder contradicts.
+//
+// It takes a FRESH open issue and asserts the refusal is ErrGroundsRefused.
+// The assertion that used to live at the end of TestWontfixGroundsOverride was
+// vacuous (iss-2608301212423956): it called Wontfix a second time on a record
+// the first call had already moved to wontfix/, so transition returned
+// ErrTransitionConflict and the `err == nil` check passed whether or not the
+// token was ever looked at.
+func TestWontfixRefusesANonDeclinedToken(t *testing.T) {
+	for name, bad := range map[string]string{
+		"pursued":  testGrounds,
+		"deferred": "deferred: we expect the successor design to make this unreachable anyway",
+	} {
+		repo, ir, issID := promoteFixture(t, "a thing that will not be fixed")
+		_, err := Wontfix(WontfixRequest{
+			RepoRoot: repo, IssuesRoot: ir, ID: issID, Reason: "out of scope", Grounds: bad,
+		})
+		if err == nil {
+			t.Fatalf("%s: a non-declined ground on a wontfix = nil error, want a refusal", name)
+		}
+		if !errors.Is(err, ErrGroundsRefused) {
+			t.Fatalf("%s: Wontfix = %v, want the token refusal", name, err)
+		}
+		if iss := readIssue(t, ir, issID); iss.Status != StateOpen {
+			t.Fatalf("%s: a refused wontfix moved the record to %s", name, iss.Status)
+		}
 	}
 }
 
