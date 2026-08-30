@@ -1,7 +1,9 @@
 package lint
 
 import (
+	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -2295,6 +2297,29 @@ func TestDuplicateKeyClaimIsScopedToThisRulesOwnScanner(t *testing.T) {
 			if findingWith(fs, rel, ruleRecordSchema, claim) {
 				t.Errorf("no reader of %s performs that, so the finding must not claim %q: %+v", rel, claim, fs)
 			}
+		}
+	}
+}
+
+// The reader-by-reader table in duplicatekeyreaders_test.go is what this rule's
+// account of OTHER components now rests on, and a store with no row in it is a
+// store whose readers nobody established. The table lives in the external test
+// package, because the readers it exercises sit in packages this one cannot
+// import, so the coverage check reads its source rather than its values.
+//
+// Adding a store therefore costs establishing what its readers do. That is the
+// step four prose corrections in a row skipped: each narrowed the claim and none
+// made it checkable, so the fifth store to arrive would have been given an answer
+// by analogy again (iss-2608301901264848).
+func TestEveryStoreHasADuplicateKeyReaderRow(t *testing.T) {
+	src, err := os.ReadFile("duplicatekeyreaders_test.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, store := range recordStores {
+		if !regexp.MustCompile(`store:\s+"` + store.prefix + `"`).Match(src) {
+			t.Errorf("the %s store has no row in the duplicate-key reader table: "+
+				"what does each reader of it do with a record carrying one top-level key twice?", store.prefix)
 		}
 	}
 }
