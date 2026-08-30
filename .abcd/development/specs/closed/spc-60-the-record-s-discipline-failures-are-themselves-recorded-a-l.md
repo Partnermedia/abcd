@@ -7,7 +7,7 @@ intent: itd-182
 
 ## Summary
 
-spc-60 completes [itd-182](../../intents/planned/itd-182-the-record-s-discipline-failures-are-themselves-recorded-a-l.md):
+spc-60 completes [itd-182](../../intents/shipped/itd-182-the-record-s-discipline-failures-are-themselves-recorded-a-l.md):
 when the recording discipline is suspended, deferred or evaded, that is itself
 captured, as an ordinary issue record carrying `category: lapse`.
 
