@@ -7,6 +7,11 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-179-round-2-ruthless"
 found_at: "internal/core/intent/grounds.go"
+resolution: "both guards now have a test that goes red when the guard is short-circuited: a fresh-issue wontfix asserting ErrGroundsRefused on a non-declined token, and an unclosed-fence record asserting the read-back refusal and a byte-identical file"
+impact: internal
+grounds: "pursued: we expect a test that stays green when its guard is deleted to be measuring something other than the guard, and mutating each of these two turned both green tests red only after they were rewritten"
+resolved_by:
+  intent: "itd-179"
 ---
 
 two stated guarantees in the grounds path are mutation-vacuous: the wontfix declined-token refusal and the read-back count check

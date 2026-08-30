@@ -340,3 +340,30 @@ func TestRecordGroundsHoldsTheMintLock(t *testing.T) {
 		t.Fatalf("the grounds write completed in %v while the mint lock was held — it took no lock", waited)
 	}
 }
+
+// TestRecordGroundsRefusesAWriteTheRecordSwallows is the read-back count check's
+// own fixture (iss-2608301212423956). A record whose body ends inside an
+// unclosed fence masks everything appended below it: the new `## Grounds`
+// section and its entry land in the file and are invisible to every reader of
+// it, including the readiness gate the entry was written to satisfy. The
+// comment question does not fire — the text opens no comment — so the count
+// question is the only thing standing between the caller and a write that
+// reports success and records nothing.
+func TestRecordGroundsRefusesAWriteTheRecordSwallows(t *testing.T) {
+	root := t.TempDir()
+	const rel = plannedDir + "/itd-10-alpha.md"
+	body := plannedUnlinked("itd-10", "alpha") + "\n## Notes\n\n```go\nfunc main() {}\n"
+	writeFile(t, root, rel, body)
+
+	g := mustGrounds(t, grounds.Pursued, "we expect the entry to be refused rather than written where nothing can read it")
+	_, err := RecordGrounds(root, "itd-10", g)
+	if err == nil {
+		t.Fatal("RecordGrounds into an unclosed fence = nil error, want the read-back refusal")
+	}
+	if !strings.Contains(err.Error(), "does not read back") {
+		t.Fatalf("RecordGrounds = %v, want the read-back refusal", err)
+	}
+	if got := readIntent(t, root, rel); got != body {
+		t.Fatalf("the refused write altered the record:\n--- got\n%s\n--- want\n%s", got, body)
+	}
+}
