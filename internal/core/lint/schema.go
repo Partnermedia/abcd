@@ -175,22 +175,29 @@ type recordStore struct {
 	// vocabulary every store shares: a join is the ONE value that makes a record
 	// a record about something else, and each store spells its own.
 	joins []recordJoin
-	// readerFailsClosed declares that the store's reader VALIDATES a record's
-	// required properties before it reads it, and skips one that omits any — so a
-	// committed record missing a property is invisible to every surface of its
-	// family while it still sits in the store. Two readers do this: capture's
-	// validateStrict for the issue ledger, and the record dispatcher for the ADR
-	// store, which confirms the frontmatter id before it will render the record.
+	// readerFailsClosed declares that the store's reader VALIDATES a record before
+	// it reads it, and skips one that fails — so a malformed committed record is
+	// invisible to every surface of its family while it still sits in the store.
+	// Two readers do this: capture's validateStrict for the issue ledger, and the
+	// record dispatcher for the ADR store, which confirms the frontmatter id before
+	// it will render the record.
 	//
-	// It is declared rather than assumed because the missing-property finding
-	// STATES it, and a rule may not state a consequence it has not established.
+	// It is declared rather than assumed because three findings STATE that
+	// consequence, and a rule may not state a consequence it has not established.
+	// ONE declaration stands behind all three — the missing required property
+	// (checkRecordRequiredFields), the key outside a closed schema
+	// (checkRecordUnknownFields) and the duplicated top-level key (the scan's own
+	// leg) — rather than one leg consulting it while the two beside it assume, which
+	// is how the first fix closed one spelling and left two (iss-2608301519254418).
+	// The three malformations differ; what the reader does about them does not.
+	//
 	// The two stores this cycle added have no such reader: the only reader of
 	// admission records honours one carrying nothing but its run and its proposal
 	// (reading_outstanding_test.go), and no reader of surprise records exists at
 	// all — so a message telling their authors the record is skipped and invisible
 	// sends them to look for a refusal nobody performs (iss-2608301411010342).
-	// It is consulted only where requiredFields is non-nil, which is the only
-	// place the claim is made.
+	// Where it is false each of the three legs states what the malformation IS,
+	// which is true of every store, and stops there.
 	readerFailsClosed bool
 	// bucketField is the frontmatter property that must name the bucket the
 	// record sits in, for a store that states its bucket twice. An admission is
@@ -761,13 +768,20 @@ func checkRecordRequiredFields(r schemaRecord, severity string, judged map[strin
 // checkRecordUnknownFields asserts that a record carries no frontmatter property
 // outside its store's allow-list, for every store that declares one.
 //
-// It is the other half of checkRecordRequiredFields and fails the same way: a
-// closed schema is what a reader validates against before it reads, so a record
-// carrying a key outside it is skipped — invisible to every surface of its own
-// family while it still sits in the store. The check is store-declared rather
-// than hard-coded to the issue ledger because the question is identical wherever
-// a schema is closed, and asking it twice in two places is how the two answers
-// start to differ.
+// It is the other half of checkRecordRequiredFields: a key outside the allow-list
+// is a key the schema does not declare, so no surface of that family reads it and
+// whatever it carries is carried nowhere. The check is store-declared rather than
+// hard-coded to the issue ledger because the question is identical wherever a
+// schema is closed, and asking it twice in two places is how the two answers start
+// to differ.
+//
+// It fails the same way too WHERE THE STORE'S READER FAILS CLOSED: a closed schema
+// is what such a reader validates against before it reads, so the record is skipped
+// — invisible to every surface of its own family while it still sits in the store.
+// That second account is gated on readerFailsClosed for the reason the
+// missing-property account is: the admission reader COUNTS a record carrying an
+// unknown key, and no reader of surprise records exists at all
+// (iss-2608301519254418).
 func checkRecordUnknownFields(r schemaRecord, severity string) []Finding {
 	if r.store.knownFields == nil {
 		return nil
@@ -781,11 +795,16 @@ func checkRecordUnknownFields(r schemaRecord, severity string) []Finding {
 		if line == 0 {
 			line = 1
 		}
-		out = append(out, Finding{
-			File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: severity,
-			Message: "unknown frontmatter property '" + key + "'; the " + r.store.noun +
+		msg := "unknown frontmatter property '" + key + "'; the " + r.store.noun +
+			" schema is closed, so a key outside it is one the schema does not declare and no " +
+			r.store.noun + " surface reads — whatever it states, the record states nowhere"
+		if r.store.readerFailsClosed {
+			msg = "unknown frontmatter property '" + key + "'; the " + r.store.noun +
 				" schema is closed, so a key outside it makes this a record the reader refuses and skips — invisible to every " +
-				r.store.noun + " surface while it still sits in the store",
+				r.store.noun + " surface while it still sits in the store"
+		}
+		out = append(out, Finding{
+			File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: severity, Message: msg,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Message < out[j].Message })
@@ -1188,19 +1207,32 @@ func scanRecordStores(repoRoot string, cfg RuleConfig) ([]schemaRecord, []Findin
 					return err
 				}
 				lines := strings.Split(string(content), "\n")
-				// A duplicated top-level key is malformed to every record consumer:
-				// the strict ledger parser refuses the file (dropping it out of the
-				// corpus its surfaces read), while the lenient scanner keeps only the
-				// first value — so a second line can hide the value a blocker is armed
-				// to reject. The lenient read below is what the rest of this rule
-				// needs; the duplicate is reported alongside it so the gate refuses
-				// what its consumers refuse (GitHub #357).
+				// A duplicated top-level key is malformed to every record consumer: the
+				// lenient scanner keeps only the first value — so a second line can hide
+				// the value a blocker is armed to reject — and where the store's reader
+				// fails closed, a strict parser refuses the file outright, dropping it
+				// out of the corpus its surfaces read. The lenient read below is what the
+				// rest of this rule needs; the duplicate is reported alongside it so the
+				// gate refuses what its consumers refuse (GitHub #357).
+				//
+				// The refusal half is gated on readerFailsClosed for the reason the
+				// missing-property and unknown-key legs are: the admission reader COUNTS
+				// a record carrying a duplicated key and no reader of surprise records
+				// exists, so naming a refusal there sends the author looking for one
+				// nobody performs (iss-2608301519254418). The silenced-blocker half is
+				// true of every store, because it is this rule's own scanner that does
+				// the silencing.
 				for _, dup := range frontmatterDuplicates(lines) {
-					out = append(out, Finding{
-						File: rel, Line: dup.Line, RuleID: ruleRecordSchema, Severity: cfg.Severity,
-						Message: "frontmatter has a duplicate top-level key '" + dup.Key +
+					msg := "frontmatter has a duplicate top-level key '" + dup.Key +
+						"'; the lenient scanner every record surface reads with keeps only the first value, " +
+						"so a second line can silence a blocker armed on the value the first hides"
+					if store.readerFailsClosed {
+						msg = "frontmatter has a duplicate top-level key '" + dup.Key +
 							"'; the record reader refuses a duplicated key, so the file is skipped by every " +
-							store.noun + " surface while the lenient scanner keeps only the first value — a second line can silence a blocker armed on the value the first hides",
+							store.noun + " surface while the lenient scanner keeps only the first value — a second line can silence a blocker armed on the value the first hides"
+					}
+					out = append(out, Finding{
+						File: rel, Line: dup.Line, RuleID: ruleRecordSchema, Severity: cfg.Severity, Message: msg,
 					})
 				}
 				fields := frontmatterFields(lines)

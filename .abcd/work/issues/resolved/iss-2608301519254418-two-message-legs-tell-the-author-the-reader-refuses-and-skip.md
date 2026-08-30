@@ -7,6 +7,11 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-189-round-3-ruthless"
 found_at: "internal/core/lint/schema.go"
+resolution: "The closed-schema and duplicate-key findings now gate their reader clause on readerFailsClosed, the same declaration the missing-property finding consults, so all three legs rest on one statement about the store rather than one leg declaring and two assuming. The issue and ADR stores keep the refusal account, which is true of them; the admission and surprise stores state what a key outside a closed schema and a duplicated key ARE, and stop there. The flag's godoc now covers all three legs."
+impact: fix
+resolved_by:
+  intent: "itd-189"
+  spec: "spc-67"
 ---
 
 two message legs tell the author the reader refuses and skips their record when the admission reader counts it and the surprise store has no reader at all

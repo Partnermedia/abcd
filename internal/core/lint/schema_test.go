@@ -1656,3 +1656,67 @@ func TestMissingPropertyClaimsNoReaderWhereTheStoreHasNone(t *testing.T) {
 		}
 	}
 }
+
+// The closed-schema leg and the duplicate-key leg make the SAME account of the
+// consequence the missing-property leg makes: the reader refuses the record and
+// skips it, so it is invisible to every surface of its family. That account is a
+// property of the STORE — readerFailsClosed is where the store declares it — and
+// it stands behind all three legs rather than behind the one that consults it.
+//
+// The admission store's only reader COUNTS a record carrying an unknown key or a
+// duplicated one, and no reader of surprise records exists anywhere in the tree,
+// so for those two stores both legs must state what a closed schema and a
+// duplicated key ARE — a key nothing reads, and a second line the lenient scanner
+// drops — and not a refusal nobody performs (iss-2608301519254418).
+//
+// The issue store is the control on the same run: its reader does perform the
+// refusal, so it keeps the claim, and the gate is not simply mute everywhere.
+func TestClosedSchemaAndDuplicateKeyClaimNoReaderWhereTheStoreHasNone(t *testing.T) {
+	root := admissionCorpus(t)
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-3.md",
+		"---\nschema_version: 1\nid: adm-3\nrun: rdg-1\nproposal: rdi-2\n"+
+			"grounds: it widens the frame\nverdict: yes\n---\n\n")
+	writeFile(t, root, "work/issues/admissions/rdg-1/adm-4.md",
+		"---\nschema_version: 1\nid: adm-4\nrun: rdg-1\nproposal: rdi-2\n"+
+			"grounds: it widens the frame\ngrounds: and again\n---\n\n")
+	writeFile(t, root, "work/issues/surprises/srp-5.md",
+		"---\nschema_version: 1\nid: srp-5\noccasioned_by: rdi-2\nverdict: yes\n---\n\n")
+	writeFile(t, root, "work/issues/surprises/srp-6.md",
+		"---\nschema_version: 1\nid: srp-6\noccasioned_by: rdi-2\noccasioned_by: rdi-2\n---\n\n")
+	// The control: the issue ledger's reader validates before it reads, so the
+	// claim is true of it and must survive.
+	writeFile(t, root, "work/issues/open/iss-42-a-finding.md",
+		strings.Replace(validIssue("iss-42", "a-finding"), "found_during: t\n", "found_during: t\nverdict: yes\n", 1))
+	writeFile(t, root, "work/issues/open/iss-43-a-finding.md",
+		strings.Replace(validIssue("iss-43", "a-finding"), "found_during: t\n", "found_during: t\nseverity: major\n", 1))
+
+	fs, err := Lint(admissionSchemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct{ rel, quote string }{
+		{filepath.Join("work", "issues", "admissions", "rdg-1", "adm-3.md"), "unknown frontmatter property 'verdict'"},
+		{filepath.Join("work", "issues", "admissions", "rdg-1", "adm-4.md"), "duplicate top-level key 'grounds'"},
+		{filepath.Join("work", "issues", "surprises", "srp-5.md"), "unknown frontmatter property 'verdict'"},
+		{filepath.Join("work", "issues", "surprises", "srp-6.md"), "duplicate top-level key 'occasioned_by'"},
+	} {
+		if !findingWith(fs, c.rel, ruleRecordSchema, c.quote) {
+			t.Errorf("the finding on %s must still be raised: %+v", c.rel, fs)
+		}
+		for _, claim := range []string{"refuses", "skipped", "skips", "invisible"} {
+			if findingWith(fs, c.rel, ruleRecordSchema, claim) {
+				t.Errorf("this store's reader performs no such refusal, so the finding on %s must not claim %q: %+v",
+					c.rel, claim, fs)
+			}
+		}
+	}
+	for _, c := range []struct{ rel, claim string }{
+		{filepath.Join("work", "issues", "open", "iss-42-a-finding.md"), "invisible"},
+		{filepath.Join("work", "issues", "open", "iss-43-a-finding.md"), "skipped"},
+	} {
+		if !findingWith(fs, c.rel, ruleRecordSchema, c.claim) {
+			t.Errorf("the issue reader does perform the refusal, so the finding on %s must keep %q: %+v",
+				c.rel, c.claim, fs)
+		}
+	}
+}
