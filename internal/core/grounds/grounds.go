@@ -195,8 +195,13 @@ func Fold(text string) string {
 }
 
 // ValidateText is the substance floor over an already-folded text. It refuses
-// the empty text, the text carrying a control character no record field can
-// hold, the text below either half of the floor — the UNIT count and the LETTER
+// the empty text, the text carrying a control character the frontmatter
+// serialiser refuses (below U+0020, the class yamlScalar will not write — NOT
+// every character a record cannot hold, because the store holds DEL, C1, the
+// line separator and the bidi overrides quite happily; the wording is narrowed
+// to the check rather than the check widened to the wording, because widening
+// would put this floor out of step with the serialiser it exists to mirror,
+// iss-2608301646042379), the text below either half of the floor — the UNIT count and the LETTER
 // count, neither of which a text of zero-width spaces can satisfy — and the text
 // made only of the vocabulary's own words or the asking verb's name. Everything
 // else passes: what this cannot do is tell a conjecture from a restatement of
@@ -229,8 +234,8 @@ func ValidateText(text string) error {
 	for _, r := range text {
 		if r < 0x20 {
 			return fmt.Errorf(
-				"grounds text carries the control character U+%04X, which no record field can hold; "+
-					"remove it and restate the conjecture being acted on", r)
+				"grounds text carries the control character U+%04X, which the frontmatter "+
+					"serialiser refuses; remove it and restate the conjecture being acted on", r)
 		}
 	}
 	units := textUnits(text)
