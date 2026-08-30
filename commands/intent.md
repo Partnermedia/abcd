@@ -118,7 +118,12 @@ Each scope condition closes with a stamped identity marker
 condition rather than to a sentence that may since have been reworded. **The
 markers are stamped by `abcd intent plan`, never hand-typed**, and the gate
 refuses a missing or duplicated one by name rather than repairing it — a
-reporter that writes is a reporter whose output depends on who ran it. The
+reporter that writes is a reporter whose output depends on who ran it. That
+remedy runs on a planned record too: `abcd intent plan <itd-N>` on an intent
+already in `planned/` does the identity step alone — it mints for every
+unmarked bullet, moves no bucket and touches no spec — so a condition written
+after planning still reaches the mint. With nothing unmarked it refuses and
+says so, rather than exiting quietly having done nothing. The
 identities are rendered by `abcd intent ready <itd-N> --json` under
 `conditions`, which is where a consumer reads them; bare `abcd intent` is a
 corpus-wide count-and-link status and carries no per-record body.
@@ -159,7 +164,8 @@ gate that will refuse the move mechanically is a recorded seed until built.
    assumptions the claim holds under, one per top-level bullet under
    `## Scope Conditions`, so a later reuse outside them is a visible
    re-decision. If the human states none, record the same exact token. Leave
-   the identity markers to `plan` — never type one.
+   the identity markers to `plan` — never type one; a condition added after
+   planning is stamped by re-running `abcd intent plan <itd-N>`.
 7. **Acceptance criteria:** walk EVERY Given-When-Then bullet; the human
    accepts, edits, or strikes each, and adds what is missing. Seeded criteria
    are proposals, never approvals.

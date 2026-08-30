@@ -625,7 +625,7 @@ Deprecated alias for `abcd intent "<text>"` (files a draft from the text)
 
 #### `abcd intent plan`
 
-Plan a draft intent: mint its spec, link both sides, move drafts -> planned
+Plan a draft intent (mint its spec, link both sides, move drafts -> planned); on an already-planned intent, stamp its unmarked scope conditions
 
 **Usage:** `abcd intent plan <itd-N>`
 

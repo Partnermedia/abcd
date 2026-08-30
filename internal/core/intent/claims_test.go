@@ -318,3 +318,80 @@ func TestSeedDraftCarriesClaimSections(t *testing.T) {
 		t.Error("the claim sections belong above '## Acceptance Criteria'")
 	}
 }
+
+// TestPlanStampsAPlannedRecordInPlace is iss-2608300210588874: a condition
+// written after planning still has to reach the mint, and `intent plan` is the
+// only writer there is. On a planned record the verb does the stamp step alone —
+// no spec is minted, no bucket moves — which is what makes the gate's remedy
+// true rather than a dead end.
+func TestPlanStampsAPlannedRecordInPlace(t *testing.T) {
+	root := t.TempDir()
+	const kept = "cond-2608300102030405"
+	const markedLine = "- holds on a POSIX shell <!-- cond: " + kept + " -->"
+	writeFile(t, root, plannedDir+"/itd-10-alpha.md",
+		"---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n"+
+			"## Scope Conditions\n\n"+markedLine+"\n- written after planning\n\n"+
+			"## Acceptance Criteria\n\n- ok\n")
+
+	res, err := Plan(root, "itd-10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.StampOnly {
+		t.Error("a planned record's Plan run must report itself as the stamp-only step")
+	}
+	if res.ConditionsStamped != 1 {
+		t.Fatalf("ConditionsStamped = %d, want 1", res.ConditionsStamped)
+	}
+	if res.Intent.Bucket != BucketPlanned || res.Intent.SpecID != "spc-1" {
+		t.Fatalf("the stamp moved or relinked the record: %+v", res.Intent)
+	}
+	if _, err := os.Stat(filepath.Join(root, specsOpen)); !os.IsNotExist(err) {
+		t.Fatal("the stamp step must mint no spec")
+	}
+	data, err := os.ReadFile(filepath.Join(root, res.Intent.Path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(data)
+	if !strings.Contains(body, markedLine+"\n") {
+		t.Errorf("the already-marked bullet was rewritten:\n%s", body)
+	}
+	conds := ParseClaims(body).Conditions
+	if len(conds) != 2 || conds[1].ID == "" || conds[1].ID == kept {
+		t.Fatalf("conditions after the stamp = %+v", conds)
+	}
+	if conds[1].Text != "written after planning" {
+		t.Errorf("the stamp rewrote the prose: %q", conds[1].Text)
+	}
+}
+
+// TestPlanOnAPlannedRecordWithNothingToStampRefuses: nothing to do is not
+// success. A planned record whose conditions are all identified (or which has
+// none) gets a refusal that says so, never a silent exit 0.
+func TestPlanOnAPlannedRecordWithNothingToStampRefuses(t *testing.T) {
+	for _, tt := range []struct{ name, conditions string }{
+		{"all identified", "- holds on a POSIX shell <!-- cond: cond-2608300102030405 -->\n"},
+		{"nullity recorded", NullityToken + "\n"},
+		{"no section at all", ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			section := ""
+			if tt.conditions != "" {
+				section = "## Scope Conditions\n\n" + tt.conditions + "\n"
+			}
+			writeFile(t, root, plannedDir+"/itd-10-alpha.md",
+				"---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n"+
+					section+"## Acceptance Criteria\n\n- ok\n")
+
+			_, err := Plan(root, "itd-10")
+			if err == nil {
+				t.Fatal("a planned record with nothing unmarked must refuse")
+			}
+			if !strings.Contains(err.Error(), "nothing to stamp") {
+				t.Fatalf("refusal must say what was not done, got %q", err)
+			}
+		})
+	}
+}

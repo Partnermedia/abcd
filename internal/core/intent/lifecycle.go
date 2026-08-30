@@ -108,6 +108,14 @@ func Plan(repoRoot, intentID string) (PlanResult, error) {
 	if !ok {
 		return PlanResult{}, fmt.Errorf("intent: %s not found in any bucket", intentID)
 	}
+	// A record already in planned/ takes the identity step alone. Conditions get
+	// written after planning — the elicitation is a human conversation, not a
+	// one-shot — and Plan is the only writer of a marker there is, so refusing the
+	// re-run would leave such a record permanently unable to satisfy the gate that
+	// demands the marker (iss-2608300210588874).
+	if it.Bucket == BucketPlanned {
+		return stampPlanned(repoRoot, it)
+	}
 	if it.Bucket != BucketDrafts {
 		return PlanResult{}, fmt.Errorf("intent: %s is in %s, not drafts; only a draft can be planned", intentID, it.Bucket)
 	}
@@ -196,6 +204,35 @@ func Plan(repoRoot, intentID string) (PlanResult, error) {
 	it.Bucket = BucketPlanned
 	it.Path = plannedRel
 	return PlanResult{Intent: it, Spec: sp, MintWarning: mintWarning, ConditionsStamped: conditionsStamped}, nil
+}
+
+// stampPlanned is Plan's idempotent second face: it mints an identity for every
+// unmarked scope-condition bullet of an already-planned record and writes it
+// back, touching nothing else — no spec, no frontmatter, no bucket move. An
+// already-marked bullet is left byte-identical, so re-running after an edit
+// stamps only what is new.
+//
+// A run with nothing to stamp is a refusal, not a quiet success: the caller
+// asked for work to be done, and a verb that exits 0 having done none of it
+// teaches its user that the command is a no-op.
+func stampPlanned(repoRoot string, it Intent) (PlanResult, error) {
+	rel := it.Path
+	abs := filepath.Join(repoRoot, rel)
+	data, err := readRepoFile(abs, rel)
+	if err != nil {
+		return PlanResult{}, err
+	}
+	stamped, n, err := stampScopeConditions(string(data), recordid.Minter{})
+	if err != nil {
+		return PlanResult{}, err
+	}
+	if n == 0 {
+		return PlanResult{}, fmt.Errorf("intent: %s is already planned and carries no unmarked scope condition; nothing to stamp", it.ID)
+	}
+	if err := fsutil.WriteFileAtomic(abs, []byte(stamped), 0o644); err != nil {
+		return PlanResult{}, fmt.Errorf("intent: writing scope-condition identities to %s: %w", rel, err)
+	}
+	return PlanResult{Intent: it, ConditionsStamped: n, StampOnly: true}, nil
 }
 
 // Link retroactively writes the derived spec_id link on an existing planned

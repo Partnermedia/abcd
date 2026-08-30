@@ -35,7 +35,10 @@ has something stable to key on when the fidelity verdict arrives.
   the checks report, they never stamp.
 - **Identity mint** (`internal/core/intent/lifecycle.go`): `Plan` stamps a
   marker onto every unmarked scope-condition bullet before it moves the record
-  drafts → planned, using `recordid.Minter.Mint` (the
+  drafts → planned, and does that step alone — no spec, no bucket move — when
+  run on a record already in `planned/`, so a condition written after planning
+  still reaches the mint and the gate's remedy is a command that works. A run
+  with nothing unmarked refuses. It uses `recordid.Minter.Mint` (the
   [adr-45](../../decisions/adrs/0045-record-ids-are-timestamp-numeric-and-capture-stable.md)
   mint). Markers are never hand-typed.
 - **Create-path scaffold** (`internal/core/intent/create.go`): `seedDraft`
@@ -87,7 +90,9 @@ identity criteria assert against that payload.
 reported by name with the remedy `abcd intent plan <itd-N>` (the write-capable
 verb), never silently minted at read time: a reporter that writes is a reporter
 whose output depends on who ran it. `Plan` is idempotent here, so re-running it
-on a record whose conditions were edited stamps only the unmarked bullets.
+on a record whose conditions were edited stamps only the unmarked bullets —
+which is why the verb accepts a planned record for the stamp step and not only
+a draft (iss-2608300210588874).
 
 **Identity lifecycle is a stamping rule, not a diffing engine.** An edit keeps
 its marker because the marker is bytes in the bullet and nothing rewrites it. A

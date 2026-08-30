@@ -1547,7 +1547,7 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 	// plan <itd-N> — mint the spec, write both link sides, move drafts -> planned.
 	intentCmd.AddCommand(&cobra.Command{
 		Use:   "plan <itd-N>",
-		Short: "Plan a draft intent: mint its spec, link both sides, move drafts -> planned",
+		Short: "Plan a draft intent (mint its spec, link both sides, move drafts -> planned); on an already-planned intent, stamp its unmarked scope conditions",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
@@ -1560,9 +1560,17 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 			}
 			emitMintWarning(cmd, res.MintWarning)
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
-				fmt.Fprintf(w, "abcd intent plan — %s drafts -> planned, linked %s\n", res.Intent.ID, res.Spec.ID)
+				if res.StampOnly {
+					// The identity step alone, over a record already planned: say what
+					// was done and nothing more, so the line cannot read as a move.
+					fmt.Fprintf(w, "abcd intent plan — %s already planned; stamped its unmarked scope conditions\n", res.Intent.ID)
+				} else {
+					fmt.Fprintf(w, "abcd intent plan — %s drafts -> planned, linked %s\n", res.Intent.ID, res.Spec.ID)
+				}
 				fmt.Fprintf(w, "  intent: %s\n", termsafe.Sanitize(res.Intent.Path))
-				fmt.Fprintf(w, "  spec:   %s\n", termsafe.Sanitize(res.Spec.Path))
+				if !res.StampOnly {
+					fmt.Fprintf(w, "  spec:   %s\n", termsafe.Sanitize(res.Spec.Path))
+				}
 				if res.ConditionsStamped > 0 {
 					fmt.Fprintf(w, "  scope-condition identities stamped: %d\n", res.ConditionsStamped)
 				}

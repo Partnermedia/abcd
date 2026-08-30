@@ -461,3 +461,34 @@ func TestIntentReadyJSONRendersConditionIdentities(t *testing.T) {
 		t.Fatalf("text report missing the condition identities:\n%s", text)
 	}
 }
+
+// TestIntentPlanStampsAPlannedRecord is the CLI half of iss-2608300210588874:
+// the command the readiness gate names as the remedy must actually run, and
+// exit 0, on the record that printed it.
+func TestIntentPlanStampsAPlannedRecord(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+	writeRepoFile(t, repo, cliPlanned+"/itd-10-alpha.md",
+		"---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n"+
+			"## Scope Conditions\n\n- written after planning\n\n## Acceptance Criteria\n\n- ok\n")
+	writeRepoFile(t, repo, cliSpecsOpen+"/spc-1-alpha.md",
+		"---\nid: spc-1\nslug: alpha\nintent: itd-10\n---\n# alpha\n\n## Summary\n\nA written design record.\n")
+
+	// The gate names the remedy...
+	report, _, err := runCLISplit(t, "intent", "ready", "itd-10")
+	if exitCodeOf(err) != 1 || !strings.Contains(report, "abcd intent plan itd-10") {
+		t.Fatalf("gate must refuse and name the remedy: exit=%d\n%s", exitCodeOf(err), report)
+	}
+	// ...and running exactly that remedy has to work.
+	out := string(runCLI(t, "intent", "plan", "itd-10"))
+	if !strings.Contains(out, "scope-condition identities stamped: 1") {
+		t.Fatalf("plan on a planned record must stamp and say so:\n%s", out)
+	}
+	if strings.Contains(out, "drafts -> planned") {
+		t.Fatalf("the stamp step must not claim a lifecycle move:\n%s", out)
+	}
+	// ...and the record is then ready.
+	if _, err := runCLIErr(t, "intent", "ready", "itd-10"); err != nil {
+		t.Fatalf("after the remedy the gate must pass, got %v", err)
+	}
+}
