@@ -18,6 +18,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/intentdriven/abcd/internal/core/issueschema"
+
 	"github.com/intentdriven/abcd/internal/core/changelog"
 	"github.com/intentdriven/abcd/internal/core/frontmatter"
 	"github.com/intentdriven/abcd/internal/core/launch"
@@ -119,7 +121,7 @@ var (
 	specBucketNames   = []string{"open", "closed"}
 	// issueStatusDirs are the issue ledger's status directories (issue_id_unique
 	// scans all three for a duplicated iss-N id).
-	issueStatusDirs = []string{"open", "resolved", "wontfix"}
+	issueStatusDirs = issueschema.StatusDirs
 	intentBuckets   = bucketSet(intentBucketNames)
 	// intentImpactValues and issueImpactValues render the legal impact set an
 	// error message offers. They are composed from the shared enum's constants
