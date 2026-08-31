@@ -102,20 +102,20 @@ disclosed as residue.
 
 ### Include table
 
-| Positions | Source | Matches | Suffixes | Fields | Kind | Admitting rule |
-| --- | --- | --- | --- | --- | --- | --- |
-| widening, entailment, comparative, detection | `.abcd/development/brief/01-product` | `.md` | none | the whole file | `brief-section` | adr-55: the construal as it presently stands is committed record, admissible to every reader including a cold reading |
-| widening, entailment, comparative, detection | `.abcd/development/brief/02-constraints` | `.md` | none | the whole file | `brief-section` | The constraints chapter states the platform, the dependency stance, the invariants and the naming a reading reads against |
-| widening, entailment, comparative, detection | `.abcd/development/brief/glossary` | `.md` | none | the whole file | `glossary-term` | adr-55: the glossary's committed terms are committed record; superseded terms and the reasoning that settled them are not |
-| widening, entailment, comparative, detection | `.abcd/development/intents/disciplines` | `.md` | none | the whole file | `discipline` | A discipline is a standing commitment the record already holds, named individually inside the intent family |
-| widening, entailment, comparative, detection | `.abcd/development/intents/shipped` | `.md` | none | `Press Release`, `Acceptance Criteria`, `Scope Conditions`, `Mechanism`, `spec_id` | `intent-projection` | Assembler rule 2: a shipped intent travels as its claim record, so the Audit Notes and dispositions it also carries stay behind |
-| widening, entailment, comparative, detection | `.abcd/development/specs` | `.md` | none | the whole file | `spec` | The design record a capability was built against |
-| entailment | `.abcd/development/intents/drafts` | `.md` | none | `Press Release`, `Acceptance Criteria`, `Scope Conditions`, `Mechanism`, `spec_id` | `intent-projection` | Assembler rule 2: articulation precedes selection, so entailment sees the candidate set and the reading asked to widen it does not |
-| entailment | `.abcd/development/intents/planned` | `.md` | none | `Press Release`, `Acceptance Criteria`, `Scope Conditions`, `Mechanism`, `spec_id` | `intent-projection` | Assembler rule 2: articulation precedes selection, so entailment sees the candidate set and the reading asked to widen it does not |
-| widening, entailment, comparative, detection | `.` | none | `_test.go` | the whole file | `test` | Assembler rule 1: the shipped tree is source and tests, counted apart because tests are the largest single class and admitted identically |
-| widening, entailment, comparative, detection | `.` | `.go` | none | the whole file | `source` | Assembler rule 1: the shipped tree is source and tests, with the record, the definitions, the evals and the assembler's own package denied structurally |
-| widening, entailment, comparative, detection | `.` | `.md` | none | the whole file | `doc` | Assembler rule 1: the shipped tree is the delivered documentation and the root prose, with the record denied structurally |
-| widening, entailment, comparative, detection | `.` | `.json`, `.yml`, `.yaml`, `.toml`, `.mod`, `.sum`, `Makefile` | none | the whole file | `config` | Assembler rule 1: the shipped tree is the delivered configuration and build files, with the record denied structurally |
+| Positions | Source | Matches | Suffixes | Fields | Store | Bucket | Kind | Admitting rule |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| widening, entailment, comparative, detection | `.abcd/development/brief/01-product` | `.md` | none | the whole file | every | every | `brief-section` | adr-55: the construal as it presently stands is committed record, admissible to every reader including a cold reading |
+| widening, entailment, comparative, detection | `.abcd/development/brief/02-constraints` | `.md` | none | the whole file | every | every | `brief-section` | The constraints chapter states the platform, the dependency stance, the invariants and the naming a reading reads against |
+| widening, entailment, comparative, detection | `.abcd/development/brief/glossary` | `.md` | none | the whole file | every | every | `glossary-term` | adr-55: the glossary's committed terms are committed record; superseded terms and the reasoning that settled them are not |
+| widening, entailment, comparative, detection | `.abcd/development/intents/disciplines` | `.md` | none | the whole file | `itd` | `disciplines` | `discipline` | A discipline is a standing commitment the record already holds, named individually inside the intent family |
+| widening, entailment, comparative, detection | `.abcd/development/intents/shipped` | `.md` | none | `Press Release`, `Acceptance Criteria`, `Scope Conditions`, `Mechanism`, `spec_id` | `itd` | `shipped` | `intent-projection` | Assembler rule 2: a shipped intent travels as its claim record, so the Audit Notes and dispositions it also carries stay behind |
+| widening, entailment, comparative, detection | `.abcd/development/specs` | `.md` | none | the whole file | `spc` | every | `spec` | The design record a capability was built against |
+| entailment | `.abcd/development/intents/drafts` | `.md` | none | `Press Release`, `Acceptance Criteria`, `Scope Conditions`, `Mechanism`, `spec_id` | `itd` | `drafts` | `intent-projection` | Assembler rule 2: articulation precedes selection, so entailment sees the candidate set and the reading asked to widen it does not |
+| entailment | `.abcd/development/intents/planned` | `.md` | none | `Press Release`, `Acceptance Criteria`, `Scope Conditions`, `Mechanism`, `spec_id` | `itd` | `planned` | `intent-projection` | Assembler rule 2: articulation precedes selection, so entailment sees the candidate set and the reading asked to widen it does not |
+| widening, entailment, comparative, detection | `.` | none | `_test.go` | the whole file | every | every | `test` | Assembler rule 1: the shipped tree is source and tests, counted apart because tests are the largest single class and admitted identically |
+| widening, entailment, comparative, detection | `.` | `.go` | none | the whole file | every | every | `source` | Assembler rule 1: the shipped tree is source and tests, with the record, the definitions, the evals and the assembler's own package denied structurally |
+| widening, entailment, comparative, detection | `.` | `.md` | none | the whole file | every | every | `doc` | Assembler rule 1: the shipped tree is the delivered documentation and the root prose, with the record denied structurally |
+| widening, entailment, comparative, detection | `.` | `.json`, `.yml`, `.yaml`, `.toml`, `.mod`, `.sum`, `Makefile` | none | the whole file | every | every | `config` | Assembler rule 1: the shipped tree is the delivered configuration and build files, with the record denied structurally |
 
 ### Exclusion floor
 

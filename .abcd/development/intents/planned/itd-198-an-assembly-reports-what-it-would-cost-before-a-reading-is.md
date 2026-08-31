@@ -63,7 +63,7 @@ checkable rather than asserted. It does not make the reading fit — the measure
 - **Given** the include table's rendering, **when** the assembler version is derived from it, **then** the rendering includes each row's kind, so a kind reassignment on an existing row moves the version.
 - **Given** a manifest, **when** it is decoded strictly, **then** every item carries a kind and round-trips it.
 - **Given** an assembled bundle, **when** it is decoded, **then** it carries no size figure and no field the report introduced: the only bundle change this intent makes is the kind label on items reassigned to `test`.
-- **Given** the include table changed and `AssemblerVersion` left where it was, **when** the gate that pins the two together runs, **then** it fails — the pin derives what it expects from the version it is pinning, so a change cannot satisfy it by restating the new digest alone.
+- **Given** any change to the include table, **when** a manifest is written before and after it, **then** the assembler version the two manifests stamp differs — the version is derived from the table's rendering, so a manifest naming a version that does not describe its own table cannot be produced at all, rather than being caught by a gate after the fact.
 
 ## Grounds
 

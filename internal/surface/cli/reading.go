@@ -261,7 +261,12 @@ func renderAssembleResult(w io.Writer, res reading.AssembleResult) {
 // whole point of the report is that it is available WITHOUT writing an artefact
 // (itd-198 ac-2).
 func renderSizeReport(w io.Writer, s reading.SizeReport) {
-	fmt.Fprintf(w, "  size:          %s, ~%s tokens (%s)\n",
+	// "item text" is in the label deliberately. These bytes are what a reader
+	// receives; bundle.json on disk is larger, because JSON escaping and the
+	// per-item envelope ride on top. An operator who read a bare "size" here
+	// and then stat'd the artefact two lines below would have been told a
+	// number that does not describe the file they are looking at.
+	fmt.Fprintf(w, "  size (item text): %s, ~%s tokens (%s)\n",
 		humanBytes(s.Bytes), thousands(s.TokensEst), s.Basis)
 	for _, k := range s.ByKind {
 		fmt.Fprintf(w, "    %-18s %6d item(s)  %9s  ~%s tokens\n",

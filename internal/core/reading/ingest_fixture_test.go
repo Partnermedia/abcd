@@ -78,7 +78,7 @@ func (f *ingestFixture) parkRun(runID string, pos Position, assemblerVersion str
 		Type: ManifestType, SchemaVersion: SchemaVersion, RunID: runID, Position: pos,
 		TargetCommit:     "0123456789abcdef0123456789abcdef01234567",
 		AssemblerVersion: assemblerVersion,
-		Items:            []ManifestItem{{ItemKey: "i1", Path: "README.md", SHA256: sha256Hex([]byte("x"))}},
+		Items:            []ManifestItem{{ItemKey: "i1", Path: "README.md", Kind: KindDoc, SHA256: sha256Hex([]byte("x"))}},
 		Exclusions:       []Exclusion{},
 	}
 	raw, err := EncodeManifest(m)

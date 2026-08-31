@@ -113,7 +113,10 @@ type SizeReport struct {
 
 // sizeBasis names the method and the divisor inside the artefact, so a report
 // read out of context still says what it is rather than looking like a count.
-var sizeBasis = fmt.Sprintf("estimated: bytes / %.2f (byte-derived, not a tokenizer's count)", tokenBytesPerToken)
+// It carries no outer parentheses of its own: the CLI wraps it in a
+// parenthetical, and a string that brought its own rendered as a doubled pair.
+// The rehearsal caught that; no fixture could have.
+var sizeBasis = fmt.Sprintf("estimated: bytes / %.2f, byte-derived, not a tokenizer's count", tokenBytesPerToken)
 
 // sizeReport totals the collected candidates by kind, in the closed
 // vocabulary's order. A kind that passed no item is omitted rather than
