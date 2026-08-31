@@ -11,17 +11,35 @@
 package reading
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"sort"
 	"strings"
 )
 
-// AssemblerVersion is the semver of the assembly contract: the include table,
-// the projection, the bundle shape and the manifest shape together. It is
-// carried into every manifest, and TestAssemblerVersionCoversTheIncludeTable
-// pins it to a hash of the rendered table, so the table cannot change without
-// the version moving with it (spc-61, ruling (12)).
-const AssemblerVersion = "1.0.0"
+// AssemblerVersionCore is the hand-set semver of the assembly contract: the
+// include table, the projection, the bundle shape and the manifest shape
+// together. It moves when the contract moves, which a digest cannot detect —
+// a rewritten rule text moves the rendering without changing what the
+// assembler promises, and a projection change alters the promise without
+// touching the table (spc-61, ruling (12); spc-68).
+const AssemblerVersionCore = "1.1.0"
+
+// AssemblerVersion is the core semver with the rendered include table's digest
+// as semver build metadata. The digest is computed, not declared, so a table
+// change moves the stamped version whether or not anyone notices: a manifest
+// cannot name a version that does not describe the table it was built from.
+//
+// This is structural where the previous gate was advisory. That gate compared
+// the rendering's digest to a standalone literal and never read the version at
+// all, so changing the table and restating the literal was green with the
+// version unmoved (iss-2608311949385350) — an attestation asserting more than
+// its examination establishes, which brief invariant 16 forbids.
+func AssemblerVersion() string {
+	sum := sha256.Sum256([]byte(Render()))
+	return AssemblerVersionCore + "+" + hex.EncodeToString(sum[:])[:12]
+}
 
 // Position is the reading position an assembly is invoked at. The set is
 // closed: an unknown token is refused by name, never defaulted.
@@ -76,6 +94,7 @@ const (
 	KindDiscipline       Kind = "discipline"
 	KindSpec             Kind = "spec"
 	KindSource           Kind = "source"
+	KindTest             Kind = "test"
 	KindDoc              Kind = "doc"
 	KindConfig           Kind = "config"
 )
@@ -83,7 +102,7 @@ const (
 // Kinds lists the closed material-class vocabulary.
 func Kinds() []Kind {
 	return []Kind{KindBriefSection, KindGlossaryTerm, KindIntentProjection,
-		KindDiscipline, KindSpec, KindSource, KindDoc, KindConfig}
+		KindDiscipline, KindSpec, KindSource, KindTest, KindDoc, KindConfig}
 }
 
 // Row is one include-table row: which positions admit this source, what is
@@ -104,6 +123,16 @@ type Row struct {
 	// extension, any other entry is an exact basename. An empty Match admits
 	// every file, which no row uses — inclusion is positive at every grain.
 	Match []string
+	// MatchSuffix selects files inside Source by basename suffix, matched
+	// case-sensitively. It is a separate field rather than a third convention
+	// inside Match so the form is named by where it sits rather than inferred
+	// from a string's first character: no disambiguation rule against the two
+	// Match forms is needed, and none exists to get wrong. The case rule is
+	// deliberate and differs from Match's extension form, which folds case:
+	// the Go toolchain recognises only a lowercase _test.go as a test file, so
+	// folding here would label material a test that Go does not build as one.
+	// A file matched by either field is admitted; the two are ORed (spc-68).
+	MatchSuffix []string
 	// Fields are the named fields projected out of each matched file, in the
 	// order they are emitted. A field is resolved as a heading section where the
 	// file carries that heading, otherwise as a frontmatter key. An empty Fields
@@ -239,6 +268,18 @@ var Table = []Row{
 			"the candidate set and the reading asked to widen it does not",
 	},
 	{
+		// Ordered above the .go row deliberately: path.Ext("foo_test.go") is
+		// ".go", so the source row would otherwise claim every test file, and
+		// the first row that reaches a path owns it. Both rows admit — this
+		// row narrows nothing and widens nothing, it only labels.
+		Positions:   allPositions,
+		Source:      ".",
+		MatchSuffix: []string{"_test.go"},
+		Kind:        KindTest,
+		Rule: "Assembler rule 1: the shipped tree is source and tests, counted apart " +
+			"because tests are the largest single class and admitted identically",
+	},
+	{
 		Positions: allPositions,
 		Source:    ".",
 		Match:     []string{".go"},
@@ -354,14 +395,16 @@ const CharterPath = ".abcd/development/readings/README.md"
 func Render() string {
 	var b strings.Builder
 	b.WriteString("### Include table\n\n")
-	b.WriteString("| Positions | Source | Matches | Fields | Admitting rule |\n")
-	b.WriteString("| --- | --- | --- | --- | --- |\n")
+	b.WriteString("| Positions | Source | Matches | Suffixes | Fields | Kind | Admitting rule |\n")
+	b.WriteString("| --- | --- | --- | --- | --- | --- | --- |\n")
 	for _, row := range Table {
-		fmt.Fprintf(&b, "| %s | `%s` | %s | %s | %s |\n",
+		fmt.Fprintf(&b, "| %s | `%s` | %s | %s | %s | `%s` | %s |\n",
 			sortedPositions(row.Positions),
 			row.Source,
-			codeList(row.Match),
+			matchList(row),
+			suffixList(row.MatchSuffix),
 			fieldList(row.Fields),
+			row.Kind,
 			row.Rule)
 	}
 	b.WriteString("\n### Exclusion floor\n\n")
@@ -378,6 +421,34 @@ func Render() string {
 }
 
 // codeList renders a match list as backticked tokens.
+// matchList renders a row's Matches column. An empty Match means "every file"
+// only when the row selects by nothing else; on a row that selects by suffix it
+// means the Match form contributes nothing, and rendering that as "every file"
+// would state the opposite of what the row admits. The rendering IS the
+// contract the assembler version digests, so the two cases are distinguished
+// here rather than left to a reader (spc-68).
+func matchList(row Row) string {
+	if len(row.Match) == 0 && len(row.MatchSuffix) == 0 {
+		return "every file"
+	}
+	if len(row.Match) == 0 {
+		return "none"
+	}
+	return codeList(row.Match)
+}
+
+// suffixList renders a row's Suffixes column.
+func suffixList(items []string) string {
+	if len(items) == 0 {
+		return "none"
+	}
+	out := make([]string, 0, len(items))
+	for _, it := range items {
+		out = append(out, "`"+it+"`")
+	}
+	return strings.Join(out, ", ")
+}
+
 func codeList(items []string) string {
 	if len(items) == 0 {
 		return "every file"

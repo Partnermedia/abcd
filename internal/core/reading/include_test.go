@@ -225,19 +225,44 @@ func TestBriefEvidenceChapterIsNeverAdmitted(t *testing.T) {
 	}
 }
 
-// includeTableDigest is the sha256 of Render() at AssemblerVersion. Changing the
-// table without moving the version fails the gate below.
-const includeTableDigest = "7f19b6953a098544b519447db82e0da930b41f6546cf6436143e2d9871181d24"
-
-// TestAssemblerVersionCoversTheIncludeTable pins the rendered table to the
-// assembler version carried into every manifest: a manifest that names a version
-// must describe the table that version rendered.
-func TestAssemblerVersionCoversTheIncludeTable(t *testing.T) {
+// TestAssemblerVersionCarriesTheTableDigest holds the property the old
+// literal-digest gate only asked for: a manifest that names a version must
+// describe the table that version rendered.
+//
+// The gate this replaces compared sha256(Render()) to a standalone literal and
+// never read AssemblerVersion at all, so a table change that restated the
+// literal was green with the version unmoved (iss-2608311949385350). A map of
+// version to digest would have failed the same way — the current version's
+// entry is as editable as the literal was. The property is now structural: the
+// stamped version is computed FROM the rendering, so it cannot disagree with it.
+func TestAssemblerVersionCarriesTheTableDigest(t *testing.T) {
 	sum := sha256.Sum256([]byte(Render()))
-	got := hex.EncodeToString(sum[:])
-	if got != includeTableDigest {
-		t.Errorf("the include table has changed but AssemblerVersion is still %s.\n"+
-			"Bump AssemblerVersion and set includeTableDigest to %q.", AssemblerVersion, got)
+	want := AssemblerVersionCore + "+" + hex.EncodeToString(sum[:])[:12]
+	if got := AssemblerVersion(); got != want {
+		t.Errorf("AssemblerVersion() = %q, want %q — the stamped version must carry the "+
+			"digest of the table it was built from", got, want)
+	}
+}
+
+// TestATableChangeMovesTheStampedVersion is the mutation proof for the test
+// above. A passing digest comparison proves nothing about whether a CHANGE
+// would be caught, which is exactly how the old gate stayed vacuous, so the
+// change is performed here rather than assumed: the table is mutated, the
+// stamped version is re-read, and it must differ.
+func TestATableChangeMovesTheStampedVersion(t *testing.T) {
+	before := AssemblerVersion()
+
+	restore := Table
+	t.Cleanup(func() { Table = restore })
+
+	mutated := make([]Row, len(Table))
+	copy(mutated, Table)
+	mutated[0].Kind = KindConfig // a kind reassignment: invisible to the OLD gate
+	Table = mutated
+
+	if after := AssemblerVersion(); after == before {
+		t.Errorf("reassigning a row's kind left the stamped version at %q; a change to "+
+			"the table a reading is decided by must move the version a manifest names", after)
 	}
 }
 
@@ -265,7 +290,11 @@ func TestEveryRowNamesAKnownKindAndPosition(t *testing.T) {
 		if row.Rule == "" {
 			t.Errorf("row %q states no admitting rule", row.Source)
 		}
-		if len(row.Match) == 0 {
+		// A row must select positively by SOMETHING. Either match form
+		// satisfies that; neither does not. The guard reads both fields
+		// because a row selecting only by suffix is positive at exactly the
+		// same grain as one selecting only by extension (spc-68).
+		if len(row.Match) == 0 && len(row.MatchSuffix) == 0 {
 			t.Errorf("row %q matches every file; inclusion is positive at every grain", row.Source)
 		}
 	}

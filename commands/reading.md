@@ -53,6 +53,15 @@ an unknown position, a missing operand, and any positional argument.
 Report from the JSON: `run_id`, `position`, `target_commit`, `item_count`,
 `manifest_hash`, and — where the run wrote — `out_dir` and `artefacts`.
 
+Also report `size`, on every run including a dry run: the total `bytes` and
+`tokens_est`, and each row of `by_kind` (`kind`, `items`, `bytes`,
+`tokens_est`). Report `tokens_est` as an estimate and say so, quoting the
+report's own `basis` — it is bytes over a measured constant, not a tokenizer's
+count, and it mis-states each kind by a few per cent in directions spc-68
+records. There is no budget and no threshold: the assembler cannot know what a
+given reader accepts, so it reports the weight and the operator decides whether
+to dispatch it.
+
 ### Where the artefacts land
 
 ```bash

@@ -25,6 +25,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/reading"
@@ -246,12 +247,61 @@ func renderAssembleResult(w io.Writer, res reading.AssembleResult) {
 	fmt.Fprintf(w, "%s: %d item(s) assembled at the %s position of %s\n",
 		res.RunID, res.ItemCount, res.Position, shortSha(res.TargetCommit))
 	fmt.Fprintf(w, "  manifest hash: %s\n", res.ManifestHash)
+	renderSizeReport(w, res.Size)
 	if !res.Written {
 		fmt.Fprintln(w, "  written:       nothing (dry run; name --out to write the two artefacts)")
 		return
 	}
 	fmt.Fprintf(w, "  written:       %s and %s in %s\n",
 		reading.BundleFileName, reading.ManifestFileName, res.OutDir)
+}
+
+// renderSizeReport writes what an assembly would cost, per material kind and in
+// total. It is written before the dry-run branch above returns, because the
+// whole point of the report is that it is available WITHOUT writing an artefact
+// (itd-198 ac-2).
+func renderSizeReport(w io.Writer, s reading.SizeReport) {
+	fmt.Fprintf(w, "  size:          %s, ~%s tokens (%s)\n",
+		humanBytes(s.Bytes), thousands(s.TokensEst), s.Basis)
+	for _, k := range s.ByKind {
+		fmt.Fprintf(w, "    %-18s %6d item(s)  %9s  ~%s tokens\n",
+			k.Kind, k.Items, humanBytes(k.Bytes), thousands(k.TokensEst))
+	}
+}
+
+// humanBytes renders a byte count at a readable scale. The unit is decimal, not
+// binary: the figure exists for a human deciding whether an artefact is
+// plausible, and 9.8 MB answers that where 9,371 KiB does not.
+func humanBytes(n int) string {
+	switch {
+	case n >= 1_000_000_000:
+		return fmt.Sprintf("%.1f GB", float64(n)/1e9)
+	case n >= 1_000_000:
+		return fmt.Sprintf("%.1f MB", float64(n)/1e6)
+	case n >= 1_000:
+		return fmt.Sprintf("%.1f kB", float64(n)/1e3)
+	default:
+		return fmt.Sprintf("%d B", n)
+	}
+}
+
+// thousands groups an integer for reading. A token estimate is the number a
+// human compares against a capacity they hold in their head, and an ungrouped
+// seven-digit run is the shape that gets misread by an order of magnitude.
+func thousands(n int) string {
+	s := strconv.Itoa(n)
+	neg := ""
+	if strings.HasPrefix(s, "-") {
+		neg, s = "-", s[1:]
+	}
+	var b strings.Builder
+	for i, c := range s {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			b.WriteByte(',')
+		}
+		b.WriteRune(c)
+	}
+	return neg + b.String()
 }
 
 // trimCorePrefix drops the core package's own tag from a message this front door

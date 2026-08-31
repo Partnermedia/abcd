@@ -9,7 +9,14 @@ import (
 )
 
 // SchemaVersion is the shape version of both artefacts an assembly writes.
-const SchemaVersion = 1
+//
+// It is ONE constant for two shapes, so a change to either restamps both. At
+// version 2 the manifest item gained a kind and the bundle's shape did not
+// move; the bundle is restamped anyway. That is a known consequence of the
+// shared constant, accepted rather than fixed inside a change that needed only
+// one half of it — splitting the two is a larger change, and making the split
+// silently is how a shape version stops meaning anything (spc-68).
+const SchemaVersion = 2
 
 // The two artefact type tags. They are carried in the documents themselves so a
 // reader of a loose file can tell the two apart without its filename.
@@ -47,7 +54,12 @@ type ManifestItem struct {
 	ItemKey string `json:"item_key"`
 	Path    string `json:"path"`
 	Field   string `json:"field,omitempty"`
-	SHA256  string `json:"sha256"`
+	// Kind is the item's material class, carried so a size report is checkable
+	// against the manifest rather than asserted beside it. It is deliberately
+	// NOT omitempty: an item without a kind is a defect, and a shape that can
+	// omit the field cannot tell that defect from a well-formed item (spc-68).
+	Kind   Kind   `json:"kind"`
+	SHA256 string `json:"sha256"`
 }
 
 // Manifest enumerates what an assembly passed, by path, by field and by hash,

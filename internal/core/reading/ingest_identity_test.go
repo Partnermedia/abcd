@@ -114,7 +114,7 @@ func TestInstrumentIdentityRequiresAllThreeParts(t *testing.T) {
 		if err == nil {
 			t.Fatal("an instrument claiming an assembler version the manifest does not carry was accepted")
 		}
-		if !strings.Contains(err.Error(), AssemblerVersion) {
+		if !strings.Contains(err.Error(), AssemblerVersion()) {
 			t.Errorf("the refusal does not name the manifest's own assembler version: %v", err)
 		}
 	})

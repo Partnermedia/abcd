@@ -57,7 +57,7 @@ func newIngestFixture(t *testing.T, pos Position) *ingestFixture {
 	f.definitionSHA = def.SHA256
 
 	f.runID = "rdg-2608310000000001"
-	f.parkRun(f.runID, pos, AssemblerVersion)
+	f.parkRun(f.runID, pos, AssemblerVersion())
 	return f
 }
 
@@ -101,7 +101,7 @@ func (f *ingestFixture) nextRun(doc map[string]any) map[string]any {
 	f.t.Helper()
 	f.runCounter++
 	id := fmt.Sprintf("rdg-2608319%09d", f.runCounter)
-	f.parkRun(id, f.position, AssemblerVersion)
+	f.parkRun(id, f.position, AssemblerVersion())
 	doc["run_id"] = id
 	doc["manifest_sha256"] = f.manifestHashOf(id)
 	return doc
@@ -203,7 +203,7 @@ func (f *ingestFixture) payload(n int) map[string]any {
 		"instrument": map[string]any{
 			"model":             "a-model",
 			"definition_sha256": f.definitionSHA,
-			"assembler_version": AssemblerVersion,
+			"assembler_version": AssemblerVersion(),
 		},
 		"items": items,
 	}
