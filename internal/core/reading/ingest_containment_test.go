@@ -182,8 +182,13 @@ func TestASymlinkedParkedRunCannotRedirectTheManifestRead(t *testing.T) {
 //
 // That is why the sweep refuses a symlinked directory outright rather than
 // resting on containment alone — the stance core/capture takes on the same
-// ledger directory. Without the extra refusal every case above still passes,
-// which is exactly the vacuity this one closes.
+// ledger directory.
+//
+// The discriminator is readDirIn's Lstat guard AS A WHOLE, not its symlink
+// branch: removing that branch alone leaves this green, because the sibling
+// `!fi.IsDir()` catches a symlink too (Lstat reports the link, not its target).
+// The two branches are mutually redundant here, so the guard is what has to be
+// mutated, and removing it turns this case red.
 func TestASymlinkedRunDirectoryInsideTheRepoIsRefusedToo(t *testing.T) {
 	f := newIngestFixture(t, "detection")
 	orphan := "rdg-2608310000000015"

@@ -30,6 +30,7 @@ import (
 	"github.com/intentdriven/abcd/internal/core/capture"
 	"github.com/intentdriven/abcd/internal/core/issueschema"
 	"github.com/intentdriven/abcd/internal/termsafe"
+	"golang.org/x/text/unicode/norm"
 )
 
 // The four supply regimes, named where the gate branches on them so a literal
@@ -263,9 +264,12 @@ func boundedRefusals(refusals []ItemRefusal) []ItemRefusal {
 		return refusals
 	}
 	out := append([]ItemRefusal{}, refusals[:maxReportedRefusals]...)
+	// The elision entry carries NO ordinal, because it is not an item: rendering
+	// it as "item 0" would name a thing that does not exist. Both surfaces print
+	// the total beside it, so the count is visible without reading the JSON.
 	return append(out, ItemRefusal{
 		Rule:   "refusals-elided",
-		Detail: fmt.Sprintf("and %d more item(s) refused; refused_count carries the total", len(refusals)-maxReportedRefusals),
+		Detail: fmt.Sprintf("and %d more item(s) refused", len(refusals)-maxReportedRefusals),
 	})
 }
 
@@ -286,7 +290,13 @@ func checkItem(ordinal int, fields map[string]string, def Definition,
 				ordinal, def.Regime, renderFields(named), regimeLicence[def.Regime])}
 	}
 
-	if strings.TrimSpace(fields[PatternField]) == "" {
+	// Blankness is judged on the FOLDED text. strings.TrimSpace does not treat a
+	// zero-width rune as space, so a pattern of one U+200B was accepted at all
+	// four regimes and the record then asserted a provenance it does not carry —
+	// an unconditional defeat of a criterion whose own words are "without
+	// exception at any regime". The encoder runs later, so this still sees raw
+	// bytes rather than the percent-encoded form.
+	if strings.TrimSpace(foldForMatching(fields[PatternField])) == "" {
 		return &ItemRefusal{Ordinal: ordinal, Rule: "named-provenance", Field: PatternField,
 			Detail: fmt.Sprintf("item %d names no %q: every item at every regime carries the pattern it "+
 				"was read under, without exception, and the definitions instruct it", ordinal, PatternField)}
@@ -312,9 +322,11 @@ func checkItem(ordinal int, fields map[string]string, def Definition,
 				"a field here", ordinal, renderFields(unknown), def.Regime, renderFields(bodyFields))}
 	}
 
+	// The same rule, for the same reason: a declared body field holding one
+	// invisible rune states nothing.
 	var missing []string
 	for _, f := range bodyFields {
-		if strings.TrimSpace(fields[f]) == "" {
+		if strings.TrimSpace(foldForMatching(fields[f])) == "" {
 			missing = append(missing, f)
 		}
 	}
@@ -399,25 +411,21 @@ func containsToken(set []string, token string) bool {
 	return false
 }
 
-// recordBytes over-estimates the reading record this item becomes: the envelope
-// the writer composes, plus every body key with its value.
+// recordBytes is a cheap early FILTER, not the decision.
 //
-// It must over-estimate, and the first version did not. The measurement is taken
-// here, before two writer steps that LENGTHEN text, so a body of double quotes
-// landed a record roughly twice the measured size and past the limit — durable,
-// committed, and unreadable by every reader of the family.
+// It estimates the record this item becomes so an obviously oversize item is
+// refused at ITEM level, landing the rest of the run. It cannot be the decision,
+// and two attempts to make it one failed the same way: the measurement is taken
+// before every step that lengthens text, and each fix modelled one such step and
+// missed the next. The escaper at most doubles a value (it escapes a backslash
+// and a double quote, one byte each), which the doubling below covers; the ledger
+// redactor exceeds that, replacing a short span with a longer placeholder, and
+// its growth scales with the body rather than with any envelope allowance.
 //
-// Each value is therefore counted DOUBLE, and the factor is exact rather than a
-// guess: the record's scalar writer escapes exactly two characters, a backslash
-// and a double quote, one byte each, and the hidden-rune encoder that runs before
-// it emits neither. No value can more than double.
-//
-// The envelope allowance is generous for the other step: the ledger redactor runs
-// after this measurement and can lengthen text where a placeholder is longer than
-// the secret it replaces. That growth is bounded by the number of secrets in one
-// item rather than by its length, so an allowance covers it — but it is an
-// allowance, not a proof, and a record dense in short secrets is the shape that
-// would exceed it.
+// So the DECISION is taken in capture.IngestReading, on the assembled bytes,
+// where the exact count exists and no estimate is needed. This filter only has
+// to be cheap and roughly right: an item it lets through is caught there, and an
+// item it refuses would have been refused there too.
 func recordBytes(fields map[string]string, bodyFields []string) int {
 	const envelope = 4096
 	const perField = 16
@@ -440,36 +448,49 @@ func bodyText(fields map[string]string, bodyFields []string) string {
 	return foldForMatching(strings.Join(parts, "\n"))
 }
 
-// foldForMatching normalises text for SIGNATURE MATCHING only: every Unicode
-// space becomes an ASCII space, and every format rune (zero-width joiners, the
-// bidi controls, a soft hyphen) is dropped. What is stored is untouched.
+// foldForMatching normalises text so an INVISIBLE or compatibility-equivalent
+// rune cannot decide whether a check fires. What is stored is untouched.
 //
-// Without it the gate is evaded by one invisible byte. Go's regexp is RE2, whose
-// \s and \b classes are ASCII-only, and termsafe.Sanitize does not mask U+00A0 —
-// so "we recommend option B" written with a NON-BREAKING space between two words
-// matches no signature at all, and the item lands with no refusal and no flag.
-// A zero-width space inside a keyword does the same.
+// It serves two callers, and they are the same question asked twice: the
+// signature registry, which must not be evaded, and the provenance rule, which
+// must not be satisfied by a pattern that renders as nothing.
 //
-// This is deliberately NOT the residue itd-185 discloses. That residue is a fix
-// proposal or a disposition PHRASED outside the registry's signatures, which is
-// a stated limit of a registry-bounded check. This was the registry's own
-// phrasing with one byte substituted, which is an evasion of the gate rather
-// than a limit of it, and filing it under the disclosure would turn an honest
-// residue into cover for a defect.
+// Three transformations, each closing a class that was demonstrated open:
 //
-// Dropping rather than folding the format runes is what catches the zero-width
-// case: folding one to a space would split a keyword in two, and the signature
-// would still not match.
+//   - Every Unicode space folds to ASCII. Go's regexp is RE2, whose \s and \b
+//     classes are ASCII-only, and termsafe.Sanitize does not mask U+00A0 — so a
+//     signature's own phrasing with a NON-BREAKING space between two words
+//     matched nothing at all.
+//   - Every invisible rune is DROPPED, across all three of the categories that
+//     hold one: Cf (zero-width space, soft hyphen, the bidi controls),
+//     Other_Default_Ignorable_Code_Point (U+034F, a combining GRAPHEME JOINER —
+//     a mark, not a format rune) and Variation_Selector (U+FE00–FE0F). Dropping
+//     rather than folding is what catches a rune placed INSIDE a keyword:
+//     folding one to a space would split the word in two and the signature would
+//     still not match. Guarding Cf alone was the same defect one category over.
+//   - NFKC folds the compatibility forms. The fi LIGATURE and the fullwidth
+//     letters are the registry's own phrasing written in code points that render
+//     the same, which is the defect side of this intent's own test — "the
+//     registry's phrasing with a byte substituted" — rather than the residue
+//     side.
+//
+// What it does NOT close, and the residue itd-185 and spc-63 now name: a
+// script-CONFUSABLE substitution. A Cyrillic that is not the Latin one, and
+// NFKC does not equate them; closing that needs a confusables table, which is a
+// new dependency and a maintainer's decision.
 func foldForMatching(text string) string {
-	return strings.Map(func(r rune) rune {
+	folded := strings.Map(func(r rune) rune {
 		switch {
-		case unicode.Is(unicode.Cf, r):
+		case unicode.Is(unicode.Cf, r),
+			unicode.Is(unicode.Other_Default_Ignorable_Code_Point, r),
+			unicode.Is(unicode.Variation_Selector, r):
 			return -1
 		case unicode.IsSpace(r):
 			return ' '
 		}
 		return r
 	}, text)
+	return norm.NFKC.String(folded)
 }
 
 // present returns the members of names the item carries, in the table's order.

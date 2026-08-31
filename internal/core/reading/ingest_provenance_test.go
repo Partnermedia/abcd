@@ -20,7 +20,17 @@ func TestEmptyPatternNamedRefusesItemAtEveryRegime(t *testing.T) {
 	for _, pos := range Positions() {
 		pos := pos
 		t.Run(string(pos), func(t *testing.T) {
-			for _, form := range []string{"empty", "absent", "whitespace"} {
+			// The invisible forms are the ones that defeated this criterion
+			// unconditionally: strings.TrimSpace does not treat a zero-width rune
+			// as space, so a pattern of one U+200B was ACCEPTED at all four
+			// regimes and the record asserted a provenance it does not carry.
+			// U+034F is a MARK rather than a format rune, so guarding Cf alone
+			// left it open; U+FE00 is a variation selector, a third category.
+			for _, form := range []string{
+				"empty", "absent", "whitespace",
+				"zero-width space", "soft hyphen", "byte-order mark",
+				"combining grapheme joiner", "variation selector", "ideographic space",
+			} {
 				t.Run(form, func(t *testing.T) {
 					f := newIngestFixture(t, pos)
 					// Two items, the FIRST illegal: the criterion refuses the
@@ -34,6 +44,18 @@ func TestEmptyPatternNamedRefusesItemAtEveryRegime(t *testing.T) {
 						delete(item, PatternField)
 					case "whitespace":
 						item[PatternField] = "   \t "
+					case "zero-width space":
+						item[PatternField] = "\u200b\u200b"
+					case "soft hyphen":
+						item[PatternField] = "\u00ad"
+					case "byte-order mark":
+						item[PatternField] = "\ufeff"
+					case "combining grapheme joiner":
+						item[PatternField] = "\u034f"
+					case "variation selector":
+						item[PatternField] = "\ufe00"
+					case "ideographic space":
+						item[PatternField] = "\u3000\u00a0"
 					}
 
 					// refusedItem establishes both halves at once: the item

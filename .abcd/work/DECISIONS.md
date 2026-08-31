@@ -2321,3 +2321,24 @@ together (the script's header says why there is no escape hatch).
   gate the wrong licence silently. Rejected: a cross-check inside the ingest
   path, which would be a second table of one fact and leave the primitive broken
   for the status render.
+- 2026-08-31 — itd-185's record-size limit is DECIDED in capture.IngestReading on
+  the assembled bytes, not estimated from the payload; reading's recordBytes stays
+  as a cheap early filter that buys item-level granularity. Ground: two attempts
+  to decide it upstream each modelled one lengthening step (the escaper) and
+  missed the next (the redactor, which exceeds 2x and scales with body length),
+  and a record past the limit is durable and permanently undispositionable.
+  Rejected: a third coefficient.
+- 2026-08-31 — itd-185's ingest containment is layered and the layers are
+  mutually redundant: writeJSONIn's contained write is currently unreachable
+  because refuseARerun probes the same path through the root first, and nothing
+  asserts that ordering. Recorded rather than fixed, because the property is
+  proved by mutating containment as a whole; a future edit that moves or drops
+  the rerun probe must re-check it. Rejected: a per-layer test, which would pin
+  an ordering the design does not promise.
+- 2026-08-31 — itd-185 folds invisible and compatibility-equivalent runes
+  (Unicode spaces, Cf + Other_Default_Ignorable_Code_Point + Variation_Selector,
+  NFKC) before signature matching and before every blankness rule, and DISCLOSES
+  the script-confusable class as open. Ground: the registry's own phrasing with a
+  byte substituted is an evasion of the gate, not the calibration residue; a
+  confusables table is a new dependency and the maintainer's call. Rejected:
+  filing the invisible-rune class under the disclosed residue.

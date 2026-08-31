@@ -215,6 +215,21 @@ func IngestReading(req IngestReadingRequest) (IngestReadingResult, error) {
 			if err != nil {
 				return fmt.Errorf("item %d: %w", i+1, err)
 			}
+			// The record's size is DECIDED here, on the assembled bytes, because
+			// this is the only place the exact count exists: the values are
+			// already redacted, already escaped, and this string is what reaches
+			// the disk. Every check upstream is an estimate over one of those
+			// steps, and an estimate that models one lengthening step and misses
+			// the next writes a record past the cap — which every reader of the
+			// family then refuses, leaving the item durable and unanswerable.
+			// That is the split RecordReadLimit exists to prevent, so the
+			// decision belongs where guessing is unnecessary.
+			if n := len(content); n > issueschema.RecordReadLimit {
+				return fmt.Errorf("item %d: %w: the record would be %d bytes, past the %d-byte limit "+
+					"every reader of this family applies; a record written past it is durable and "+
+					"unreadable, so it can never be dispositioned",
+					i+1, ErrInvariantViolation, n, issueschema.RecordReadLimit)
+			}
 			pending = append(pending, staged{id: id, content: content})
 		}
 

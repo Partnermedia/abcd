@@ -303,3 +303,74 @@ func TestIngestRedactsBeforeTakingTheLedgerLock(t *testing.T) {
 		t.Fatalf("%d scanner(s) were built while the ledger lock was held; redaction belongs outside it", built-builtWhenLocked)
 	}
 }
+
+// TestIngestReadingRefusesARecordPastTheReadLimit is the record-size DECISION,
+// and it lives here because this is the only place the exact byte count exists:
+// the values are already redacted, already escaped, and the assembled string is
+// what reaches the disk.
+//
+// Every check upstream is an estimate over one of those steps, and two attempts
+// to decide it upstream failed the same way — each modelled one lengthening step
+// and missed the next, writing a record past the cap that every reader of the
+// family then refuses. The item is durable and can never be dispositioned, which
+// is the split issueschema.RecordReadLimit exists to prevent.
+func TestIngestReadingRefusesARecordPastTheReadLimit(t *testing.T) {
+	repo, ir := ledger(t)
+	run := "rdg-2608310000000031"
+
+	body := bodyFor("detection")
+	body["why_a_tension"] = strings.Repeat("x", issueschema.RecordReadLimit)
+
+	res, err := IngestReading(IngestReadingRequest{
+		RepoRoot: repo, IssuesRoot: ir,
+		Run: run, Manifest: "sha256:beef",
+		Position: "detection", Regime: "registrative",
+		Items: []ReadingItem{
+			{Pattern: "a pattern", Body: bodyFor("detection")},
+			{Pattern: "another pattern", Body: body},
+		},
+	})
+	if err == nil {
+		t.Fatal("an item whose record exceeds the family's read limit was written")
+	}
+	if !errors.Is(err, ErrInvariantViolation) {
+		t.Errorf("the refusal is not an invariant violation: %v", err)
+	}
+	for _, want := range []string{"item 2", "never be dispositioned"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal does not carry %q: %v", want, err)
+		}
+	}
+	if len(res.Records) != 0 {
+		t.Errorf("the refused run wrote %d record(s); every item is validated before any is written",
+			len(res.Records))
+	}
+
+	// Nothing reached the tree: the run directory holds no record at all.
+	entries, err := os.ReadDir(filepath.Join(ir, issueschema.ReadingsDir, run))
+	if err == nil && len(entries) != 0 {
+		t.Errorf("the refused run left %d file(s) in the ledger", len(entries))
+	}
+
+	// And the same batch without the oversize item still lands, so this is a
+	// size refusal rather than a blanket one.
+	ok, err := IngestReading(IngestReadingRequest{
+		RepoRoot: repo, IssuesRoot: ir,
+		Run: "rdg-2608310000000032", Manifest: "sha256:beef",
+		Position: "detection", Regime: "registrative",
+		Items: []ReadingItem{{Pattern: "a pattern", Body: bodyFor("detection")}},
+	})
+	if err != nil {
+		t.Fatalf("a legal batch was refused: %v", err)
+	}
+	if len(ok.Records) != 1 {
+		t.Fatalf("the legal batch landed %d record(s)", len(ok.Records))
+	}
+	info, err := os.Stat(filepath.Join(repo, filepath.FromSlash(ok.Records[0].Path)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Size() > issueschema.RecordReadLimit {
+		t.Errorf("a landed record is %d bytes, past the %d-byte limit", info.Size(), issueschema.RecordReadLimit)
+	}
+}
