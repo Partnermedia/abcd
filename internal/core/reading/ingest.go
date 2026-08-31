@@ -367,9 +367,11 @@ func checkEnvelope(out Output) (Position, error) {
 			"an ingest names the run an assembly parked, and a run id becomes a directory name",
 			echo(out.RunID), RunIDFamily)
 	}
+	// The parser quotes the token it refused, and that token is payload text, so
+	// the whole message goes through echo rather than the value alone.
 	pos, err := ParsePosition(string(out.Position))
 	if err != nil {
-		return "", fmt.Errorf("reading: %w", err)
+		return "", fmt.Errorf("reading: %s", echo(err.Error()))
 	}
 	if !sha256HexRe.MatchString(out.ManifestSHA256) {
 		return "", fmt.Errorf("reading: manifest_sha256 %q is not a sha-256 digest", echo(out.ManifestSHA256))
@@ -419,12 +421,16 @@ func resolveParkedManifest(repoRoot string, out Output) (Manifest, error) {
 			"to %s; the reference is the manifest's own content hash, and a disagreement refuses the run",
 			echo(out.ManifestSHA256), rel, got)
 	}
+	// The manifest is a file on disk rather than the payload, but it is no more
+	// trusted for that: it is read back at the operator's word and its values
+	// reach the same terminal, so they are echoed under the same rule.
 	if m.RunID != out.RunID {
-		return Manifest{}, fmt.Errorf("reading: the manifest at %s names run %s, not %s", rel, m.RunID, out.RunID)
+		return Manifest{}, fmt.Errorf("reading: the manifest at %s names run %s, not %s",
+			rel, echo(m.RunID), out.RunID)
 	}
 	if m.Position != out.Position {
 		return Manifest{}, fmt.Errorf("reading: the output reads at the %s position and the manifest of run %s "+
-			"names the %s position", echo(string(out.Position)), out.RunID, m.Position)
+			"names the %s position", echo(string(out.Position)), out.RunID, echo(string(m.Position)))
 	}
 	return m, nil
 }

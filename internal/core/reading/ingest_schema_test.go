@@ -160,6 +160,48 @@ func TestWrongPositionBodyIsUndecodable(t *testing.T) {
 	f.mustIngest(f.payload(1))
 }
 
+// TestMissingBodyFieldRefusesTheItem is the body schema's other direction, and
+// it exists because removing the guard left every other case green: an item
+// carrying a FOREIGN body trips the unknown-key check first, so nothing reached
+// the missing-field branch (iss-2608311206480573). What it catches is a reading
+// that returned a partial item at its OWN position — a tension named with no
+// account of why it is one.
+//
+// Both the empty and the absent form are tried; only one of them is an obviously
+// missing field in the payload bytes.
+func TestMissingBodyFieldRefusesTheItem(t *testing.T) {
+	fields := issueschema.ReadingBodyFields["detection"]
+	if len(fields) < 2 {
+		t.Fatalf("the detection body declares %d field(s); this case needs one to remove", len(fields))
+	}
+	for _, field := range fields {
+		field := field
+		for _, form := range []string{"empty", "absent"} {
+			t.Run(field+"/"+form, func(t *testing.T) {
+				f := newIngestFixture(t, "detection")
+				doc := f.payload(2)
+				item := doc["items"].([]any)[1].(map[string]any)
+				if form == "empty" {
+					item[field] = ""
+				} else {
+					delete(item, field)
+				}
+
+				r := f.refusedItem(doc, 2, 2)
+				if r.Rule != "missing-body-field" {
+					t.Errorf("the refusal cites rule %q", r.Rule)
+				}
+				if !strings.Contains(r.Field, field) {
+					t.Errorf("the refusal names field %q, want %q", r.Field, field)
+				}
+				if !strings.Contains(r.Detail, "item 2") {
+					t.Errorf("the refusal does not name the item's ordinal: %q", r.Detail)
+				}
+			})
+		}
+	}
+}
+
 // TestNoDurableWriteBeforeValidation is ac-1 stated as an ordering: a payload
 // whose LAST item is illegal leaves nothing behind, even though its earlier
 // items are perfectly legal. Validation is step one of four, and the durable
@@ -182,4 +224,107 @@ func TestNoDurableWriteBeforeValidation(t *testing.T) {
 		t.Error("the refused run left a stage behind")
 	}
 	f.mustIngest(f.payload(3))
+}
+
+// hostileRune reports whether r is one of the classes termsafe.Sanitize masks:
+// a C0 control (ESC among them), DEL, the C1 range, a bidi override or isolate,
+// or a zero-width character. The list is stated here rather than imported so
+// this case fails if the sanitiser stops masking one of them.
+func hostileRune(r rune) bool {
+	switch {
+	case r < 0x20 && r != '\n':
+		return true
+	case r == 0x7f, r >= 0x80 && r <= 0x9f:
+		return true
+	case r >= 0x202a && r <= 0x202e, r >= 0x2066 && r <= 0x2069:
+		return true
+	case r == 0x200b, r == 0x200c, r == 0x200d, r == 0xfeff:
+		return true
+	}
+	return false
+}
+
+// hostileText carries one rune from each class the sanitiser masks: an ANSI
+// escape that could recolour or overprint the message reporting it, a bell, a
+// right-to-left override, and a zero-width space.
+const hostileText = "\x1b[31m\x07\u202ereversed\u200b\x1b[2K"
+
+// TestARefusalNeverEchoesRawPayloadBytes is the trust boundary at the OUTPUT
+// end. A refusal quotes model-produced text back to a terminal and writes it
+// into a durable record, so a payload carrying an escape sequence could rewrite
+// the very message that reports it, and a payload carrying megabytes in one
+// field could drown it.
+//
+// Both guards were mutation-vacuous when they were written — neutralising the
+// sanitiser and neutralising the cap each left every test green
+// (iss-2608311211235195) — so this case walks the fields an untrusted value
+// actually reaches a message through, one at a time.
+func TestARefusalNeverEchoesRawPayloadBytes(t *testing.T) {
+	long := strings.Repeat("z", 3000)
+
+	for _, field := range []string{"_type", "run_id", "position", "regime", "manifest_sha256"} {
+		field := field
+		for _, oversized := range []bool{false, true} {
+			name, value := field+"/hostile", hostileText
+			if oversized {
+				name, value = field+"/oversized", long
+			}
+			t.Run(name, func(t *testing.T) {
+				f := newIngestFixture(t, "detection")
+				doc := f.payload(1)
+				doc[field] = value
+
+				_, err := f.ingest(doc)
+				if err == nil {
+					t.Fatalf("%s carrying untrusted text was accepted", field)
+				}
+				assertSafeEcho(t, err.Error(), oversized)
+			})
+		}
+	}
+
+	// An item's KEY is payload text too, and it reaches a message through the
+	// unknown-field refusal.
+	t.Run("item key", func(t *testing.T) {
+		f := newIngestFixture(t, "detection")
+		doc := f.payload(1)
+		doc["items"].([]any)[0].(map[string]any)[hostileText] = "x"
+		_, err := f.ingest(doc)
+		if err == nil {
+			t.Fatal("an item key carrying terminal-attack runes was accepted")
+		}
+		assertSafeEcho(t, err.Error(), false)
+	})
+
+	// And the DURABLE record: a list-level refusal writes the instrument's model
+	// into refusal.json, where the same rule has to hold.
+	t.Run("durable refusal record", func(t *testing.T) {
+		f := newIngestFixture(t, "detection")
+		doc := f.payload(1)
+		doc["regime"] = RegimeEvaluative
+		doc["instrument"].(map[string]any)["model"] = hostileText + long
+
+		if _, err := f.ingest(doc); err == nil {
+			t.Fatal("a regime mismatch was accepted")
+		}
+		rec := f.readRefusalRecord(f.runID)
+		assertSafeEcho(t, rec.Instrument.Model, true)
+		assertSafeEcho(t, rec.Reason, false)
+	})
+}
+
+// assertSafeEcho holds one rendered message to both halves of the rule: no
+// terminal-display attack rune survives, and a payload value that arrived
+// oversized is capped rather than reproduced.
+func assertSafeEcho(t *testing.T, msg string, expectCapped bool) {
+	t.Helper()
+	for i, r := range msg {
+		if hostileRune(r) {
+			t.Errorf("the message carries U+%04X at byte %d, which the sanitiser masks: %q", r, i, msg)
+			return
+		}
+	}
+	if expectCapped && strings.Contains(msg, strings.Repeat("z", maxEchoedRunes+1)) {
+		t.Errorf("an oversized payload value reached the message uncapped (%d bytes): %.200q", len(msg), msg)
+	}
 }
