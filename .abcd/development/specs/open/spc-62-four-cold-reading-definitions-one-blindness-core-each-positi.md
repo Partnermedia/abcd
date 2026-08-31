@@ -189,15 +189,28 @@ positional authority ac-1..ac-3.
 | --- | --- | --- |
 | ac-1 — the blindness core is byte-identical across the four and carries its seven conditions in the fixed order | One delimited core span, carried verbatim in each file, the delimiters making the span exact rather than heuristic | `TestBlindnessCoreIsByteIdenticalAcrossDefinitions`, `TestBlindnessCoreCarriesSevenConditions` |
 | ac-2 — every definition states a regime, the four distinct and resolvable by position alone | `position:` and `regime:` are frontmatter keys of the definition file, which is what makes the regime the definition's property rather than the payload's | `TestEveryDefinitionStatesItsRegime`, `TestRegimeValuesAreTheFourAndDistinct` |
-| ac-3 — no registered flag and no registered configuration key sets or overrides a regime | The command tree is walked through `commandSurface`, the repository's one canonical cobra walk, and every flag and shorthand inspected; the reading verb's operand set is additionally pinned closed, so an operand that would set a regime under another name fails too. The configuration keys are enumerated from the committed configuration files, found by directory rather than by a list of schemas, with the two largest schema types also walked by reflection. Nothing is a written list, so the guard cannot fall behind the surface it guards (itd-195) | `TestNoOperatorSurfaceSetsARegime`, in `internal/surface/cli/regime_surface_test.go` |
+| ac-3 — no registered flag and no registered configuration key sets or overrides a regime | The command tree is walked through `commandSurface`, the repository's one canonical cobra walk, and every flag and shorthand inspected. The configuration keys are enumerated from the git index — every tracked `.json` under `.abcd/` — with the two largest schema types also walked by reflection. Two written lists survive and are stated in the guard's header rather than implied: the reading verb's pinned operand set, which fails CLOSED and is a tripwire rather than an enumeration, and the one exclusion from the file walk, which fails OPEN | `TestNoOperatorSurfaceSetsARegime`, in `internal/surface/cli/regime_surface_test.go` |
 
 The residue itd-184 discloses against ac-3 is a channel that was never
-registered. This spec adds no mechanism for one, and the walk sees every
-channel that is. One narrower edge sits inside that residue and is stated in the
-guard's own header: a key declared by a schema type outside the two walked by
-reflection, and written into no committed configuration file, is unregistered in
-both senses until a file carries it — at which point the configuration-file walk
-reaches it.
+registered. This spec adds no mechanism for one, and the walk sees every channel
+that is. Two narrower edges sit inside that residue, both stated in the guard's
+own header rather than left to be discovered.
+
+- A key declared by a schema type outside the two walked by reflection, and
+  written into no tracked file, is unregistered in both senses until a file
+  carries it — at which point the index walk reaches it.
+- A knob written into one of the machine-written baselines
+  (`*-baseline.json`) is skipped. That exclusion exists because the citations
+  baseline uses cited URLs as its map keys, so a paper whose URL says `regimes`
+  would turn the guard red while naming no knob; nothing reads a baseline as
+  configuration, and the exclusion is where that would change if anything ever
+  did.
+
+The file set is read from the git index rather than globbed from chosen
+directories, and iss-2608311100496798 is why: two directories was a written list
+and it had already fallen behind by four files — `personas.json`, the release
+surface snapshot, the release-gate manifest and the ruleset mirror all sit
+outside them, so a regime key in any of them passed.
 
 
 ## Tests

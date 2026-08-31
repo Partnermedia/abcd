@@ -15,25 +15,40 @@ package cli
 // canonical cobra walk — the same one the release compatibility gate reads —
 // rather than through a second walk written here.
 //
-// The configuration side walks every key of every committed configuration file,
-// found by DIRECTORY rather than by a list of schemas: a configuration file
-// added tomorrow is walked tomorrow, without anyone remembering to name it here.
-// The two largest schema types are additionally walked by reflection over their
-// json tags, which reaches a key the schema declares that no committed file
-// happens to carry. A hand-written list of either kind would be a prose claim
-// about how the surface behaves, and it would fall behind the surface the day
-// someone added a command or a config.
+// The configuration side walks every key of every JSON file tracked under
+// .abcd/, enumerated from the git INDEX rather than from chosen directories, so
+// a configuration file added tomorrow is walked tomorrow without anyone
+// remembering to name it here. The two largest schema types are additionally
+// walked by reflection over their json tags, which reaches a key a schema
+// declares that no committed file happens to carry.
+//
+// TWO WRITTEN LISTS SURVIVE, and both are stated rather than implied, because a
+// header that claims more than the code establishes is the defect this criterion
+// was split out to catch.
+//
+//  1. readingOperands, the reading verb's pinned operand set. It is a written
+//     list ON PURPOSE and it fails CLOSED: any addition to that verb turns this
+//     red, so it cannot fall behind the surface — it is a tripwire, not an
+//     enumeration.
+//  2. generatedBaselineSuffix, the one exclusion from the file walk. It fails
+//     OPEN: it can only ever REMOVE the machine-written baselines from the walk,
+//     and a configuration file added anywhere under .abcd/ is walked unless it is
+//     named for a baseline.
 //
 // Disclosed residue, as itd-184 states it: what the walk cannot see is a channel
 // that was never registered — an environment variable read ad hoc, say. Nothing
-// here adds a mechanism for one, and the walk sees every channel that is. The
-// one narrower edge: a key declared by a schema type OUTSIDE the two walked here
-// and written into no committed configuration file is unregistered in both
-// senses until a file carries it, at which point the file walk reaches it.
+// here adds a mechanism for one, and the walk sees every channel that is. Two
+// narrower edges sit inside that residue. A key declared by a schema type
+// OUTSIDE the two walked by reflection, and written into no tracked file, is
+// unregistered in both senses until a file carries it — at which point the index
+// walk reaches it. And a knob added to a machine-written baseline is skipped;
+// nothing reads a baseline as configuration today, and if something ever does,
+// the exclusion above is where that changes.
 
 import (
 	"encoding/json"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -42,7 +57,7 @@ import (
 
 	"github.com/intentdriven/abcd/internal/core/lint"
 	"github.com/intentdriven/abcd/internal/core/rules"
-	"github.com/intentdriven/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/gitutil"
 )
 
 // regimeToken is the thing no operator surface may carry. It is matched
@@ -63,13 +78,22 @@ var readingOperands = map[string][]string{
 	"abcd reading assemble": {"dry-run", "out", "position", "target"},
 }
 
-// configFileGlobs are the DIRECTORIES abcd's committed configuration lives in.
-// They are directories, not a list of schemas: everything matching is walked, so
-// a configuration file added later is covered without an edit here.
-var configFileGlobs = []string{
-	".abcd/*.json",
-	".abcd/config/*.json",
-}
+// generatedBaselineSuffix names the machine-written caches under .abcd/, which
+// are the one thing the configuration walk skips.
+//
+// A baseline is not an operator surface: it is written by the binary
+// (internal/core/lint/baseline.go, internal/core/site/paths.go) and read back by
+// it, and nobody sets a knob by editing one. It also cannot be searched the way
+// a configuration file can, because the citations baseline uses CITED URLS as
+// its map keys -- 51 of them today -- so a paper whose URL says "regimes" would
+// turn this guard red while naming no knob at all. Skipping it removes a false
+// red, not a real channel.
+//
+// This suffix is the ONE written rule in the enumeration, and it is stated here
+// rather than implied. It fails OPEN: a configuration file added anywhere under
+// .abcd/ is walked without an edit here, and the only way out of the walk is to
+// be named for a baseline.
+const generatedBaselineSuffix = "-baseline.json"
 
 // configKey is one configuration key as the walk found it, with the path through
 // the file or schema that reaches it.
@@ -81,10 +105,18 @@ type configKey struct {
 // walkConfigFiles returns every key of every committed configuration file, keys
 // nested inside objects and arrays included. This is the enumeration of the
 // registered configuration surface: a key an operator can actually write.
+//
+// The file set comes from the git INDEX -- every tracked .json under .abcd/ --
+// rather than from a glob of chosen directories. Two directories was a written
+// list, and it had already fallen behind by four files: personas.json, the
+// release surface snapshot, the release-gate manifest and the ruleset mirror all
+// sit outside .abcd/ and .abcd/config/, so a regime key in any of them passed.
+// Reading the index also makes "committed" literally true: an untracked local
+// .abcd/scratch.json is nobody's registered configuration and is not walked.
 func walkConfigFiles(t *testing.T, repoRoot string) []configKey {
 	t.Helper()
 	var out []configKey
-	var files int
+	var files, excluded, belowTheOldGlobs int
 	var walk func(file string, v any, prefix string)
 	walk = func(file string, v any, prefix string) {
 		switch node := v.(type) {
@@ -103,27 +135,50 @@ func walkConfigFiles(t *testing.T, repoRoot string) []configKey {
 			}
 		}
 	}
-	for _, glob := range configFileGlobs {
-		matches, err := filepath.Glob(filepath.Join(repoRoot, filepath.FromSlash(glob)))
-		if err != nil {
-			t.Fatalf("glob %s: %v", glob, err)
-		}
-		for _, path := range matches {
-			raw, err := os.ReadFile(path)
-			if err != nil {
-				t.Fatalf("read %s: %v", path, err)
-			}
-			var doc any
-			if err := json.Unmarshal(raw, &doc); err != nil {
-				t.Fatalf("decode %s: %v", path, err)
-			}
-			files++
-			walk(filepath.ToSlash(fsutil.RepoRel(repoRoot, path)), doc, "")
-		}
+	if !gitutil.InRepo(repoRoot) {
+		t.Fatal("the configuration walk reads the git index, and this is not a repository checkout")
 	}
-	if files < 8 {
-		t.Fatalf("the configuration-file walk found %d files under %v; the repository carries more, "+
-			"so the walk is broken", files, configFileGlobs)
+	listed, err := gitutil.Run(repoRoot, "ls-files", "-z", "--", ".abcd")
+	if err != nil {
+		t.Fatalf("list the tracked .abcd files: %v", err)
+	}
+	for _, rel := range strings.Split(listed, "\x00") {
+		if !strings.HasSuffix(rel, ".json") {
+			continue
+		}
+		if strings.HasSuffix(path.Base(rel), generatedBaselineSuffix) {
+			excluded++
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join(repoRoot, filepath.FromSlash(rel)))
+		if err != nil {
+			t.Fatalf("read %s: %v", rel, err)
+		}
+		var doc any
+		if err := json.Unmarshal(raw, &doc); err != nil {
+			t.Fatalf("decode %s: %v", rel, err)
+		}
+		files++
+		dir := path.Dir(rel)
+		if dir != ".abcd" && dir != ".abcd/config" {
+			belowTheOldGlobs++
+		}
+		walk(rel, doc, "")
+	}
+
+	// Three guards, each against a way this walk could report the criterion
+	// satisfied by seeing nothing.
+	if files < 40 {
+		t.Fatalf("the configuration walk found %d tracked .abcd json file(s); the repository carries more, "+
+			"so the walk is broken", files)
+	}
+	if belowTheOldGlobs == 0 {
+		t.Fatalf("every one of the %d walked files sits in .abcd/ or .abcd/config/, which is the two-directory "+
+			"glob this walk replaced; the index enumeration is not reaching the rest of the tree", files)
+	}
+	if excluded > 3 {
+		t.Fatalf("the %q rule excluded %d files; it exists to skip the machine-written baselines and cannot "+
+			"be allowed to swallow the configuration tree", generatedBaselineSuffix, excluded)
 	}
 	return out
 }
@@ -227,7 +282,7 @@ func TestNoOperatorSurfaceSetsARegime(t *testing.T) {
 	keys := walkConfigFiles(t, repoRootFromTest(t))
 	keys = append(keys, walkConfigKeys("record-lint schema", reflect.TypeOf(lint.Config{}))...)
 	keys = append(keys, walkConfigKeys("rules schema", reflect.TypeOf(rules.RuleSet{}))...)
-	if len(keys) < 100 {
+	if len(keys) < 500 {
 		t.Fatalf("the configuration walk found %d keys; the committed configuration is larger than that, "+
 			"so the walk is broken", len(keys))
 	}
