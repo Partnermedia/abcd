@@ -54,9 +54,12 @@ shipped assembler is a precondition no eval may establish for itself, because an
 eval must not patch the code under test. The three criteria above catch each
 named nondeterminism through an oracle the assembler does not supply, and the
 comparator's own capacity to fail is proved by ac-4. What remains is discharged
-by hand: the walk sort removed by a one-line local patch, the test watched red,
-the patch reverted before the branch is pushed, and the run recorded in the
-pull-request body. That is a recorded hand-run, not a standing gate.
+by hand, and by a mutation that can actually establish the precondition:
+rebuilding the assembler's candidate slice from a map, which makes the order
+vary between runs, watched red and then reverted before the branch is pushed.
+Removing the walk sort does NOT serve — it yields a different order, not an
+unstable one, so the byte comparison stays green and only the order oracle
+fires. That is a recorded hand-run, not a standing gate.
 
 
 ## Grounds

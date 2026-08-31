@@ -9,6 +9,10 @@ found_during: "phase-4-conditional"
 origin: researcher-authored
 production_mode: hand-written
 found_at: ".abcd/development/intents/shipped"
+resolution: "itd-185 landed and merged as 1d84ce26, so the condition discharges on its first branch: the five MET_WITH_CONCERNS criteria across itd-178, itd-180 and itd-189 stand as issued and need no re-issuing. The producer they rested on exists and is wired, reached from both the CLI and the plugin markdown surface."
+impact: additive
+resolved_by:
+  intent: "itd-185"
 ---
 
 two shipped acceptance criteria hold a MET_WITH_CONCERNS that becomes NOT_MET if itd-185 does not land in this phase
@@ -70,3 +74,6 @@ That changes what this record is for. It was a reminder; it is now the single
 place recording that one unstarted intent carries the acceptance of three
 shipped ones.
 
+## Grounds
+
+- pursued: the record armed a two-way condition on whether itd-185 would land this phase, and it landed, so the five criteria resting on it hold as issued; what would show this wrong is the ingest verb failing to reach the reading-record family from a front door, which would leave the corpus unpopulated and the criteria unsupported after all.

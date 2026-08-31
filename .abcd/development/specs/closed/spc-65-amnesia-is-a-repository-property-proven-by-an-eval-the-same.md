@@ -165,13 +165,16 @@ and the run recorded in the pull-request body.
 Every test below is watched red before the change and green after.
 
 - `TestAssembledInputIsByteIdenticalAcrossRuns` is watched red against an
-  assembler whose walk sort is temporarily removed by a one-line local patch,
-  which is the run that proves the comparison can fail against real
-  nondeterminism. The run is recorded in the pull request body and the patch is
-  reverted before the branch is pushed.
-- `TestWalkOrderIsLexicographic` is watched red the same way, and stays the
-  standing guard afterwards: it fails on any consistent-but-not-lexicographic
-  order, which the byte comparison alone would accept.
+  assembler whose candidate slice is rebuilt from a map, so the order varies
+  between runs. That is the mutation that proves the comparison can fail against
+  real nondeterminism. Removing the walk sort does not: it yields a different
+  order rather than an unstable one, so both assemblies still agree and the byte
+  comparison stays green. The run is recorded in the pull request body and the
+  patch is reverted before the branch is pushed.
+- `TestWalkOrderIsLexicographic` is watched red against the removed walk sort,
+  which is the mutation that suits it, and stays the standing guard afterwards:
+  it fails on any consistent-but-not-lexicographic order, which the byte
+  comparison alone would accept.
 - `TestManifestCarriesNoTimestamp` is watched red against a manifest with a
   generation time stamped into it.
 - `TestComparatorReportsADifference` feeds the comparator two synthetic
