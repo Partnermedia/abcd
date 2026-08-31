@@ -74,6 +74,59 @@ reason in `Gap` rather than being quietly omitted, and
 `TestEveryAssemblerRuleHasAFalsifier` fails if a row names a plant that has gone,
 if a plant is named by no row, or if the number of declared gaps changes.
 
+## The amnesia eval
+
+`coldreading_determinism_test.go` and `coldreading_order_test.go` check the other
+half of what the assembler owes a reading: the same repository state, assembled
+twice, produces the same assembled input. Amnesia is a property of what the
+assembler passes rather than an instruction an agent is trusted to follow, so it
+is checked here and no case run is spent evidencing it.
+
+The identity relation is **byte-equality of the bundle**, the manifest excluded,
+because the manifest carries a run identifier that differs between runs by
+construction. The two assemblies run at two **distinct absolute paths** over one
+commit — the corpus is committed once and the tree copied, `.git` included — so
+an absolute path or a temporary-directory name embedded in the output fails on
+the first run. A run-to-run comparison in one directory cannot see that leak, and
+it is both a determinism failure and a breach of the rule that no absolute local
+path enters an artefact.
+
+The manifest is not therefore unasserted. Two weaker properties hold on it: no
+key and no scalar in it is timestamp-shaped, and its item paths agree with the
+eval's **own** lexicographic sort. The scan is confined to the manifest because a
+projected record body legitimately quotes dates in prose; the manifest carries
+paths, field names and hashes only, so a timestamp-shaped token there is
+unambiguously a defect. One exemption is declared rather than silent: the run
+identifier mints from a clock, so it is exempt from the packed-digit rule alone
+and its own shape is asserted, and the manifest is not described as
+timestamp-free.
+
+### What keeps it from passing vacuously
+
+An identity assertion fails the way an absence assertion fails — two artefacts
+that agree because both are empty are green and worthless — so four guards stand
+under it:
+
+- `testdata/cold-reading/order/` is the order-adversarial corpus: six records
+  whose names sort one way by byte, another by case-folded comparison, a third by
+  numeric suffix and a fourth by path component, materialised in a creation order
+  that is none of the four. `TestFixtureOrderIsAdversarial` asserts those
+  disagreements hold, so the order oracle cannot pass by coincidence. The shared
+  baseline corpus alone cannot catch a numeric-suffix comparator, nor a
+  component-wise one — which is the order a directory walk yields, and so the
+  likeliest wrong order of the four; this corpus catches both.
+- `nonVacuous` refuses an assembly that has lost that corpus — by path in the
+  manifest **and** by its own text in the bundle — rather than a bare "any item"
+  floor, which a bundle of empty texts satisfies exactly.
+- The two runs are required to report **different run identifiers**, so the
+  comparison is over two invocations rather than one artefact read twice. One
+  repeat is allowed before that is believed: an identifier is a one-second stamp
+  and a uniform four-digit draw, so a single collision is a documented outcome of
+  the mint and only a second one is evidence.
+- `TestComparatorReportsADifference` feeds the comparator artefacts that differ
+  only in item order, only in one item's scalar, and only in the artefact header,
+  and demands a reported difference naming the item that differs.
+
 ## Running them
 
 Both lanes sit behind the `smoke` build tag so they stay out of the fast
