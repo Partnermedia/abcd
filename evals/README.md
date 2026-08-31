@@ -40,9 +40,10 @@ read the assembler's own include table could only ever confirm the table.
 
 `testdata/cold-reading/baseline/` holds every plant in its canonical home;
 `holed/` is the negative control, holding the replacement content for the two
-files a relocated plant lands in; `home/` is the fixture HOME carrying the
-planted transcript store, keyed on the fixture's root-commit sha at
-materialisation.
+files a relocated plant lands in; `refused/` holds the shapes the exclusion
+floor cannot redact and must therefore refuse, one variant directory each;
+`home/` is the fixture HOME carrying the planted transcript store, keyed on the
+fixture's root-commit sha at materialisation.
 
 ### What keeps it from passing vacuously
 
@@ -68,11 +69,22 @@ floor, and each excluded heading, which needs a home on a record type that
 travels whole (on a projected type the projection keeps the heading out whatever
 the floor says, so its exclusion cannot be falsified there).
 
+The exclusion floor's **fail-closed half** needs a corpus of its own, because a
+leak cannot reach it: removing a refusal admits nothing new against material with
+nothing to refuse, so the whole redaction verifier could be deleted with this
+lane green. `refused/` is that corpus — a file the include table admits whole,
+carrying an excluded heading in a form the section scan does not report, so the
+redactor has no span to delete. `TestTheAssemblerRefusesAnUnredactableShape`
+requires the run to be refused and the refusal to name the heading; when the
+guard goes, the same binary exits 0 and the test reads the leaked token back out
+of the bundle.
+
 `coldreading_coverage_test.go` is the matrix: one row per rule, the mutation that
 removes it, and the plants that die. A rule no mutation can falsify carries its
 reason in `Gap` rather than being quietly omitted, and
-`TestEveryAssemblerRuleHasAFalsifier` fails if a row names a plant that has gone,
-if a plant is named by no row, or if the number of declared gaps changes.
+`TestEveryAssemblerRuleHasAFalsifier` fails if a row names a plant or a refusal
+that has gone, if either is named by no row, or if the number of declared gaps
+changes.
 
 ## The amnesia eval
 

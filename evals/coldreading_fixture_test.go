@@ -214,6 +214,42 @@ var sentinelClasses = []sentinelClass{
 		Why:   "itd-183, ruling (18): a reading never receives the include table that decides what it sees",
 	},
 	{
+		Name: "UNMATCHED-KIND",
+		Homes: []string{
+			"repo:.abcd/development/brief/01-product/07-working-notes.txt",
+			"repo:working-notes.txt",
+		},
+		Count: 2,
+		Why: "itd-183 assembler rule 1: inclusion is positive at FILE grain as well as at " +
+			"directory grain. A file whose extension no include row names is absent for the " +
+			"same reason a family the table does not name is — and the two homes are the two " +
+			"grains it has to hold at, one inside a named source and one under the root rows, " +
+			"which reach every undenied path in the tree",
+	},
+	{
+		Name:  "NESTED-SECTION",
+		Homes: []string{"repo:.abcd/development/specs/open/spc-1-a-design-record.md"},
+		Count: 1,
+		Why: "itd-183 exclusion list: an excluded heading never travels, and what it names is " +
+			"the SECTION — everything down to the next heading of its own level or shallower. " +
+			"A subsection of Open Questions is Open Questions",
+	},
+	{
+		Name:  "BLOCK-SCALAR",
+		Homes: []string{"repo:.abcd/development/intents/disciplines/itd-4-selection-criteria.md"},
+		Count: 1,
+		Why: "itd-183 exclusion list: origin never travels, and an excluded key's VALUE is the " +
+			"warm thing. A block scalar carries it on continuation lines, blank lines inside " +
+			"the block included, so a floor that took the key line alone would leave the value",
+	},
+	{
+		Name:  "DENIED-CASE",
+		Homes: []string{"repo:docs/Agents/note.md"},
+		Count: 1,
+		Why: "itd-183 assembler rule 1: the deny is structural over every path component, so a " +
+			"component spelling a denied namespace in another case is the denied namespace",
+	},
+	{
 		Name:   "DRAFT-BODY",
 		Homes:  []string{"repo:.abcd/development/intents/drafts/itd-2-a-draft-intent.md"},
 		Count:  1,
@@ -269,6 +305,80 @@ var holes = []hole{
 		To:    "docs/reference/thing.md",
 		Why:   "the shipped tree's delivered documentation is admitted wholesale",
 	},
+}
+
+// refusedPrefix is the shape a refusal plant's token takes. It is deliberately
+// NOT sentinelPrefix: a sentinel class is counted against the baseline corpus by
+// the anti-vacuity guard, and this material is never in the baseline — a corpus
+// carrying it cannot be assembled at all, which is the behaviour under test.
+const refusedPrefix = "ABCD-EVAL-REFUSED-"
+
+// refusal is one shape the key-and-heading floor cannot REDACT and therefore
+// refuses: a file the include table admits WHOLE, carrying an excluded heading
+// in a form the section scan does not report, so the redactor has no span to
+// delete and the fail-closed half is the only thing standing between the warm
+// text and the bundle.
+//
+// It is what makes that half falsifiable. The floor's redacting half is
+// falsified by a leak; its refusing half cannot be, because removing a refusal
+// admits nothing new against a corpus with nothing to refuse. So the corpus
+// grows a shape that MUST be refused, and the falsifier is the refusal going
+// away — at which point the same binary exits 0 with the token in the bundle.
+type refusal struct {
+	// Name is the variant directory under testdata/cold-reading/refused/.
+	Name string
+	// Path is the repo-relative file replaced. Its replacement content lives at
+	// refused/<Name>/<Path>.
+	Path string
+	// Token is the warm token the refusal keeps out of the bundle.
+	Token string
+	// Names are fragments the refusal message must carry, so a refusal for some
+	// unrelated reason cannot be read as this one.
+	Names []string
+	// Falsifier is the assembler mutation that removes the refusal.
+	Falsifier string
+	// Why states what the redactor cannot do about the shape.
+	Why string
+}
+
+// refusals is the refusal corpus: one entry per unredactable shape.
+var refusals = []refusal{
+	{
+		Name:  "setext",
+		Path:  ".abcd/development/brief/02-constraints/03-invariants.md",
+		Token: refusedPrefix + "SETEXT",
+		Names: []string{
+			".abcd/development/brief/02-constraints/03-invariants.md",
+			"underlines the excluded heading",
+			"Audit Notes",
+		},
+		Falsifier: "delete the verifyRedaction call from redactExcluded",
+		Why: "a setext underline turns the line above it into a heading, and the section scan " +
+			"does not model setext at all, so the redactor sees prose where every renderer and " +
+			"every reader sees the excluded heading",
+	},
+	{
+		Name:  "rendered",
+		Path:  ".abcd/development/brief/glossary/core/construal.md",
+		Token: refusedPrefix + "RENDERED",
+		Names: []string{
+			".abcd/development/brief/glossary/core/construal.md",
+			"still carries the excluded heading",
+			"Audit Notes",
+		},
+		Falsifier: "make sameRendering return false",
+		Why: "the redactor's own span lookup compares the normalised title exactly, which the " +
+			"emphasis marks defeat; the equality that recognises `## **Audit Notes**` as the " +
+			"excluded heading exists on the refusal path alone",
+	},
+}
+
+// apply replaces the refusal's file in a materialised tree.
+func (r refusal) apply(t *testing.T, root string) {
+	t.Helper()
+	copyFile(t,
+		filepath.Join(refusedDir, r.Name, filepath.FromSlash(r.Path)),
+		filepath.Join(root, filepath.FromSlash(r.Path)))
 }
 
 // carrier is one plant-bearing file the include table admits, and the positions
@@ -454,6 +564,7 @@ const (
 	corpusDir      = "testdata/cold-reading"
 	baselineDir    = corpusDir + "/baseline"
 	holedDir       = corpusDir + "/holed"
+	refusedDir     = corpusDir + "/refused"
 	fixtureHomeDir = corpusDir + "/home"
 	// rootSHAPlaceholder is the directory name the fixture home carries where
 	// the transcript store keys on the repository's root-commit sha. The sha
@@ -477,11 +588,15 @@ type fixture struct {
 	Variant string
 }
 
+// treeEdit is one further edit applied to a materialised tree BEFORE it is
+// committed, so whatever it writes is tracked and the assembler can see it.
+type treeEdit func(t *testing.T, root string)
+
 // materialise copies the corpus into a temporary directory, applies the
-// variant's holes, commits it under a fixture identity in a reserved example
-// domain, and plants the transcript store in a temporary HOME keyed on the
-// resulting root-commit sha.
-func materialise(t *testing.T, variant string) fixture {
+// variant's holes and any further edits, commits it under a fixture identity in
+// a reserved example domain, and plants the transcript store in a temporary HOME
+// keyed on the resulting root-commit sha.
+func materialise(t *testing.T, variant string, edits ...treeEdit) fixture {
 	t.Helper()
 	requireOracleTables(t)
 	base := t.TempDir()
@@ -500,6 +615,9 @@ func materialise(t *testing.T, variant string) fixture {
 				filepath.Join(holedDir, filepath.FromSlash(h.To)),
 				filepath.Join(f.Root, filepath.FromSlash(h.To)))
 		}
+	}
+	for _, edit := range edits {
+		edit(t, f.Root)
 	}
 	gitCommitFixture(t, f.Root)
 	f.RootSHA = rootCommit(t, f.Root)
