@@ -32,6 +32,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/intentdriven/abcd/internal/core/frontmatter"
 	"github.com/intentdriven/abcd/internal/core/issueschema"
 	"github.com/intentdriven/abcd/internal/core/recordid"
 )
@@ -1243,6 +1244,26 @@ func checkIssueRecordShape(r schemaRecord, severity string, judged map[string]bo
 		}
 	}
 
+	// grounds: the record BODY is where they live, as the append-only
+	// `## Grounds` section core/grounds holds for both record families. A
+	// frontmatter `grounds:` is therefore a MISPLACED value, and the gate blocks
+	// it and names the section.
+	//
+	// The key is still in the reader's allow-list, so a record carrying it reads
+	// perfectly well and stays visible to every capture surface — it is the VALUE
+	// that goes unread, which is the whole reason this has to be a gate rather
+	// than a reader refusal. A refusal would make the reader skip the record, and
+	// a record nothing can see is a worse outcome than a value nothing reads.
+	//
+	// The value's own spelling is deliberately not judged. Nothing parses it any
+	// more, so a well-formed one and a malformed one are equally unread, and a
+	// second finding about the grammar of a value that has no consumer would send
+	// the operator to fix the wrong thing. The remedy is the same either way:
+	// move it into the section.
+	if groundsField, present := r.fields["grounds"]; present {
+		add("grounds", groundsField.line, "grounds is in frontmatter; a frontmatter scalar is SET, so a later triage route overwrites the conjecture an earlier one recorded — grounds are appended as `- <token>: <text>` bullets under a `## Grounds` heading in the record body, and a frontmatter value is read by nothing")
+	}
+
 	// lapsed_at: required exactly when the category is lapse, and an RFC 3339
 	// instant whenever it is present. Both halves read the ONE shared definition in
 	// core/issueschema, the same one capture's validateStrict reads, so this gate
@@ -1341,6 +1362,26 @@ func issueScalar(value string) string {
 	v := strings.TrimSpace(value)
 	if len(v) >= 2 && (v[0] == '"' || v[0] == '\'') && v[len(v)-1] == v[0] {
 		v = v[1 : len(v)-1]
+	}
+	return v
+}
+
+// readerScalar decodes a frontmatter scalar EXACTLY as capture's decodeScalar
+// does — the same shape test here, then the SAME decoder, frontmatter.Unquote,
+// which both call: a matched pair of DOUBLE quotes is removed and its backslash
+// escaping reversed; anything else — a single-quoted value included — is the bare token it
+// spells, quote characters and all.
+//
+// It exists beside issueScalar rather than replacing it because the two answer
+// different questions. issueScalar compares an enum leniently, where a
+// single-quoted `severity: 'minor'` is a spelling nobody needs a finding about.
+// A free-text value is different: the quote character survives into the value the
+// reader parses, so a gate that strips it judges a string that never existed
+// (iss-2608300927577163).
+func readerScalar(value string) string {
+	v := strings.TrimSpace(value)
+	if len(v) >= 2 && strings.HasPrefix(v, `"`) && strings.HasSuffix(v, `"`) {
+		return frontmatter.Unquote(v[1 : len(v)-1])
 	}
 	return v
 }

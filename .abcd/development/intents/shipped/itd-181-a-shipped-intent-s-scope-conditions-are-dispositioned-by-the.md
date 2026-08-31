@@ -107,3 +107,7 @@ Gap audit:
   - Agent-produced rationale, narrowing and evidence refs reach the committed record without the redaction primitive (pre-existing convention, inherited by the new fields)
     evidence: .abcd/work/issues/open/iss-2608300924205748-audit-ingest-writes-agent-prose-unredacted.md:11 — "applies no privacy scanner to agent-produced prose"
     evidence: internal/core/intent/audit.go:892 — "func renderDispositions(b *strings.Builder, conds []verdictCondition) {"
+
+## Grounds
+
+- pursued: Pursued now because the difference between what an intent assumed and what held is itself a finding, and it is currently unrecorded: the audit can compare promise to delivery but has nowhere to say that a condition the design leaned on turned out false. It rides with spc-55 because the identity it keys on has no other consumer, and a mechanism with no consumer is scaffolding.

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/changelog"
+	"github.com/intentdriven/abcd/internal/core/grounds"
 	"github.com/intentdriven/abcd/internal/core/provenance"
 	"github.com/intentdriven/abcd/internal/fsutil"
 )
@@ -253,6 +254,18 @@ func Resolve(req ResolveRequest) (TransitionResult, error) {
 	if err != nil {
 		return TransitionResult{}, err
 	}
+	// Validated BEFORE the move, like the impact: a resolution is a conjecture
+	// being closed, and recording the route without the reasoning is the thing
+	// itd-179 exists to stop. resolveRoots is called for the redactor's repo root
+	// alone — the transition below resolves them again for the move itself.
+	rr, _, err := resolveRoots(req.RepoRoot, req.IssuesRoot)
+	if err != nil {
+		return TransitionResult{}, err
+	}
+	g, gRedacted, gDegraded, err := requireGrounds(rr, "resolve", req.Grounds)
+	if err != nil {
+		return TransitionResult{}, err
+	}
 	// Validated BEFORE the move, like every other member: the field's job is to
 	// take a record OUT of a release, so a value the derivation cannot read is
 	// worse than no value at all — it would sit in the ledger looking like an
@@ -286,12 +299,16 @@ func Resolve(req ResolveRequest) (TransitionResult, error) {
 		}
 		extras = append(extras, kv{"resolved_by", members})
 	}
-	res, err := transition(req.RepoRoot, req.IssuesRoot, req.ID, "resolution", req.Resolution,
-		extras, req.ProductionMode, StateResolved)
+	res, err := transition(req.RepoRoot, req.IssuesRoot, req.ID, "resolve", "resolution", req.Resolution,
+		extras, &g, req.ProductionMode, StateResolved)
 	if err != nil {
 		return TransitionResult{}, err
 	}
 	res.ResolvedBy = rb
+	res.Redacted += gRedacted
+	if res.Degraded == "" {
+		res.Degraded = gDegraded
+	}
 	return res, nil
 }
 
@@ -340,14 +357,36 @@ func resolveProvenance(req ResolveRequest) (*ResolvedBy, error) {
 // lines of documentation from the function to the regexp.
 var reShippedIn = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+$`)
 
-// Wontfix moves an open issue to wontfix/, writing the wontfix_reason note.
-// wontfix/ carries no impact (issue_impact_valid gates resolved/ only), so no
-// judgement is stamped.
+// Wontfix moves an open issue to wontfix/, writing the wontfix_reason note and
+// the `declined:` grounds derived from it. wontfix/ carries no impact
+// (issue_impact_valid gates resolved/ only), so no judgement is stamped.
+//
+// It needs no new required flag: transition already refuses an empty reason, so
+// a wontfix could never be recorded without grounds — what it lacked was the
+// TYPE. Grounds overrides the text when the conjecture is worth stating
+// separately from the user-facing reason.
 func Wontfix(req WontfixRequest) (TransitionResult, error) {
+	rr, _, err := resolveRoots(req.RepoRoot, req.IssuesRoot)
+	if err != nil {
+		return TransitionResult{}, err
+	}
+	g, gRedacted, gDegraded, err := wontfixGrounds(rr, req.Grounds, req.Reason)
+	if err != nil {
+		return TransitionResult{}, err
+	}
 	if err := validateRestampMode(req.ProductionMode); err != nil {
 		return TransitionResult{}, fmt.Errorf("wontfix: %w", err)
 	}
-	return transition(req.RepoRoot, req.IssuesRoot, req.ID, "wontfix_reason", req.Reason, nil, req.ProductionMode, StateWontfix)
+	res, err := transition(req.RepoRoot, req.IssuesRoot, req.ID, "wontfix", "wontfix_reason", req.Reason,
+		nil, &g, req.ProductionMode, StateWontfix)
+	if err != nil {
+		return TransitionResult{}, err
+	}
+	res.Redacted += gRedacted
+	if res.Degraded == "" {
+		res.Degraded = gDegraded
+	}
+	return res, nil
 }
 
 // validateRestampMode checks a declared restamp against the closed vocabulary
@@ -398,10 +437,16 @@ func restampField(fm map[string]any, issID, mode string) ([]kv, error) {
 // transition moves an open issue to target, setting the defining note field and
 // any extra frontmatter fields (e.g. resolved/'s impact) in one atomic write.
 //
+// verb is the command the caller is running, and it exists because the grounds
+// append needs it. Passing the target STATE instead made one command emit two
+// prefixes — `resolve: grounds refused` from the flag check and
+// `resolved: grounds refused` from the append — which reads as two different
+// commands failing (iss-2608301803425790).
+//
 // productionMode, when non-empty, restamps the record's production_mode in the
 // same write — and is refused against a record that carries no origin, before
 // anything is written (restampField).
-func transition(repoRoot, issuesRoot, issID, field, note string, extra []kv, productionMode string, target State) (TransitionResult, error) {
+func transition(repoRoot, issuesRoot, issID, verb, field, note string, extra []kv, g *grounds.Grounds, productionMode string, target State) (TransitionResult, error) {
 	rr, ir, err := resolveRoots(repoRoot, issuesRoot)
 	if err != nil {
 		return TransitionResult{}, err
@@ -459,6 +504,16 @@ func transition(repoRoot, issuesRoot, issID, field, note string, extra []kv, pro
 			} else {
 				newContent, err = setScalarField(newContent, f.key, f.val)
 			}
+			if err != nil {
+				return err
+			}
+		}
+		// The grounds entry is APPENDED to the body, not set in frontmatter, and
+		// it rides the same atomic write as the fields above. A record promoted
+		// before it was resolved carries both conjectures afterwards
+		// (iss-2608301657354776).
+		if g != nil {
+			newContent, err = appendGrounds(verb, newContent, *g)
 			if err != nil {
 				return err
 			}

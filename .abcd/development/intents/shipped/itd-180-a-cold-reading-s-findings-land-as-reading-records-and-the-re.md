@@ -285,3 +285,7 @@ Gap audit:
     evidence: .abcd/work/issues/resolved/iss-2608300257421526-itd-180-second-round-residue.md:10 — "schema.go states the reading stores' missing required fields as a gap the writer and review cover"
   - a fifth disposition state
     evidence: internal/core/issueschema/reading.go:146 — "The discrepancy is carried here, not resolved."
+
+## Grounds
+
+- pursued: Pursued now because the instrument's first run happens in this cycle, and a record written after the fact is precisely the retrospective reconstruction the ledger exists to prevent: unless the reading record and the disposition are two writes from the start, nothing can later show that a finding existed before it was answered. Ruling (2) settled the shape; the only remaining question was whether to build it before or after the first run, and after is too late.

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/frontmatter"
+	"github.com/intentdriven/abcd/internal/core/grounds"
 	"github.com/intentdriven/abcd/internal/core/recordid"
 	"github.com/intentdriven/abcd/internal/core/spec"
 )
@@ -19,11 +20,12 @@ const (
 	CheckScopeConditions    = "scope_conditions"
 	CheckSpecLink           = "spec_link"
 	CheckSpecBody           = "spec_body"
+	CheckGrounds            = "grounds"
 )
 
 // ReadyCheck is one finding of the implement-readiness gate.
 type ReadyCheck struct {
-	Name   string `json:"name"` // bucket | acceptance_criteria | mechanism_claim | scope_conditions | spec_link | spec_body
+	Name   string `json:"name"` // bucket | acceptance_criteria | mechanism_claim | scope_conditions | spec_link | spec_body | grounds
 	OK     bool   `json:"ok"`
 	Detail string `json:"detail"`           // why it passed or failed
 	Remedy string `json:"remedy,omitempty"` // the exact next command/action when !OK
@@ -38,7 +40,7 @@ type ReadyResult struct {
 	Bucket   string       `json:"bucket"` // directory-as-truth state
 	SpecID   string       `json:"spec_id"`
 	Ready    bool         `json:"ready"`
-	Checks   []ReadyCheck `json:"checks"` // always exactly 6, fixed order
+	Checks   []ReadyCheck `json:"checks"` // always exactly 7, fixed order
 	// Conditions is the record's scope conditions with their minted identities —
 	// the observable surface the identity criteria assert against. Empty for a
 	// record whose conditions are absent, or recorded as the nullity token.
@@ -97,6 +99,7 @@ func Ready(repoRoot, intentID string) (ReadyResult, error) {
 		return ReadyResult{}, err
 	}
 	res.Checks = append(res.Checks, bodyCheck)
+	res.Checks = append(res.Checks, groundsCheck(it, content))
 
 	res.Ready = true
 	for _, c := range res.Checks {
@@ -274,6 +277,52 @@ func scopeConditionsCheck(it Intent, claims Claims) ReadyCheck {
 	return c
 }
 
+// groundsCheck reports the record's recorded grounds — the reasoning behind
+// what is being pursued, at the conjecture granularity the ADR family's
+// Alternatives Considered does not reach (spc-57). It is reported LAST, because
+// it is the only check about why the work is being done at all rather than about
+// whether the record is well formed.
+//
+// It REFUSES, forward-only, and the flip is not free: measured at the branch
+// tip, 10 of the 66 planned/ records carry an entry, 56 fail this check, and 36
+// of those were READY before the promotion and are NOT READY after it. Records
+// planned before the argument existed fail it, and that is the finding, not a
+// defect: an unrecorded conjecture is exactly what this reports, and each of the
+// 36 records its grounds when it is next picked up — the moment the conjecture
+// is still known, which is the only moment it can be recorded honestly.
+//
+// Only a well-formed entry counts. Prose under the heading is prose: putting a
+// gate verdict on a sentence somebody wrote for a human is a judgement no parser
+// can make, and the substance floor is deliberately the whole of the machine's
+// claim.
+func groundsCheck(it Intent, content string) ReadyCheck {
+	c := ReadyCheck{Name: CheckGrounds, OK: true}
+	if detail, exempt := groundsCheckExemption(it); exempt {
+		c.Detail = detail
+		return c
+	}
+	entries := ParseGrounds(content)
+	if len(entries) == 0 {
+		c.OK = false
+		c.Detail = "no recorded grounds — the conjecture behind pursuing " + it.ID + " is unrecorded"
+		c.Remedy = groundsRemedy(it.ID)
+		return c
+	}
+	last := entries[len(entries)-1]
+	c.Detail = fmt.Sprintf("%d recorded ground(s), most recent %s", len(entries), last.Token)
+	return c
+}
+
+// groundsRemedy is the one spelling of how a ground is recorded, so the gate and
+// the surfaces name the same command and the same closed vocabulary. It asks for
+// the expectation AND its falsifier, because that is the difference between a
+// conjecture and a restatement of the decision — the part no parser can check.
+func groundsRemedy(intentID string) string {
+	return "run `abcd intent ready " + intentID +
+		" --grounds \"" + string(grounds.Pursued) + ": <what is expected, and what would show it wrong>\"` " +
+		"(vocabulary: " + grounds.ProseList() + ") — name the conjecture being acted on, not the route taken"
+}
+
 // claimCheckExemption reports the buckets where a claim check has nothing to
 // ask for, and the detail that says why. Discipline records carry no claim
 // sections at all; a shipped or superseded record is never backfilled (spc-55
@@ -291,11 +340,32 @@ func claimCheckExemption(it Intent) (string, bool) {
 	return "", false
 }
 
-// The two strings both claim checks share, so the exemption and the remedy read
-// identically wherever they are reported.
+// groundsCheckExemption reports the buckets where the GROUNDS check has nothing
+// to ask for. The buckets are claimCheckExemption's, and for the same reasons,
+// but the detail names grounds rather than claims: reusing the claim string made
+// the grounds row of a shipped record report "a shipped record's CLAIMS are
+// never backfilled", which is a true sentence about a check that is not the one
+// reporting it (iss-2608301657350399, the detail-string class of the resolved
+// iss-2608300210588414).
+func groundsCheckExemption(it Intent) (string, bool) {
+	switch it.Bucket {
+	case BucketDisciplines:
+		return disciplineGroundsExemption, true
+	case BucketShipped, BucketSuperseded:
+		return "not applicable — a " + it.Bucket + " record's grounds are never backfilled", true
+	}
+	return "", false
+}
+
+// The strings the claim checks and the grounds check share, so an exemption and
+// a remedy read identically wherever they are reported.
 const (
 	disciplineClaimExemption = "not applicable — discipline records carry no claim sections"
-	scopeConditionsRemedy    = "write the conditions this claim holds under as top-level bullets under '## Scope Conditions', or record the exact token `None stated.` alone on its line"
+	// A discipline record is exempt for a different reason than a terminal one:
+	// it has no conjecture of its own to record, rather than a window that has
+	// closed. The two exemption strings say the two different things.
+	disciplineGroundsExemption = "not applicable — a discipline record carries no conjecture of its own"
+	scopeConditionsRemedy      = "write the conditions this claim holds under as top-level bullets under '## Scope Conditions', or record the exact token `None stated.` alone on its line"
 )
 
 // joinInts renders condition ordinals for a finding.

@@ -64,8 +64,6 @@ var (
 	fmKeyRe = regexp.MustCompile(`^([A-Za-z0-9_]+):(.*)$`)
 	// acHeadingRe matches the `## Acceptance Criteria` heading (any heading depth).
 	acHeadingRe = regexp.MustCompile(`^#{1,6}\s+Acceptance Criteria\s*$`)
-	// headingRe matches any markdown ATX heading line.
-	headingRe = regexp.MustCompile(`^#{1,6}\s`)
 )
 
 // Intent is one intent record. Bucket is the directory it was found in; Path is

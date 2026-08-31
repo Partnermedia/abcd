@@ -24,6 +24,7 @@ import (
 	"github.com/intentdriven/abcd/internal/core"
 	"github.com/intentdriven/abcd/internal/core/ahoy"
 	"github.com/intentdriven/abcd/internal/core/capture"
+	"github.com/intentdriven/abcd/internal/core/grounds"
 	"github.com/intentdriven/abcd/internal/core/history"
 	"github.com/intentdriven/abcd/internal/core/identity"
 	"github.com/intentdriven/abcd/internal/core/intent"
@@ -1599,20 +1600,57 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 	// machine seam an autonomous run gates on: 0 ready, 1 not ready (the rendered
 	// report is the output, empty message — the embark-conflicts precedent), 2
 	// structural fault.
-	intentCmd.AddCommand(&cobra.Command{
-		Use:   "ready <itd-N>",
-		Short: "Report whether an intent is ready to implement (planned + AC + claims + written spec); exit 1 when not",
+	//
+	// --grounds is wired here as TWO calls rather than as a parameter of the gate:
+	// intent.Ready is documented and tested as a reporter that never mutates the
+	// store, and that contract is worth more than flag placement (spc-57). So the
+	// flag records first through intent.RecordGrounds and then reports through the
+	// unchanged Ready. A failed write is a STRUCTURAL fault (exit 2), never the
+	// gate's own exit 1: a caller that maps 1 to SKIP must not read a lost write
+	// as a skipped item.
+	var readyGrounds string
+	readyCmd := &cobra.Command{
+		Use:   "ready <itd-N> [--grounds \"" + grounds.UsageSpelling() + ": <conjecture>\"]",
+		Short: "Report whether an intent is ready to implement (planned + AC + claims + written spec + recorded grounds); exit 1 when not",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
 			if err != nil {
 				return err
 			}
+			var recorded *intent.GroundsResult
+			if strings.TrimSpace(readyGrounds) != "" {
+				g, perr := grounds.Parse(readyGrounds)
+				if perr != nil {
+					return &exitError{Code: 2, Msg: "abcd intent ready: " + perr.Error() + " (nothing recorded)"}
+				}
+				rec, rerr := intent.RecordGrounds(cwd, args[0], g)
+				if rerr != nil {
+					return &exitError{Code: 2, Msg: "abcd intent ready: " + rerr.Error()}
+				}
+				recorded = &rec
+				// The receipt is emitted HERE, before the gate is consulted. A
+				// structural fault in the gate exits 2 carrying no result at all, and
+				// a caller who never learns the write happened retries and appends a
+				// second entry to a record that is append-only by design
+				// (iss-2608300930057882). In --json the receipt goes to stderr, so
+				// stdout stays a single machine payload and the news still survives a
+				// fault that emits no envelope.
+				emitGroundsReceipt(cmd, *asJSON, rec)
+			}
 			res, err := intent.Ready(cwd, args[0])
 			if err != nil {
 				return &exitError{Code: 2, Msg: "abcd intent ready: " + err.Error()}
 			}
-			if rerr := render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+			// With the flag, the payload is an envelope carrying BOTH halves: the
+			// write the flag performed and the report the verb makes. Without it the
+			// payload is the readiness result unchanged, so no existing consumer's
+			// shape moves under it.
+			var payload any = res
+			if recorded != nil {
+				payload = readyGroundsEnvelope{Grounds: recorded, Ready: res}
+			}
+			if rerr := render(cmd.OutOrStdout(), *asJSON, payload, func(w io.Writer) {
 				verdict := "READY"
 				if !res.Ready {
 					verdict = "NOT READY"
@@ -1648,7 +1686,10 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 			}
 			return nil
 		},
-	})
+	}
+	readyCmd.Flags().StringVar(&readyGrounds, "grounds", "",
+		"record the conjecture behind this gate decision: \""+grounds.UsageSpelling()+": <what is expected, and what would show it wrong>\"")
+	intentCmd.AddCommand(readyCmd)
 
 	// link <itd-N> <spc-N> — retroactively set spec_id on a planned intent.
 	intentCmd.AddCommand(&cobra.Command{
@@ -2616,9 +2657,10 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	// resolve — open -> resolved with a note, a required product impact, and
 	// optional resolved_by provenance (spc-25): the intent, spec, or commit
 	// that fixed it.
-	var resolveImpact, resolveByIntent, resolveBySpec, resolveByCommit, resolveShippedIn, resolveModeRestamp string
+	var resolveImpact, resolveByIntent, resolveBySpec, resolveByCommit, resolveShippedIn string
+	var resolveGrounds, resolveModeRestamp string
 	resolveCmd := &cobra.Command{
-		Use:   "resolve <iss-N> <note> --impact <additive|breaking|fix|internal> [--intent itd-N] [--spec spc-N] [--commit sha] [--shipped-in vX.Y.Z]",
+		Use:   "resolve <iss-N> <note> --impact <additive|breaking|fix|internal> --grounds \"<token>: <text>\" [--intent itd-N] [--spec spc-N] [--commit sha] [--shipped-in vX.Y.Z]",
 		Short: "Mark an open issue resolved (open/ -> resolved/), optionally naming what fixed it",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -2626,16 +2668,21 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if err := requireGroundsFlag("resolve", resolveGrounds); err != nil {
+				return err
+			}
 			res, err := capture.Resolve(capture.ResolveRequest{
 				RepoRoot: cwd, ID: args[0], Resolution: args[1], Impact: resolveImpact,
 				ByIntent: resolveByIntent, BySpec: resolveBySpec, ByCommit: resolveByCommit,
-				ShippedIn: resolveShippedIn, ProductionMode: resolveModeRestamp,
+				ShippedIn: resolveShippedIn, Grounds: resolveGrounds,
+				ProductionMode: resolveModeRestamp,
 			})
 			if err != nil {
-				return err
+				return groundsUsageError("resolve", err)
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				fmt.Fprintf(w, "%s  %s -> %s — %s%s\n", res.ID, res.FromStatus, res.ToStatus, termsafe.Sanitize(res.Path), resolvedByNote(res.ResolvedBy))
+				emitRedactionNote(w, res.Redacted, res.Degraded)
 			})
 		},
 	}
@@ -2646,6 +2693,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	// tree's no-required-flags invariant (TestLiveTreeMarksNoFlagRequired): the
 	// requirement is enforced semantically in the core, not by a usage annotation.
 	resolveCmd.Flags().StringVar(&resolveImpact, "impact", "", "product impact: additive|breaking|fix|internal (required)")
+	resolveCmd.Flags().StringVar(&resolveGrounds, "grounds", "", groundsFlagUsage)
 	resolveCmd.Flags().StringVar(&resolveByIntent, "intent", "", "resolved_by provenance: the itd-N that fixed it (must exist)")
 	resolveCmd.Flags().StringVar(&resolveBySpec, "spec", "", "resolved_by provenance: the spc-N that fixed it (must exist)")
 	resolveCmd.Flags().StringVar(&resolveByCommit, "commit", "", "resolved_by provenance: the fixing commit sha (7-64 hex chars, shape-checked only)")
@@ -2669,15 +2717,25 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	// promoted_to in one invocation; --intent is the stamp-only repair/link
 	// mode. The issue keeps its status folder — promotion is not resolution —
 	// and an undispositioned rdi-N is refused before anything is minted.
-	var promoteIntent, promoteProductionMode string
+	var promoteIntent, promoteGrounds, promoteProductionMode string
 	promoteCmd := &cobra.Command{
-		Use:   "promote <iss-N|rdi-N>",
+		Use:   "promote <iss-N> --grounds \"<token>: <text>\" | promote <rdi-N>",
 		Short: "Graduate an issue or a dispositioned reading item into an intent draft (mints + stamps promoted_to)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
 			if err != nil {
 				return err
+			}
+			// The grounds argument belongs to the ISSUE route, which has no
+			// other place to say why the conjecture is being pursued. A reading
+			// item records that in its DISPOSITION, a separate record promote
+			// already refuses to act without, so demanding a second conjecture
+			// here would collect a value nothing writes.
+			if !strings.HasPrefix(args[0], issueschema.ReadingItemFamily+"-") {
+				if err := requireGroundsFlag("promote", promoteGrounds); err != nil {
+					return err
+				}
 			}
 			// The mode belongs to the DRAFT this mints; stamp-only mode mints
 			// nothing, so it carries none.
@@ -2686,10 +2744,11 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 				return err
 			}
 			res, err := capture.Promote(capture.PromoteRequest{
-				RepoRoot: cwd, ID: args[0], LinkIntent: promoteIntent, ProductionMode: mode,
+				RepoRoot: cwd, ID: args[0], LinkIntent: promoteIntent, Grounds: promoteGrounds,
+				ProductionMode: mode,
 			})
 			if err != nil {
-				return err
+				return groundsUsageError("promote", err)
 			}
 			emitMintWarning(cmd, res.MintWarning)
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
@@ -2702,10 +2761,12 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 				fmt.Fprintf(w, "%s (%s, %s) promoted — %s %s — %s\n",
 					res.IssueID, res.IssueStatus, termsafe.Sanitize(res.IssuePath),
 					verb, res.IntentID, termsafe.Sanitize(res.IntentPath))
+				emitRedactionNote(w, res.Redacted, res.Degraded)
 			})
 		},
 	}
 	promoteCmd.Flags().StringVar(&promoteIntent, "intent", "", "stamp-only mode: link this existing itd-N instead of minting a draft")
+	promoteCmd.Flags().StringVar(&promoteGrounds, "grounds", "", groundsFlagUsage)
 	promoteCmd.Flags().StringVar(&promoteProductionMode, "production-mode", "", productionModeFlagHelp)
 	captureCmd.AddCommand(promoteCmd)
 
@@ -2766,10 +2827,14 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	dispositionCmd.Flags().StringVar(&dispHoldMoscow, "hold-moscow", "", "RESERVED (dormant): must | should | could | wont; a populated value is refused until activation is ruled")
 	captureCmd.AddCommand(dispositionCmd)
 
-	// wontfix — open -> wontfix with a reason.
-	var wontfixProductionMode string
+	// wontfix — open -> wontfix with a reason. It needs no required --grounds:
+	// the reason is already mandatory, so a wontfix could never be recorded
+	// without grounds — what it lacked was the TYPE, which it stamps as
+	// `declined: <reason>`. The flag overrides the TEXT for the case where the
+	// conjecture is worth stating separately from the user-facing reason.
+	var wontfixGrounds, wontfixProductionMode string
 	wontfixCmd := &cobra.Command{
-		Use:   "wontfix <iss-N> <reason>",
+		Use:   "wontfix <iss-N> <reason> [--grounds \"declined: <text>\"]",
 		Short: "Record an explicit non-action decision (open/ -> wontfix/)",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -2778,21 +2843,114 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 				return err
 			}
 			res, err := capture.Wontfix(capture.WontfixRequest{
-				RepoRoot: cwd, ID: args[0], Reason: args[1], ProductionMode: wontfixProductionMode,
+				RepoRoot: cwd, ID: args[0], Reason: args[1], Grounds: wontfixGrounds,
+				ProductionMode: wontfixProductionMode,
 			})
 			if err != nil {
-				return err
+				return groundsUsageError("wontfix", err)
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				fmt.Fprintf(w, "%s  %s -> %s — %s\n", res.ID, res.FromStatus, res.ToStatus, termsafe.Sanitize(res.Path))
+				emitRedactionNote(w, res.Redacted, res.Degraded)
 			})
 		},
 	}
+	// No backticks: cobra's UnquoteUsage reads the first backquoted word as the
+	// flag's value placeholder and strips it from the prose, which printed
+	// `--grounds declined` and lost the word (iss-2608301212428844).
+	wontfixCmd.Flags().StringVar(&wontfixGrounds, "grounds", "",
+		"override the recorded grounds text (the token stays declined — a wontfix IS that non-action)")
 	wontfixCmd.Flags().StringVar(&wontfixProductionMode, "production-mode", "",
 		"restamp how this record's text was produced: "+provenance.ModeList()+" (default: leave the record's existing stamp alone; refused on a record that predates disclosure)")
 	captureCmd.AddCommand(wontfixCmd)
 
 	return captureCmd
+}
+
+// readyGroundsEnvelope is `abcd intent ready --grounds --json`'s payload: the
+// grounds write beside the readiness report.
+//
+// It exists because the plugin surface tells the host to report the redaction
+// count, and the redaction-is-never-silent promise cannot be kept by a stderr
+// line on the plane a machine consumer reads. Without the flag the payload stays
+// the bare ReadyResult, so the envelope appears exactly when there is a write to
+// describe (iss-2608300930057882).
+//
+// There is deliberately no `degraded` member. The intent-side redactor is
+// FAIL-CLOSED: a scanner that cannot be built, or whose pattern set a per-repo
+// override weakened, refuses the write and exits 2 rather than writing under a
+// weakened detector. The ledger's redactor degrades and reports, and carries the
+// member for it; here a degraded scanner is an error, and a member that could
+// only ever be empty would be a second promise nothing keeps.
+type readyGroundsEnvelope struct {
+	Grounds *intent.GroundsResult `json:"grounds"`
+	Ready   intent.ReadyResult    `json:"ready"`
+}
+
+// emitGroundsReceipt says that a record was written, on the plane the caller can
+// still read after a later fault: stdout in text mode (before the report), stderr
+// in --json mode (where stdout must stay a single machine payload).
+func emitGroundsReceipt(cmd *cobra.Command, asJSON bool, rec intent.GroundsResult) {
+	w := cmd.OutOrStdout()
+	if asJSON {
+		w = cmd.ErrOrStderr()
+	}
+	// The path is a corpus filename, attacker-shapeable in a hostile clone.
+	fmt.Fprintf(w, "abcd intent ready — recorded grounds on %s (%d entries)\n",
+		termsafe.Sanitize(rec.Path), rec.Entries)
+	if rec.Redacted > 0 {
+		fmt.Fprintf(w, "  redacted %d span(s) before writing (home paths and identifiers are never committed)\n",
+			rec.Redacted)
+	}
+}
+
+// groundsFlagUsage is the one spelling of the argument's help text, so promote
+// and resolve cannot describe the same closed vocabulary differently.
+var groundsFlagUsage = "REQUIRED — the conjecture being acted on, not the route taken: " +
+	"\"" + grounds.UsageSpelling() + ": <what is expected, and what would show it wrong>\""
+
+// groundsUsageError maps a core grounds refusal to exit 2, leaving every other
+// failure on its existing path.
+//
+// A MISSING --grounds exited 2 (the flag check above) while a MALFORMED one
+// exited 1, so a caller distinguishing usage errors from real failures learned
+// the wrong thing from the same flag (iss-2608300930057882). Both are one thing:
+// the argument was not usable and nothing was written. The core carries one
+// sentinel for the whole class, so this needs no second copy of the vocabulary,
+// the grammar, or the floor.
+func groundsUsageError(verb string, err error) error {
+	if errors.Is(err, capture.ErrGroundsRefused) {
+		return &exitError{Code: 2, Msg: "abcd capture " + verb + ": " + scrubPaths(err)}
+	}
+	return err
+}
+
+// requireGroundsFlag refuses a triage that names no grounds, at the CLI, as a
+// USAGE error (exit 2) with nothing written — the same shape `--category lapse`
+// without `--lapsed-at` already has. The core refuses the same call on its own
+// for every other caller; this is where a person typing the command learns it, in
+// flag terms rather than in property terms. Neither flag is marked
+// cobra-required, which would break the tree's no-required-flags invariant
+// (TestLiveTreeMarksNoFlagRequired): the requirement is semantic, not a usage
+// annotation.
+func requireGroundsFlag(verb, value string) error {
+	if strings.TrimSpace(value) != "" {
+		return nil
+	}
+	return &exitError{Code: 2, Msg: "abcd capture " + verb + " requires --grounds \"" + grounds.UsageSpelling() + ": <text>\" " +
+		"(nothing written — a triage records the conjecture being acted on, never only the route taken)"}
+}
+
+// emitRedactionNote says, on the human surface, that the written text differs
+// from the text handed in. Redaction is never silent: only the caller can judge
+// whether the rewritten record still says what they meant.
+func emitRedactionNote(w io.Writer, redacted int, degraded string) {
+	if redacted > 0 {
+		fmt.Fprintf(w, "  redacted %d span(s) before writing (home paths and identifiers are never committed)\n", redacted)
+	}
+	if degraded != "" {
+		fmt.Fprintf(w, "  WARNING: %s\n", termsafe.Sanitize(degraded))
+	}
 }
 
 // resolvedByNote renders the stamped provenance members for the resolve text

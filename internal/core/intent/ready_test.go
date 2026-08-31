@@ -48,11 +48,11 @@ func checkByName(t *testing.T, res ReadyResult, name string) ReadyCheck {
 	return ReadyCheck{}
 }
 
-// assertShape enforces the machine-shape contract: always exactly six rows in
+// assertShape enforces the machine-shape contract: always exactly seven rows in
 // fixed order, whatever the intent's state.
 func assertShape(t *testing.T, res ReadyResult) {
 	t.Helper()
-	want := []string{"bucket", "acceptance_criteria", "mechanism_claim", "scope_conditions", "spec_link", "spec_body"}
+	want := []string{"bucket", "acceptance_criteria", "mechanism_claim", "scope_conditions", "spec_link", "spec_body", "grounds"}
 	if len(res.Checks) != len(want) {
 		t.Fatalf("expected %d checks, got %d: %+v", len(want), len(res.Checks), res.Checks)
 	}
@@ -307,7 +307,7 @@ func TestReadyChecksOrderAndCount(t *testing.T) {
 // given bodies verbatim — the fixture the five gradient cases vary.
 func plannedWithClaims(mechanism, conditions string) string {
 	return "---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n" +
-		mechanism + conditions + "## Acceptance Criteria\n\n- ok\n"
+		mechanism + conditions + "## Acceptance Criteria\n\n- ok\n" + groundsSection
 }
 
 // readyWithClaims runs the gate over a planned record carrying the given claim
@@ -653,4 +653,125 @@ func researcherStamp(t *testing.T) provenance.Stamp {
 		t.Fatalf("NewStamp: %v", err)
 	}
 	return s
+}
+
+// groundsSection is the recorded-grounds section a green fixture carries, so a
+// test about the claim checks is not incidentally a test about the grounds one.
+const groundsSection = "\n## Grounds\n\n- pursued: we expect the recorded conjecture to outlive the session that had it\n"
+
+// TestReadyGroundsAbsentFails: with the recording path landed and the planned/
+// bucket populated, the check refuses. The remedy names the flag and the closed
+// vocabulary, so the report says exactly how to answer it.
+func TestReadyGroundsAbsentFails(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, plannedDir+"/itd-10-alpha.md", plannedUnlinked("itd-10", "alpha"))
+
+	res, err := Ready(root, "itd-10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertShape(t, res)
+	g := checkByName(t, res, CheckGrounds)
+	if g.OK {
+		t.Fatalf("grounds check = %+v, want a refusal on a record carrying none", g)
+	}
+	if !strings.Contains(g.Remedy, "--grounds") || !strings.Contains(g.Remedy, "pursued") {
+		t.Fatalf("grounds remedy = %q, want the flag and the vocabulary", g.Remedy)
+	}
+	if res.Ready {
+		t.Fatal("an intent with no recorded grounds must not be ready")
+	}
+}
+
+// TestReadyGroundsPresentPasses and TestReadyGroundsReportsEntries are one
+// assertion: a record carrying a well-formed entry passes, and the report says
+// how many are recorded.
+func TestReadyGroundsPresentPasses(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, plannedDir+"/itd-10-alpha.md",
+		plannedUnlinked("itd-10", "alpha")+
+			"\n## Grounds\n\n- pursued: we expect a stamped identity to survive rewording\n")
+
+	res, err := Ready(root, "itd-10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertShape(t, res)
+	g := checkByName(t, res, CheckGrounds)
+	if !g.OK {
+		t.Fatalf("grounds check = %+v, want OK on a record carrying an entry", g)
+	}
+	if !strings.Contains(g.Detail, "1 recorded ground") {
+		t.Fatalf("grounds detail = %q, want the entry count", g.Detail)
+	}
+}
+
+// TestReadyGroundsIgnoresMalformedEntry: prose under the heading is prose. Only
+// a well-formed entry counts, and the gate never puts a verdict on a sentence
+// somebody wrote for a human.
+func TestReadyGroundsIgnoresMalformedEntry(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, plannedDir+"/itd-10-alpha.md",
+		plannedUnlinked("itd-10", "alpha")+
+			"\n## Grounds\n\nSome prose about why this matters.\n\n- planned: not a vocabulary value\n")
+
+	res, err := Ready(root, "itd-10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g := checkByName(t, res, CheckGrounds); strings.Contains(g.Detail, "1 recorded ground") {
+		t.Fatalf("grounds detail = %q, want no entry counted", g.Detail)
+	}
+}
+
+// TestReadyGroundsExemptInTerminalBuckets: population is forward-only, so a
+// shipped or superseded record and a discipline are reported as not applicable
+// rather than told to record work nobody may do.
+func TestReadyGroundsExemptInTerminalBuckets(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, shippedDir+"/itd-10-alpha.md", plannedUnlinked("itd-10", "alpha"))
+	writeFile(t, root, disciplinesDir+"/itd-11-beta.md", plannedUnlinked("itd-11", "beta"))
+
+	for _, id := range []string{"itd-10", "itd-11"} {
+		res, err := Ready(root, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		g := checkByName(t, res, CheckGrounds)
+		if !g.OK || !strings.Contains(g.Detail, "not applicable") {
+			t.Fatalf("%s grounds check = %+v, want the not-applicable exemption", id, g)
+		}
+	}
+}
+
+// TestGroundsExemptionIsNotTheClaimExemption is the third nit of
+// iss-2608301657350399: groundsCheck reused claimCheckExemption, so the grounds
+// row of a shipped record reported "a shipped record's CLAIMS are never
+// backfilled" — a true sentence about a check that is not the one reporting it,
+// the same detail-string class as the resolved iss-2608300210588414.
+//
+// The assertion is that the two rows do not report the SAME STRING, not that the
+// grounds row avoids some particular word. One string doing two jobs is the
+// defect itself, and identity is what no rewording of either sentence can
+// satisfy while the reuse is still there.
+func TestGroundsExemptionIsNotTheClaimExemption(t *testing.T) {
+	for _, bucket := range []string{BucketShipped, BucketSuperseded, BucketDisciplines} {
+		it := Intent{ID: "itd-1", Bucket: bucket}
+		got := groundsCheck(it, "")
+		if !got.OK {
+			t.Fatalf("%s: the grounds row is exempt, so it must pass: %+v", bucket, got)
+		}
+		claim, exempt := claimCheckExemption(it)
+		if !exempt {
+			t.Fatalf("%s: the claim check is expected to be exempt here too", bucket)
+		}
+		if got.Detail == claim {
+			t.Errorf("%s: the grounds row reports the CLAIM check's exemption verbatim: %q", bucket, got.Detail)
+		}
+		// And it says what it is about, so the fix is a different sentence rather
+		// than an empty one.
+		if !strings.Contains(got.Detail, "grounds") && !strings.Contains(got.Detail, "conjecture") {
+			t.Errorf("%s: the grounds row names neither grounds nor the conjecture: %q", bucket, got.Detail)
+		}
+	}
 }

@@ -25,6 +25,27 @@ plugin surface, and a future MCP server share one engine.
   carries, and a record they disagree about is one that sits in the ledger unread
   by every surface. It is not inside `core/capture` because that package's own
   tests import `core/lint`, so a lint importing capture back is an import cycle.
+- **`core/grounds/`** — the recorded-grounds vocabulary and its record form: the
+  three values (`pursued`, `deferred`, `declined`), the `<token>: <text>` grammar,
+  the substance floor that refuses a degenerate text, and the append-only
+  `## Grounds` section both record families accumulate entries in. A leaf on the
+  `core/issueschema` precedent, because three sites record grounds — the intent
+  record writer (`core/intent`), the ledger writer (`core/capture`), and the
+  committed-record gate that reads them back (`core/lint`) — and a vocabulary
+  spelled three times is one the three can disagree about. It holds a FLOOR, not
+  a judgement: whether a text names a conjecture rather than restating the
+  decision is a review property, carried by the interview prompts on the plugin
+  surface, and this package claims nothing about it.
+- **`core/mdrecord/`** — the Markdown machinery a record BODY is read and written
+  through: which lines are live markdown and which lie inside a fence or an HTML
+  comment, where a section starts and stops, what a top-level bullet is, and
+  where a trailing run of link-reference definitions ends. A leaf on the
+  `core/grounds` precedent, because two record families carry the same
+  constructs — the intent record's scope conditions and audit notes
+  (`core/intent`), the issue record's grounds (`core/capture`) — and a body
+  reader spelled twice is one the two can disagree about, which is how a bullet
+  one writer appends becomes a bullet the other cannot find. It owns no heading's
+  meaning: a caller supplies the pattern it is looking for.
 - **`core/provenance/`** — the record's disclosure vocabulary: where an item came
   from (`origin`) and how its text was produced (`production_mode`), plus the one
   parser that reads and renders them. It is a leaf for the same reason

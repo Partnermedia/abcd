@@ -106,3 +106,7 @@ None stated.
   blindness core is byte-identical across all four.
 - **Given** any definition, **when** it is inspected, **then** its regime
   value is stated in the definition and not derivable from operator input.
+
+## Grounds
+
+- pursued: This conjecture is pursued now because one definition with four objects cannot hold: the prohibition against proposing is constitutive of the detection pass and would void the widening pass entirely, so the count of definitions has to be settled before anything is written that a reading would read against. The byte-identical core is the cheap guarantee that separating them by licence does not also separate them by blindness.

@@ -175,17 +175,6 @@ Every test below is watched red before the change and green after.
 - `TestFixtureOrderIsAdversarial` asserts the `order/` fixture's creation order
   is not its sorted order, so the order oracle cannot pass by coincidence.
 
-## Grounds (pursued)
-
-_Pre-tooling: recorded in the plan record until the grounds argument (itd-179) ships._
-
-Amnesia is a property of what the assembler passes, not an instruction an agent
-can be trusted to follow, and a case run could only ever exhibit it rather than
-prove it. It is pursued now because a case run is the scarcest thing in the
-cycle: making amnesia a repository eval leaves the closing run of Iteration 2
-carrying only the properties a case run can carry, purpose durability and
-convergence, and lets any reader check the rest for themselves.
-
 ## Out of scope
 
 - The assembler, its include table, its projection, and its manifest format:
