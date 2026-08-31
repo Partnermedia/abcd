@@ -176,6 +176,17 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 				OutputPath: resolved,
 			})
 			if err != nil {
+				// A refusal that produced a durable record renders it before it
+				// exits. The record path is the operator's handle on the event,
+				// and the plugin page tells a host to report `refusal_record` —
+				// which it could never find if the render only ran on success.
+				// A refusal reached before the run's identity is proven writes
+				// no record and renders none, because there is no run to name.
+				if res.RefusalPath != "" {
+					_ = render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+						renderIngestResult(w, res)
+					})
+				}
 				return &exitError{Code: 2, Msg: "reading ingest: " + trimCorePrefix(scrubPaths(err))}
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
@@ -269,6 +280,9 @@ func renderIngestResult(w io.Writer, res reading.IngestResult) {
 	if res.RunRecordPath != "" {
 		fmt.Fprintf(w, "  run metadata:  %s\n", res.RunRecordPath)
 	}
+	if res.RefusalPath != "" {
+		fmt.Fprintf(w, "  refused:       the run; recorded at %s\n", res.RefusalPath)
+	}
 	for _, r := range res.RefusedItems {
 		fmt.Fprintf(w, "  refused:       item %d (%s): %s\n", r.Ordinal, r.Rule, r.Detail)
 	}
@@ -277,6 +291,10 @@ func renderIngestResult(w io.Writer, res reading.IngestResult) {
 	}
 	if len(res.ClearedStages) > 0 {
 		fmt.Fprintf(w, "  cleared:       orphaned stage(s) of %s\n", strings.Join(res.ClearedStages, ", "))
+	}
+	if len(res.RolledBack) > 0 {
+		fmt.Fprintf(w, "  rolled back:   %s removed from the ledger (their run never committed)\n",
+			strings.Join(res.RolledBack, ", "))
 	}
 	if res.Degraded != "" {
 		fmt.Fprintf(w, "  redaction:     %s\n", res.Degraded)

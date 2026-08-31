@@ -11,6 +11,7 @@ package reading
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -33,6 +34,8 @@ type ingestFixture struct {
 	// definitionSHA is the hash of the position's definition file, which is half
 	// of the instrument's identity.
 	definitionSHA string
+	// runCounter numbers the extra runs nextRun parks.
+	runCounter int
 }
 
 // newIngestFixture prepares a repository at one position.
@@ -87,6 +90,21 @@ func (f *ingestFixture) parkRun(runID string, pos Position, assemblerVersion str
 	if runID == f.runID {
 		f.manifestHash = sha256Hex(raw)
 	}
+}
+
+// nextRun parks a FRESH run and points doc at it.
+//
+// A run id that already has an outcome is refused, by design: a rerun is a new
+// run with a new run id, never an amendment. So a case that ingests twice
+// ingests two runs, and saying that here keeps the rule out of every case.
+func (f *ingestFixture) nextRun(doc map[string]any) map[string]any {
+	f.t.Helper()
+	f.runCounter++
+	id := fmt.Sprintf("rdg-2608319%09d", f.runCounter)
+	f.parkRun(id, f.position, AssemblerVersion)
+	doc["run_id"] = id
+	doc["manifest_sha256"] = f.manifestHashOf(id)
+	return doc
 }
 
 // manifestHashOf is the parked content hash of one run's manifest.

@@ -502,3 +502,83 @@ func TestIngestExecutesEndToEnd(t *testing.T) {
 		t.Errorf("the reading record is not on disk: %v", err)
 	}
 }
+
+// TestIngestRendersARefusalRecord: a refusal that produced a durable record
+// renders it, so the `refusal_record` key the plugin page tells a host to report
+// is reachable through the front door. Rendering only on success made that key —
+// and the field behind it — dead surface.
+func TestIngestRendersARefusalRecord(t *testing.T) {
+	srcRoot := repoRootFromTest(t)
+	repo := readingRepo(t)
+	t.Chdir(repo)
+
+	out := runCLI(t, "reading", "assemble", "--position", "detection", "--target", "HEAD", "--json")
+	var assembled struct {
+		RunID        string `json:"run_id"`
+		ManifestHash string `json:"manifest_hash"`
+	}
+	if err := json.Unmarshal(out, &assembled); err != nil {
+		t.Fatalf("decode the assemble render: %v\n%s", err, out)
+	}
+	def, err := reading.LoadDefinition(srcRoot, "detection")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defRaw, err := os.ReadFile(filepath.Join(srcRoot, filepath.FromSlash(def.Path)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defPath := filepath.Join(repo, filepath.FromSlash(def.Path))
+	if err := os.MkdirAll(filepath.Dir(defPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(defPath, defRaw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// A regime the definition does not state: a list-level refusal, after the
+	// run's identity is proven, so it records.
+	payload := map[string]any{
+		"_type": "abcd.reading.output/1", "run_id": assembled.RunID,
+		"position": "detection", "regime": "generative",
+		"manifest_sha256": assembled.ManifestHash,
+		"instrument": map[string]any{
+			"model": "a-model", "definition_sha256": def.SHA256,
+			"assembler_version": reading.AssemblerVersion,
+		},
+		"items": []any{map[string]any{
+			"pattern": "the pattern this reading read under",
+			"tension": "the record says one thing", "constraint_in_play": "a stated constraint",
+			"why_a_tension": "the two cannot both hold",
+		}},
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outPath := filepath.Join(t.TempDir(), "output.json")
+	if err := os.WriteFile(outPath, raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	rendered, err := runCLIErr(t, "reading", "ingest", "--output-json", outPath, "--json")
+	if err == nil {
+		t.Fatalf("a regime mismatch exited 0:\n%s", rendered)
+	}
+	if code := exitCodeOf(err); code != 2 {
+		t.Errorf("a refusal exited %d, want 2", code)
+	}
+	var res reading.IngestResult
+	if jsonErr := json.Unmarshal(rendered, &res); jsonErr != nil {
+		t.Fatalf("a refusal rendered no JSON result: %v\n%s", jsonErr, rendered)
+	}
+	if res.RefusalPath == "" {
+		t.Fatal("the rendered result carries no refusal_record")
+	}
+	if _, statErr := os.Stat(filepath.Join(repo, filepath.FromSlash(res.RefusalPath))); statErr != nil {
+		t.Errorf("the rendered refusal_record is not on disk: %v", statErr)
+	}
+	if len(res.Records) != 0 {
+		t.Errorf("a refused run reported %d record(s)", len(res.Records))
+	}
+}

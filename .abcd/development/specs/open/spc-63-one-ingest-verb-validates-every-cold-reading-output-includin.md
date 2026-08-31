@@ -206,6 +206,31 @@ the rendered records into a second issues root would move that probe off the
 real ledger and reopen what the lock was taken for. One record writer, one mint,
 one lock — and the stage does the job ac-2 actually asks of it.
 
+**One ingest at a time in one checkout**, from the sweep through the commit
+marker, behind an flock on the stage root (`fsutil.WithFileLock`). The sweep
+DELETES committed reading records, and its only test for an orphan is a stage
+with no commit marker beside it — which is exactly what a live ingest looks like
+between its ledger write and its marker. Without the lock a second invocation
+rolls the first one back mid-flight, and the first then writes a run record
+naming records that no longer exist and exits 0. capture's ledger lock cannot
+serve: `IngestReading` re-takes it internally, and the sweep sits outside it.
+
+**Every path inside the repository is resolved through an `os.Root` opened at
+the repository root.** The run-id grammar makes the run id a safe path
+COMPONENT and says nothing about the components above it, and this verb writes
+and DELETES under two directories a hostile clone can commit a symlink at. The
+orphan sweep runs before the payload is even read, so no valid payload is needed
+to reach it. A directory the sweep walks or removes from is additionally refused
+when it IS a symlink, which is the stance `capture` takes on the same ledger
+directory.
+
+**A rerun is refused.** The run id is payload-chosen, so a second ingest of one
+run would otherwise land a second batch beside the first and rewrite the run
+metadata to name only the second — leaving the first batch unreachable from any
+run record and beyond every later sweep, because the rollback bails whenever a
+commit marker exists. An id that already carries a commit marker or a refusal
+record is refused before either can be overwritten.
+
 An orphaned stage found on a later invocation is reported by name and cleared,
 and the run is ROLLED BACK: a run whose commit marker never landed never
 happened, so its reading records are removed (bounded by the `rdi-N.md`
@@ -218,12 +243,32 @@ leaves neither half a run nor a stale one.
 ### Refusal granularity and refusal records
 
 An item-level violation refuses that item and lands the rest, naming the
-refused item's ordinal and the rule. A list-level violation (bad `_type`,
+refused item's ordinal and the rule. Beyond the schema and the regime, an item
+is refused when a closed body vocabulary is broken (`claim_type`), and when the
+record it would become would exceed `issueschema.RecordReadLimit` — an oversize
+record is durable and, because every reader of the family applies that limit,
+permanently unanswerable.
+
+Item text is passed to the record writer through `termsafe.EncodeHiddenRunes`,
+after the checks rather than before: the record is a committed markdown file a
+reviewer reads in a terminal, and the writer's own scalar guard refuses runes
+below 0x20 and nothing above. Encoding first would defeat the checks — a pattern
+of one tab encodes to a non-blank string, and the provenance rule would pass it.
+Every payload-derived value that reaches a message or a durable record goes
+through `termsafe.CleanProseLine`, the repository's canonical untrusted-prose
+cleaner, under a per-value cap and a cap on how many payload-chosen NAMES one
+refusal quotes. A list-level violation (bad `_type`,
 regime mismatch, unresolvable manifest, missing instrument field) refuses the
-whole run. **A refused run still writes a durable refusal record**:
-`.abcd/development/readings/<run-id>/refusal.json`, carrying the run metadata
-and the named reason and no items. The event is durable, and a rerun is a new
-run with a new run id, never an amendment.
+whole run. **A refusal writes a durable refusal record once the run's identity is proven**
+— that is, once the run id resolves to a parked manifest whose content hash
+matches: `.abcd/development/readings/<run-id>/refusal.json`, carrying the run
+metadata and the whole named reason and no items. A refusal reached BEFORE that
+point writes nothing anywhere, because there is no proven run to record against,
+and ac-1 requires exactly that. The reason is carried WHOLE: every
+payload-derived substring inside it is cleaned where it is interpolated, so a
+second cap over the composed sentence would only truncate the repository's own
+prose. The front door renders the result on a recorded refusal before it exits
+2, so the record path is reachable rather than named only in the error text.
 
 ## Acceptance criteria mapping
 
@@ -278,7 +323,11 @@ Each case is written to fail before the change and pass after, in
   `TestWrongPositionBodyIsUndecodable`,
   `TestNoDurableWriteBeforeValidation`,
   `TestMissingBodyFieldRefusesTheItem`,
+  `TestAnOversizeItemIsRefusedRatherThanWrittenUnreadable`,
+  `TestAClosedBodyVocabularyIsEnforced`,
   `TestARefusalNeverEchoesRawPayloadBytes`,
+  `TestTheCommittedRecordCarriesNoHiddenRunes`,
+  `TestTheRefusalRecordCarriesTheWholeReason`,
   `TestPatternFieldIsTheRecordEnvelopeField`.
 - `ingest_regime_test.go`: `TestRegimeComesFromTheDefinitionNotThePayload`,
   `TestADriftedDefinitionRefusesTheRunRatherThanChangingTheLicence`,
@@ -302,15 +351,25 @@ Each case is written to fail before the change and pass after, in
   `TestOrphanSweepLeavesACommittedRunAlone`,
   `TestItemLevelViolationLandsTheRest`,
   `TestListLevelRefusalWritesRefusalRecordOnly`,
-  `TestRunIDNeverBuildsAPathBeforeItIsChecked`.
+  `TestRunIDNeverBuildsAPathBeforeItIsChecked`,
+  `TestARerunOfACommittedRunIsRefused`,
+  `TestTheStageLockIsHeldAcrossTheSweepAndTheWrite`.
+- `ingest_containment_test.go`: the adversarial-repository cases —
+  `TestASymlinkedReadingsTreeCannotRedirectTheDurableWrite`,
+  `TestASymlinkedLedgerRunCannotRedirectTheRollback`,
+  `TestASymlinkedDurableRunCannotRedirectTheRollback`,
+  `TestASymlinkedStageRootCannotRedirectTheSweep`,
+  `TestASymlinkedParkedRunCannotRedirectTheManifestRead`. Each plants the
+  symlink a hostile clone commits, runs the verb, and asserts the directory
+  outside the repository is untouched.
 - `ingest_identity_test.go`: `TestManifestReferenceMustResolve`,
   `TestManifestHashMismatchRefusesRun`,
   `TestInstrumentIdentityRequiresAllThreeParts`,
   `TestItemIDsAreMintedByTheVerb` (the mint's shape; a payload-supplied id is
   an unknown field).
 - `internal/surface/cli/reading_surface_test.go`:
-  `TestIngestRequiresOutputJSON`, `TestIngestReachesBothPlanes` and
-  `TestIngestExecutesEndToEnd`, which assembles a run through the sibling verb
+  `TestIngestRequiresOutputJSON`, `TestIngestReachesBothPlanes`,
+  `TestIngestRendersARefusalRecord` and `TestIngestExecutesEndToEnd`, which assembles a run through the sibling verb
   and ingests its output, so the wiring claim is a run rather than a tree walk.
   The no-operator-surface guard on the regime is spc-62's
   `TestNoOperatorSurfaceSetsARegime`, in its own file.

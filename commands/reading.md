@@ -136,9 +136,18 @@ parked manifest, a manifest hash that disagrees, an instrument claiming a
 definition hash or an assembler version the artefacts do not carry, a regime
 disagreeing with the definition, or a payload in which no item survived.
 
-**A refused run still leaves a record.** `refusal.json` under the run's
-directory carries the run metadata and the named reason and no items, so the
-event is durable; a rerun is a new run with a new run id, never an amendment.
+**A refusal leaves a record once the run's identity is proven** — that is, once
+the run id resolves to a parked manifest whose content hash matches. From that
+point a list-level refusal writes `refusal.json` under the run's directory,
+carrying the run metadata and the named reason and no items, and the refusal
+message and the JSON render both name it. A refusal reached BEFORE that point —
+a wrong `_type`, a run id that resolves to nothing, a manifest hash that
+disagrees — writes nothing anywhere, because there is no proven run to record
+against.
+
+**A rerun is a new run with a new run id, never an amendment.** Once a run id
+has an outcome — a commit marker or a refusal record — ingesting it again is
+refused. Assemble again, and ingest the run that assembly parked.
 
 ### The supply regime is the definition's
 
@@ -170,9 +179,13 @@ records land in the reading-record family, the run's manifest is promoted
 beside its run metadata, and the run metadata is written **last** as the commit
 marker — a run without one never happened. An ingest interrupted before that
 marker leaves a stage in the local tier, and the next invocation names the
-orphan, rolls the run back and clears it. Report from the JSON: `run_id`,
-`records`, `refused_items`, `review_flags`, `run_record` (or `refusal_record`)
-and `cleared_stages`.
+orphan, rolls the run back and clears it. One ingest runs at a time in a
+checkout: a second waits, and reports contention rather than sweeping the
+first one's records away.
+
+Report from the JSON: `run_id`, `records`, `refused_items`, `review_flags`,
+`cleared_stages`, and `run_record` — or, on a refusal that recorded one,
+`refusal_record`.
 
 **Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
 provisions the binary into the plugin root, so this is the rung that fires for a

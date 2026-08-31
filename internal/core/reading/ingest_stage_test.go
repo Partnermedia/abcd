@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // withFault arms the staged-write protocol's test seam for one step and restores
@@ -107,6 +109,12 @@ func TestOrphanedStageIsReportedAndCleared(t *testing.T) {
 	}
 	if f.exists(".abcd/work/issues/readings/" + orphan + "/rdi-2608310000000004.md") {
 		t.Error("the orphaned run's reading record survived the rollback")
+	}
+	// A delete in the COMMITTED tier is reported by id. "Cleared an orphaned
+	// stage" does not tell an operator that records left the ledger with it.
+	if len(res.RolledBack) != 1 || res.RolledBack[0] != "rdi-2608310000000004" {
+		t.Errorf("the sweep rolled back %v; it removed rdi-2608310000000004 from the ledger and has to "+
+			"say so", res.RolledBack)
 	}
 	if !f.exists(".abcd/work/issues/readings/" + orphan + "/NOTES.md") {
 		t.Error("the rollback removed a file that is not a reading record")
@@ -207,8 +215,11 @@ func TestListLevelRefusalWritesRefusalRecordOnly(t *testing.T) {
 	if rec.ManifestSHA256 != f.manifestHash || rec.TargetCommit == "" {
 		t.Errorf("the refusal record does not carry the run's manifest reference: %+v", rec)
 	}
-	if !strings.Contains(rec.Reason, RegimeEvaluative) {
-		t.Errorf("the refusal record does not name the reason: %q", rec.Reason)
+	// The WHOLE reason, not a prefix of it that happens to contain the word:
+	// the recorded reason is what the operator was told, and a record that
+	// carries the first hundred runes of it carries a different claim.
+	if !strings.Contains(rec.Reason, RegimeEvaluative) || !strings.Contains(rec.Reason, "refuses the run") {
+		t.Errorf("the refusal record does not carry the whole named reason: %q", rec.Reason)
 	}
 
 	if got := f.ledgerRecords(f.runID); len(got) != 0 {
@@ -252,5 +263,108 @@ func TestRunIDNeverBuildsAPathBeforeItIsChecked(t *testing.T) {
 	}
 	if _, err := os.Stat(outside); !os.IsNotExist(err) {
 		t.Errorf("a traversal run id produced %s", outside)
+	}
+}
+
+// TestARerunOfACommittedRunIsRefused holds "a rerun is a NEW run with a new run
+// id, never an amendment" as a check rather than a sentence.
+//
+// The run id is payload-chosen. Without the check a second ingest lands a second
+// batch of records beside the first and rewrites run.json to name only the
+// second — and the first batch is then unreachable from any run record AND
+// beyond every later sweep, because the rollback bails whenever a commit marker
+// exists. The refusal record is guarded for the same reason in the other
+// direction: a rerun must not overwrite the refusal of the run it repeats.
+func TestARerunOfACommittedRunIsRefused(t *testing.T) {
+	t.Run("after a commit marker", func(t *testing.T) {
+		f := newIngestFixture(t, "detection")
+		doc := f.payload(2)
+		first := f.mustIngest(doc)
+		if len(first.Records) != 2 {
+			t.Fatalf("the first run landed %d of 2", len(first.Records))
+		}
+
+		if _, err := f.ingest(doc); err == nil {
+			t.Fatal("a run that already committed was ingested again")
+		} else if !strings.Contains(err.Error(), "never an amendment") {
+			t.Errorf("the refusal does not state the rule: %v", err)
+		}
+		if got := f.ledgerRecords(f.runID); len(got) != 2 {
+			t.Errorf("the ledger holds %v; the rerun duplicated the run's records", got)
+		}
+		run := f.readRunRecord(f.runID)
+		if len(run.Records) != 2 {
+			t.Errorf("the run record names %d records", len(run.Records))
+		}
+	})
+
+	t.Run("after a refusal record", func(t *testing.T) {
+		f := newIngestFixture(t, "detection")
+		bad := f.payload(1)
+		bad["regime"] = RegimeEvaluative
+		if _, err := f.ingest(bad); err == nil {
+			t.Fatal("a regime mismatch was accepted")
+		}
+		before := f.readRefusalRecord(f.runID)
+
+		if _, err := f.ingest(f.payload(1)); err == nil {
+			t.Fatal("a run that was already refused was ingested again")
+		}
+		if after := f.readRefusalRecord(f.runID); after.Reason != before.Reason {
+			t.Error("the rerun overwrote the refusal record of the run it repeated")
+		}
+		if f.exists(ReadingsRecordDir + "/" + f.runID + "/" + RunFileName) {
+			t.Error("a rerun of a refused run wrote a commit marker beside its refusal")
+		}
+	})
+
+	// And a DIFFERENT run in the same repository still lands: the rule is about
+	// one run id, not about the repository having ingested before.
+	f := newIngestFixture(t, "detection")
+	f.mustIngest(f.payload(1))
+	if res := f.mustIngest(f.nextRun(f.payload(1))); len(res.Records) != 1 {
+		t.Fatalf("a second, distinct run landed %d record(s)", len(res.Records))
+	}
+}
+
+// TestTheStageLockIsHeldAcrossTheSweepAndTheWrite is the peer-invocation guard.
+//
+// The sweep deletes committed reading records, and its only test for an orphan
+// is a stage with no commit marker beside it — which is exactly what a LIVE
+// ingest looks like between its ledger write and its marker. A second
+// invocation would therefore roll the first one back mid-flight, and the first
+// would then write a run record naming records that no longer exist and exit 0.
+//
+// The lock is probed from inside the fault seam, at the very window the race
+// needs, with a zero timeout: a race driven by two real processes would be
+// timing-dependent, and this asserts the property the race rests on instead.
+func TestTheStageLockIsHeldAcrossTheSweepAndTheWrite(t *testing.T) {
+	f := newIngestFixture(t, "detection")
+	lock := filepath.Join(f.root, filepath.FromSlash(IngestStageDir), stageLockName)
+
+	probed := map[string]bool{}
+	prior := ingestFault
+	ingestFault = func(at string) error {
+		probed[at] = true
+		err := fsutil.WithFileLock(lock, 0, func() error { return nil })
+		if !errors.Is(err, fsutil.ErrLockContention) {
+			t.Errorf("at %s the stage lock was free (%v); a peer invocation could sweep this run's "+
+				"records out from under it", at, err)
+		}
+		return nil
+	}
+	t.Cleanup(func() { ingestFault = prior })
+
+	f.mustIngest(f.payload(2))
+	for _, at := range []string{faultAfterStage, faultAfterLedger} {
+		if !probed[at] {
+			t.Errorf("the %s window was never reached, so the lock was never probed there", at)
+		}
+	}
+
+	// And the lock is RELEASED: the next ingest is not blocked by the last.
+	f.mustIngest(f.nextRun(f.payload(1)))
+	if err := fsutil.WithFileLock(lock, 0, func() error { return nil }); err != nil {
+		t.Errorf("the stage lock was not released after the ingest returned: %v", err)
 	}
 }

@@ -118,7 +118,7 @@ func TestSelfDeclaredRegimeMismatchRefusesRun(t *testing.T) {
 	if got := f.ledgerRecords(f.runID); len(got) != 0 {
 		t.Errorf("the refused run wrote %v", got)
 	}
-	f.mustIngest(f.payload(3))
+	f.mustIngest(f.nextRun(f.payload(3)))
 }
 
 // TestEvaluativeRankScoreRecommendedRefused is ac-6: each reserved name on the
