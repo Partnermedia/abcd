@@ -378,6 +378,11 @@ func TestIngestRequiresOutputJSON(t *testing.T) {
 	if !strings.Contains(err.Error()+string(out), "reading ingest") {
 		t.Errorf("the refusal does not name the verb: %v\n%s", err, out)
 	}
+	// The verb's name is printed ONCE. The refusal message is load-bearing for
+	// this verb, and a doubled prefix is the first thing a reader skims past.
+	if strings.Contains(err.Error()+string(out), "reading ingest: reading:") {
+		t.Errorf("the refusal doubles its prefix: %v\n%s", err, out)
+	}
 }
 
 // TestIngestReachesBothPlanes holds "wired or it isn't done" for the ingest verb:
