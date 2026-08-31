@@ -97,9 +97,12 @@ eval's **own** lexicographic sort. The scan is confined to the manifest because 
 projected record body legitimately quotes dates in prose; the manifest carries
 paths, field names and hashes only, so a timestamp-shaped token there is
 unambiguously a defect. One exemption is declared rather than silent: the run
-identifier mints from a clock, so it is exempt from the packed-digit rule alone
-and its own shape is asserted, and the manifest is not described as
-timestamp-free.
+identifier mints from a clock, so it is exempt from the packed-digit rule alone,
+and the manifest is not described as timestamp-free. The exemption is keyed on
+the NAME at any depth while the shape assertion reads the top-level field only,
+so a nested key spelled the same way would be exempt and unchecked; the closed
+manifest structs declare no such field, which is what makes that unreachable
+rather than merely unobserved.
 
 ### What keeps it from passing vacuously
 
