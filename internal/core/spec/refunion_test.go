@@ -16,7 +16,7 @@ func TestCreateMintsPastACommittedBranch(t *testing.T) {
 	r.Commit("base")
 
 	// Branch A (main): mint spc-1 and commit it.
-	spA, _, err := Create(r.Root(), "itd-1", "alpha")
+	spA, _, err := Create(r.Root(), "itd-1", "alpha", "")
 	if err != nil {
 		t.Fatalf("branch A Create: %v", err)
 	}
@@ -29,7 +29,7 @@ func TestCreateMintsPastACommittedBranch(t *testing.T) {
 	// spec, so a tree-only mint would hand out spc-1 again.
 	r.Git("checkout", "-b", "branch-b", "HEAD~1")
 
-	spB, _, err := Create(r.Root(), "itd-2", "beta")
+	spB, _, err := Create(r.Root(), "itd-2", "beta", "")
 	if err != nil {
 		t.Fatalf("branch B Create: %v", err)
 	}

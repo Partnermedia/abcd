@@ -7,7 +7,7 @@ intent: itd-180
 
 ## Summary
 
-spc-58 delivers [itd-180](../../intents/planned/itd-180-a-cold-reading-s-findings-land-as-reading-records-and-the-re.md)'s
+spc-58 delivers [itd-180](../../intents/shipped/itd-180-a-cold-reading-s-findings-land-as-reading-records-and-the-re.md)'s
 two record types. A **reading record** is what an instrument returned under a
 recorded visible world; a **disposition record** is the researcher's answer to
 one such item, written separately and keyed to it. The two are never one write,

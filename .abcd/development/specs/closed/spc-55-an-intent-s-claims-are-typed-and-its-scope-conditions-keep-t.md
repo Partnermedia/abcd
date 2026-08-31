@@ -18,7 +18,7 @@ rule, and the two sections are
 format. What lands here is the parse, the mint, the render, and the refusal.
 
 The identity is the load-bearing half. A disposition attaches to a condition,
-not to a sentence, so [spc-59](../open/spc-59-a-shipped-intent-s-scope-conditions-are-dispositioned-by-the.md)
+not to a sentence, so [spc-59](spc-59-a-shipped-intent-s-scope-conditions-are-dispositioned-by-the.md)
 has something stable to key on when the fidelity verdict arrives.
 
 ## Scope

@@ -8,7 +8,7 @@ intent: itd-181
 
 ## Summary
 
-spc-59 delivers [itd-181](../../intents/planned/itd-181-a-shipped-intent-s-scope-conditions-are-dispositioned-by-the.md):
+spc-59 delivers [itd-181](../../intents/shipped/itd-181-a-shipped-intent-s-scope-conditions-are-dispositioned-by-the.md):
 the intent-fidelity verdict grows a fourth judgement surface beside the
 per-criterion verdicts and the three-bucket gap audit, keyed to the scope-
 condition identities [spc-55](../closed/spc-55-an-intent-s-claims-are-typed-and-its-scope-conditions-keep-t.md)

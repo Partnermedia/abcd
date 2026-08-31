@@ -70,7 +70,7 @@ different cycle and a different day.
 
 ## Scope
 
-**Intents:** [itd-177](../../intents/shipped/itd-177-an-intent-s-claims-are-typed-and-its-scope-conditions-keep-t.md), [itd-178](../../intents/planned/itd-178-every-record-written-through-a-command-carries-its-origin-an.md), [itd-179](../../intents/planned/itd-179-the-reasoning-behind-what-was-pursued-no-longer-evaporates-a.md), [itd-180](../../intents/planned/itd-180-a-cold-reading-s-findings-land-as-reading-records-and-the-re.md), [itd-181](../../intents/planned/itd-181-a-shipped-intent-s-scope-conditions-are-dispositioned-by-the.md), [itd-182](../../intents/shipped/itd-182-the-record-s-discipline-failures-are-themselves-recorded-a-l.md) (record side, track A); [itd-183](../../intents/planned/itd-183-the-cold-reading-sees-exactly-what-the-assembler-passes-posi.md), [itd-185](../../intents/planned/itd-185-one-ingest-verb-validates-every-cold-reading-output-includin.md), [itd-184](../../intents/planned/itd-184-four-cold-reading-definitions-one-blindness-core-each-positi.md) (the
+**Intents:** [itd-177](../../intents/shipped/itd-177-an-intent-s-claims-are-typed-and-its-scope-conditions-keep-t.md), [itd-178](../../intents/shipped/itd-178-every-record-written-through-a-command-carries-its-origin-an.md), [itd-179](../../intents/planned/itd-179-the-reasoning-behind-what-was-pursued-no-longer-evaporates-a.md), [itd-180](../../intents/shipped/itd-180-a-cold-reading-s-findings-land-as-reading-records-and-the-re.md), [itd-181](../../intents/shipped/itd-181-a-shipped-intent-s-scope-conditions-are-dispositioned-by-the.md), [itd-182](../../intents/shipped/itd-182-the-record-s-discipline-failures-are-themselves-recorded-a-l.md) (record side, track A); [itd-183](../../intents/shipped/itd-183-the-cold-reading-sees-exactly-what-the-assembler-passes-posi.md), [itd-185](../../intents/planned/itd-185-one-ingest-verb-validates-every-cold-reading-output-includin.md), [itd-184](../../intents/planned/itd-184-four-cold-reading-definitions-one-blindness-core-each-positi.md) (the
 instrument bundle, track B, one shared spec); [itd-186](../../intents/planned/itd-186-the-read-block-eval-falsifies-the-firewall-planted-warm-cont.md), [itd-187](../../intents/planned/itd-187-amnesia-is-a-repository-property-proven-by-an-eval-the-same.md) (evals, track C);
 [itd-188](../../intents/shipped/itd-188-machine-assistance-in-maintaining-the-ledger-without-any-con.md) (scribe context, track D); [itd-189](../../intents/planned/itd-189-what-the-widening-reading-proposes-is-admitted-or-declined-o.md) (step-2 admission records,
 schema only). **Disciplines:** [itd-190](../../intents/disciplines/itd-190-the-claim-recording-gradient-an-intent-s-three-claim-kinds-c.md) (claim-recording gradient),
@@ -130,5 +130,7 @@ parallel store.
   local ledger side until the product thinker assigns a home.
 - Whether "ledger" needs a glossary term to separate the provenance ledger from
   the issue ledger — flagged by the adversarial reviews, not ruled.
-- The [HAND] owners for the scribe-protocol rehearsal and the step-2 admission
-  records — to be named when the workstream's planning cycle phase runs.
+- The [HAND] owner for the step-2 admission records — to be named when the
+  workstream's planning cycle phase runs. Nothing is owed before then: a
+  widening reading has to run before a proposal exists to admit, and no reading
+  runs this cycle.
