@@ -488,3 +488,31 @@ func TestPromoteStampsExtractedFromRecord(t *testing.T) {
 		t.Errorf("the source issue's origin moved to %v; promotion must not rewrite it", fm["origin"])
 	}
 }
+
+// TestPromoteReadingItemRefusesGrounds: the grounds argument governs the ISSUE
+// route. A reading item's conjecture lives in its disposition, which promote
+// already refuses to act without, and this route writes no grounds — so an
+// operand handed to it is refused rather than accepted and dropped. Reporting
+// success over a conjecture that reached no record is the evaporation the
+// argument exists to close.
+func TestPromoteReadingItemRefusesGrounds(t *testing.T) {
+	repo, ir, item := dispositionedReadingFixture(t)
+	before := draftCount(t, repo)
+
+	_, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: item, Grounds: testGrounds})
+	if !errors.Is(err, ErrGroundsRefused) {
+		t.Fatalf("Promote(%s, --grounds) = %v, want ErrGroundsRefused", item, err)
+	}
+	if !strings.Contains(err.Error(), item) || !strings.Contains(err.Error(), "disposition") {
+		t.Fatalf("the refusal must name the item and where its conjecture belongs; got %v", err)
+	}
+	if after := draftCount(t, repo); after != before {
+		t.Fatalf("a refused promote minted a draft (%d -> %d)", before, after)
+	}
+
+	// Without the operand the same fixture promotes: the refusal is about the
+	// discarded value, never about the route.
+	if _, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: item}); err != nil {
+		t.Fatalf("the reading route must still promote with no grounds: %v", err)
+	}
+}

@@ -123,13 +123,17 @@ closed — `pursued`, `deferred`, `declined` — and the text is free prose:
 --grounds "pursued: <what is expected, and what would show it wrong>"
 ```
 
-`promote` and `resolve` **require** it: they mint the value in the same call, so
-an absent `--grounds` exits 2 and writes nothing. So does a malformed one — an
-unknown token, a missing colon, or a text below the substance floor. Every
-grounds refusal is a usage error at exit 2, on all three routes. `wontfix` does not, because its
-reason is already mandatory — it stamps `declined: <reason>` from the reason it
-already takes, and `--grounds "declined: <text>"` overrides that text for the
-case where the conjecture and the user-facing reason are not the same sentence.
+`promote <iss-N>` and `resolve` **require** it: they mint the value in the same
+call, so an absent `--grounds` exits 2 and writes nothing. So does a malformed
+one — an unknown token, a missing colon, or a text below the substance floor.
+Every grounds refusal is a usage error at exit 2, on all three routes.
+`promote <rdi-N>` is the one route that takes no grounds and refuses one handed
+to it: a reading item states its conjecture in its disposition, which promote
+already refuses to act without, so a second one here would reach no record.
+`wontfix` does not, because its reason is already mandatory — it stamps
+`declined: <reason>` from the reason it already takes, and
+`--grounds "declined: <text>"` overrides that text for the case where the
+conjecture and the user-facing reason are not the same sentence.
 The token there stays `declined`: a wontfix IS the non-action that value names.
 
 **Ask for the expectation and its falsifier.** "Promoted it because it is next"

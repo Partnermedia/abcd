@@ -293,6 +293,18 @@ func issueTitleLine(body, fallback string) string {
 // writing the draft and the stamp by hand — is a lapse-log entry, not something
 // this gate can see.
 func promoteReadingItem(repoRoot, issuesRoot string, req PromoteRequest) (PromoteResult, error) {
+	// Grounds belong to the ISSUE route, which has nowhere else to say why. A
+	// reading item records its conjecture in its DISPOSITION, which this route
+	// already refuses to act without, and nothing here writes req.Grounds — so an
+	// operand supplied to this route is refused rather than written and ignored,
+	// on the same rule an exit condition outside `held` is (reading.go). Accepting
+	// it would report success over a conjecture that reached no record, which is
+	// the evaporation the grounds argument exists to close.
+	if strings.TrimSpace(req.Grounds) != "" {
+		return PromoteResult{}, fmt.Errorf(
+			"promote: %w: %s records its conjecture in its disposition, which this route already refuses to act without, so there is nothing here for grounds to say; nothing written",
+			ErrGroundsRefused, req.ID)
+	}
 	src, err := findReadingItem(issuesRoot, req.ID)
 	if err != nil {
 		return PromoteResult{}, err
