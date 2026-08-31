@@ -303,18 +303,18 @@ func requireCarriers(t *testing.T, a assembled) {
 		// The path first, because a missing path and an empty text are different
 		// faults and the message should say which.
 		if !seen[c.Path] {
-			t.Fatalf("the assembly at %s does not carry %s (%s), so the %s assertion(s) over it "+
-				"would pass with nothing to catch", a.Position, c.Path, c.Why,
-				strings.Join(c.tokens(), " and "))
+			t.Fatalf("the assembly at %s does not carry %s (%s); %s",
+				a.Position, c.Path, c.Why, c.stake())
 		}
 		// Then the bytes. The manifest names what an assembly SAYS it passed; only
 		// the bundle says what it actually passed, and an absence assertion over an
 		// item whose text is empty is an absence assertion over nothing.
-		if !bytes.Contains(a.BundleRaw, []byte(c.Marker)) {
+		for _, marker := range c.Markers {
+			if bytes.Contains(a.BundleRaw, []byte(marker)) {
+				continue
+			}
 			t.Fatalf("the assembly at %s names %s in its manifest, but the bundle does not carry "+
-				"that file's own text (%q is absent), so the %s assertion(s) over it would pass "+
-				"with nothing to catch", a.Position, c.Path, c.Marker,
-				strings.Join(c.tokens(), " and "))
+				"that file's own text (%q is absent); %s", a.Position, c.Path, marker, c.stake())
 		}
 	}
 }
@@ -341,13 +341,13 @@ func requireOracleTables(t *testing.T) {
 		want int
 	}{
 		{"sentinelClasses", len(sentinelClasses), 14},
-		{"carriers", len(carriers), 6},
+		{"carriers", len(carriers), 10},
 		{"holes", len(holes), 2},
 		{"excludedKeys", len(excludedKeys), 2},
 		{"excludedHeadings", len(excludedHeadings), 4},
 		{"excludedFamilies", len(excludedFamilies), 15},
 		{"admittedRecordPaths", len(admittedRecordPaths), 8},
-		{"coverage", len(coverage), len(coverage)}, // pinned by its own test, row by row
+		{"coverage", len(coverage), 46},
 	} {
 		if tbl.got != tbl.want {
 			t.Fatalf("the %s table holds %d row(s), and this eval is written against %d; "+
