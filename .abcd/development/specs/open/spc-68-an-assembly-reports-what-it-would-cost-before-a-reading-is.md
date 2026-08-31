@@ -192,10 +192,17 @@ Matches so the new field is covered too. The readings charter carries the
 rendered table between its markers, so `TestReadingsCharterCarriesTheRenderedIncludeTable`
 requires the charter to be regenerated in the same change.
 
-`Store` and `Bucket` remain outside the rendering. They route a row through the
-record graph and do not decide what a reading receives, so they are not part of
-the contract the version names. This is stated rather than left silent, because
-the reasoning that admits Kind would otherwise appear to admit them.
+`Store` and `Bucket` are rendered too. An earlier draft of this spec left them
+out and justified it — "they route a row through the record graph and do not
+decide what a reading receives" — and adversarial review showed that claim is
+false: `rowPaths` filters candidates on `Bucket` and selects a node type by
+`Store`. Deleting `Store` from the specs row makes that directory's README
+travel in every reading at every position, and the rendering would not have
+moved. They look inert today only because every row's `Source` already bounds it
+to one bucket, which is a coincidence of the current record layout and not a
+property anything enforces. Rendering them costs two columns and removes an
+argument the next reader would have to re-derive and could get wrong the same
+way this spec did.
 
 ### The version that cannot misreport its table
 
@@ -222,13 +229,26 @@ func AssemblerVersion() string {
 }
 ```
 
+The digest is carried WHOLE. A truncation would have read better and would not
+have supported the claim: `Row.Rule` is free prose of unbounded length inside
+the digested input, so a short digest is a collision an author can grind rather
+than one they would have to be unlucky to hit. Review demonstrated that channel
+against a 12-character digest rather than inferring it. The claim is absolute,
+so the evidence behind it is too.
+
 The core stays hand-set and keeps a pin, because it signals a contract change a
 digest cannot: a rewritten rule text moves the digest without changing what the
 assembler promises, and a projection change alters the promise without touching
-the table. The pin on the core remains advisory. That is now tolerable where it
-was not, because the advisory half can no longer make an artefact lie about its
-table — which is the property brief invariant 16 requires, and the property the
-digest-only literal never delivered.
+the table. **That pin is advisory, and it is now WEAKER than the gate it
+replaced, not equivalent** — a distinction an earlier draft of this spec blurred.
+The old gate was the only thing in the tree that ever named the version constant,
+so replacing it with a structural property would have left the core semver with
+nothing pointing at it at all. The literal is therefore kept, explicitly labelled
+advisory, for the one job the computed digest cannot do: failing on a table
+change and naming `AssemblerVersionCore` while it fails, which is what puts the
+hand-set half in front of a human at the moment it should move. What made that
+literal insufficient before no longer matters, because restating it can no longer
+make a manifest lie.
 
 Call sites move from a constant to a call: `assemble.go` (manifest stamp, result
 echo) and `status.go`. Determinism is unaffected: the digest is a pure function
@@ -252,8 +272,13 @@ can omit the field cannot distinguish one from an old manifest. `DecodeManifest`
 is already strict on unknown fields, trailing content and schema version, so it
 refuses a v1 manifest against v2 without further work.
 
-`SchemaVersion` moves 1 to 2. It is one constant shared by both artefacts an
-assembly writes, so the bundle is restamped although ac-8 holds its shape
+`SchemaVersion` moves 1 to 2, which makes every manifest a prior build parked
+under the local run directory undecodable. That is fail-closed and correct — a
+v1 manifest genuinely does not carry the kinds a v2 reader requires — and it is
+recorded here because a decoder refusing yesterday's artefact should be a stated
+consequence rather than a surprise.
+
+It is one constant shared by both artefacts an assembly writes, so the bundle is restamped although ac-8 holds its shape
 unchanged. That is a known consequence of the shared constant, accepted rather
 than fixed: splitting it is a larger change than this intent, and making the
 split silently, inside a change that needed only one half, is how a shape
@@ -315,8 +340,17 @@ Every test below is watched fail before the change and pass after.
   metadata equals the digest of the current rendering; **proved by mutation**:
   a table edit moves the stamped version with no other edit.
 - `TestManifestItemRoundTripsKind` — strict decode of an encoded manifest
-  preserves every item's kind; a manifest with an item lacking a kind is refused.
-- `TestManifestSchemaVersionRefusesV1` — a v1 manifest is refused against v2.
+  preserves every item's kind.
+- `TestDecodeManifestRefusesAnItemWithoutAKind` — an empty kind, an absent kind
+  key and an unknown kind are each refused. `DecodeManifest` gained that check
+  in this change: without it the not-omitempty decision was a habit of the
+  writer rather than a property of the format, and the ingest fixtures were in
+  fact producing kindless manifests that decoded clean.
+- The v1-against-v2 refusal is covered by `TestDecodeManifestIsStrict`'s
+  `wrong schema` case rather than by a test of its own. That case had gone
+  vacuous — it substituted the literal `"schema_version": 1`, which stopped
+  matching the moment the schema moved, and a no-op substitution produces a
+  VALID manifest — so it is now derived from `SchemaVersion`.
 
 The eval lanes are not run by `make preflight` (`iss-2608311632382737`), so
 `make evals-cold-reading` and `make smoke` are run explicitly, and once under
@@ -333,3 +367,12 @@ files, and `fence.go` is the sole corpus behind the body-redaction row.
 - Making the advisory pin on `AssemblerVersionCore` mechanical. The structural
   digest removes the consequence that made it urgent; the core's own pin remains
   a convention, and this spec says so rather than implying otherwise.
+- Extending the eval coverage matrix for the new match form and the per-item
+  kind attestation. Review is right that a new attestation with no falsifier
+  behind it is the shape itd-186 exists to prevent; it is captured as
+  `iss-2608312019547974` rather than closed here, because growing the eval corpus after the intent's adversarial
+  reviews would ship an unreviewed scope increase.
+- Bringing `prefixDenied`'s case sensitivity into line with `segmentDenied`'s
+  case folding. Pre-existing, contradicted by `deny.go`'s own header comment,
+  and captured as `iss-2608312019544150` rather than changed inside a
+  size-report intent.

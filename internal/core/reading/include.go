@@ -36,9 +36,17 @@ const AssemblerVersionCore = "1.1.0"
 // all, so changing the table and restating the literal was green with the
 // version unmoved (iss-2608311949385350) — an attestation asserting more than
 // its examination establishes, which brief invariant 16 forbids.
+//
+// The digest is carried WHOLE, not truncated. A short digest would have been
+// easier to read and would not have supported the sentence above: Row.Rule is
+// free prose of unbounded length inside the digested input, so a truncation is
+// a collision an author can grind rather than one they would have to be unlucky
+// to hit. The claim this function makes is absolute, so the evidence behind it
+// is too — brief invariant 16 is the rule that an attestation states no more
+// than its examination establishes, and this function IS an attestation.
 func AssemblerVersion() string {
 	sum := sha256.Sum256([]byte(Render()))
-	return AssemblerVersionCore + "+" + hex.EncodeToString(sum[:])[:12]
+	return AssemblerVersionCore + "+" + hex.EncodeToString(sum[:])
 }
 
 // Position is the reading position an assembly is invoked at. The set is
@@ -129,9 +137,14 @@ type Row struct {
 	// from a string's first character: no disambiguation rule against the two
 	// Match forms is needed, and none exists to get wrong. The case rule is
 	// deliberate and differs from Match's extension form, which folds case:
-	// the Go toolchain recognises only a lowercase _test.go as a test file, so
-	// folding here would label material a test that Go does not build as one.
-	// A file matched by either field is admitted; the two are ORed (spc-68).
+	// the Go toolchain builds a test only from a lowercase _test.go, so folding
+	// here would label material a test that Go does not build as one. The
+	// suffix is not the WHOLE of Go's rule — a file named exactly _test.go is
+	// ignored by the toolchain for its leading underscore, and files under
+	// testdata/ are never built either, yet both are labelled test here. Those
+	// are labelling differences on material no build compiles, never admission
+	// differences. A file matched by either field is admitted; the two are
+	// ORed (spc-68).
 	MatchSuffix []string
 	// Fields are the named fields projected out of each matched file, in the
 	// order they are emitted. A field is resolved as a heading section where the
@@ -395,15 +408,17 @@ const CharterPath = ".abcd/development/readings/README.md"
 func Render() string {
 	var b strings.Builder
 	b.WriteString("### Include table\n\n")
-	b.WriteString("| Positions | Source | Matches | Suffixes | Fields | Kind | Admitting rule |\n")
-	b.WriteString("| --- | --- | --- | --- | --- | --- | --- |\n")
+	b.WriteString("| Positions | Source | Matches | Suffixes | Fields | Store | Bucket | Kind | Admitting rule |\n")
+	b.WriteString("| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n")
 	for _, row := range Table {
-		fmt.Fprintf(&b, "| %s | `%s` | %s | %s | %s | `%s` | %s |\n",
+		fmt.Fprintf(&b, "| %s | `%s` | %s | %s | %s | %s | %s | `%s` | %s |\n",
 			sortedPositions(row.Positions),
 			row.Source,
 			matchList(row),
 			suffixList(row.MatchSuffix),
 			fieldList(row.Fields),
+			routeField(row.Store),
+			routeField(row.Bucket),
 			row.Kind,
 			row.Rule)
 	}
@@ -420,7 +435,6 @@ func Render() string {
 	return b.String()
 }
 
-// codeList renders a match list as backticked tokens.
 // matchList renders a row's Matches column. An empty Match means "every file"
 // only when the row selects by nothing else; on a row that selects by suffix it
 // means the Match form contributes nothing, and rendering that as "every file"
@@ -437,22 +451,35 @@ func matchList(row Row) string {
 	return codeList(row.Match)
 }
 
+// routeField renders a row's Store or Bucket column.
+//
+// Both are rendered, and the reasoning for leaving them out did not survive
+// examination: rowPaths filters candidates on Bucket and selects a node type by
+// Store, so they decide what a reading receives as surely as Match does. They
+// look inert today only because every row's Source already bounds it to one
+// bucket — a coincidence of the current record layout, not a property, and
+// nothing enforces it. Rendering them costs two columns and removes the need
+// for anyone to re-derive that argument and get it wrong.
+func routeField(s string) string {
+	if s == "" {
+		return "every"
+	}
+	return "`" + s + "`"
+}
+
 // suffixList renders a row's Suffixes column.
 func suffixList(items []string) string {
 	if len(items) == 0 {
 		return "none"
 	}
-	out := make([]string, 0, len(items))
-	for _, it := range items {
-		out = append(out, "`"+it+"`")
-	}
-	return strings.Join(out, ", ")
+	return codeList(items)
 }
 
+// codeList renders a non-empty token list as backticked tokens. It has no
+// empty-list branch: every caller decides for itself what an empty list MEANS
+// in its own column, and the branch that used to answer "every file" here was
+// unreachable once matchList took that decision over.
 func codeList(items []string) string {
-	if len(items) == 0 {
-		return "every file"
-	}
 	out := make([]string, 0, len(items))
 	for _, it := range items {
 		out = append(out, "`"+it+"`")

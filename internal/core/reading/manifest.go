@@ -131,6 +131,27 @@ func DecodeManifest(data []byte) (Manifest, error) {
 		return Manifest{}, fmt.Errorf("decoding reading manifest: schema_version is %d, want %d",
 			m.SchemaVersion, SchemaVersion)
 	}
+	// An item's kind is REFUSED when absent rather than defaulted, so the
+	// not-omitempty decision on the write side is a property of the format
+	// rather than a habit of this writer. Without this, an item carrying no
+	// kind decodes clean and the strictness the type's own comment claims is
+	// true of what the binary writes and false of what it reads — an
+	// attestation asserting more than its examination establishes, which brief
+	// invariant 16 forbids.
+	known := make(map[Kind]bool, len(Kinds()))
+	for _, k := range Kinds() {
+		known[k] = true
+	}
+	for i, it := range m.Items {
+		if it.Kind == "" {
+			return Manifest{}, fmt.Errorf("decoding reading manifest: item %d (%s) carries no kind",
+				i, it.ItemKey)
+		}
+		if !known[it.Kind] {
+			return Manifest{}, fmt.Errorf("decoding reading manifest: item %d (%s) carries the "+
+				"unknown kind %q; the vocabulary is closed", i, it.ItemKey, it.Kind)
+		}
+	}
 	return m, nil
 }
 

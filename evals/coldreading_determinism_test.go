@@ -605,8 +605,21 @@ var (
 	clockPattern       = regexp.MustCompile(`\d{1,2}:\d{2}:\d{2}`)
 	packedDigitPattern = regexp.MustCompile(`\d{8,}`)
 	hexValuePattern    = regexp.MustCompile(`^[0-9a-f]{40}$|^[0-9a-f]{64}$`)
-	runIDPattern       = regexp.MustCompile(`^rdg-\d{16}$`)
-	epochPattern       = regexp.MustCompile(`^\d{10,}$`)
+	// assemblerVersionPattern is the stamped version's whole shape: a semver
+	// core with the include table's digest as build metadata. It is a third
+	// DECLARED exemption, and it is needed because the digest is not a bare
+	// hex value — hexValuePattern anchors on the whole string, so the "1.1.0+"
+	// prefix put the digest outside every existing exemption while leaving it
+	// squarely inside the packed-digit rule. A digest carrying eight
+	// consecutive decimal digits would then be reported as a leaked moment, at
+	// every position, on a lane preflight does not run.
+	//
+	// Matched by SHAPE, not by key name: an assembler_version that stopped
+	// being a digest is scanned again rather than exempted by the name it
+	// happens to go under.
+	assemblerVersionPattern = regexp.MustCompile(`^\d+\.\d+\.\d+\+[0-9a-f]{64}$`)
+	runIDPattern            = regexp.MustCompile(`^rdg-\d{16}$`)
+	epochPattern            = regexp.MustCompile(`^\d{10,}$`)
 )
 
 // runIDKey is the one key whose value is exempt from the packed-digit rule.
@@ -676,7 +689,8 @@ func scanManifestForTimestamps(raw []byte) ([]timestampFinding, map[string]bool,
 				findings = append(findings, timestampFinding{Where: where, Detail: fmt.Sprintf("the value %q carries a calendar date", n)})
 			case clockPattern.MatchString(n):
 				findings = append(findings, timestampFinding{Where: where, Detail: fmt.Sprintf("the value %q carries a clock time", n)})
-			case packedDigitPattern.MatchString(n) && key != runIDKey && !hexValuePattern.MatchString(n):
+			case packedDigitPattern.MatchString(n) && key != runIDKey &&
+				!hexValuePattern.MatchString(n) && !assemblerVersionPattern.MatchString(n):
 				findings = append(findings, timestampFinding{Where: where, Detail: fmt.Sprintf("the value %q carries a packed run of digits, which is how a moment travels without punctuation", n)})
 			}
 		case json.Number:

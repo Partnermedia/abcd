@@ -1,6 +1,7 @@
 package reading
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -52,12 +53,19 @@ func TestKindSplitDoesNotMoveAdmission(t *testing.T) {
 	writeFile(t, root, "widget_test.go", "package main\n\nfunc TestWidget() {}\n")
 	gitCommitAll(t, root)
 
+	// Restored via t.Cleanup, not by a trailing assignment: assembleFixture
+	// calls t.Fatalf on error, which would skip a trailing restore and leave
+	// the package-global Table missing the test row for every later test in
+	// the run — a mutating test that corrupts the suite it belongs to.
+	restore := Table
+	t.Cleanup(func() { Table = restore })
+
 	for _, p := range Positions() {
+		Table = restore
 		withRow := itemPaths(assembleFixture(t, root, p).Manifest)
 
-		restore := Table
-		without := make([]Row, 0, len(Table))
-		for _, row := range Table {
+		without := make([]Row, 0, len(restore))
+		for _, row := range restore {
 			if row.Kind == KindTest {
 				continue
 			}
@@ -237,9 +245,32 @@ func TestBundleGainsNoFieldFromTheReport(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encode: %v", err)
 	}
-	for _, forbidden := range []string{"\"size\"", "\"bytes\"", "\"tokens_est\"", "\"by_kind\"", "\"basis\""} {
-		if strings.Contains(string(raw), forbidden) {
-			t.Errorf("the bundle carries %s; the report rides on the result alone", forbidden)
+
+	// Decoded and inspected by SHAPE, not scanned as a substring. A bundle
+	// carries verbatim Go source, so a scan for "bytes" matches any fixture
+	// file that imports the bytes package — the assertion would have been
+	// about the fixture's imports rather than about the bundle's shape.
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &top); err != nil {
+		t.Fatalf("decode bundle: %v", err)
+	}
+	want := map[string]bool{"_type": true, "schema_version": true, "position": true, "items": true}
+	for key := range top {
+		if !want[key] {
+			t.Errorf("the bundle carries the top-level key %q; the report rides on the result alone", key)
+		}
+	}
+
+	var items []map[string]json.RawMessage
+	if err := json.Unmarshal(top["items"], &items); err != nil {
+		t.Fatalf("decode items: %v", err)
+	}
+	wantItem := map[string]bool{"item_key": true, "kind": true, "text": true}
+	for i, item := range items {
+		for key := range item {
+			if !wantItem[key] {
+				t.Errorf("bundle item %d carries the key %q", i, key)
+			}
 		}
 	}
 }
@@ -385,5 +416,46 @@ func TestSuffixListPinsEveryBranch(t *testing.T) {
 	}
 	if got := suffixList([]string{"_test.go", "_gen.go"}); got != "`_test.go`, `_gen.go`" {
 		t.Errorf("suffixList two = %q, want %q", got, "`_test.go`, `_gen.go`")
+	}
+}
+
+// TestSizeBasisBringsNoParenthesesOfItsOwn pins the shape the rehearsal caught.
+// The CLI wraps the basis in a parenthetical, so a basis carrying its own
+// rendered as "((...))" on every run. Every gate was green and every fixture
+// passed; only running the thing over a real tree showed it.
+func TestSizeBasisBringsNoParenthesesOfItsOwn(t *testing.T) {
+	if strings.ContainsAny(sizeBasis, "()") {
+		t.Errorf("sizeBasis %q carries a parenthesis; the CLI supplies the pair", sizeBasis)
+	}
+}
+
+// TestDecodeManifestRefusesAnItemWithoutAKind is the read side of the
+// not-omitempty decision. The write side alone was not enough: the type's own
+// comment claimed a missing kind is distinguishable from a well-formed item,
+// and that was true of what this package WRITES and false of what it READS,
+// which is an attestation asserting more than its examination establishes.
+func TestDecodeManifestRefusesAnItemWithoutAKind(t *testing.T) {
+	root := fixtureRepo(t)
+	res := assembleFixture(t, root, PositionWidening)
+	raw, err := EncodeManifest(res.Manifest)
+	if err != nil {
+		t.Fatalf("encode: %v", err)
+	}
+
+	// An explicit empty kind, and the key removed altogether: both are the same
+	// defect and both must be refused, because a decoder that only caught the
+	// spelled-out empty string would pass the commoner shape.
+	first := res.Manifest.Items[0]
+	for name, bad := range map[string]string{
+		"empty kind":   strings.Replace(string(raw), "\"kind\": \""+string(first.Kind)+"\"", "\"kind\": \"\"", 1),
+		"absent kind":  strings.Replace(string(raw), "\n      \"kind\": \""+string(first.Kind)+"\",", "", 1),
+		"unknown kind": strings.Replace(string(raw), "\"kind\": \""+string(first.Kind)+"\"", "\"kind\": \"warm-ledger\"", 1),
+	} {
+		if bad == string(raw) {
+			t.Fatalf("%s: the substitution did not change the document, so the case tests nothing", name)
+		}
+		if _, err := DecodeManifest([]byte(bad)); err == nil {
+			t.Errorf("a manifest with an %s decoded", name)
+		}
 	}
 }

@@ -225,19 +225,51 @@ func TestBriefEvidenceChapterIsNeverAdmitted(t *testing.T) {
 	}
 }
 
-// TestAssemblerVersionCarriesTheTableDigest holds the property the old
-// literal-digest gate only asked for: a manifest that names a version must
-// describe the table that version rendered.
+// includeTableDigest is the sha256 of Render() at AssemblerVersionCore.
 //
-// The gate this replaces compared sha256(Render()) to a standalone literal and
-// never read AssemblerVersion at all, so a table change that restated the
-// literal was green with the version unmoved (iss-2608311949385350). A map of
-// version to digest would have failed the same way — the current version's
-// entry is as editable as the literal was. The property is now structural: the
-// stamped version is computed FROM the rendering, so it cannot disagree with it.
+// The digest the manifest carries is COMPUTED, so this literal is not what
+// makes a version honest — TestATableChangeMovesTheStampedVersion holds that,
+// structurally. This literal does the one job the computed digest cannot: it
+// fails on a table change and names AssemblerVersionCore while doing so, which
+// is what puts the hand-set semver in front of a human at the moment it should
+// move.
+//
+// That forcing function is worth keeping explicitly, because removing the old
+// gate removed it by accident. The old gate was the only thing that ever named
+// the version constant, and replacing it with a structural property left the
+// core semver advisory with NOTHING pointing at it — weaker than before, not
+// equivalent. Restated here, and the weakness that made the old gate
+// insufficient no longer matters: updating this literal without moving the core
+// can no longer make a manifest lie, because the manifest's digest is not this
+// literal.
+const includeTableDigest = "4ec7fdecea43c78746f7e306a9b123a7bf2dcd981f82d1567c8328a5b628de70"
+
+// TestAssemblerVersionCoversTheIncludeTable puts the core semver in front of
+// whoever changed the table. It is ADVISORY by construction — the fix for a red
+// run may legitimately be to restate the digest — and it is not the gate that
+// makes the stamped version trustworthy. Do not read it as one.
+func TestAssemblerVersionCoversTheIncludeTable(t *testing.T) {
+	sum := sha256.Sum256([]byte(Render()))
+	got := hex.EncodeToString(sum[:])
+	if got != includeTableDigest {
+		t.Errorf("the include table has changed while AssemblerVersionCore is still %s.\n"+
+			"Decide whether the CONTRACT moved: if it did, bump AssemblerVersionCore.\n"+
+			"Either way set includeTableDigest to %q.", AssemblerVersionCore, got)
+	}
+}
+
+// TestAssemblerVersionCarriesTheTableDigest checks the stamped version is the
+// core composed with the digest.
+//
+// It is a composition check and nothing more: it re-derives what
+// AssemblerVersion() computes, so it cannot fail for any table change. The
+// property that matters — that the version MOVES when the table does — is held
+// by TestATableChangeMovesTheStampedVersion below, which performs the change
+// rather than asserting about it. Both are here because a reader who finds only
+// the composition check would reasonably think it was the gate.
 func TestAssemblerVersionCarriesTheTableDigest(t *testing.T) {
 	sum := sha256.Sum256([]byte(Render()))
-	want := AssemblerVersionCore + "+" + hex.EncodeToString(sum[:])[:12]
+	want := AssemblerVersionCore + "+" + hex.EncodeToString(sum[:])
 	if got := AssemblerVersion(); got != want {
 		t.Errorf("AssemblerVersion() = %q, want %q — the stamped version must carry the "+
 			"digest of the table it was built from", got, want)

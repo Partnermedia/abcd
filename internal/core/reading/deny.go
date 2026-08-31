@@ -60,8 +60,11 @@ func prefixDenied(rel string) bool {
 	return false
 }
 
-// matches reports whether a basename satisfies the row's Match list: an entry
-// beginning with "." is an extension, any other entry is an exact basename.
+// matches reports whether a basename satisfies either of the row's two match
+// forms. MatchSuffix is a basename suffix, matched case-sensitively; in Match,
+// an entry beginning with "." is an extension and any other entry is an exact
+// basename. The two are ORed, and only a row declaring NEITHER admits every
+// file.
 func (r Row) matches(base string) bool {
 	// Both forms empty admits every file, which no row uses. A row that
 	// declares only MatchSuffix must NOT fall through to that: an empty Match
@@ -70,10 +73,11 @@ func (r Row) matches(base string) bool {
 	if len(r.Match) == 0 && len(r.MatchSuffix) == 0 {
 		return true
 	}
-	// Case-sensitive by construction: the Go toolchain recognises only a
-	// lowercase _test.go as a test file, so folding case here would label
-	// material a test that Go does not build as one. This deliberately differs
-	// from the extension form below, which folds.
+	// Case-sensitive by construction: the Go toolchain builds a test only from
+	// a lowercase _test.go, so folding case here would label material a test
+	// that Go does not build as one. This deliberately differs from the
+	// extension form below, which folds. See Row.MatchSuffix for the edges this
+	// suffix does not capture; all of them are labelling, never admission.
 	for _, s := range r.MatchSuffix {
 		if strings.HasSuffix(base, s) {
 			return true

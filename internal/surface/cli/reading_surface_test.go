@@ -686,7 +686,7 @@ func TestSizeReportRendersBeforeTheWrittenLine(t *testing.T) {
 	renderAssembleResult(&buf, res)
 	out := buf.String()
 
-	size, written := strings.Index(out, "size:"), strings.Index(out, "written:")
+	size, written := strings.Index(out, "size (item text):"), strings.Index(out, "written:")
 	if size < 0 || written < 0 {
 		t.Fatalf("render is missing a line:\n%s", out)
 	}
