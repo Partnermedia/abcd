@@ -60,11 +60,33 @@ const (
 // structure and one of which ends "the grounds text is not the fault"
 // (iss-2608301908284034, iss-2608301918362294).
 //
-// It is not yet what the surfaces read: the CLI's flag descriptions and usage
-// strings, and the ledger's own missing-grounds refusal, each spell the three
-// values as literal text (iss-2608301836222858). The comment here used to claim
-// otherwise, which is the shape that makes a fourth value look like one edit.
+// Every rendering of the set for a reader goes through this package: the two
+// refusals above through vocabularyList, and the help text and usage refusals a
+// caller reads through UsageSpelling and ProseList. Prose documentation is the
+// stated exception and spells the values by hand, which is what prose does.
+//
+// Earlier spellings of this comment enumerated the places the values were
+// copied. Each correction of that list introduced a fresh error, because a prose
+// enumeration cannot fail and so cannot be maintained (iss-2608301836222858).
+// There is no list here because there is nothing left to list.
 var Vocabulary = []Token{Pursued, Deferred, Declined}
+
+// UsageSpelling renders the closed set as the operand placeholder a surface
+// prints in help text and in a usage refusal: at today's set,
+// `<pursued|deferred|declined>` — the alternation a caller types exactly one of,
+// followed by `: <the conjecture being acted on>`.
+//
+// It exists so that no surface types that string. The accepted cost is that the
+// usage text stops being greppable from the surface that prints it: a search for
+// the literal alternation lands here and in the test that pins this function's
+// output — both of them beside the set the string is rendered from — and
+// otherwise only in the prose documentation.
+func UsageSpelling() string { return "<" + joinVocabulary("|") + ">" }
+
+// ProseList renders the closed set for running prose — at today's set,
+// `pursued | deferred | declined` — spaced, for a sentence naming the vocabulary
+// where a bracketed placeholder would read as shell syntax.
+func ProseList() string { return joinVocabulary(" | ") }
 
 // Grounds is one recorded ground: the disposition plus the free-text conjecture.
 // It is comparable, so a round trip through String and Parse can be asserted
@@ -430,10 +452,15 @@ func (g Grounds) String() string { return string(g.Token) + ": " + g.Text }
 func (g Grounds) Bullet() string { return "- " + g.String() }
 
 // vocabularyList renders the closed set for a refusal message.
-func vocabularyList() string {
+func vocabularyList() string { return joinVocabulary("/") }
+
+// joinVocabulary renders the closed set with one separator. It is the single
+// place the values become text, so the spellings the refusals and the surfaces
+// need cannot disagree about the set or about its order.
+func joinVocabulary(sep string) string {
 	parts := make([]string, len(Vocabulary))
 	for i, v := range Vocabulary {
 		parts[i] = string(v)
 	}
-	return strings.Join(parts, "/")
+	return strings.Join(parts, sep)
 }

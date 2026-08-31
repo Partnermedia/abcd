@@ -504,3 +504,24 @@ func TestDegenerateWordsCoversVocabulary(t *testing.T) {
 		}
 	}
 }
+
+// TestVocabularyRenderings pins the three spellings the surfaces render, so a
+// change to the closed set fails here — beside the set — rather than in a
+// regenerated reference page nobody read. The literals are deliberate: they are
+// what a search for the usage text lands on now that no surface types it.
+func TestVocabularyRenderings(t *testing.T) {
+	if got, want := UsageSpelling(), "<pursued|deferred|declined>"; got != want {
+		t.Errorf("UsageSpelling() = %q, want %q", got, want)
+	}
+	if got, want := ProseList(), "pursued | deferred | declined"; got != want {
+		t.Errorf("ProseList() = %q, want %q", got, want)
+	}
+	if got, want := vocabularyList(), "pursued/deferred/declined"; got != want {
+		t.Errorf("vocabularyList() = %q, want %q", got, want)
+	}
+	for _, v := range Vocabulary {
+		if !strings.Contains(UsageSpelling(), string(v)) || !strings.Contains(ProseList(), string(v)) {
+			t.Errorf("the renderings do not carry the vocabulary value %q", v)
+		}
+	}
+}

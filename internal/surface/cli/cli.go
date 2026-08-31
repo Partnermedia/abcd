@@ -1594,7 +1594,7 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 	// as a skipped item.
 	var readyGrounds string
 	readyCmd := &cobra.Command{
-		Use:   "ready <itd-N> [--grounds \"<pursued|deferred|declined>: <conjecture>\"]",
+		Use:   "ready <itd-N> [--grounds \"" + grounds.UsageSpelling() + ": <conjecture>\"]",
 		Short: "Report whether an intent is ready to implement (planned + AC + claims + written spec + recorded grounds); exit 1 when not",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -1672,7 +1672,7 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 		},
 	}
 	readyCmd.Flags().StringVar(&readyGrounds, "grounds", "",
-		"record the conjecture behind this gate decision: \"<pursued|deferred|declined>: <what is expected, and what would show it wrong>\"")
+		"record the conjecture behind this gate decision: \""+grounds.UsageSpelling()+": <what is expected, and what would show it wrong>\"")
 	intentCmd.AddCommand(readyCmd)
 
 	// link <itd-N> <spc-N> — retroactively set spec_id on a planned intent.
@@ -2700,8 +2700,8 @@ func emitGroundsReceipt(cmd *cobra.Command, asJSON bool, rec intent.GroundsResul
 
 // groundsFlagUsage is the one spelling of the argument's help text, so promote
 // and resolve cannot describe the same closed vocabulary differently.
-const groundsFlagUsage = "REQUIRED — the conjecture being acted on, not the route taken: " +
-	"\"<pursued|deferred|declined>: <what is expected, and what would show it wrong>\""
+var groundsFlagUsage = "REQUIRED — the conjecture being acted on, not the route taken: " +
+	"\"" + grounds.UsageSpelling() + ": <what is expected, and what would show it wrong>\""
 
 // groundsUsageError maps a core grounds refusal to exit 2, leaving every other
 // failure on its existing path.
@@ -2731,7 +2731,7 @@ func requireGroundsFlag(verb, value string) error {
 	if strings.TrimSpace(value) != "" {
 		return nil
 	}
-	return &exitError{Code: 2, Msg: "abcd capture " + verb + " requires --grounds \"<pursued|deferred|declined>: <text>\" " +
+	return &exitError{Code: 2, Msg: "abcd capture " + verb + " requires --grounds \"" + grounds.UsageSpelling() + ": <text>\" " +
 		"(nothing written — a triage records the conjecture being acted on, never only the route taken)"}
 }
 

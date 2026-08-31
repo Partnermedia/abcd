@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/frontmatter"
+	"github.com/intentdriven/abcd/internal/core/grounds"
 	"github.com/intentdriven/abcd/internal/core/recordid"
 	"github.com/intentdriven/abcd/internal/core/spec"
 )
@@ -318,8 +319,8 @@ func groundsCheck(it Intent, content string) ReadyCheck {
 // conjecture and a restatement of the decision — the part no parser can check.
 func groundsRemedy(intentID string) string {
 	return "run `abcd intent ready " + intentID +
-		" --grounds \"pursued: <what is expected, and what would show it wrong>\"` " +
-		"(vocabulary: pursued | deferred | declined) — name the conjecture being acted on, not the route taken"
+		" --grounds \"" + string(grounds.Pursued) + ": <what is expected, and what would show it wrong>\"` " +
+		"(vocabulary: " + grounds.ProseList() + ") — name the conjecture being acted on, not the route taken"
 }
 
 // claimCheckExemption reports the buckets where a claim check has nothing to
