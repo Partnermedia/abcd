@@ -278,7 +278,12 @@ func whatEscaped(t *testing.T, outDir, position string, r refusal) string {
 //
 // The negative rows are the other half of the claim. A scan widened until it
 // reports everything reports nothing, so text that merely NAMES the heading, a
-// frontmatter close, a thematic break and a table divider must all stay clean.
+// thematic break and a table divider must all stay clean — and so must the two
+// shapes the assembler explicitly declines to read as headings: a frontmatter
+// block's closing delimiter, which closes a block rather than underlining one,
+// and anything inside a fence, which is an EXAMPLE of a record rather than a
+// record. The fenced rows are the cost of widening: setext rules and `<h2>` tags
+// are exactly what a fenced example of a record carries.
 func TestFieldAbsenceSeesEveryHeadingForm(t *testing.T) {
 	const excluded = "Audit Notes"
 	found := false
@@ -310,6 +315,14 @@ func TestFieldAbsenceSeesEveryHeadingForm(t *testing.T) {
 		{"lower cased", "## audit notes\n\nwarm text\n", true},
 		{"prose naming the heading", "The record's Audit Notes stay behind.\n", false},
 		{"a frontmatter close under a key", "---\nid: spc-1\nintent: itd-1\n---\n\nbody\n", false},
+		{
+			"a frontmatter close under a block scalar naming the heading",
+			"---\nsummary: |\n  Open Questions\n---\n\nbody\n",
+			false,
+		},
+		{"a fenced markdown example", "```markdown\nAudit Notes\n-----------\n```\n", false},
+		{"a fenced html example", "```html\n<h2>Audit Notes</h2>\n```\n", false},
+		{"a fenced atx example", "```markdown\n## Audit Notes\n```\n", false},
 		{"a thematic break under a blank line", "Audit Notes are elsewhere.\n\n---\n\nbody\n", false},
 		{"a table divider", "| Audit Notes |\n| --- |\n| a cell |\n", false},
 		{"an unrelated heading", "## Mechanism\n\nbody\n", false},
