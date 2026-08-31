@@ -136,9 +136,9 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 	assembleCmd.Flags().BoolVar(&dryRun, "dry-run", false,
 		"write nothing; with --out the two artefacts still land in that directory")
 
-	var outputJSON string
+	var readingJSON string
 	ingestCmd := &cobra.Command{
-		Use:   "ingest --output-json <path>",
+		Use:   "ingest --reading-json <path>",
 		Short: "Validate one reading's returned output and write its records",
 		Long: "Validate the JSON a cold reading returned and write its reading records.\n\n" +
 			"The verb checks what the reading was LICENSED to produce, not only what it saw: the\n" +
@@ -149,7 +149,7 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 			"as an unknown field. Nothing durable is written until the whole payload validates, and\n" +
 			"the run metadata is written last as the commit marker: a run without one never happened,\n" +
 			"and an orphaned stage is named and cleared by the next invocation.",
-		Example: "  abcd reading ingest --output-json ./reading-output.json --json",
+		Example: "  abcd reading ingest --reading-json ./reading-output.json --json",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) > 0 {
 				return &exitError{Code: 2, Msg: "reading ingest: this verb takes no positional argument; " +
@@ -159,15 +159,15 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if outputJSON == "" {
-				return &exitError{Code: 2, Msg: "reading ingest: --output-json <path> is required: " +
+			if readingJSON == "" {
+				return &exitError{Code: 2, Msg: "reading ingest: --reading-json <path> is required: " +
 					"the JSON the reading returned"}
 			}
 			// The operator's path means what the shell means by it; the core is
 			// handed the resolved one. The working directory is a transport fact
 			// the core does not hold.
 			cwd := mustCwd()
-			resolved := outputJSON
+			resolved := readingJSON
 			if !filepath.IsAbs(resolved) {
 				resolved = filepath.Join(cwd, filepath.FromSlash(resolved))
 			}
@@ -194,7 +194,7 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 			})
 		},
 	}
-	ingestCmd.Flags().StringVar(&outputJSON, "output-json", "",
+	ingestCmd.Flags().StringVar(&readingJSON, "reading-json", "",
 		"path to the JSON the cold reading returned")
 
 	readingCmd.AddCommand(assembleCmd)

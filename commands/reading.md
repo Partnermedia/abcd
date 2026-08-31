@@ -1,7 +1,7 @@
 ---
 name: reading
 description: Assemble the input a cold reading is handed and validate the output it returns, by invoking the abcd binary. Bare invocation is a read-only status render; assemble produces the assembled input and its hashed manifest, and ingest validates one reading's output and writes its records.
-argument-hint: "[] | assemble --position <widening|entailment|comparative|detection> --target <HEAD|sha> [--out <dir>] [--dry-run] | ingest --output-json <path>"
+argument-hint: "[] | assemble --position <widening|entailment|comparative|detection> --target <HEAD|sha> [--out <dir>] [--dry-run] | ingest --reading-json <path>"
 ---
 
 # `/abcd:reading` — cold-reading input assembler
@@ -97,10 +97,10 @@ detect it after the fact.
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/abcd" reading ingest \
-  --output-json ./reading-output.json --json
+  --reading-json ./reading-output.json --json
 ```
 
-`--output-json` names the JSON the reading returned. It is the only operand:
+`--reading-json` names the JSON the reading returned. It is the only operand:
 the output states its own run, position and regime, and there is no flag that
 could set one. A missing operand, a positional argument, and every refusal
 below exit 2.
