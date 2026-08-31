@@ -175,17 +175,27 @@ func TestMissingBodyFieldRefusesTheItem(t *testing.T) {
 	if len(fields) < 2 {
 		t.Fatalf("the detection body declares %d field(s); this case needs one to remove", len(fields))
 	}
+	// The invisible forms are here for the reason they are on the pattern: a
+	// declared body field holding one zero-width rune states nothing, and
+	// strings.TrimSpace does not treat it as blank. U+034F is a MARK and U+FE00 a
+	// variation selector, so the Cf category alone does not reach either.
+	forms := map[string]string{
+		"empty": "", "absent": "", "zero-width space": "\u200b",
+		"soft hyphen": "\u00ad", "combining grapheme joiner": "\u034f",
+		"variation selector": "\ufe00", "non-breaking space": "\u00a0\u00a0",
+	}
 	for _, field := range fields {
 		field := field
-		for _, form := range []string{"empty", "absent"} {
+		for _, form := range []string{"empty", "absent", "zero-width space",
+			"soft hyphen", "combining grapheme joiner", "variation selector", "non-breaking space"} {
 			t.Run(field+"/"+form, func(t *testing.T) {
 				f := newIngestFixture(t, "detection")
 				doc := f.payload(2)
 				item := doc["items"].([]any)[1].(map[string]any)
-				if form == "empty" {
-					item[field] = ""
-				} else {
+				if form == "absent" {
 					delete(item, field)
+				} else {
+					item[field] = forms[form]
 				}
 
 				r := f.refusedItem(doc, 2, 2)
@@ -429,6 +439,19 @@ func TestTheRefusalListIsBoundedInCount(t *testing.T) {
 		}
 		if run.RefusedCount != items-1 {
 			t.Errorf("the run record's refused_count is %d, want %d", run.RefusedCount, items-1)
+		}
+		// The elision entry names no item. Rendering it as "item 0" would send a
+		// reader looking for one that does not exist.
+		for _, r := range res.RefusedItems {
+			if r.Rule == "refusals-elided" {
+				if r.Ordinal != 0 {
+					t.Errorf("the elision entry claims ordinal %d", r.Ordinal)
+				}
+				if strings.Contains(r.Detail, "refused_count") {
+					t.Errorf("the elision entry refers the reader to a field the text surface does "+
+						"not print: %q", r.Detail)
+				}
+			}
 		}
 	})
 

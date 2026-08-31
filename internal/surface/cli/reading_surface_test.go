@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -580,5 +581,34 @@ func TestIngestRendersARefusalRecord(t *testing.T) {
 	}
 	if len(res.Records) != 0 {
 		t.Errorf("a refused run reported %d record(s)", len(res.Records))
+	}
+}
+
+// TestTheTextRenderNamesNoItemZero: the elision entry a bounded refusal list
+// carries is not an item, and the text surface must not print it as one — there
+// is no item 0, and a reader sent looking for it finds nothing. The same render
+// prints the refusal TOTAL, so the count is visible without reading the JSON.
+func TestTheTextRenderNamesNoItemZero(t *testing.T) {
+	var buf bytes.Buffer
+	renderIngestResult(&buf, reading.IngestResult{
+		RunID: "rdg-2608310000000041", Position: "detection", Regime: "registrative",
+		RefusedCount: 199,
+		RefusedItems: []reading.ItemRefusal{
+			{Ordinal: 2, Rule: "named-provenance", Detail: "item 2 names no pattern"},
+			{Rule: "refusals-elided", Detail: "and 178 more item(s) refused"},
+		},
+	})
+	out := buf.String()
+	if strings.Contains(out, "item 0") {
+		t.Errorf("the render names an item 0:\n%s", out)
+	}
+	if !strings.Contains(out, "refused items: 199") {
+		t.Errorf("the render does not print the refusal total:\n%s", out)
+	}
+	if !strings.Contains(out, "item 2 names no pattern") {
+		t.Errorf("the render dropped a real item refusal:\n%s", out)
+	}
+	if !strings.Contains(out, "and 178 more") {
+		t.Errorf("the render dropped the elision entry:\n%s", out)
 	}
 }

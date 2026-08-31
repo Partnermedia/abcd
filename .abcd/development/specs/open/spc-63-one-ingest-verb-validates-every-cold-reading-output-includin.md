@@ -161,16 +161,34 @@ Two enforcement layers sit behind that:
   widening prohibitions raise review flags on the run record instead, because
   the generative licence is the widest and the constraint falls at admission.
 
-**Matching runs over a folded copy.** Go's regexp is RE2, whose whitespace and
-word-boundary classes are ASCII-only, and the terminal sanitiser does not mask
-U+00A0 — so a signature's own phrasing with a non-breaking space between two
-words, or a zero-width space inside a keyword, matched nothing and the item
-landed. The detectors therefore read a copy with every Unicode space folded to
-ASCII and every format rune dropped; the stored text is untouched. This is
-deliberately NOT the residue itd-185 discloses, which covers a fix proposal or
-disposition PHRASED outside the registry: this was the registry's own phrasing
-with one invisible byte substituted, and filing it under the disclosure would
-turn an honest residue into cover for a defect (iss-2608311306535485).
+**Matching runs over a folded copy, and so does the provenance rule.** Go's
+regexp is RE2, whose whitespace and word-boundary classes are ASCII-only, and
+the terminal sanitiser does not mask U+00A0 — so a signature's own phrasing with
+a non-breaking space between two words, or a zero-width space inside a keyword,
+matched nothing and the item landed. `strings.TrimSpace` likewise does not treat
+a zero-width rune as blank, so a `pattern` of one U+200B satisfied ac-11 at all
+four regimes and the record then asserted a provenance it does not carry.
+
+`foldForMatching` closes three classes and the stored text is untouched: every
+Unicode space folds to ASCII; every invisible rune is dropped, across all three
+categories that hold one — `Cf`, `Other_Default_Ignorable_Code_Point` (U+034F is
+a MARK, so guarding `Cf` alone left it open) and `Variation_Selector`; and NFKC
+folds the compatibility forms (the `fi` ligature, the fullwidth letters). Both
+the signature registry and the blankness rules read through it.
+
+**What stays open, stated plainly because this section previously read as a
+closure:** a script-CONFUSABLE substitution. A Cyrillic that is not the Latin
+one, and no normalisation equates them, so a signature's phrasing written in a
+confusable script is not caught. Closing it needs a confusables table, a new
+dependency and a maintainer's decision. itd-185's disclosed residue names this
+class alongside the phrased-outside-the-registry one.
+
+The line between defect and residue is one test: the registry's phrasing with a
+byte substituted is an evasion of the gate, and phrasing outside the registry is
+a limit of it. The invisible and compatibility classes fell on the defect side
+and are closed (iss-2608311306535485, iss-2608311351290623); the confusable
+class falls on the defect side too and is open, which is why it is disclosed
+rather than filed under the calibration residue.
 
 **Every signature ships enforced.** Each registry entry carries a literal mode
 (`enforce` or `flag`) in Go, with no configuration seam: degrading a signature
@@ -268,13 +286,15 @@ record it would become would exceed `issueschema.RecordReadLimit` — an oversiz
 record is durable and, because every reader of the family applies that limit,
 permanently unanswerable.
 
-The size check counts every value DOUBLE. It is measured before two writer steps
-that lengthen text, and the doubling is exact rather than a guess: the record's
-scalar writer escapes exactly two characters, one byte each, and the hidden-rune
-encoder emits neither. The envelope allowance covers the other step, the ledger
-redactor, whose growth is bounded by the number of secrets in an item rather
-than by its length — an allowance, not a proof, and the disclosed residue is a
-record dense in short secrets.
+**The record's size is DECIDED where the exact byte count exists**, in
+`capture.IngestReading` on the assembled content: values already redacted,
+already escaped, and the string that reaches the disk. Two attempts to decide it
+from the payload failed the same way — each modelled one lengthening step and
+missed the next, and a record written past `issueschema.RecordReadLimit` is
+durable and unreadable by every reader of the family, so the item can never be
+dispositioned. `recordBytes` remains upstream as a cheap early FILTER, which is
+what gives an obviously oversize item an item-level refusal that lands the rest
+of the run; it is not the decision, and it does not have to be exact.
 
 Three caps bound what a payload can put into a message or a durable record, in
 the three dimensions it chooses: the length of one value, the number of field

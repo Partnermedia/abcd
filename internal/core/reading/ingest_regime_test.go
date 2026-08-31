@@ -383,6 +383,22 @@ func TestTheRegimeGateIsNotEvadedByInvisibleRunes(t *testing.T) {
 		{"ideographic space", "comparative", "characterisation",
 			"options of this shape behave unremarkably, and we" + ideoSpace + "recommend option B",
 			"RG-EVAL-RECOMMENDATION"},
+		// U+034F is a MARK, not a format rune, and U+FE00 is a variation
+		// selector: guarding Cf alone was the same defect one category over.
+		{"combining grapheme joiner", "detection", "why_a_tension",
+			"the record and the tree disagree; the f\u034fix is to restate the constraint",
+			"RG-REG-FIXPROPOSAL"},
+		{"variation selector", "detection", "why_a_tension",
+			"the record and the tree disagree; the fix\ufe00 is to restate the constraint",
+			"RG-REG-FIXPROPOSAL"},
+		// Compatibility forms: the registry's own phrasing in code points that
+		// render the same. NFKC folds them.
+		{"ligature", "detection", "why_a_tension",
+			"the record and the tree disagree; the \ufb01x is to restate the constraint",
+			"RG-REG-FIXPROPOSAL"},
+		{"fullwidth letters", "comparative", "characterisation",
+			"options of this shape behave unremarkably, and \uff57\uff45 recommend option B",
+			"RG-EVAL-RECOMMENDATION"},
 	}
 	for _, tc := range evasions {
 		tc := tc
@@ -399,18 +415,43 @@ func TestTheRegimeGateIsNotEvadedByInvisibleRunes(t *testing.T) {
 	}
 
 	// The folding is for MATCHING only: the stored text keeps its own bytes.
-	t.Run("innocent prose carrying a non-breaking space is accepted", func(t *testing.T) {
-		f := newIngestFixture(t, "detection")
-		doc := f.payload(1)
-		doc["items"].([]any)[0].(map[string]any)["why_a_tension"] =
-			"the constraint names a budget of 30" + nbsp + "ms, and the shipped path exceeds it"
-
-		res := f.mustIngest(doc)
-		if len(res.Records) != 1 {
-			t.Fatalf("innocent prose was refused: %v", res.RefusedItems)
+	//
+	// This battery is the other half of the fix and the more important one. Every
+	// transformation above widens what refuses, and NFKC is more aggressive than
+	// the rest — so each case here is ordinary prose that legitimately carries
+	// one of the runes being folded, and every one must still LAND. An evasion
+	// traded for a false refusal costs a reading its findings, which is the cost
+	// itd-185's open question is about.
+	t.Run("innocent prose still lands", func(t *testing.T) {
+		innocent := []struct{ name, text string }{
+			{"non-breaking space in a measurement", "the constraint names a budget of 30" + nbsp + "ms"},
+			{"soft hyphen at a line break", "the constraint is docu\u00admented in the record"},
+			{"narrow no-break space in a figure", "the budget is 30" + narrowNbsp + "%, and the path exceeds it"},
+			{"zero-width non-joiner in a compound", "the record names a well\u200cknown constraint"},
+			{"combining acute", "the re\u0301cord and the tree disagree about the constraint"},
+			{"variation selector after a glyph", "the record marks it \u2714\ufe0f and the tree does not"},
+			{"the bare word fix", "the constraint names a fix window, and the tree has none"},
+			{"the bare word order", "the record states an order of operations the tree does not keep"},
+			{"the word recommend in quoted material", "the passed material uses the word recommend"},
+			{"ideographic text", "the record states \u5236\u7d04 and the tree does not"},
+			{"an em dash and curly quotes", "the record says \u201cone thing\u201d \u2014 the tree says another"},
+			{"a ligature in ordinary prose", "the record de\ufb01nes the constraint the tree ignores"},
 		}
-		if len(res.RefusedItems) != 0 {
-			t.Errorf("an evasion was traded for a false refusal: %v", res.RefusedItems)
+		for _, tc := range innocent {
+			tc := tc
+			t.Run(tc.name, func(t *testing.T) {
+				f := newIngestFixture(t, "detection")
+				doc := f.payload(1)
+				doc["items"].([]any)[0].(map[string]any)["why_a_tension"] = tc.text
+
+				res := f.mustIngest(doc)
+				if len(res.Records) != 1 {
+					t.Fatalf("innocent prose was refused: %v", res.RefusedItems)
+				}
+				if len(res.RefusedItems) != 0 {
+					t.Errorf("an evasion was traded for a false refusal: %v", res.RefusedItems)
+				}
+			})
 		}
 	})
 }
