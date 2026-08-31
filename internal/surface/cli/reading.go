@@ -176,7 +176,7 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 				OutputPath: resolved,
 			})
 			if err != nil {
-				return &exitError{Code: 2, Msg: "reading ingest: " + scrubPaths(err)}
+				return &exitError{Code: 2, Msg: "reading ingest: " + trimCorePrefix(scrubPaths(err))}
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				renderIngestResult(w, res)
@@ -241,6 +241,20 @@ func renderAssembleResult(w io.Writer, res reading.AssembleResult) {
 	}
 	fmt.Fprintf(w, "  written:       %s and %s in %s\n",
 		reading.BundleFileName, reading.ManifestFileName, res.OutDir)
+}
+
+// trimCorePrefix drops the core package's own tag from a message this front door
+// is about to prefix with the verb's name.
+//
+// Printing both reads as a stutter — `abcd: reading ingest: reading: ...` — and
+// the refusal message is load-bearing for this verb: six of itd-185's thirteen
+// criteria require the offending field, the item's ordinal or the signature id
+// to be NAMED, so a message a reader skims past is a criterion half-met rather
+// than a cosmetic complaint. The `assemble` path above carries the same stutter
+// and is deliberately left alone: it is a change to a shipped verb's output
+// rather than to what this delivery adds, and it is captured separately.
+func trimCorePrefix(msg string) string {
+	return strings.TrimPrefix(msg, "reading: ")
 }
 
 // renderIngestResult writes one ingest's text render.
