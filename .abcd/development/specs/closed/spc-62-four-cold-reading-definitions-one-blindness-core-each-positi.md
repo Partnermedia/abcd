@@ -51,7 +51,7 @@ byte-identity test on the shared core, and the tests that hold each definition t
 its five parts and its regime value.
 
 **Out.** Enforcing the blindness, which is the assembler's job checked by
-[itd-186](../../intents/planned/itd-186-the-read-block-eval-falsifies-the-firewall-planted-warm-cont.md)'s
+[itd-186](../../intents/shipped/itd-186-the-read-block-eval-falsifies-the-firewall-planted-warm-cont.md)'s
 and
 [itd-187](../../intents/planned/itd-187-amnesia-is-a-repository-property-proven-by-an-eval-the-same.md)'s
 evals; validating what a reading produced against its regime, which is

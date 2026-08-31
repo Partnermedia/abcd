@@ -30,7 +30,7 @@ CI is a cycle exit criterion.
 spc-61 is being written concurrently. Where it is still a stub, this spec
 designs against itd-183's own text and the assembler row of the cycle build
 plan, and inherits the four interface demands
-[spc-64](spc-64-the-read-block-eval-falsifies-the-firewall-planted-warm-cont.md)
+[spc-64](../closed/spc-64-the-read-block-eval-falsifies-the-firewall-planted-warm-cont.md)
 places on it rather than adding a fifth.
 
 ## Scope
