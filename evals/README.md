@@ -42,9 +42,37 @@ read the assembler's own include table could only ever confirm the table.
 `holed/` is the negative control, holding the replacement content for the two
 files a relocated plant lands in; `home/` is the fixture HOME carrying the
 planted transcript store, keyed on the fixture's root-commit sha at
-materialisation. `TestEverySentinelIsPlanted` is the anti-vacuity guard: an
-absence assertion cannot see a corpus that lost its plants, so the corpus is
-asserted separately from the absence.
+materialisation.
+
+### What keeps it from passing vacuously
+
+An absence eval's characteristic failure is asserting nothing while looking
+green, so the corpus is adversarial per rule and three separate guards stand
+under the assertions:
+
+- `TestEverySentinelIsPlanted` — the corpus keeps its plants, at their declared
+  count, in their declared homes, all tracked by git (the assembler walks the
+  tracked set, so an untracked plant tests nothing).
+- The carrier floor — every plant-bearing file the include list names arrives at
+  each position, and its own **cold marker text** is in the bundle's bytes. A
+  manifest names what an assembly says it passed; only the bundle says what it
+  actually passed.
+- The declared table sizes — each oracle table asserts its count rather than
+  merely being non-empty, because a `> 0` floor on a table whose size is known
+  lets it halve unnoticed.
+
+The plants are chosen so that each rule of the assembler's contract has one that
+dies when the rule is removed — including the **positive** half of the field
+projection, which needs a section that is neither projected nor on the exclusion
+floor, and each excluded heading, which needs a home on a record type that
+travels whole (on a projected type the projection keeps the heading out whatever
+the floor says, so its exclusion cannot be falsified there).
+
+`coldreading_coverage_test.go` is the matrix: one row per rule, the mutation that
+removes it, and the plants that die. A rule no mutation can falsify carries its
+reason in `Gap` rather than being quietly omitted, and
+`TestEveryAssemblerRuleHasAFalsifier` fails if a row names a plant that has gone,
+if a plant is named by no row, or if the number of declared gaps changes.
 
 ## Running them
 

@@ -137,11 +137,33 @@ var sentinelClasses = []sentinelClass{
 	{
 		Name: "WARM-FIELD",
 		Homes: []string{
+			"repo:.abcd/development/brief/01-product/01-press-release.md",
+			"repo:.abcd/development/intents/disciplines/itd-4-selection-criteria.md",
 			"repo:.abcd/development/intents/shipped/itd-1-a-shipped-intent.md",
+			"repo:.abcd/development/specs/open/spc-1-a-design-record.md",
+		},
+		Count: 7,
+		Why: "itd-183: a heading the exclusion floor names, on a record type the include " +
+			"list admits. Every one of the four excluded headings has a home on a record " +
+			"type that travels WHOLE — Why This Matters in a brief chapter, Audit Notes in " +
+			"a discipline, Open Questions and the scope-condition dispositions in a spec — " +
+			"because on a PROJECTED record type the projection keeps the heading out " +
+			"whatever the floor says, so deleting that heading's exclusion there leaks " +
+			"nothing and the rule cannot be falsified. The three on the shipped intent are " +
+			"the projected shape, kept so both shapes are exercised",
+	},
+	{
+		Name: "UNPROJECTED-SECTION",
+		Homes: []string{
+			"repo:.abcd/development/intents/shipped/itd-1-a-shipped-intent.md",
+			"repo:.abcd/development/intents/drafts/itd-2-a-draft-intent.md",
+			"repo:.abcd/development/intents/planned/itd-3-a-planned-intent.md",
 		},
 		Count: 3,
-		Why: "itd-183 assembler rule 2: a shipped intent travels as its claim record, so " +
-			"its Audit Notes, its scope-condition dispositions and every other heading stay behind",
+		Why: "itd-183 assembler rule 2: the intent projection is POSITIVE at field " +
+			"granularity, so a section it does not name stays behind — a section that is " +
+			"neither projected nor on the exclusion floor is the only plant that can tell " +
+			"a live projection from a dead one the redaction tidied up after",
 	},
 	{
 		Name: "WARM-KEY",
@@ -172,6 +194,24 @@ var sentinelClasses = []sentinelClass{
 		},
 		Count: 2,
 		Why:   "itd-183 exclusion list: admission and selection grounds",
+	},
+	{
+		Name:  "DEFINITION",
+		Homes: []string{"repo:agents/cold-reading-widening.md"},
+		Count: 1,
+		Why:   "itd-183: the reading definitions are the instrument, not its input",
+	},
+	{
+		Name:  "INSTRUMENT",
+		Homes: []string{"repo:evals/read_block.go"},
+		Count: 1,
+		Why:   "itd-183: the evals that guard this assembler are the instrument",
+	},
+	{
+		Name:  "ASSEMBLER-SOURCE",
+		Homes: []string{"repo:internal/core/reading/include.go"},
+		Count: 1,
+		Why:   "itd-183, ruling (18): a reading never receives the include table that decides what it sees",
 	},
 	{
 		Name:   "DRAFT-BODY",
@@ -235,13 +275,15 @@ var holes = []hole{
 // it must actually reach the assembly at.
 //
 // The anti-vacuity guard below the corpus proves the plants are on disk and
-// tracked. This proves they are IN THE ASSEMBLY, which is a different claim and
-// the one every absence assertion here rests on: an assembler that stopped
-// enumerating a whole class of source would drop the files carrying WARM-FIELD,
-// two of the three WARM-KEY plants and both draft plants, leave a bundle that is
-// still comfortably non-empty, and turn every assertion green for the reason
-// they exist to catch. A floor of "any item" cannot see that; a floor naming the
-// carriers can.
+// tracked. This proves their CONTENT is in the assembly, which is a different
+// claim and the one every absence assertion here rests on. Two failures it has
+// to see, and both have been watched: an assembler that stopped enumerating a
+// whole class of source drops the files carrying WARM-FIELD, two of the three
+// WARM-KEY plants and every candidate plant, and leaves a bundle that is still
+// comfortably non-empty; and an assembler that emitted an EMPTY text for each
+// item leaves the manifest describing exactly the same paths while the bundle
+// carries nothing to leak. A floor of "any item" cannot see the first. A floor
+// of "this path is in the manifest" cannot see the second.
 //
 // The list is transcribed from the same source as the include list above —
 // itd-183's positive includes — never from the assembler.
@@ -251,41 +293,74 @@ type carrier struct {
 	Path string
 	// Positions are the positions it must reach. Empty means every position.
 	Positions []string
-	// Class is the sentinel class the file carries, so a missing carrier names
-	// the assertion it silently disarmed.
-	Class string
+	// Marker is a COLD string drawn from the carrier's own travelling text: not a
+	// sentinel, so it belongs in the bundle, and distinctive, so finding it in the
+	// bundle's bytes means this file's content arrived rather than its name.
+	//
+	// Requiring the marker rather than the manifest path is the whole point. A
+	// manifest names what an assembly SAYS it passed; an assembly that emitted an
+	// empty text for every projected item would satisfy a path check exactly while
+	// every absence assertion over those items asserted nothing at all.
+	Marker string
+	// Classes are the sentinel classes the file carries, so a missing carrier
+	// names the assertions it silently disarmed.
+	Classes []string
 	// Why states what the file is doing in the assembly.
 	Why string
 }
 
-// carriers is the plant-bearing half of the include list.
+// carriers is the plant-bearing half of the include list. Every Marker is COLD
+// text drawn from the carrier's own body, so requiring it in the bundle requires
+// the carrier's bytes rather than its name.
 var carriers = []carrier{
 	{
-		Path:  ".abcd/development/brief/01-product/01-press-release.md",
-		Class: "WARM-KEY",
-		Why:   "a brief chapter admitted wholesale, carrying the production-mode key",
+		Path:    ".abcd/development/brief/01-product/01-press-release.md",
+		Marker:  "The fixture product, stated as it presently stands.",
+		Classes: []string{"WARM-KEY"},
+		Why:     "a brief chapter admitted wholesale, carrying the production-mode key",
 	},
 	{
-		Path:  ".abcd/development/intents/disciplines/itd-4-selection-criteria.md",
-		Class: "WARM-KEY",
-		Why:   "a discipline admitted whole, carrying the origin key",
+		Path:    ".abcd/development/intents/disciplines/itd-4-selection-criteria.md",
+		Marker:  "Six criteria, recorded as a standing commitment.",
+		Classes: []string{"WARM-KEY"},
+		Why:     "a discipline admitted whole, carrying the origin key",
 	},
 	{
-		Path:  ".abcd/development/specs/open/spc-1-a-design-record.md",
-		Class: "WARM-KEY",
-		Why:   "a spec admitted whole, carrying the origin key",
+		Path:    ".abcd/development/specs/open/spc-1-a-design-record.md",
+		Marker:  "The mechanics the capability was built against.",
+		Classes: []string{"WARM-KEY", "WARM-FIELD"},
+		Why:     "a spec admitted whole, carrying the origin key and an excluded heading",
 	},
 	{
-		Path:  ".abcd/development/intents/shipped/itd-1-a-shipped-intent.md",
-		Class: "WARM-FIELD",
-		Why:   "a shipped intent projected to its claim record, carrying the three headings that stay behind",
+		Path:    ".abcd/development/intents/shipped/itd-1-a-shipped-intent.md",
+		Marker:  "The promise, as it was made.",
+		Classes: []string{"WARM-FIELD", "UNPROJECTED-SECTION"},
+		Why:     "a shipped intent projected to its claim record",
 	},
 	{
 		Path:      ".abcd/development/intents/drafts/itd-2-a-draft-intent.md",
 		Positions: []string{posEntailment},
-		Class:     "DRAFT-ORIGIN",
+		Marker:    "The draft's press release, which the entailment reading reads.",
+		Classes:   []string{"DRAFT-ORIGIN", "UNPROJECTED-SECTION"},
 		Why:       "the candidate set the entailment reading reads, carrying the origin key",
 	},
+	{
+		Path:      ".abcd/development/intents/planned/itd-3-a-planned-intent.md",
+		Positions: []string{posEntailment},
+		Marker:    "A planned promise the entailment reading reads.",
+		Classes:   []string{"UNPROJECTED-SECTION"},
+		Why:       "the planned half of the candidate set, projected the same way",
+	},
+}
+
+// tokens renders the carrier's sentinel classes as their tokens, for a message
+// that names the assertions a missing carrier would have disarmed.
+func (c carrier) tokens() []string {
+	out := make([]string, 0, len(c.Classes))
+	for _, name := range c.Classes {
+		out = append(out, sentinelPrefix+name)
+	}
+	return out
 }
 
 // reachesAt reports whether the carrier must reach the assembly at position p.
@@ -335,6 +410,7 @@ type fixture struct {
 // resulting root-commit sha.
 func materialise(t *testing.T, variant string) fixture {
 	t.Helper()
+	requireOracleTables(t)
 	base := t.TempDir()
 	f := fixture{
 		Root:    filepath.Join(base, "repo"),
