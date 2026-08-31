@@ -39,6 +39,10 @@ type AssembleRequest struct {
 	// and scrubPaths cannot redact the result when the working directory is not a
 	// prefix of it. Empty means OutDir is the operator's own spelling.
 	OutDirLabel string
+	// Scope names what this reading is ABOUT: a record id, a material kind, or
+	// a committed preset. It is required, and it is a closed form — the
+	// invocation carries no prose (adr-58).
+	Scope string
 	// DryRun writes nothing into the repository's own tiers. With OutDir set the
 	// artefacts still land there; with OutDir empty nothing is written at all
 	// and the result is rendered only.
@@ -62,6 +66,7 @@ type AssembleResult struct {
 	AssemblerVersion string     `json:"assembler_version"`
 	ItemCount        int        `json:"item_count"`
 	ManifestHash     string     `json:"manifest_hash"`
+	Scope            Scope      `json:"scope"`
 	Size             SizeReport `json:"size"`
 	OutDir           string     `json:"out_dir,omitempty"`
 	Artefacts        []string   `json:"artefacts"`
@@ -222,6 +227,31 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 		return AssembleResult{}, err
 	}
 
+	// The comparative position refuses BEFORE anything is resolved or
+	// collected. Its declared object is the widening run's pre-admission
+	// output, which is not repository material and has no channel today, and
+	// the readings family that would hold a prior run is denied to this
+	// assembler structurally. What it did instead was hand back a bundle
+	// byte-identical to detection's and report success: a false green, where
+	// every gate passes and the reading is about the wrong thing. Refusing is
+	// the loud-staging principle applied to a position (itd-199, adr-58).
+	if position == PositionComparative {
+		return AssembleResult{}, fmt.Errorf("reading: the comparative position does not assemble. "+
+			"Its object is the widening reading's pre-admission output, which is not repository "+
+			"material and has no channel today, so there is no scope that is its object. It is "+
+			"refused rather than served the %s corpus, which is not what it is about",
+			PositionDetection)
+	}
+
+	presets, err := LoadPresets(req.RepoRoot)
+	if err != nil {
+		return AssembleResult{}, fmt.Errorf("reading: %w", err)
+	}
+	scope, err := ResolveScope(presets, position, req.Scope)
+	if err != nil {
+		return AssembleResult{}, fmt.Errorf("reading: %w", err)
+	}
+
 	cands, err := collect(req.RepoRoot, position)
 	if err != nil {
 		return AssembleResult{}, err
@@ -231,9 +261,30 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 	}
 
 	exclusions := ExclusionsFor(position)
-	if err := assertExclusions(cands, exclusions); err != nil {
+	if err := assertExclusionsHook(cands, exclusions); err != nil {
 		return AssembleResult{}, err
 	}
+
+	// The scope filter runs LAST, after the dirty gate and the exclusion
+	// assertion have both run over the unfiltered walk. That ordering is
+	// load-bearing rather than incidental: every structural property the
+	// assembler holds — the deny, the floor, the tracked-set intersection, the
+	// dirty gate — is a property of what the POSITION admits, and a scope must
+	// not be able to shrink the set those gates examine. A narrow scope
+	// therefore cannot quiet a dirty-tree refusal or an exclusion breach that
+	// a wide one would have caught (spc-69).
+	scoped := make([]candidate, 0, len(cands))
+	for _, c := range cands {
+		if scope.selects(c) {
+			scoped = append(scoped, c)
+		}
+	}
+	if len(scoped) == 0 {
+		return AssembleResult{}, fmt.Errorf("reading: the scope %q selects no item the %s "+
+			"position admits, so there is nothing to assemble; an empty assembly is a refusal "+
+			"rather than a bundle a reader would take for its whole object", scope.Source, position)
+	}
+	cands = scoped
 
 	runID, err := mintRunID()
 	if err != nil {
@@ -244,7 +295,12 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 		Type:          BundleType,
 		SchemaVersion: SchemaVersion,
 		Position:      position,
+		Scope:         bundleScope(scope),
 		Items:         make([]BundleItem, 0, len(cands)),
+	}
+	scopeHash, err := scope.Hash()
+	if err != nil {
+		return AssembleResult{}, err
 	}
 	manifest := Manifest{
 		Type:             ManifestType,
@@ -253,6 +309,9 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 		Position:         position,
 		TargetCommit:     target,
 		AssemblerVersion: AssemblerVersion(),
+		Scope:            scope,
+		ScopeHash:        scopeHash,
+		ScopeOverridden:  scope.Overridden,
 		Items:            make([]ManifestItem, 0, len(cands)),
 		Exclusions:       exclusions,
 	}
@@ -275,6 +334,7 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 		AssemblerVersion: AssemblerVersion(),
 		ItemCount:        len(bundle.Items),
 		ManifestHash:     hash,
+		Scope:            scope,
 		Size:             sizeReport(cands),
 		Artefacts:        []string{},
 		Bundle:           bundle,
@@ -504,6 +564,12 @@ func refuseDirtyIncludedPaths(repoRoot string, position Position, cands []candid
 	// record does. It sits under the deny, so no include row ever puts it in this
 	// set; it is named here instead.
 	included[LintConfigPath] = true
+	// The preset configuration decides what a scope resolves to, so an
+	// uncommitted edit to it reshapes the assembly exactly as an uncommitted
+	// edit to the record configuration does. It sits under the deny too, so no
+	// include row ever puts it in this set; it is named here for the same
+	// reason and by the same argument (itd-199).
+	included[PresetConfigPath] = true
 	var dirty []string
 	for _, entry := range dirtyPaths(out) {
 		if strings.HasSuffix(entry, "/") {
@@ -563,6 +629,22 @@ func dirtyPaths(out string) []string {
 // DECLARES what was refused, and this refuses to emit an item that contradicts
 // the declaration. A floor a run can quietly violate is a disclosure, not a
 // gate.
+// assertExclusionsHook is the seam that makes the ORDER of this pipeline
+// observable, and it exists because the order is a claim nothing else can
+// falsify.
+//
+// The gates above run over the unfiltered walk deliberately: a scope must not
+// be able to shrink the set they examine, or a narrow scope could quiet a
+// breach a wide one would have caught. Every other way of testing that turned
+// out to be untestable — the dirty gate's predicate is a pure function of the
+// position, so it refuses under either order, and the exclusion floor's own
+// paths are structurally denied, so no candidate can breach one to begin with.
+// The claim was therefore true, load-bearing, and unfalsifiable, which is the
+// shape itd-195 says to make executable or stop making.
+//
+// A test swaps this to record how many candidates the assertion was handed.
+var assertExclusionsHook = assertExclusions
+
 func assertExclusions(cands []candidate, exclusions []Exclusion) error {
 	for _, e := range exclusions {
 		if e.Signal != "directory" && e.Signal != "file" {

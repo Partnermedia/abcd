@@ -28,7 +28,7 @@ func TestExcludedFieldsNeverReachTheBundle(t *testing.T) {
 		sentinelDefinition:  "a reading definition and its eval",
 		sentinelLapse:       "the lapse log",
 	}
-	for _, p := range Positions() {
+	for _, p := range AssemblingPositions() {
 		res := assembleFixture(t, root, p)
 		text := bundleText(res.Bundle)
 		for token, what := range banned {
@@ -46,7 +46,12 @@ func TestDraftBodyIsColdAtEntailmentAndWarmElsewhere(t *testing.T) {
 	if text := bundleText(assembleFixture(t, root, PositionEntailment).Bundle); !strings.Contains(text, sentinelDraftBody) {
 		t.Error("the entailment position did not pass the draft body; articulation precedes selection")
 	}
-	for _, p := range []Position{PositionWidening, PositionComparative, PositionDetection} {
+	// Comparative is absent from this list because it no longer assembles
+	// (itd-199). The asymmetry it used to demonstrate here is still held at the
+	// table level for all four positions by
+	// TestWideningExcludesDraftsAndPlannedEntailmentIncludesThem, which tests
+	// Admits rather than an assembly, so nothing is lost by narrowing this one.
+	for _, p := range []Position{PositionWidening, PositionDetection} {
 		if text := bundleText(assembleFixture(t, root, p).Bundle); strings.Contains(text, sentinelDraftBody) {
 			t.Errorf("position %s passed the draft body; only entailment sees the candidate set", p)
 		}
@@ -63,7 +68,7 @@ func TestNewRecordFamilyIsAbsentWithoutTableChange(t *testing.T) {
 		"---\nid: inv-1\n---\n\n# An invented record\n\n"+invented+"\n")
 	gitCommitAll(t, root)
 
-	for _, p := range Positions() {
+	for _, p := range AssemblingPositions() {
 		res := assembleFixture(t, root, p)
 		if strings.Contains(bundleText(res.Bundle), invented) {
 			t.Errorf("position %s passed a record family invented after the table was written", p)
@@ -160,7 +165,7 @@ func TestAssembleRefusesDirtyIncludedPath(t *testing.T) {
 	root := fixtureRepo(t)
 	writeFile(t, root, "README.md", "# The repository\n\nEdited, uncommitted.\n")
 
-	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true})
 	if err == nil {
 		t.Fatal("assembly over a dirty included path succeeded; the manifest would promise a re-run it cannot deliver")
 	}
@@ -176,7 +181,7 @@ func TestAssembleIgnoresDirtinessOutsideTheIncludeTable(t *testing.T) {
 	writeFile(t, root, ".abcd/work/DECISIONS.md", "# Decisions\n\nedited, uncommitted.\n")
 
 	if _, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true,
 	}); err != nil {
 		t.Fatalf("a dirty excluded path blocked the assembly: %v", err)
 	}
@@ -186,7 +191,7 @@ func TestAssembleIgnoresDirtinessOutsideTheIncludeTable(t *testing.T) {
 func TestTargetRefusesBranchAndTag(t *testing.T) {
 	root := fixtureRepo(t)
 	for _, bad := range []string{"main", "v0.6.8", "HEAD~1", "origin/main", "", "abc", strings.Repeat("a", 41)} {
-		_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: bad, DryRun: true})
+		_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: bad, Scope: fixtureScopeName, DryRun: true})
 		if err == nil {
 			t.Errorf("target %q was accepted; only HEAD or a 7-to-40-digit hex sha may be named", bad)
 		}
@@ -194,7 +199,7 @@ func TestTargetRefusesBranchAndTag(t *testing.T) {
 	head := headOf(t, root)
 	for _, good := range []string{"HEAD", head, head[:7], head[:12]} {
 		if _, err := Assemble(AssembleRequest{
-			RepoRoot: root, Position: PositionWidening, Target: good, DryRun: true,
+			RepoRoot: root, Position: PositionWidening, Target: good, Scope: fixtureScopeName, DryRun: true,
 		}); err != nil {
 			t.Errorf("target %q was refused: %v", good, err)
 		}
@@ -206,7 +211,7 @@ func TestTargetRefusesBranchAndTag(t *testing.T) {
 func TestTargetMustResolveToHead(t *testing.T) {
 	root := fixtureRepo(t)
 	_, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionWidening, Target: "0123456789abcdef", DryRun: true,
+		RepoRoot: root, Position: PositionWidening, Target: "0123456789abcdef", Scope: fixtureScopeName, DryRun: true,
 	})
 	if err == nil {
 		t.Fatal("a target that is not HEAD was accepted; assembly reads the working tree")
@@ -217,7 +222,7 @@ func TestTargetMustResolveToHead(t *testing.T) {
 func TestAssembleRefusesAnUnknownPosition(t *testing.T) {
 	root := fixtureRepo(t)
 	if _, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: Position("framing"), Target: "HEAD", DryRun: true,
+		RepoRoot: root, Position: Position("framing"), Target: "HEAD", Scope: fixtureScopeName, DryRun: true,
 	}); err == nil {
 		t.Fatal("an unknown position was accepted")
 	}
@@ -229,7 +234,7 @@ func TestAssembleDryRunWritesNothing(t *testing.T) {
 	root := fixtureRepo(t)
 	before := treeSnapshot(t, root)
 
-	res, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	res, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true})
 	if err != nil {
 		t.Fatalf("assemble: %v", err)
 	}
@@ -250,7 +255,7 @@ func TestAssembleWritesTwoSeparateArtefacts(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "run")
 
 	res, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionWidening, Target: "HEAD", OutDir: out, DryRun: true,
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, OutDir: out, DryRun: true,
 	})
 	if err != nil {
 		t.Fatalf("assemble: %v", err)
@@ -284,7 +289,7 @@ func TestAssembleWritesTwoSeparateArtefacts(t *testing.T) {
 // TestAssembleDefaultsToTheLocalTier holds the default artefact home.
 func TestAssembleDefaultsToTheLocalTier(t *testing.T) {
 	root := fixtureRepo(t)
-	res, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD"})
+	res, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName})
 	if err != nil {
 		t.Fatalf("assemble: %v", err)
 	}
@@ -353,7 +358,7 @@ func TestSourceFileWithAnUnterminatedFenceDoesNotAbortTheAssembly(t *testing.T) 
 	gitCommitAll(t, root)
 
 	res, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true,
 	})
 	if err != nil {
 		t.Fatalf("a fence inside a Go raw string aborted the assembly: %v", err)
@@ -380,7 +385,7 @@ func TestAssembleRefusesADeletedIncludedPath(t *testing.T) {
 		t.Fatalf("remove: %v", err)
 	}
 	_, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true,
 	})
 	if err == nil {
 		t.Fatal("an included path deleted in the working tree did not refuse the assembly")
@@ -406,7 +411,7 @@ func TestIgnoredFilesNeverEnterTheAssembly(t *testing.T) {
 	writeFile(t, root, "build/generated.go", "package build\n\n// "+canary+"\n")
 
 	res, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true,
 	})
 	if err != nil {
 		t.Fatalf("assemble: %v", err)
@@ -430,7 +435,7 @@ func TestUntrackedIncludedFileRefusesTheAssembly(t *testing.T) {
 	writeFile(t, root, "docs/newcomer.md", "# A newcomer\n\nUncommitted.\n")
 
 	_, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true,
 	})
 	if err == nil {
 		t.Fatal("an untracked included file did not refuse the assembly")
@@ -453,7 +458,7 @@ func TestAssembleRefusesAnUnconfiguredRecordScan(t *testing.T) {
 	gitCommitAll(t, root)
 
 	_, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true,
 	})
 	if err == nil {
 		t.Fatal("an unconfigured record scan assembled silently")
@@ -473,7 +478,7 @@ func TestAssembleRefusesAStoreTheConfigurationDoesNotName(t *testing.T) {
 	gitCommitAll(t, root)
 
 	_, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true,
 	})
 	if err == nil {
 		t.Fatal("an include row naming an unconfigured store assembled silently")
@@ -495,7 +500,7 @@ func TestDuplicateExcludedKeyRefusesTheFile(t *testing.T) {
 		"---\nid: spc-2\norigin: cold\norigin: "+sentinelOrigin+"\n---\n\n# A spec\n\nProse.\n")
 	gitCommitAll(t, root)
 
-	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true})
 	if err == nil {
 		t.Fatal("a duplicated excluded key did not refuse the file; the second copy survives redaction")
 	}
@@ -513,7 +518,7 @@ func TestExcludedKeySurvivingRedactionRefusesTheFile(t *testing.T) {
 		"---\nid: spc-3\norigin: "+sentinelOrigin+"\n----\n\n# A spec\n\nProse.\n")
 	gitCommitAll(t, root)
 
-	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true})
 	if err == nil {
 		t.Fatal("an excluded key survived redaction and was passed")
 	}
@@ -530,7 +535,7 @@ func TestCaseVariantExcludedHeadingRefusesTheFile(t *testing.T) {
 		"---\nid: spc-4\n---\n\n# A spec\n\n## audit notes\n\n"+sentinelAuditNotes+"\n")
 	gitCommitAll(t, root)
 
-	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true})
 	if err == nil {
 		t.Fatal("a case-variant excluded heading was passed whole")
 	}
@@ -547,7 +552,7 @@ func TestStagedRenameOutOfTheIncludeSetRefuses(t *testing.T) {
 	root := fixtureRepo(t)
 	gitRun(t, root, "mv", "docs/reference/thing.md", ".abcd/development/plans/thing.md")
 
-	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true})
 	if err == nil {
 		t.Fatal("an included file renamed out of the include set did not refuse the assembly")
 	}
@@ -563,7 +568,7 @@ func TestWorktreeRenameRefuses(t *testing.T) {
 	gitRun(t, root, "mv", "README.md", "READYOU.md")
 	gitRun(t, root, "reset", "-q")
 
-	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true})
 	if err == nil {
 		t.Fatal("a worktree rename of an included file did not refuse the assembly")
 	}
@@ -581,7 +586,7 @@ func TestRetargetedStoreDirectoryRefuses(t *testing.T) {
    "spc": ".abcd/development/specifications"}}}}`)
 	gitCommitAll(t, root)
 
-	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true})
 	if err == nil {
 		t.Fatal("a store pointed at an absent directory assembled silently")
 	}
@@ -599,7 +604,7 @@ func TestUncommittedLintConfigRefuses(t *testing.T) {
   {"enabled": true, "severity": "blocker", "record_stores": {"itd": ".abcd/development/intents",
    "spc": ".abcd/development/specs"}}}}`)
 
-	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true})
 	if err == nil {
 		t.Fatal("an uncommitted record configuration did not refuse the assembly")
 	}
@@ -614,7 +619,7 @@ func TestUntrackedFileInANewDirectoryRefuses(t *testing.T) {
 	root := fixtureRepo(t)
 	writeFile(t, root, "docs/newdir/page.md", "# A page\n\nUncommitted, in a new directory.\n")
 
-	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true})
 	if err == nil {
 		t.Fatal("an untracked admitted file in a new directory did not refuse the assembly")
 	}
@@ -655,7 +660,7 @@ func TestAssembleRefusesANonEmptyOutputDirectory(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "run")
 	writeFile(t, out, "leftover.txt", "from an earlier run\n")
 
-	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", OutDir: out})
+	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, OutDir: out})
 	if err == nil {
 		t.Fatal("a non-empty output directory was accepted")
 	}
@@ -665,12 +670,12 @@ func TestAssembleRefusesANonEmptyOutputDirectory(t *testing.T) {
 
 	empty := filepath.Join(t.TempDir(), "fresh")
 	if _, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionWidening, Target: "HEAD", OutDir: empty,
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, OutDir: empty,
 	}); err != nil {
 		t.Errorf("an absent output directory was refused: %v", err)
 	}
 	if _, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionWidening, Target: "HEAD", OutDir: empty,
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, OutDir: empty,
 	}); err == nil {
 		t.Error("a second run over the same directory was accepted; it is no longer empty")
 	}
@@ -721,7 +726,7 @@ func TestOwnArtefactRefusalIsContentSigned(t *testing.T) {
 // the artefact.
 func assertRefusesOwnArtefact(t *testing.T, root, what, rel string) {
 	t.Helper()
-	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true})
 	if err == nil {
 		t.Errorf("%s was admitted whole (%s)", what, rel)
 		return
@@ -752,7 +757,7 @@ func TestExcludedHeadingSpellingsAreRecognised(t *testing.T) {
 		gitCommitAll(t, root)
 
 		res, err := Assemble(AssembleRequest{
-			RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+			RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true,
 		})
 		if err != nil {
 			continue // a refusal is a legitimate way to recognise the spelling
@@ -772,7 +777,7 @@ func TestQuotedExcludedKeyIsRecognised(t *testing.T) {
 		"---\nid: spc-7\n\"origin\": "+sentinelOrigin+"\n---\n\n# A spec\n\nProse.\n")
 	gitCommitAll(t, root)
 
-	res, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	res, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true})
 	if err == nil && strings.Contains(bundleText(res.Bundle), sentinelOrigin) {
 		t.Error("a quoted excluded key travelled")
 	}
@@ -786,7 +791,7 @@ func TestBlockScalarWithABlankLineIsFullyRedacted(t *testing.T) {
 		"---\nid: spc-8\norigin: |\n  a first line\n\n  "+sentinelOrigin+"\nspec: kept\n---\n\n# A spec\n\nProse.\n")
 	gitCommitAll(t, root)
 
-	res, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	res, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true})
 	if err == nil && strings.Contains(bundleText(res.Bundle), sentinelOrigin) {
 		t.Error("a block scalar's tail survived the blank line inside it")
 	}
@@ -804,7 +809,7 @@ func TestFencedTemplateExampleDoesNotRefuse(t *testing.T) {
 	gitCommitAll(t, root)
 
 	if _, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true,
 	}); err != nil {
 		t.Fatalf("a fenced template example refused the assembly: %v", err)
 	}
@@ -824,7 +829,7 @@ func TestSymlinkedOutDirIntoAnAdmittedRootRefuses(t *testing.T) {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
 	if _, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionWidening, Target: "HEAD", OutDir: link,
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, OutDir: link,
 	}); err == nil {
 		t.Fatal("an output directory symlinked into an admitted root was accepted")
 	}
@@ -847,7 +852,7 @@ func TestSymlinkedStoreDirectoryRefuses(t *testing.T) {
    "spc": ".abcd/development/linked-specs"}}}}`)
 	gitCommitAll(t, root)
 
-	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true})
 	if err == nil {
 		t.Fatal("a store reached through a symlink was accepted")
 	}
@@ -867,7 +872,7 @@ func TestAbsentWalkSourceRefuses(t *testing.T) {
 	}
 	gitCommitAll(t, root)
 
-	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	_, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true})
 	if err == nil {
 		t.Fatal("an absent include-row source directory assembled silently")
 	}
@@ -886,7 +891,7 @@ func TestAnEmptyBucketStaysSilent(t *testing.T) {
 	gitCommitAll(t, root)
 
 	if _, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionEntailment, Target: "HEAD", DryRun: true,
+		RepoRoot: root, Position: PositionEntailment, Target: "HEAD", Scope: fixtureScopeName, DryRun: true,
 	}); err != nil {
 		t.Fatalf("an absent lifecycle bucket refused the assembly: %v", err)
 	}
@@ -937,7 +942,7 @@ func TestHeadingsThatRenderAsAnExcludedTitleAreRecognised(t *testing.T) {
 		gitCommitAll(t, root)
 
 		res, err := Assemble(AssembleRequest{
-			RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+			RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true,
 		})
 		if err != nil {
 			continue // a refusal is a legitimate way to recognise the spelling
@@ -957,7 +962,7 @@ func TestIndentedFrontmatterBlockIsRecognised(t *testing.T) {
 		"---\n id: spc-12\n origin: "+sentinelOrigin+"\n---\n\n# A spec\n\nProse.\n")
 	gitCommitAll(t, root)
 
-	res, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	res, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true})
 	if err == nil && strings.Contains(bundleText(res.Bundle), sentinelOrigin) {
 		t.Error("an indented frontmatter block let an excluded key travel")
 	}
@@ -978,7 +983,7 @@ func TestRawHTMLHeadingIsRecognised(t *testing.T) {
 		gitCommitAll(t, root)
 
 		res, err := Assemble(AssembleRequest{
-			RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+			RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true,
 		})
 		if err != nil {
 			continue
@@ -1029,7 +1034,7 @@ func TestYAMLKeySpellingsAreRecognised(t *testing.T) {
 		gitCommitAll(t, root)
 
 		res, err := Assemble(AssembleRequest{
-			RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+			RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true,
 		})
 		if err != nil {
 			continue
@@ -1057,7 +1062,7 @@ func TestRawHTMLHeadingFormsAreRecognised(t *testing.T) {
 		gitCommitAll(t, root)
 
 		res, err := Assemble(AssembleRequest{
-			RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+			RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true,
 		})
 		if err != nil {
 			continue
@@ -1083,7 +1088,7 @@ func TestUnresolvableFrontmatterShapesRefuse(t *testing.T) {
 		gitCommitAll(t, root)
 
 		if _, err := Assemble(AssembleRequest{
-			RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+			RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true,
 		}); err == nil {
 			t.Errorf("%s did not refuse", what)
 		}
@@ -1101,7 +1106,7 @@ func TestBlockScalarEndingInAnExcludedTitleIsNotASetextHeading(t *testing.T) {
 	gitCommitAll(t, root)
 
 	if _, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true,
 	}); err != nil && strings.Contains(err.Error(), "underlines") {
 		t.Errorf("a block scalar inside the frontmatter was read as a setext heading: %v", err)
 	}
@@ -1118,7 +1123,7 @@ func TestQuotedScalarMentioningAKeyDoesNotRefuse(t *testing.T) {
 	gitCommitAll(t, root)
 
 	if _, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true,
 	}); err != nil {
 		t.Fatalf("a quoted scalar mentioning a key refused the assembly: %v", err)
 	}
@@ -1133,7 +1138,7 @@ func TestHeadingFollowedByAnAutolinkDoesNotRefuse(t *testing.T) {
 	gitCommitAll(t, root)
 
 	if _, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true,
 	}); err != nil {
 		t.Fatalf("a heading carrying an autolink refused the assembly: %v", err)
 	}
@@ -1147,11 +1152,11 @@ func TestDefaultRunDirectoryRefusalNamesIt(t *testing.T) {
 	// Re-run into the same directory by pinning the mint, so the default lands
 	// where a run already sits — the collision the fallback has to survive.
 	setMinter(t, fixedMinter("2608301200", 789))
-	first, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD"})
+	first, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName})
 	if err != nil {
 		t.Fatalf("assemble: %v", err)
 	}
-	_, err = Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD"})
+	_, err = Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName})
 	if err == nil {
 		t.Fatal("a second run into one default directory was accepted")
 	}
@@ -1172,7 +1177,7 @@ func spcWithFrontmatter(t *testing.T, root, name, front string) {
 // run carrying the field.
 func refusesOrWithholds(t *testing.T, root, what, sentinel string) {
 	t.Helper()
-	res, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true})
+	res, err := Assemble(AssembleRequest{RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true})
 	if err != nil {
 		return
 	}
@@ -1267,7 +1272,7 @@ func TestHeadingRoleDivIsRecognised(t *testing.T) {
 func mustAssemble(t *testing.T, root, what string) {
 	t.Helper()
 	if _, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true,
 	}); err != nil {
 		t.Errorf("%s refused the assembly: %v", what, err)
 	}

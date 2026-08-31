@@ -104,7 +104,7 @@ func TestReadBlockCatchesAHoledFirewall(t *testing.T) {
 func TestReadBlockCatchesWarmFieldsOnIncludedTypes(t *testing.T) {
 	f := materialise(t, variantBaseline)
 	warm := map[string]bool{"WARM-KEY": true, "WARM-FIELD": true, "DRAFT-ORIGIN": true}
-	for _, position := range everyPosition {
+	for _, position := range assemblingPositions {
 		t.Run(position, func(t *testing.T) {
 			a := assemble(t, f, position)
 			var vs []violation
@@ -129,7 +129,7 @@ func TestReadBlockCatchesWarmFieldsOnIncludedTypes(t *testing.T) {
 // be handed by accident, and nothing else in the cycle tests it.
 func TestPriorRunExhaustNeverReaches(t *testing.T) {
 	f := materialise(t, variantBaseline)
-	for _, position := range everyPosition {
+	for _, position := range assemblingPositions {
 		t.Run(position, func(t *testing.T) {
 			a := assemble(t, f, position)
 			var vs []violation
@@ -197,10 +197,10 @@ func TestTheAssemblerRefusesAnUnredactableShape(t *testing.T) {
 					"tracked set, so an untracked plant is never read", r.Name, r.Path)
 			}
 
-			for _, position := range everyPosition {
+			for _, position := range assemblingPositions {
 				outDir := filepath.Join(t.TempDir(), "run-"+position)
 				args := append(append([]string{}, assembleVerb...),
-					"--position", position, "--target", "HEAD", "--out", outDir, "--dry-run")
+					"--position", position, "--target", "HEAD", "--scope", evalScope, "--out", outDir, "--dry-run")
 				out, code := runIn(t, f.Root, []string{"HOME=" + f.Home}, args...)
 				if code == 0 {
 					t.Errorf("the assembly at %s over the %s plant exited 0, %s; %s, so the "+
@@ -511,4 +511,47 @@ func countSentinels(t *testing.T, f fixture) (map[string]int, map[string][]strin
 		}
 	}
 	return counts, wheres
+}
+
+// TestComparativeRefusesToAssemble is what replaces the comparative position's
+// bundle assertions, and it is deliberately stronger than they were.
+//
+// Those assertions asked whether the bytes the position emitted carried a
+// sentinel. This asks whether it emits anything at all. Since itd-199 the
+// comparative position refuses: its declared object is the widening reading's
+// pre-admission output, which is not repository material and has no channel,
+// so the corpus it used to be handed was never what it was about.
+//
+// The failure this guards against is the position quietly starting to assemble
+// again — through a table change, a preset, or a resolution order — without
+// this eval being told. That is exactly the shape that once left six sentinel
+// classes unasserted here, and a refusal nobody checks is a refusal that can be
+// removed silently.
+func TestComparativeRefusesToAssemble(t *testing.T) {
+	f := materialise(t, variantBaseline)
+	outDir := filepath.Join(t.TempDir(), "run-comparative")
+	args := append(append([]string{}, assembleVerb...),
+		"--position", posComparative, "--target", "HEAD", "--scope", evalScope,
+		"--out", outDir, "--dry-run")
+	out, code := runIn(t, f.Root, []string{"HOME=" + f.Home}, args...)
+
+	if code == 0 {
+		t.Fatalf("the comparative position assembled (exit 0). Its object is the widening "+
+			"reading's pre-admission output, which no channel supplies, so anything it returns "+
+			"is about something other than what it was asked to read.\n%s", out)
+	}
+	for _, want := range []string{"comparative", "channel"} {
+		if !strings.Contains(strings.ToLower(out), want) {
+			t.Errorf("the refusal does not name %q, so an operator cannot tell this refusal "+
+				"from any other:\n%s", want, out)
+		}
+	}
+	// A refusal that still wrote an artefact would leave a bundle on disk that
+	// no assertion in this eval covers.
+	for _, name := range []string{bundleFile, manifestFile} {
+		if _, err := os.Stat(filepath.Join(outDir, name)); err == nil {
+			t.Errorf("the comparative refusal still wrote %s; a refused position must leave "+
+				"no artefact behind", name)
+		}
+	}
 }

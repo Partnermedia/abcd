@@ -1,8 +1,8 @@
 ---
 id: itd-199
 slug: a-reading-is-about-something-narrower-than-everything-its
-spec_id: null
-kind: null
+spec_id: spc-69
+kind: standalone
 suggested_kind: standalone
 reclassification_history: []
 builds_on: [itd-183, itd-184, itd-198]
@@ -26,7 +26,7 @@ The four positions were ruled as four objects and every one of them is corpus-sh
 ([iss-2608311501186646](../../../work/issues/open/iss-2608311501186646-the-assembled-input-for-a-real-reading-of-this-repository-is.md)).
 No selection between those two figures both fits a reader and preserves a position's stated object, which is why this is a redesign and not a filter.
 
-The originating intent, [itd-86](itd-86-cold-reading-surface.md), scoped a cold reading to "exactly one target document ... the constraints visible in that document alone". The shipped verb's `--target` names a commit, not a document, and the word survived while its referent changed. That is not a reversal of anything ruled — the four corpus-shaped objects follow from a ruling that stands — but it does mean the instrument lost the ability to be pointed at something, and the size is the consequence.
+The originating intent, [itd-86](../drafts/itd-86-cold-reading-surface.md), scoped a cold reading to "exactly one target document ... the constraints visible in that document alone". The shipped verb's `--target` names a commit, not a document, and the word survived while its referent changed. That is not a reversal of anything ruled — the four corpus-shaped objects follow from a ruling that stands — but it does mean the instrument lost the ability to be pointed at something, and the size is the consequence.
 
 The second finding is the same root seen from the other side: three of the four positions receive a byte-identical item set
 ([iss-2608311501240566](../../../work/issues/open/iss-2608311501240566-three-of-the-four-reading-positions-receive-a-byte-identical.md)).
@@ -34,15 +34,25 @@ A table that cannot say what a reading is about cannot distinguish four readings
 
 ## What's In Scope
 
-- **A scope operand** naming what a reading is about, in a closed grammar and never prose: a record id, a record family, or the name of a preset. **No repository path is accepted at the invocation.** itd-183's ac-3 rules the interface accepts a position and a target state and no free-text argument anywhere, and names the one revision it anticipates as a shape-validated record-id list; a raw path is prose and would make the invocation the framing channel that ruling exists to close. Absent, the verb refuses, as it already refuses an absent position or target.
-- **Committed, adjustable presets** under `.abcd/config/`, carrying a schema version. **A preset is where a repository path may be named**, because the file is committed, shape-validated and inside the dirty gate, so a path there is a reviewed repository fact rather than something typed at a prompt. This is what keeps the source lever — 82 per cent of the measured weight — without reopening the free-text ruling.
+- **A scope operand** naming what a reading is about, in a closed grammar and never prose: a record id, a record family, or the name of a preset. **No repository path is accepted at the invocation** — a raw path is prose, and would make the invocation the framing channel the 2026-08-28 rulings exist to close. Absent, the verb refuses, as it already refuses an absent position or target.
+
+- **The ruling that admits a third operand at all (maintainer, 2026-08-31), recorded as adr-58 and carried into brief invariant 15.** This intent cannot be built under the rules as they stand, and says so rather than shipping past them. Two records forbid it, and the difference between them matters.
+
+  itd-183's ac-3 rules the interface takes a position and a target state and nothing else. It names one anticipated revision, and that revision is **narrower than this intent on three counts**: it fires only "if the evaluative position proves to need candidates at invocation", it is "restricted to the intent family", and it carries candidates rather than a scope. This intent's trigger is size at every position, its grammar spans every record family, and — per the comparative ruling below — it defers the evaluative position entirely. **So none of the three tokens is the anticipated revision, a bare record id included.** M8 is superseded on the record rather than read as though it had already permitted this.
+
+  Brief invariant 15 states that invocation "carries no free text (position and target state only)". That parenthetical is an exhaustive enumeration, not an illustration, so a third operand contradicts it whether or not the operand is free text. The invariant moves to name the scope operand and to state the property it was actually protecting: that no operand carries prose.
+
+  The preset name earns its place on its **own** argument, not the record-id-list one. A preset name resolves into a committed, reviewed, shape-validated file inside the dirty gate, so what it expands to — repository paths included — is a repository fact under review rather than something typed at a prompt. The id and family tokens are shape-validated closed forms. Nothing at the invocation is prose, which is the property both records were protecting.
+- **Committed, adjustable presets** at `.abcd/config/reading-presets.json`, carrying a schema version. **A preset is where a repository path may be named**, because the file is committed, shape-validated and inside the dirty gate, so a path there is a reviewed repository fact rather than something typed at a prompt. This is what keeps the source lever — 82 per cent of the measured weight — without reopening the free-text ruling.
+- **A preset maps position to scope**, rather than carrying one scope every position shares. The measured finding this intent exists to fix is that three of the four positions receive a byte-identical item set, and a single scope intersected with four admissions that are already near-identical reproduces it exactly. Per-position scopes make the distinctness of the four readings a property of the configuration rather than a hope about it.
 - **`warm` is `cold` plus a delta, by construction**, so a scope added to cold appears in warm without anyone remembering to add it twice, and warm can never be narrower than cold. A preset that is neither is a third preset with its own name, not a redefinition of warm.
 - **No warm definitions.** A wider scope changes what a reader was given and changes nothing about the seven blindness conditions, which are carried verbatim by all four definitions and stay carried.
 - **A single document as a valid scope**, which is the narrowest form and restores what itd-86 asked for without disturbing the four positions.
 - **The scope carried in the bundle**, so the reading knows what it was given. This is the reader's fact, not the auditor's: the manifest is the auditor's alone by construction, and a reading told its object is the shipped tree while handed a subset will report the absence of the rest as a tension against the claim record, with every gate green.
 - **The effective scope and its hash recorded in the manifest**, and a run whose scope was overridden at invocation stamped as overridden — so drift between the committed preset and what people actually run is countable rather than invisible.
 - **The preset configuration in the dirty gate.** An uncommitted edit to it reshapes the assembly as surely as an edit to a record does, and it sits under the structural deny so no include row reaches it. The record-lint configuration is already named into the dirty set for exactly this reason and by exactly this argument; the preset file joins it.
-- **A stated precedence between the definition and the bundle.** A definition states what its position MAY read; the bundle states what THIS run was given. Where they disagree the bundle governs, and each definition says so in its Object section, because otherwise a reader holds two accounts of its object with no rule and reports the difference as a finding. The comparative position needs its own sentence: its object is not a repository source at all, so a scope there names the prior run whose output is being compared, never repository material.
+- **A stated precedence between the definition and the bundle.** A definition states what its position MAY read; the bundle states what THIS run was given. Where they disagree the bundle governs, and each definition says so in its Object section, because otherwise a reader holds two accounts of its object with no rule and reports the difference as a finding.
+- **The comparative position REFUSES, naming the channel it lacks** (maintainer, 2026-08-31). Its object is the widening run's pre-admission output, which is not repository material and has no channel today; and the readings family that would hold a prior run is denied to the assembler structurally, by itd-183's ruling on the manifest's home and by itd-186's ac-4. So there is no scope this intent can give comparative that is its stated object. What it does today is hand back a bundle byte-identical to detection's, which is a false green: the run succeeds, every gate passes, and the reading is about the wrong thing. Refusing is the `loud-staging` principle applied to a position — a stage that cannot do its job says so. Supplying the missing channel is a separate intent, and this one does not pretend to.
 - **The assembler version moved**, because both the bundle shape and the manifest shape change. The version's own documentation says it covers the include table, the projection, the bundle shape and the manifest shape together, while the only gate pinning it hashes the table's rendering; two manifests stamped alike, one carrying an effective scope and one not, would be indistinguishable by the field that exists to tell runs apart.
 - **The pinned operand set updated with a statement of what the new operand does.** itd-184's guard pins this verb's operands exactly and fails CLOSED on any addition, by design, so that a new operand has to say what it does before it can ship. A scope operand trips it, and that is the guard working.
 
@@ -56,8 +66,9 @@ A table that cannot say what a reading is about cannot distinguish four readings
 
 ## Scope Conditions
 
-- Whether a scope should be expressible as a set of record families rather than one target is unknown until several readings have run. The grammar starts closed and narrow; widening it is cheaper than retracting it.
-- The comparative position's object is the widening reading's pre-admission output, which is not a subset of the repository and has no channel today. A scope operand does not supply one, and that absence stays open.
+- Whether a scope should be expressible as a set of record families rather than one target is unknown until several readings have run. The grammar starts closed and narrow; widening it is cheaper than retracting it. <!-- cond: cond-2608312031029678 -->
+- The comparative position's object is the widening reading's pre-admission output, which is not a subset of the repository and has no channel today. A scope operand does not supply one, and that absence stays open — which is why this intent makes the position refuse rather than quietly serve it the wrong corpus. <!-- cond: cond-2608312031028702 -->
+- **The impact stays `fix`, and the reasoning is stated rather than left to be reconstructed.** A required operand where none existed is the textbook breaking change, and two things make it a fix here instead. The verb's output cannot be handed to any reader at any position, so there is no working invocation to break; and the comparative position was returning a corpus that is not its object, so its every past run was already wrong. Calling this `breaking` would assert that something usable stopped working, which would be the more misleading of the two labels. <!-- cond: cond-2608312031020321 -->
 
 ## Acceptance Criteria
 
@@ -67,9 +78,10 @@ A table that cannot say what a reading is about cannot distinguish four readings
 - **Given** a scope naming the intent record family at the widening position, **when** the assembly runs, **then** no item from the draft or planned intent families appears, because a scope intersects what the table admits there and never widens it.
 - **Given** an assembled bundle, **when** the reading reads it, **then** the bundle states the scope it was assembled under.
 - **Given** a run under a committed preset, **when** its manifest is read, **then** the manifest records the effective scope and its hash.
-- **Given** a run whose scope was overridden at invocation, **when** its manifest is read, **then** the run is stamped as overridden.
+- **Given** a run whose scope names a record id or a record family directly rather than a committed preset, **when** its manifest is read, **then** the run is stamped as overridden; **and given** a run whose scope names a committed preset, **then** it is not. Naming a preset is running as reviewed; departing from the presets is what the stamp counts, so drift between what is committed and what people actually run is countable rather than invisible.
 - **Given** an uncommitted edit to the preset configuration, **when** an assembly runs against a target state, **then** the verb refuses, as it does for an uncommitted edit to any other configuration that reshapes the assembly.
-- **Given** the committed presets, **when** an assembly runs at each of the four positions against one target state, **then** no two positions carry the same ITEM SET.
+- **Given** the committed presets, **when** an assembly runs at each of the three positions that assemble against one target state, **then** no two of them carry the same ITEM SET.
+- **Given** an invocation at the comparative position, **when** it runs, **then** the verb refuses and names the channel it lacks, rather than assembling a bundle identical to another position's and reporting success.
 - **Given** a preset naming `warm`, **when** it is resolved, **then** its scope contains every scope member of `cold` at the same position.
 - **Given** a definition and a bundle that disagree about the reading's object, **when** the reading reads them, **then** the bundle's scope governs and the definition says so.
 

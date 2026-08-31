@@ -49,7 +49,7 @@ func TestAssembledInputIsByteIdenticalAcrossRuns(t *testing.T) {
 		t.Fatal("both assemblies would run at the same path, so the comparison could not see " +
 			"an absolute path embedded in the output")
 	}
-	for _, position := range everyPosition {
+	for _, position := range assemblingPositions {
 		t.Run(position, func(t *testing.T) {
 			a := assemble(t, first, position)
 			b := assemble(t, second, position)
@@ -722,7 +722,7 @@ var manifestKeysScanned = []string{
 // a timestamp-shaped token there is unambiguously a defect.
 func TestManifestCarriesNoTimestamp(t *testing.T) {
 	first, _ := materialiseOrderPair(t)
-	for _, position := range everyPosition {
+	for _, position := range assemblingPositions {
 		t.Run(position, func(t *testing.T) {
 			a := assemble(t, first, position)
 			if err := nonVacuous(a); err != nil {

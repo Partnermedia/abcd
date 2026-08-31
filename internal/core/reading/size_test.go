@@ -60,7 +60,7 @@ func TestKindSplitDoesNotMoveAdmission(t *testing.T) {
 	restore := Table
 	t.Cleanup(func() { Table = restore })
 
-	for _, p := range Positions() {
+	for _, p := range AssemblingPositions() {
 		Table = restore
 		withRow := itemPaths(assembleFixture(t, root, p).Manifest)
 
@@ -90,7 +90,7 @@ func TestTestKindIsReachableAtEveryPosition(t *testing.T) {
 	writeFile(t, root, "widget_test.go", "package main\n\nfunc TestWidget() {}\n")
 	gitCommitAll(t, root)
 
-	for _, p := range Positions() {
+	for _, p := range AssemblingPositions() {
 		res := assembleFixture(t, root, p)
 		found := false
 		for _, m := range res.Manifest.Items {
@@ -199,7 +199,7 @@ func TestSizeReportRowsFollowTheVocabularyOrder(t *testing.T) {
 func TestDryRunCarriesTheSizeReport(t *testing.T) {
 	root := fixtureRepo(t)
 	res, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionDetection, Target: "HEAD", DryRun: true,
+		RepoRoot: root, Position: PositionDetection, Target: "HEAD", Scope: fixtureScopeName, DryRun: true,
 	})
 	if err != nil {
 		t.Fatalf("assemble: %v", err)
@@ -254,7 +254,13 @@ func TestBundleGainsNoFieldFromTheReport(t *testing.T) {
 	if err := json.Unmarshal(raw, &top); err != nil {
 		t.Fatalf("decode bundle: %v", err)
 	}
-	want := map[string]bool{"_type": true, "schema_version": true, "position": true, "items": true}
+	// "scope" is expected: itd-199 puts what a run was GIVEN into the bundle
+	// deliberately, because a reader told its object is the shipped tree and
+	// handed a tenth of it reports the missing nine tenths as a finding. What
+	// must stay out is the size report, which is the operator's fact and not
+	// the reading's.
+	want := map[string]bool{"_type": true, "schema_version": true, "position": true,
+		"scope": true, "items": true}
 	for key := range top {
 		if !want[key] {
 			t.Errorf("the bundle carries the top-level key %q; the report rides on the result alone", key)
@@ -442,19 +448,41 @@ func TestDecodeManifestRefusesAnItemWithoutAKind(t *testing.T) {
 		t.Fatalf("encode: %v", err)
 	}
 
-	// An explicit empty kind, and the key removed altogether: both are the same
-	// defect and both must be refused, because a decoder that only caught the
-	// spelled-out empty string would pass the commoner shape.
-	first := res.Manifest.Items[0]
-	for name, bad := range map[string]string{
-		"empty kind":   strings.Replace(string(raw), "\"kind\": \""+string(first.Kind)+"\"", "\"kind\": \"\"", 1),
-		"absent kind":  strings.Replace(string(raw), "\n      \"kind\": \""+string(first.Kind)+"\",", "", 1),
-		"unknown kind": strings.Replace(string(raw), "\"kind\": \""+string(first.Kind)+"\"", "\"kind\": \"warm-ledger\"", 1),
-	} {
-		if bad == string(raw) {
-			t.Fatalf("%s: the substitution did not change the document, so the case tests nothing", name)
+	// Mutated through the decoded document rather than by substituting text.
+	// A text substitution on "kind" was the obvious way to write this and it
+	// silently stopped testing anything the moment the manifest gained a scope
+	// block, because the scope's selectors carry "kind" too and the first
+	// occurrence is no longer the item's. Addressing items[0] by structure
+	// cannot drift that way.
+	mutate := func(t *testing.T, f func(item map[string]any)) []byte {
+		t.Helper()
+		var doc map[string]any
+		if err := json.Unmarshal(raw, &doc); err != nil {
+			t.Fatalf("decode for mutation: %v", err)
 		}
-		if _, err := DecodeManifest([]byte(bad)); err == nil {
+		items, ok := doc["items"].([]any)
+		if !ok || len(items) == 0 {
+			t.Fatal("the manifest carries no items to mutate")
+		}
+		item, ok := items[0].(map[string]any)
+		if !ok {
+			t.Fatal("the first manifest item is not an object")
+		}
+		f(item)
+		out, err := json.Marshal(doc)
+		if err != nil {
+			t.Fatalf("re-encode: %v", err)
+		}
+		return out
+	}
+
+	for name, f := range map[string]func(map[string]any){
+		"empty kind":   func(item map[string]any) { item["kind"] = "" },
+		"absent kind":  func(item map[string]any) { delete(item, "kind") },
+		"unknown kind": func(item map[string]any) { item["kind"] = "warm-ledger" },
+	} {
+		bad := mutate(t, f)
+		if _, err := DecodeManifest(bad); err == nil {
 			t.Errorf("a manifest with an %s decoded", name)
 		}
 	}

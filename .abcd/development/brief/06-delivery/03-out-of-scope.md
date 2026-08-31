@@ -98,7 +98,6 @@ gate. That is what keeps "not hand-counted" true after the day it was written.
 - `itd-164` — Licence vetting at source admission: `docs cite refresh` records each source's licence verdict into the committed baseline, and the zero-network gate refuses a new entry without one (builds on itd-163)
 - `itd-159` — the repo visibility model has a committed-record mode between private and public, with the matching fence-suppression (graduated from iss-223)
 - `itd-194` — the reading include table admits only what the exclusion floor can read, so a document the floor cannot parse is refused at admission rather than passed through unscanned and asserted over (carries itd-183's ten-record exclusion residue; the recognition fork ruled 2026-08-30 for narrowing admission)
-- `itd-199` — a reading is about something narrower than everything, and its scope is a committed, adjustable choice: a closed-grammar scope operand naming one record, one family, one path or a named preset, with `cold` and `warm` as two presets over one dial rather than two mechanisms, the scope carried in the bundle so the reading knows what it was given, and the effective scope recorded in the manifest (carries iss-2608311501240566 and the residue of iss-2608311501186646)
 <!-- /index -->
 
 **Later-phase items with no intent id.** These four were written into the brief

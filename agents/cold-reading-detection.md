@@ -34,6 +34,15 @@ a claim nobody has committed to is not a tension.
 - `.abcd/development/specs` — the design record a capability was built against.
 - `.` — the shipped tree: source, tests, delivered documentation, root prose and build configuration.
 
+
+**What this section states, and what governs.** This section states what your
+position MAY read. The bundle you were handed states what THIS run was actually
+given, which is narrower: a reading is commissioned about something, and the
+scope it was commissioned under travels in the bundle. **Where the two
+disagree, the bundle governs.** The absence of material this section names is
+therefore not a finding — it is the scope you were given, and reporting it as a
+tension against the record would be reporting the commission rather than the
+object.
 ## Question
 
 Answer exactly this question, and no other:

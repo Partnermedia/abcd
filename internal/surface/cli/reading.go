@@ -29,6 +29,7 @@ import (
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/reading"
+	"github.com/intentdriven/abcd/internal/termsafe"
 	"github.com/spf13/cobra"
 )
 
@@ -55,7 +56,7 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 		},
 	}
 
-	var position, target, outDir string
+	var position, target, outDir, scope string
 	var dryRun bool
 	assembleCmd := &cobra.Command{
 		Use:   "assemble --position <position> --target <HEAD|sha>",
@@ -89,6 +90,15 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 				return &exitError{Code: 2, Msg: "reading assemble: --target is required: HEAD, " +
 					"or a hexadecimal commit sha of 7 to 40 digits"}
 			}
+			// Required for the same reason the other two are: a reading is
+			// commissioned ABOUT something, and a defaulted scope would pick
+			// that on the operator's behalf. It is a closed form, never prose
+			// and never a path (adr-58).
+			if scope == "" {
+				return &exitError{Code: 2, Msg: "reading assemble: --scope is required: a record id " +
+					"(itd-N, spc-N, adr-N, iss-N), a material kind, or a committed preset named in " +
+					reading.PresetConfigPath}
+			}
 			pos, err := reading.ParsePosition(position)
 			if err != nil {
 				return &exitError{Code: 2, Msg: "reading assemble: " + scrubPaths(err)}
@@ -108,6 +118,7 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 				RepoRoot:    captureRoot(cwd),
 				Position:    pos,
 				Target:      target,
+				Scope:       scope,
 				OutDir:      resolvedOut,
 				OutDirLabel: outDir,
 				DryRun:      dryRun,
@@ -131,6 +142,9 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 		"the reading position: "+positionTokens())
 	assembleCmd.Flags().StringVar(&target, "target", "",
 		"the commit the assembly describes: HEAD, or a hexadecimal sha of 7 to 40 digits")
+	assembleCmd.Flags().StringVar(&scope, "scope", "",
+		"what the reading is about: a record id (itd-N, spc-N, adr-N, iss-N), a material kind,\n"+
+			"or a committed preset. No repository path is accepted here; a preset is where one may be named")
 	assembleCmd.Flags().StringVar(&outDir, "out", "",
 		"an empty or absent directory the assembled input and the manifest are written to\n"+
 			"(default: the local-tier run directory)")
@@ -247,6 +261,7 @@ func renderAssembleResult(w io.Writer, res reading.AssembleResult) {
 	fmt.Fprintf(w, "%s: %d item(s) assembled at the %s position of %s\n",
 		res.RunID, res.ItemCount, res.Position, shortSha(res.TargetCommit))
 	fmt.Fprintf(w, "  manifest hash: %s\n", res.ManifestHash)
+	renderScope(w, res.Scope)
 	renderSizeReport(w, res.Size)
 	if !res.Written {
 		fmt.Fprintln(w, "  written:       nothing (dry run; name --out to write the two artefacts)")
@@ -254,6 +269,35 @@ func renderAssembleResult(w io.Writer, res reading.AssembleResult) {
 	}
 	fmt.Fprintf(w, "  written:       %s and %s in %s\n",
 		reading.BundleFileName, reading.ManifestFileName, res.OutDir)
+}
+
+// renderScope writes what the reading was commissioned about, and says plainly
+// when the run departed from the committed presets — a run nobody can tell was
+// an override is a run whose drift from the reviewed configuration is
+// invisible.
+func renderScope(w io.Writer, s reading.Scope) {
+	clauses := make([]string, 0, len(s.Selectors))
+	for _, sel := range s.Selectors {
+		switch {
+		case sel.Kind != "":
+			clauses = append(clauses, string(sel.Kind))
+		case sel.Record != "":
+			clauses = append(clauses, sel.Record)
+		case sel.Path != "":
+			clauses = append(clauses, sel.Path+"/")
+		}
+	}
+	note := ""
+	if s.Overridden {
+		note = " (overridden at invocation, not a committed preset)"
+	}
+	// Sanitised because these are runtime-read strings: the source token comes
+	// from the operator and the path clauses come from a file on disk, and
+	// invariant 13 holds every such string to being termsafe before it joins a
+	// rendered line. This is the first render site in this file that emits file
+	// content, so it is the first that needs it.
+	fmt.Fprintf(w, "  scope:         %s%s\n", termsafe.Sanitize(s.Source), note)
+	fmt.Fprintf(w, "    selects:     %s\n", termsafe.Sanitize(strings.Join(clauses, ", ")))
 }
 
 // renderSizeReport writes what an assembly would cost, per material kind and in

@@ -37,6 +37,23 @@ func readingRepoAt(t *testing.T, root string) string {
 			t.Fatal(err)
 		}
 	}
+	// The surface test drives the real core, so the repository it builds needs
+	// the preset configuration an assembly now resolves its scope against. It
+	// selects every kind at every assembling position, so these tests keep the
+	// item sets they were written against.
+	write(".abcd/config/reading-presets.json", `{
+  "schema_version": 1,
+  "presets": {
+    "everything": {
+      "positions": {
+        "widening": {"kinds": ["brief-section", "glossary-term", "intent-projection", "discipline", "spec", "source", "test", "doc", "config"], "records": [], "paths": []},
+        "entailment": {"kinds": ["brief-section", "glossary-term", "intent-projection", "discipline", "spec", "source", "test", "doc", "config"], "records": [], "paths": []},
+        "detection": {"kinds": ["brief-section", "glossary-term", "intent-projection", "discipline", "spec", "source", "test", "doc", "config"], "records": [], "paths": []}
+      }
+    }
+  }
+}
+`)
 	write(".abcd/record-lint.json", `{"schema_version": 1, "rules": {"record_schema": {"enabled": true,
   "severity": "blocker", "record_stores": {"itd": ".abcd/development/intents", "spc": ".abcd/development/specs"}}}}`)
 	write(".abcd/development/brief/01-product/06-framing.md", "# Framing\n\n## Construal\n\nA gap in the record.\n")
@@ -147,7 +164,7 @@ func TestAssembleRefusesFreeTextOperands(t *testing.T) {
 	t.Chdir(repo)
 
 	out, err := runCLIErr(t, "reading", "assemble", "read this against the ledger",
-		"--position", "widening", "--target", "HEAD", "--dry-run")
+		"--scope", "everything", "--position", "widening", "--target", "HEAD", "--dry-run")
 	if err == nil {
 		t.Fatalf("a free-text operand was accepted:\n%s", out)
 	}
@@ -162,7 +179,7 @@ func TestPositionTokenIsClosed(t *testing.T) {
 	t.Chdir(repo)
 
 	for _, bad := range []string{"framing", "Widening", "", "widening extra"} {
-		args := []string{"reading", "assemble", "--target", "HEAD", "--dry-run"}
+		args := []string{"reading", "assemble", "--scope", "everything", "--target", "HEAD", "--dry-run"}
 		if bad != "" {
 			args = append(args, "--position", bad)
 		}
@@ -170,7 +187,7 @@ func TestPositionTokenIsClosed(t *testing.T) {
 			t.Errorf("position %q was accepted:\n%s", bad, out)
 		}
 	}
-	if _, err := runCLIErr(t, "reading", "assemble", "--position", "widening", "--target", "HEAD", "--dry-run"); err != nil {
+	if _, err := runCLIErr(t, "reading", "assemble", "--scope", "everything", "--position", "widening", "--target", "HEAD", "--dry-run"); err != nil {
 		t.Errorf("the widening position was refused: %v", err)
 	}
 }
@@ -182,7 +199,7 @@ func TestTargetRefusesBranchAndTag(t *testing.T) {
 	t.Chdir(repo)
 
 	for _, bad := range []string{"main", "v1.0.0", "HEAD~1"} {
-		out, err := runCLIErr(t, "reading", "assemble", "--position", "widening", "--target", bad, "--dry-run")
+		out, err := runCLIErr(t, "reading", "assemble", "--scope", "everything", "--position", "widening", "--target", bad, "--dry-run")
 		if err == nil {
 			t.Errorf("target %q was accepted:\n%s", bad, out)
 			continue
@@ -191,7 +208,7 @@ func TestTargetRefusesBranchAndTag(t *testing.T) {
 			t.Errorf("target %q exited 0", bad)
 		}
 	}
-	if out, err := runCLIErr(t, "reading", "assemble", "--position", "widening", "--dry-run"); err == nil {
+	if out, err := runCLIErr(t, "reading", "assemble", "--scope", "everything", "--position", "widening", "--dry-run"); err == nil {
 		t.Errorf("a missing --target was accepted:\n%s", out)
 	}
 }
@@ -203,7 +220,7 @@ func TestAssembleDryRunWritesNothing(t *testing.T) {
 	t.Chdir(repo)
 	before := treeOf(t, repo)
 
-	out := runCLI(t, "reading", "assemble", "--position", "widening", "--target", "HEAD", "--dry-run", "--json")
+	out := runCLI(t, "reading", "assemble", "--scope", "everything", "--position", "widening", "--target", "HEAD", "--dry-run", "--json")
 	var res reading.AssembleResult
 	if err := json.Unmarshal(out, &res); err != nil {
 		t.Fatalf("the --json envelope does not decode: %v\n%s", err, out)
@@ -230,7 +247,7 @@ func TestAssembleWritesTwoArtefactsIntoANamedDirectory(t *testing.T) {
 	t.Chdir(repo)
 	outDir := filepath.Join(t.TempDir(), "run")
 
-	raw := runCLI(t, "reading", "assemble", "--position", "entailment", "--target", "HEAD",
+	raw := runCLI(t, "reading", "assemble", "--scope", "everything", "--position", "entailment", "--target", "HEAD",
 		"--out", outDir, "--dry-run", "--json")
 	var res reading.AssembleResult
 	if err := json.Unmarshal(raw, &res); err != nil {
@@ -292,7 +309,7 @@ func TestRelativeOutResolvesAgainstTheWorkingDirectory(t *testing.T) {
 	sub := filepath.Join(repo, "docs")
 	t.Chdir(sub)
 
-	raw := runCLI(t, "reading", "assemble", "--position", "widening", "--target", "HEAD",
+	raw := runCLI(t, "reading", "assemble", "--scope", "everything", "--position", "widening", "--target", "HEAD",
 		"--out", "../../outside-run", "--json")
 	var res reading.AssembleResult
 	if err := json.Unmarshal(raw, &res); err != nil {
@@ -331,7 +348,7 @@ func TestOutRefusalsQuoteTheOperatorsOwnPath(t *testing.T) {
 	// the leak actually lives in.
 	t.Chdir(filepath.Join(repo, "docs"))
 
-	out, err := runCLIErr(t, "reading", "assemble", "--position", "widening",
+	out, err := runCLIErr(t, "reading", "assemble", "--scope", "everything", "--position", "widening",
 		"--target", "HEAD", "--out", "../run-dir")
 	if err == nil {
 		t.Fatalf("an output directory inside the table's reach was accepted:\n%s", out)
@@ -462,7 +479,7 @@ func TestIngestExecutesEndToEnd(t *testing.T) {
 
 	// One assembled run, through the sibling verb, so the ingest resolves a run
 	// this repository actually parked.
-	out := runCLI(t, "reading", "assemble", "--position", "detection", "--target", "HEAD", "--json")
+	out := runCLI(t, "reading", "assemble", "--scope", "everything", "--position", "detection", "--target", "HEAD", "--json")
 	var assembled struct {
 		RunID        string `json:"run_id"`
 		ManifestHash string `json:"manifest_hash"`
@@ -540,7 +557,7 @@ func TestIngestRendersARefusalRecord(t *testing.T) {
 	repo := readingRepo(t)
 	t.Chdir(repo)
 
-	out := runCLI(t, "reading", "assemble", "--position", "detection", "--target", "HEAD", "--json")
+	out := runCLI(t, "reading", "assemble", "--scope", "everything", "--position", "detection", "--target", "HEAD", "--json")
 	var assembled struct {
 		RunID        string `json:"run_id"`
 		ManifestHash string `json:"manifest_hash"`

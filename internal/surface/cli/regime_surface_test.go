@@ -74,8 +74,16 @@ const regimeToken = "regime"
 // the new operand does. A new operand on this verb is a decision, not an
 // accident.
 var readingOperands = map[string][]string{
-	"abcd reading":          {},
-	"abcd reading assemble": {"dry-run", "out", "position", "target"},
+	"abcd reading": {},
+	// scope added by itd-199 under adr-58. This pin fails CLOSED on any
+	// addition precisely so a new operand has to say what it does before it
+	// ships, and it did its job here: --scope names what a reading is ABOUT,
+	// in a closed grammar of a record id, a material kind or a committed
+	// preset. It accepts no repository path and no prose, which is the
+	// property the 2026-08-28 rulings were protecting; a path may be named
+	// only inside the committed preset file, where it is reviewed and inside
+	// the dirty gate.
+	"abcd reading assemble": {"dry-run", "out", "position", "scope", "target"},
 }
 
 // generatedBaselineSuffix names the machine-written caches under .abcd/, which

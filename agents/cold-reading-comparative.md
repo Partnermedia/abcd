@@ -38,6 +38,14 @@ not exercised at all, and that outcome is recorded as such rather than answered.
 - `.abcd/development/specs` — the design record a capability was built against.
 - `.` — the shipped tree: source, tests, delivered documentation, root prose and build configuration.
 
+
+**This position does not currently assemble.** Your object is the widening
+reading's pre-admission output, which is not repository material, and no channel
+supplies it: the readings family that would hold a prior run is denied to every
+assembly. Rather than hand you the detection position's corpus and let you read
+the wrong object with every gate green, the assembler refuses at this position
+and names the channel it lacks. This section stands as the statement of what the
+position is FOR, against the day that channel exists.
 ## Question
 
 Answer exactly this question, and no other:

@@ -279,7 +279,7 @@ func TestFixtureOrderIsAdversarial(t *testing.T) {
 // another would pass.
 func TestWalkOrderIsLexicographic(t *testing.T) {
 	first, _ := materialiseOrderPair(t)
-	for _, position := range everyPosition {
+	for _, position := range assemblingPositions {
 		t.Run(position, func(t *testing.T) {
 			a := assemble(t, first, position)
 			if err := nonVacuous(a); err != nil {

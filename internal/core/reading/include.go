@@ -24,7 +24,7 @@ import (
 // a rewritten rule text moves the rendering without changing what the
 // assembler promises, and a projection change alters the promise without
 // touching the table (spc-61, ruling (12); spc-68).
-const AssemblerVersionCore = "1.1.0"
+const AssemblerVersionCore = "1.2.0"
 
 // AssemblerVersion is the core semver with the rendered include table's digest
 // as semver build metadata. The digest is computed, not declared, so a table
@@ -71,6 +71,25 @@ const (
 // Positions lists every position, in the order the charter renders them.
 func Positions() []Position {
 	return []Position{PositionWidening, PositionEntailment, PositionComparative, PositionDetection}
+}
+
+// AssemblingPositions lists the positions an assembly can run at.
+//
+// It is Positions() minus comparative, whose object is the widening reading's
+// pre-admission output — not repository material, and with no channel supplying
+// it. That position refuses rather than being served a corpus that is not what
+// it is about (itd-199). The two lists are deliberately separate: comparative
+// is still a position, still has a definition and still keys a supply regime;
+// it is only assembly it cannot do.
+func AssemblingPositions() []Position {
+	out := make([]Position, 0, len(Positions())-1)
+	for _, p := range Positions() {
+		if p == PositionComparative {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
 }
 
 // ParsePosition resolves a token to a position, refusing anything else by name.

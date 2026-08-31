@@ -12,7 +12,7 @@ import (
 // occurred, and a hash.
 func TestManifestCoversEveryBundleItem(t *testing.T) {
 	root := fixtureRepo(t)
-	for _, p := range Positions() {
+	for _, p := range AssemblingPositions() {
 		res := assembleFixture(t, root, p)
 		if len(res.Bundle.Items) == 0 {
 			t.Fatalf("position %s assembled nothing", p)

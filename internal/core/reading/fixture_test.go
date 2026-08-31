@@ -1,8 +1,10 @@
 package reading
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -46,6 +48,11 @@ func writeFile(t *testing.T, root, rel, body string) {
 func fixtureRepo(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
+
+	// fixtureScope selects every material kind at every assembling position, so
+	// a test written before scopes existed sees the item set it was written
+	// against. A test that cares about NARROWING names its own preset.
+	writeFile(t, root, ".abcd/config/reading-presets.json", fixturePresets())
 
 	writeFile(t, root, ".abcd/record-lint.json", `{
   "schema_version": 1,
@@ -155,7 +162,9 @@ func headOf(t *testing.T, root string) string {
 // assembleFixture runs one assembly over the fixture repository at p.
 func assembleFixture(t *testing.T, root string, p Position) AssembleResult {
 	t.Helper()
-	res, err := Assemble(AssembleRequest{RepoRoot: root, Position: p, Target: "HEAD", DryRun: true})
+	res, err := Assemble(AssembleRequest{
+		RepoRoot: root, Position: p, Target: "HEAD", Scope: fixtureScopeName, DryRun: true,
+	})
 	if err != nil {
 		t.Fatalf("assemble at %s: %v", p, err)
 	}
@@ -204,4 +213,35 @@ func gitRun(t *testing.T, root string, args ...string) {
 	if out, err := gitutil.Run(root, full...); err != nil {
 		t.Fatalf("git %s: %v (%s)", strings.Join(args, " "), err, out)
 	}
+}
+
+// fixtureScopeName is the all-selecting preset every fixture carries.
+const fixtureScopeName = "everything"
+
+// fixturePresets renders a preset file selecting every kind at every position
+// that assembles. It is generated from Kinds() and AssemblingPositions() rather
+// than written out, so a new kind or position cannot leave the fixture quietly
+// narrower than the table it is meant to mirror.
+func fixturePresets() string {
+	kinds := make([]string, 0, len(Kinds()))
+	for _, k := range Kinds() {
+		kinds = append(kinds, strconv.Quote(string(k)))
+	}
+	positions := make([]string, 0, len(AssemblingPositions()))
+	for _, p := range AssemblingPositions() {
+		positions = append(positions, fmt.Sprintf(
+			`      %q: {"kinds": [%s], "records": [], "paths": []}`,
+			string(p), strings.Join(kinds, ", ")))
+	}
+	return fmt.Sprintf(`{
+  "schema_version": %d,
+  "presets": {
+    %q: {
+      "positions": {
+%s
+      }
+    }
+  }
+}
+`, PresetSchemaVersion, fixtureScopeName, strings.Join(positions, ",\n"))
 }
