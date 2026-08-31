@@ -13,6 +13,13 @@ in a reserved example domain so the manifest's commit reference resolves.
   plant is removed from. A baseline plus declared holes rather than two full
   trees, so the variants cannot drift apart in everything the hole does not
   touch.
+- `refused/` — the refusal corpus, one variant directory per shape the exclusion
+  floor cannot REDACT and therefore refuses: a file the include table admits
+  whole, carrying an excluded heading in a form the section scan does not report.
+  It is separate from the baseline because a corpus carrying one cannot be
+  assembled at all, which is the behaviour under test. Its plants carry the
+  `ABCD-EVAL-REFUSED-` prefix rather than a sentinel class, because a sentinel
+  class is counted against the baseline and this material is never in it.
 - `home/` — the fixture `HOME`, carrying a planted session-transcript store. Its
   `ROOT_COMMIT_SHA` directory is renamed to the fixture repository's own
   root-commit sha at materialisation, so the transcript class of brief invariant
@@ -26,7 +33,7 @@ and `docs/`.
 
 Each plant is placed so that some rule of the assembler's contract is
 falsifiable by it — the corpus is adversarial per rule, not merely
-representative. Two placements are load-bearing and easy to get wrong:
+representative. Four placements are load-bearing and easy to get wrong:
 
 - **An excluded heading needs a home on a record type that travels WHOLE.** On a
   projected record type the projection keeps the heading out whatever the
@@ -39,6 +46,16 @@ representative. Two placements are load-bearing and easy to get wrong:
   field granularity" from "the projection is gone and the redaction cleaned up
   after it". That is the `## Residue` section on the shipped, draft and planned
   intents.
+- **A rule the assembler enforces by REFUSING needs a shape to refuse.** A leak
+  cannot reach one: removing a refusal admits nothing new where there was nothing
+  to refuse. That is what `refused/` is for, and it is why the redaction verifier
+  went unnamed by the coverage matrix through three review rounds — its call
+  could be deleted outright with the lane green.
+- **A grain the corpus never exercises is a grain no mutation can reach.** The
+  match list, the case fold on the structural deny, a subsection under an
+  excluded heading and a block scalar under an excluded key each carry a plant of
+  their own for that reason: without one, the mutation that removes the rule
+  leaves the fixture manifests byte-identical and every assertion green.
 
 `evals/coldreading_coverage_test.go` holds the matrix that records this, rule by
 rule, including the rules this corpus cannot falsify and why.

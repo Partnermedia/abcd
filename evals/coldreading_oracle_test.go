@@ -356,14 +356,15 @@ func requireOracleTables(t *testing.T) {
 		got  int
 		want int
 	}{
-		{"sentinelClasses", len(sentinelClasses), 14},
+		{"sentinelClasses", len(sentinelClasses), 18},
 		{"carriers", len(carriers), 11},
 		{"holes", len(holes), 2},
+		{"refusals", len(refusals), 2},
 		{"excludedKeys", len(excludedKeys), 2},
 		{"excludedHeadings", len(excludedHeadings), 4},
 		{"excludedFamilies", len(excludedFamilies), 15},
 		{"admittedRecordPaths", len(admittedRecordPaths), 8},
-		{"coverage", len(coverage), 50},
+		{"coverage", len(coverage), 56},
 	} {
 		if tbl.got != tbl.want {
 			t.Fatalf("the %s table holds %d row(s), and this eval is written against %d; "+
@@ -428,6 +429,152 @@ var excludedKeyLine = regexp.MustCompile(`^\s*["']?([A-Za-z_][A-Za-z0-9_-]*)["']
 // CommonMark allows.
 var atxHeading = regexp.MustCompile(`^[ ]{0,3}#{1,6}\s+(.*?)\s*#*\s*$`)
 
+// The other spellings a heading arrives in. An ATX-only scan would report a
+// bundle item carrying a setext-underlined or raw-HTML excluded heading as
+// clean, which is assertion 2 satisfied completely by the leak it exists to
+// catch. The state is unreachable while the assembler REFUSES those forms rather
+// than redacting them — but that refusal is a mechanism of the assembler's, not
+// a property of this oracle, and an oracle that can only see what the thing
+// under test currently emits is an oracle that agrees with it by construction.
+var (
+	// setextUnderline matches the underline that turns the line above it into a
+	// heading. A blank line above one underlines nothing, which is what keeps a
+	// thematic break from reading as an empty heading.
+	setextUnderline = regexp.MustCompile(`^[ ]{0,3}(?:=+|-+)[ \t]*$`)
+	// rawHeadingOpen matches an element that OPENS a heading: an h1-h6 tag, or
+	// any element carrying a heading role, which renders and is announced as a
+	// heading while no h-tag appears. Matching the opening tag alone covers the
+	// unclosed and multi-line forms — a document need not be well-formed for a
+	// reader to see a heading in it.
+	rawHeadingOpen = regexp.MustCompile(
+		`(?is)<h[1-6](?:\s[^>]*)?/?>|<[a-z][a-z0-9-]*\s[^>]*role\s*=\s*["']?heading\b[^>]*>`)
+	// blankLine bounds a raw heading's text where no closing tag does.
+	blankLine = regexp.MustCompile(`\n[ \t]*\n`)
+	// fenceDelimiter matches a fenced code block's delimiter. A heading inside a
+	// fence is an EXAMPLE — a record template showing its own shape — and the
+	// assembler leaves one alone on exactly that ground, so reporting it would be
+	// a false red rather than a leak. Widening this scan to setext and raw HTML is
+	// what makes the fence matter: those are the forms an example most often
+	// carries.
+	fenceDelimiter = regexp.MustCompile("^[ \t]*```")
+	// headingMarkup is the markup a title carries without changing how it reads:
+	// HTML comments and tags.
+	headingMarkup = regexp.MustCompile(`(?s)<!--.*?-->|</?[A-Za-z][A-Za-z0-9-]*(?:\s[^>]*)?/?>`)
+	// headingLink unwraps `[text](target)` to the text a reader sees.
+	headingLink = regexp.MustCompile(`\[([^\]]*)\]\([^)]*\)`)
+)
+
+// headingsIn returns every heading an item's text carries, in each spelling,
+// unnormalised. It is deliberately the broader of the two scans — the assembler
+// redacts one form and refuses the rest, while this reports them all, which is
+// the safe direction for a transcribed oracle.
+func headingsIn(text string) []string {
+	var out []string
+	lines := strings.Split(text, "\n")
+	fenced := fencedLines(lines)
+	blockOpen, blockClose := firstDelimitedBlock(lines, fenced)
+	for i, line := range lines {
+		if fenced[i] {
+			continue
+		}
+		if m := atxHeading.FindStringSubmatch(line); m != nil {
+			out = append(out, m[1])
+			continue
+		}
+		if i+1 >= len(lines) || fenced[i+1] || !setextUnderline.MatchString(lines[i+1]) {
+			continue
+		}
+		if strings.TrimSpace(line) == "" {
+			continue // a blank line underlines nothing
+		}
+		// Two shapes inside a record's own frontmatter that a setext scan reads as
+		// headings and no reader does. The block's closing `---` sits directly
+		// under the block's last line: it CLOSES a block, it underlines nothing.
+		// And a line indented inside the block is a block scalar's continuation,
+		// which is a value rather than a title — the shape this corpus grew when
+		// the block-scalar plant went in.
+		if blockClose >= 0 && i+1 == blockClose {
+			continue
+		}
+		if blockOpen >= 0 && i > blockOpen && (blockClose < 0 || i < blockClose) &&
+			strings.HasPrefix(line, " ") {
+			continue
+		}
+		out = append(out, line)
+	}
+	// The raw-HTML scan runs over the text JOINED with the fenced lines blanked,
+	// because an opening tag, its text and its close need not share a line.
+	unfenced := make([]string, len(lines))
+	for i, line := range lines {
+		if !fenced[i] {
+			unfenced[i] = line
+		}
+	}
+	scan := strings.Join(unfenced, "\n")
+	for _, loc := range rawHeadingOpen.FindAllStringIndex(scan, -1) {
+		rest := scan[loc[1]:]
+		if cut := strings.Index(rest, "<"); cut >= 0 {
+			rest = rest[:cut]
+		}
+		if cut := blankLine.FindStringIndex(rest); cut != nil {
+			rest = rest[:cut[0]]
+		}
+		out = append(out, rest)
+	}
+	return out
+}
+
+// fencedLines reports, per line, whether it sits inside a fenced code block. The
+// delimiter itself counts as inside.
+func fencedLines(lines []string) []bool {
+	mask := make([]bool, len(lines))
+	inside := false
+	for i, line := range lines {
+		if fenceDelimiter.MatchString(line) {
+			inside = !inside
+			mask[i] = true
+			continue
+		}
+		mask[i] = inside
+	}
+	return mask
+}
+
+// firstDelimitedBlock locates a document's opening `---` block: the line that
+// opens it and the line that closes it, or -1 for either. The block must be the
+// document's first non-blank content, so a thematic break further down is not
+// mistaken for one.
+func firstDelimitedBlock(lines []string, fenced []bool) (int, int) {
+	open := -1
+	for i, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if !fenced[i] && strings.TrimSpace(line) == "---" {
+			open = i
+		}
+		break
+	}
+	if open < 0 {
+		return -1, -1
+	}
+	for i := open + 1; i < len(lines); i++ {
+		if !fenced[i] && strings.HasPrefix(strings.TrimSpace(lines[i]), "---") {
+			return open, i
+		}
+	}
+	return open, -1
+}
+
+// headingTitle reduces a heading to the text a reader sees: markup removed, link
+// wrappers unwrapped, emphasis and code marks dropped, whitespace collapsed.
+func headingTitle(raw string) string {
+	s := headingMarkup.ReplaceAllString(raw, "")
+	s = headingLink.ReplaceAllString(s, "$1")
+	s = strings.Trim(s, " \t*_`#")
+	return strings.Join(strings.Fields(s), " ")
+}
+
 // checkFieldAbsence is assertion 2: a recursive walk of the parsed documents
 // reports no key on the excluded-key list at any depth, and no excluded heading
 // in any projected body.
@@ -488,17 +635,23 @@ func checkFieldAbsence(a assembled) []violation {
 					})
 				}
 			}
-			m := atxHeading.FindStringSubmatch(line)
-			if m == nil {
+		}
+		// The heading scan is over the item's whole text rather than per line,
+		// because a heading need not be spelled on one: a setext heading is two
+		// lines and a raw-HTML one can be any number.
+		for _, raw := range headingsIn(it.Text) {
+			title := headingTitle(raw)
+			if title == "" {
 				continue
 			}
 			for _, h := range excludedHeadings {
-				if strings.EqualFold(strings.TrimSpace(m[1]), h.Heading) {
+				if strings.EqualFold(title, h.Heading) {
 					out = append(out, violation{
 						Position: a.Position,
 						Rule:     ruleExcludedHeader,
-						Detail:   fmt.Sprintf("item %s carries the heading %q", it.ItemKey, h.Heading),
-						Source:   h.Source,
+						Detail: fmt.Sprintf("item %s carries the heading %q, spelled %q",
+							it.ItemKey, h.Heading, strings.TrimSpace(raw)),
+						Source: h.Source,
 					})
 				}
 			}

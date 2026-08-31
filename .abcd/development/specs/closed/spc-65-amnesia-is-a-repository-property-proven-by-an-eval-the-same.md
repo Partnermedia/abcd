@@ -73,8 +73,18 @@ Assembling from two different paths is a deliberate strengthening of itd-187's
 criterion, decided here: a run-to-run comparison in one directory cannot see an
 absolute path or a temporary directory name embedded in the output, and that
 leak is both a determinism failure and a breach of the repository's rule that no
-absolute local path enters an artefact. Comparing across paths catches it on the
-first run.
+absolute local path enters an artefact. Comparing across paths catches a path
+the two runs DIFFER in, on the first run.
+
+It cannot catch one they SHARE. Both trees are created under one temporary
+parent, so a parent embedded in both outputs leaves the comparison agreeing and
+reporting nothing — the same blindness one level up. The artefacts are therefore
+also held to a path detector, on two mechanisms: every ancestor of the fixture's
+repository root and HOME up to the process temporary directory, which is where
+this harness's own directories stop and the machine's begin, and a shape match
+for any other absolute path, which reaches the machine's own directories that no
+list of known paths could enumerate. The comparison and the detector reach
+different halves of one rule.
 
 ### The order oracle
 
