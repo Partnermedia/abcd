@@ -14,11 +14,22 @@ package evals
 // true.
 //
 // Two things make it more than a comment (itd-195). Every row names sentinel
-// classes that must exist and must be planted, and every declared class must be
-// named by at least one row — so a plant no rule depends on, and a rule naming a
-// plant that has gone, both fail here. And a row that no mutation can falsify
-// carries its reason in Gap rather than being quietly omitted: a declared gap is
-// worth more than a floor that turns out to be one dimension short.
+// classes and refusal plants that must exist and must be planted, and every
+// declared class and refusal must be named by at least one row — so a plant no
+// rule depends on, and a rule naming a plant that has gone, both fail here. And
+// a row that no mutation can falsify carries its reason in Gap rather than being
+// quietly omitted: a declared gap is worth more than a floor that turns out to
+// be one dimension short.
+//
+// Its own disclosed limit is what a fidelity audit then found through: the rows
+// are checked against the plants, never against the assembler, so a rule the
+// matrix simply does not NAME is invisible here and the declared-gap discipline
+// never engages on it. Six were absent that way, and two of them were the ones
+// that mattered — the match list, whose mutation leaves the fixture manifests
+// byte-identical, and the redaction verifier, whose call could be deleted
+// outright with the lane green because a leak cannot reach a rule enforced by
+// refusing. Both are rows below now, with corpus behind them. The limit stands:
+// closing it needs a human reading the include table against this list.
 //
 // What it does NOT claim: that each Falsifier has been executed on every run.
 // The ones marked in the record as watched red have been; the rest are the
@@ -69,6 +80,11 @@ const (
 	// caughtRefusal: the assembler refuses the run and the verb exits non-zero,
 	// which the eval reports as a failed assembly rather than as a leak.
 	caughtRefusal = "the assembly is refused and the verb exits non-zero"
+	// caughtUnrefused: the inverse, and the only mechanism that reaches the
+	// floor's fail-closed half. A shape the redactor cannot delete a span for
+	// STOPS being refused, so the refusal corpus reports an assembly that
+	// succeeded — with the warm token in the bundle it reads back.
+	caughtUnrefused = "the refusal corpus reports an assembly that was not refused"
 )
 
 // coverageRow is one rule of the assembler's contract.
@@ -82,6 +98,11 @@ type coverageRow struct {
 	// Classes are the sentinel classes that die or leak. It may be empty for a
 	// rule this eval catches by path rather than by plant.
 	Classes []string
+	// Refusals are the refusal-corpus entries that stop being refused. It is the
+	// same discipline as Classes, over the corpus that reaches the exclusion
+	// floor's fail-closed half: a refusal plant no rule depends on, and a rule
+	// naming a refusal plant that has gone, both fail the check below.
+	Refusals []string
 	// Gap is why no mutation falsifies this rule against this corpus. Set exactly
 	// when Caught is empty. A row carrying one is declared unfalsifiable
 	// coverage, not an open hole to be discovered later.
@@ -174,6 +195,21 @@ var coverage = []coverageRow{
 	},
 
 	{
+		Rule: "inclusion is positive at FILE grain too: a file whose extension no row's " +
+			"Match list names is absent, inside a named Source and under the root rows alike",
+		Falsifier: "make Row.matches return true unconditionally",
+		Caught:    caughtLeak,
+		Classes:   []string{"UNMATCHED-KIND"},
+		// The two homes are the two grains the rule has to hold at, and one alone
+		// would not have caught it. A row naming a Source reaches only inside that
+		// directory; the three root rows reach every undenied path in the tree, so
+		// the match list is the whole of what keeps an unnamed extension out of
+		// them. Against a corpus where every file already carries a named
+		// extension the mutation leaves the manifests byte-identical, which is
+		// exactly how it stayed unnamed here for three review rounds.
+	},
+
+	{
 		Rule: "the intent projection is the FIVE contracted fields: press release, " +
 			"acceptance criteria, scope conditions, mechanism and spec_id",
 		Falsifier: "narrow intentProjection to []string{\"Press Release\"}",
@@ -211,6 +247,19 @@ var coverage = []coverageRow{
 		Classes:   []string{"WARM-KEY"},
 	},
 
+	{
+		Rule: "an excluded key's VALUE goes with it: a block scalar's continuation lines, " +
+			"and the blank lines inside the block, are part of the value and are dropped too",
+		Falsifier: "delete redactExcluded's indented-continuation drop",
+		Caught:    caughtLeak,
+		Classes:   []string{"WARM-KEY", "BLOCK-SCALAR"},
+		// Two plants inside one block, either side of a blank line, so the two
+		// halves of the rule are separable: the continuation drop as a whole, and
+		// the narrower reading that stops at the first blank line. Under the
+		// stated falsifier both leak; under a drop that ends at the first blank
+		// line the second alone does.
+	},
+
 	// ---- the exclusion floor: headings ----
 	{
 		Rule:      "an Audit Notes heading never travels",
@@ -235,6 +284,40 @@ var coverage = []coverageRow{
 		Falsifier: "delete the Why This Matters row from Exclusions",
 		Caught:    caughtLeak,
 		Classes:   []string{"WARM-FIELD"},
+	},
+
+	{
+		Rule: "an excluded heading owns its whole SECTION: everything down to the next " +
+			"heading of its own level or shallower, subsections included",
+		Falsifier: "make sectionSpan end at the next heading of ANY level",
+		Caught:    caughtLeak,
+		Classes:   []string{"NESTED-SECTION"},
+	},
+	{
+		Rule: "the key-and-heading floor is FAIL-CLOSED: a file still carrying an excluded " +
+			"shape after redaction refuses the run rather than travelling under a manifest " +
+			"asserting the shape was refused",
+		Falsifier: "delete the verifyRedaction call from redactExcluded",
+		Caught:    caughtUnrefused,
+		Refusals:  []string{"setext", "rendered"},
+		// This half cannot be falsified by a leak, and that is why it went
+		// unnamed: removing a refusal admits nothing new against a corpus with
+		// nothing to refuse, so the call could be deleted outright with this lane
+		// green. It needs a corpus that HAS something to refuse — a file admitted
+		// whole carrying an excluded heading the section scan does not report —
+		// and the refusal corpus is that, held in its own variant because a
+		// baseline carrying one cannot be assembled at all.
+	},
+	{
+		Rule: "a heading is the excluded heading however it is SPELLED: two titles that " +
+			"render as the same heading are the same heading",
+		Falsifier: "make sameRendering return false",
+		Caught:    caughtUnrefused,
+		Refusals:  []string{"rendered"},
+		// The narrower of the two falsifiers over the same plant, which is what
+		// tells this rule apart from the fail-closed rule above: deleting the
+		// verifyRedaction call unrefuses both refusal plants, while this unrefuses
+		// only the emphasised one.
 	},
 
 	// ---- the exclusion floor: families ----
@@ -367,6 +450,18 @@ var coverage = []coverageRow{
 		Caught:    caughtRefusal,
 	},
 	{
+		Rule:      "the structural deny binds each path component CASE-INSENSITIVELY",
+		Falsifier: "make segmentDenied compare with == rather than strings.EqualFold",
+		Caught:    caughtLeak,
+		Classes:   []string{"DENIED-CASE"},
+		// The plant is at `docs/Agents/`, not at the root: the four denied
+		// segments all exist in the corpus in lower case, and a same-name
+		// differently-cased sibling beside one of them is not a tree a
+		// case-insensitive filesystem can hold. A component two levels down
+		// exercises the same predicate, because the deny binds every component
+		// rather than the first.
+	},
+	{
 		Rule:      "the `evals` namespace is denied structurally, from each row's own Source downward",
 		Falsifier: "drop \"evals\" from denySegments",
 		Caught:    caughtRefusal,
@@ -464,7 +559,12 @@ func TestEveryAssemblerRuleHasAFalsifier(t *testing.T) {
 	for _, c := range sentinelClasses {
 		declared[c.Name] = true
 	}
+	declaredRefusals := map[string]bool{}
+	for _, r := range refusals {
+		declaredRefusals[r.Name] = true
+	}
 	named := map[string]bool{}
+	namedRefusals := map[string]bool{}
 	gaps := 0
 
 	for _, row := range coverage {
@@ -490,6 +590,13 @@ func TestEveryAssemblerRuleHasAFalsifier(t *testing.T) {
 			}
 			named[name] = true
 		}
+		for _, name := range row.Refusals {
+			if !declaredRefusals[name] {
+				t.Errorf("the coverage row %q names the refusal plant %q, which no longer "+
+					"exists in the refusals table", row.Rule, name)
+			}
+			namedRefusals[name] = true
+		}
 	}
 
 	// A plant no rule depends on is a plant that proves nothing. It is either a
@@ -504,6 +611,20 @@ func TestEveryAssemblerRuleHasAFalsifier(t *testing.T) {
 	if len(orphans) > 0 {
 		t.Errorf("%d planted class(es) are named by no coverage row, so nothing says which "+
 			"assembler rule they falsify: %s", len(orphans), strings.Join(orphans, ", "))
+	}
+
+	// The same for the refusal corpus, which is a second body of planted material
+	// and decays the same way.
+	var strayRefusals []string
+	for _, r := range refusals {
+		if !namedRefusals[r.Name] {
+			strayRefusals = append(strayRefusals, r.Name)
+		}
+	}
+	sort.Strings(strayRefusals)
+	if len(strayRefusals) > 0 {
+		t.Errorf("%d refusal plant(s) are named by no coverage row, so nothing says which "+
+			"assembler rule they falsify: %s", len(strayRefusals), strings.Join(strayRefusals, ", "))
 	}
 
 	// The gap count is declared, so a row silently becoming unfalsifiable — the

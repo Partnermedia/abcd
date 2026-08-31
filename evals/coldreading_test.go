@@ -151,6 +151,81 @@ func TestPriorRunExhaustNeverReaches(t *testing.T) {
 	}
 }
 
+// TestTheAssemblerRefusesAnUnredactableShape is the falsifier for the exclusion
+// floor's FAIL-CLOSED half, which every other test in this package leaves
+// unexercised.
+//
+// The floor has two halves and only one of them is falsified by a leak. The
+// redacting half deletes a span, so removing it leaks; the refusing half stops a
+// run, so removing it against a corpus with nothing to refuse changes no output
+// at all — which is why deleting the verifyRedaction call outright left this
+// lane green. The answer is a corpus that HAS something to refuse: a file the
+// include table admits whole, carrying an excluded heading in a form the section
+// scan does not report, so the redactor has no span to delete and the refusal is
+// the only thing between the warm text and the bundle.
+//
+// The two shapes are watched red by their own falsifiers: deleting the
+// verifyRedaction call, and making sameRendering return false. Under either, the
+// same binary exits 0 and the token is in the bundle — which is what the exit-0
+// branch below reads and reports.
+func TestTheAssemblerRefusesAnUnredactableShape(t *testing.T) {
+	requireOracleTables(t)
+	if len(refusals) == 0 {
+		t.Fatal("the refusals table is empty, so the exclusion floor's fail-closed half has " +
+			"nothing to refuse and its removal would change no output; this test is the only " +
+			"thing that reaches that half, and it cannot reach it with an empty corpus")
+	}
+	for _, r := range refusals {
+		t.Run(r.Name, func(t *testing.T) {
+			f := materialise(t, variantBaseline, r.apply)
+
+			// The anti-vacuity guard, in the shape the corpus already uses: a
+			// refusal test over a plant that is not there passes for the wrong
+			// reason, and the assembler never sees an untracked file.
+			planted, err := os.ReadFile(filepath.Join(f.Root, filepath.FromSlash(r.Path)))
+			if err != nil {
+				t.Fatalf("the %s refusal plant is not in the materialised tree at %s: %v",
+					r.Name, r.Path, err)
+			}
+			if !bytes.Contains(planted, []byte(r.Token)) {
+				t.Fatalf("the %s refusal plant at %s does not carry %s, so a refusal over it "+
+					"would be a refusal over nothing", r.Name, r.Path, r.Token)
+			}
+			if !trackedFiles(t, f.Root)[r.Path] {
+				t.Fatalf("the %s refusal plant at %s is not tracked; the assembler walks the "+
+					"tracked set, so an untracked plant is never read", r.Name, r.Path)
+			}
+
+			for _, position := range everyPosition {
+				outDir := filepath.Join(t.TempDir(), "run-"+position)
+				args := append(append([]string{}, assembleVerb...),
+					"--position", position, "--target", "HEAD", "--out", outDir, "--dry-run")
+				out, code := runIn(t, f.Root, []string{"HOME=" + f.Home}, args...)
+				if code == 0 {
+					leak := "and the bundle could not be read back"
+					if raw, rerr := os.ReadFile(filepath.Join(outDir, bundleFile)); rerr == nil {
+						leak = "and the bundle does NOT carry " + r.Token
+						if bytes.Contains(raw, []byte(r.Token)) {
+							leak = "and " + r.Token + " is in the bundle"
+						}
+					}
+					t.Errorf("the assembly at %s over the %s plant exited 0, %s; %s, so the "+
+						"exclusion floor's fail-closed half is what refuses it and %s removes "+
+						"that refusal\n%s", position, r.Name, leak, r.Why, r.Falsifier, out)
+					continue
+				}
+				for _, want := range r.Names {
+					if !strings.Contains(out, want) {
+						t.Errorf("the assembly at %s over the %s plant was refused, but the "+
+							"refusal does not name %q, so it is not demonstrably THIS refusal\n%s",
+							position, r.Name, want, out)
+					}
+				}
+			}
+		})
+	}
+}
+
 // bannedImports are the import paths that would make this oracle derived rather
 // than transcribed: the assembler's own package, and the include list its
 // structural deny is modelled on.

@@ -356,14 +356,15 @@ func requireOracleTables(t *testing.T) {
 		got  int
 		want int
 	}{
-		{"sentinelClasses", len(sentinelClasses), 14},
+		{"sentinelClasses", len(sentinelClasses), 18},
 		{"carriers", len(carriers), 11},
 		{"holes", len(holes), 2},
+		{"refusals", len(refusals), 2},
 		{"excludedKeys", len(excludedKeys), 2},
 		{"excludedHeadings", len(excludedHeadings), 4},
 		{"excludedFamilies", len(excludedFamilies), 15},
 		{"admittedRecordPaths", len(admittedRecordPaths), 8},
-		{"coverage", len(coverage), 50},
+		{"coverage", len(coverage), 56},
 	} {
 		if tbl.got != tbl.want {
 			t.Fatalf("the %s table holds %d row(s), and this eval is written against %d; "+
