@@ -343,3 +343,157 @@ func TestOutRefusalsQuoteTheOperatorsOwnPath(t *testing.T) {
 		t.Errorf("the refusal quotes a resolved absolute path: %s", msg)
 	}
 }
+
+// TestIngestRequiresOutputJSON holds the ingest verb's invocation interface: one
+// operand, required, and no positional argument. There is no position operand
+// and no regime operand, because the output states its own and the regime is the
+// definition's — the standing guard on that is TestNoOperatorSurfaceSetsARegime.
+func TestIngestRequiresOutputJSON(t *testing.T) {
+	repo := readingRepo(t)
+	t.Chdir(repo)
+
+	for _, args := range [][]string{
+		{"reading", "ingest"},
+		{"reading", "ingest", "some-output.json"},
+	} {
+		out, err := runCLIErr(t, args...)
+		if err == nil {
+			t.Errorf("%v was accepted:\n%s", args, out)
+			continue
+		}
+		if code := exitCodeOf(err); code != 2 {
+			t.Errorf("%v exited %d, want 2", args, code)
+		}
+	}
+
+	// The flag is registered and reaches the core: a path that resolves to
+	// nothing is a refusal from the verb, not a cobra "unknown flag".
+	out, err := runCLIErr(t, "reading", "ingest", "--output-json", "absent.json")
+	if err == nil {
+		t.Fatalf("an absent output was accepted:\n%s", out)
+	}
+	if strings.Contains(err.Error()+string(out), "unknown flag") {
+		t.Fatalf("--output-json is not registered on the verb: %v\n%s", err, out)
+	}
+	if !strings.Contains(err.Error()+string(out), "reading ingest") {
+		t.Errorf("the refusal does not name the verb: %v\n%s", err, out)
+	}
+}
+
+// TestIngestReachesBothPlanes holds "wired or it isn't done" for the ingest verb:
+// registered in the command tree AND reachable from the plugin markdown surface,
+// with the operand the page tells a host to pass.
+func TestIngestReachesBothPlanes(t *testing.T) {
+	var found bool
+	for _, c := range NewRootCommand().Commands() {
+		if c.Name() != "reading" {
+			continue
+		}
+		for _, sub := range c.Commands() {
+			if sub.Name() != "ingest" {
+				continue
+			}
+			found = true
+			if sub.Flags().Lookup("output-json") == nil {
+				t.Error("`reading ingest` registers no --output-json flag")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("the command tree registers no `reading ingest` sub-verb")
+	}
+
+	raw, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "commands", "reading.md"))
+	if err != nil {
+		t.Fatalf("read the plugin surface: %v", err)
+	}
+	body := string(raw)
+	for _, want := range []string{"reading ingest", "--output-json", "refusal.json", "pattern"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("commands/reading.md does not mention %q", want)
+		}
+	}
+}
+
+// TestIngestExecutesEndToEnd is the other half of the wiring claim: the verb is
+// registered AND it runs. A surface test that only walked the command tree would
+// pass against a sub-command whose RunE was never reached.
+func TestIngestExecutesEndToEnd(t *testing.T) {
+	// The source checkout is resolved BEFORE the working directory moves: the
+	// shipped definition is read from this repository, and repoRootFromTest walks
+	// up from the working directory, which is about to be a temporary tree with a
+	// go.mod of its own.
+	srcRoot := repoRootFromTest(t)
+	repo := readingRepo(t)
+	t.Chdir(repo)
+
+	// One assembled run, through the sibling verb, so the ingest resolves a run
+	// this repository actually parked.
+	out := runCLI(t, "reading", "assemble", "--position", "detection", "--target", "HEAD", "--json")
+	var assembled struct {
+		RunID        string `json:"run_id"`
+		ManifestHash string `json:"manifest_hash"`
+	}
+	if err := json.Unmarshal(out, &assembled); err != nil {
+		t.Fatalf("decode the assemble render: %v\n%s", err, out)
+	}
+
+	def, err := reading.LoadDefinition(srcRoot, "detection")
+	if err != nil {
+		t.Fatalf("load the shipped detection definition: %v", err)
+	}
+	// The definition the run reads under has to be present in the repository the
+	// verb is pointed at, so the fixture takes the shipped one verbatim.
+	defRaw, err := os.ReadFile(filepath.Join(srcRoot, filepath.FromSlash(def.Path)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defPath := filepath.Join(repo, filepath.FromSlash(def.Path))
+	if err := os.MkdirAll(filepath.Dir(defPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(defPath, defRaw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	payload := map[string]any{
+		"_type": "abcd.reading.output/1", "run_id": assembled.RunID,
+		"position": "detection", "regime": def.Regime,
+		"manifest_sha256": assembled.ManifestHash,
+		"instrument": map[string]any{
+			"model": "a-model", "definition_sha256": def.SHA256,
+			"assembler_version": reading.AssemblerVersion,
+		},
+		"items": []any{map[string]any{
+			"pattern": "the pattern this reading read under",
+			"tension": "the record says one thing", "constraint_in_play": "a stated constraint",
+			"why_a_tension": "the two cannot both hold",
+		}},
+	}
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outPath := filepath.Join(t.TempDir(), "output.json")
+	if err := os.WriteFile(outPath, raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	raw2 := runCLI(t, "reading", "ingest", "--output-json", outPath, "--json")
+	var res reading.IngestResult
+	if err := json.Unmarshal(raw2, &res); err != nil {
+		t.Fatalf("decode the ingest render: %v\n%s", err, raw2)
+	}
+	if len(res.Records) != 1 {
+		t.Fatalf("the ingest landed %d record(s), want 1:\n%s", len(res.Records), raw2)
+	}
+	if res.Regime != def.Regime {
+		t.Errorf("the run recorded regime %q, want the definition's %q", res.Regime, def.Regime)
+	}
+	if _, err := os.Stat(filepath.Join(repo, filepath.FromSlash(res.RunRecordPath))); err != nil {
+		t.Errorf("the commit marker is not on disk: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(repo, filepath.FromSlash(res.Records[0].Path))); err != nil {
+		t.Errorf("the reading record is not on disk: %v", err)
+	}
+}

@@ -81,20 +81,34 @@ position       = widening | entailment | comparative | detection
 regime         = generative | explicative | evaluative | registrative
 manifest_sha256
 instrument     = {model, definition_sha256, assembler_version}
-items[]        = {pattern_named, body}
+items[]        = flat objects: pattern, plus the position's body fields
 ```
 
 **Ids are the verb's to mint.** The payload carries no item identifier; a
-reading holds no mint. On acceptance the verb mints `rdi-<yymmddHHMMSS><rrrr>`
-per item through `recordid.Minter.Mint("rdi")`
+reading holds no mint. On acceptance each item is minted
+`rdi-<yymmddHHMMSS><rrrr>` through `recordid.Minter.Mint("rdi")`
 ([adr-45](../../decisions/adrs/0045-record-ids-are-timestamp-numeric-and-capture-stable.md)),
 run-scoped and never content-derived, so a re-raise of the same finding in a
-later run is distinguishable from its first appearance.
+later run is distinguishable from its first appearance. The mint itself is
+`capture.IngestReading`'s, under the ledger lock, because that is where the
+collision probe can see the tree it is about to write into.
 
 **Provenance is one envelope field.** itd-180 calls it the pattern named and
-itd-185 calls it the pattern-basis field; they are one requirement, and the
-field is `pattern_named` on the item envelope, never in a body (ruling (18)).
-Empty or absent refuses the item, at every regime without exception.
+itd-185 calls it the pattern-basis field; they are one requirement (ruling
+(18)), and its wire name is `pattern` — the reading record's own envelope field
+name, and the key the four definitions instruct. Empty or absent refuses the
+item, at every regime without exception.
+
+**The item is FLAT, and its body field names are the record schema's.** An item
+is `pattern` plus exactly the fields the position declares, in one object; there
+is no nested `body`, and the names come from `issueschema.ReadingBodyFields`
+rather than from a table restated here. Both facts are a correction to this
+spec's first draft, which predated the four definitions: those definitions —
+shipped, and what the producer actually reads — instruct a flat item and those
+field names, and the reading record family already uses them. A verb built to
+the earlier table would have refused every output the shipped instrument can
+produce, and would have needed a rename between the payload and the record for
+no gain (iss-2608311123267602).
 
 ### The bodies, per position
 
@@ -105,9 +119,14 @@ text is throughout the repository:
 | Regime | Body fields |
 | --- | --- |
 | `generative` | `configuration`, `what_admits_it` |
-| `explicative` | `claim`, `claim_type` (`criterion` / `causal` / `context`), `what_implies_it` |
-| `evaluative` | `candidate`, `criterion`, `characterization` |
-| `registrative` | `tension`, `constraint_in_play`, `why` |
+| `explicative` | `claim_surfaced`, `claim_type` (`criterion` / `causal` / `context`), `what_implies_it` |
+| `evaluative` | `candidate_id`, `criterion`, `characterisation` |
+| `registrative` | `tension`, `constraint_in_play`, `why_a_tension` |
+
+The table is `issueschema.ReadingBodyFields` read out, not a second copy: the
+verb derives the closed key set from it, `TestDefinitionHoldsItsFiveParts`
+already holds the four definitions to it, and the record writer writes from it.
+One vocabulary reaches from the instruction through the payload to the record.
 
 ### The regime gate
 
@@ -116,6 +135,15 @@ position to `agents/cold-reading-<position>.md`, reads its `regime:`
 frontmatter key (spc-62), and compares. A payload whose self-declared regime
 disagrees is refused at list level. There is no `--regime` flag and no
 configuration key: the value cannot be reached from operator input.
+
+`issueschema.ReadingPositions` also binds a position to a regime, and the two
+are reconciled rather than left to agree by habit. The ingest verb reads ONLY
+the definition, through `reading.LoadDefinition`; the schema table is the record
+family's vocabulary (which regimes exist, and which body a position returns),
+and `TestRegimeValuesAreTheFourAndDistinct` in `definitions_test.go` already
+holds every shipped definition to it. So the definition is the source of truth
+at runtime, the table is the source of truth for the record schema, and a drift
+between them is a test failure rather than a silent disagreement.
 
 Two enforcement layers sit behind that:
 
@@ -161,15 +189,31 @@ the payload's claim; the assembler version is compared with the manifest's.
 Nothing durable is written until the whole payload validates.
 
 1. Validate: schema, regime, provenance, manifest reference, instrument.
-2. Stage every reading record into
-   `.abcd/.work.local/scratch/reading-ingest/<run-id>/`.
-3. Move the staged records into the reading-record family (spc-58's
-   `.abcd/work/issues/readings/<run-id>/`).
-4. Write `.abcd/development/readings/<run-id>/run.json` **last**: the run
-   metadata is the commit marker, so a run without one never happened.
+2. Stage a write-aside marker into
+   `.abcd/.work.local/scratch/reading-ingest/<run-id>/stage.json`.
+3. Write the reading records into the reading-record family (spc-58's
+   `.abcd/work/issues/readings/<run-id>/`) through `capture.IngestReading`, and
+   stamp the ids that landed back onto the marker.
+4. Promote the manifest, then write `.abcd/development/readings/<run-id>/run.json`
+   **last**: the run metadata is the commit marker, so a run without one never
+   happened. The stage is cleared once the marker is down.
 
-An orphaned stage found on a later invocation is reported by name and cleared.
-A crash mid-ingest therefore leaves evidence, never half a run.
+The stage holds a MARKER rather than the rendered records, which is a departure
+from this spec's first draft and is taken for a reason. `capture.IngestReading`
+mints every item id under the ledger lock, probing the tree it is about to write
+into, precisely so two ingests landing in one second cannot draw one id; staging
+the rendered records into a second issues root would move that probe off the
+real ledger and reopen what the lock was taken for. One record writer, one mint,
+one lock — and the stage does the job ac-2 actually asks of it.
+
+An orphaned stage found on a later invocation is reported by name and cleared,
+and the run is ROLLED BACK: a run whose commit marker never landed never
+happened, so its reading records are removed (bounded by the `rdi-N.md`
+filename grammar, so a file a person put in the directory survives), and its
+own directory with them. A stage beside a run whose marker DID land is a
+leftover from a crash after the marker; that run is complete and only the stage
+goes. A crash mid-ingest therefore leaves evidence, and the next invocation
+leaves neither half a run nor a stale one.
 
 ### Refusal granularity and refusal records
 
@@ -189,19 +233,19 @@ by a registry. The numbering below is the positional authority ac-1..ac-13.
 
 | itd-185 criterion | How spc-63 satisfies it | Test |
 | --- | --- | --- |
-| ac-1 — malformed output refused, nothing durable anywhere | Validation is step 1 of four; staging is local-tier; the durable move happens only after the whole payload validates | `TestMalformedPayloadWritesNothing`, `TestNoDurableWriteBeforeValidation`, `TestUnknownFieldRefusedAtEveryLevel` |
-| ac-2 — a fault between staging and the commit marker leaves no half-run, and the orphan is named and cleared | Run metadata is written last as the commit marker; an orphaned stage found on a later invocation is reported by name and cleared | `TestRunMetadataLandsLast`, `TestOrphanedStageIsReportedAndCleared` |
-| ac-3 — the manifest reference resolves, and a mismatch refuses the run | `manifest_sha256` is checked against the parked manifest's own content hash before promotion | `TestManifestReferenceMustResolve`, `TestManifestHashMismatchRefusesRun` |
+| ac-1 — malformed output refused, nothing durable anywhere | Validation is step 1 of four; staging is local-tier; the durable write happens only after the whole payload validates | `TestMalformedPayloadWritesNothing`, `TestNoDurableWriteBeforeValidation`, `TestUnknownFieldRefusedAtEveryLevel` |
+| ac-2 — a fault between staging and the commit marker leaves no half-run, and the orphan is named and cleared | Run metadata is written last as the commit marker; an orphaned stage found on a later invocation is reported by name, the run is rolled back, and the stage is cleared | `TestRunMetadataLandsLast` (both fault windows), `TestOrphanedStageIsReportedAndCleared`, `TestOrphanSweepLeavesACommittedRunAlone` |
+| ac-3 — the manifest reference resolves, and a mismatch refuses the run | `manifest_sha256` is checked against the parked manifest's own content hash before anything is written | `TestManifestReferenceMustResolve`, `TestManifestHashMismatchRefusesRun` |
 | ac-4 — a registrative reserved name refuses, naming ordinal, field and licence | The `registrative` reserved-name table: `resolution`, `fix`, `remedy` | `TestRegistrativeResolutionFieldRefused` |
 | ac-5 — a registered fix-proposal signature refuses, naming item and signature | `RG-REG-FIXPROPOSAL`, shipped in `enforce` mode with no configuration seam | `TestRegistrativeProseFixProposalRefused`, `TestEverySignatureShipsEnforced` |
 | ac-6 — an evaluative reserved name refuses, naming the field | The `evaluative` reserved-name table: `rank`, `score`, `recommended`, `order` | `TestEvaluativeRankScoreRecommendedRefused` |
 | ac-7 — arrangement order alone is accepted | Arrangement order is never inspected: items arrive in document order by mandate | `TestEvaluativeDocumentOrderIsNeverRefused` |
-| ac-8 — an explicative disposition-bearing field refuses, naming the field | `disposition` and `status` are reserved on the explicative body, and strict decoding refuses any field outside that body schema, so the violation is impossible to express rather than merely caught | `TestExplicativeDispositionRefused`, `TestWrongPositionBodyIsUndecodable` |
+| ac-8 — an explicative disposition-bearing field refuses, naming the field | `disposition` and `status` are reserved on the explicative body, and the item's key set is closed against the position's own body fields, so any field outside it is refused by name | `TestExplicativeDispositionRefused`, `TestWrongPositionBodyIsUndecodable` |
 | ac-9 — a registered disposition signature refuses, naming item and signature | `RG-EXPL-DISPOSITION`, shipped in `enforce` mode | `TestExplicativeProseDispositionRefused`, `TestEverySignatureShipsEnforced` |
-| ac-10 — a list-level refusal writes a refusal record and no items | The refusal path writes `refusal.json` carrying run metadata and the named reason; nothing is ever moved out of the stage | `TestListLevelRefusalWritesRefusalRecordOnly` |
-| ac-11 — an empty or absent `pattern_named` refuses the item at every regime | Provenance is one envelope field, checked before the body, at all four regimes without exception | `TestEmptyPatternNamedRefusesItemAtEveryRegime` |
+| ac-10 — a list-level refusal writes a refusal record and no items | The refusal path writes `refusal.json` carrying run metadata and the named reason; the stage is never taken | `TestListLevelRefusalWritesRefusalRecordOnly` |
+| ac-11 — an empty or absent `pattern` refuses the item at every regime | Provenance is one envelope field, checked before the body, at all four regimes without exception | `TestEmptyPatternNamedRefusesItemAtEveryRegime` (all four positions, three forms each) |
 | ac-12 — a self-declared regime disagreeing with the definition refuses the run | The regime's source of truth is the definition, resolved through the run's position; the payload's claim is compared, never trusted | `TestRegimeComesFromTheDefinitionNotThePayload`, `TestSelfDeclaredRegimeMismatchRefusesRun` |
-| ac-13 — item ids are minted by the verb, and a supplied id is an unknown field | `recordid.Minter.Mint("rdi")` on acceptance; the payload schema carries no item identifier at all | `TestItemIDsAreMintedByTheVerb` |
+| ac-13 — item ids are minted by the verb, and a supplied id is an unknown field | `recordid.Minter.Mint("rdi")` through `capture.IngestReading` on acceptance; the payload schema carries no item identifier at all | `TestItemIDsAreMintedByTheVerb` |
 
 ac-5 and ac-9 are the two criteria bounded by the signature registry rather
 than by the schema, and itd-185 discloses that residue. Their structural
@@ -215,6 +259,14 @@ refusal granularity, which lands the surviving items when one item is refused
 review-flag path, which raises a flag on the run record instead of refusing
 (`TestGenerativeHasNoRegimeRefusalButFlagsRecommendation`).
 
+ac-13 is checked against the mint's SHAPE rather than through an injected clock
+and entropy, which is a departure from this spec's first draft. The mint is
+`capture.IngestReading`'s, taken under that package's ledger lock so the
+collision probe sees the tree it is about to write into, and its seams are not
+reachable from this package. What the case establishes is what the criterion
+asks: every id on an accepted run came from a mint and none from the payload,
+and a payload supplying its own is refused by name.
+
 
 ## Tests
 
@@ -224,7 +276,8 @@ Each case is written to fail before the change and pass after, in
 - `ingest_schema_test.go`: `TestMalformedPayloadWritesNothing`,
   `TestUnknownFieldRefusedAtEveryLevel`,
   `TestWrongPositionBodyIsUndecodable`,
-  `TestNoDurableWriteBeforeValidation`.
+  `TestNoDurableWriteBeforeValidation`,
+  `TestPatternFieldIsTheRecordEnvelopeField`.
 - `ingest_regime_test.go`: `TestRegimeComesFromTheDefinitionNotThePayload`,
   `TestSelfDeclaredRegimeMismatchRefusesRun`,
   `TestEvaluativeRankScoreRecommendedRefused`,
@@ -234,21 +287,40 @@ Each case is written to fail before the change and pass after, in
   `TestExplicativeDispositionRefused`,
   `TestExplicativeProseDispositionRefused`,
   `TestGenerativeHasNoRegimeRefusalButFlagsRecommendation`,
-  `TestEverySignatureShipsEnforced` (a property over the registry).
+  `TestEverySignatureShipsEnforced` (a property over the registry),
+  `TestReservedNamesNeverCollideWithABodyField`.
 - `ingest_provenance_test.go`: `TestEmptyPatternNamedRefusesItemAtEveryRegime`.
+- `ingest_fixture_test.go`: the shared fixture. Every refusal case is built by
+  mutating a payload it produced, and asserts the adjacent LEGAL item in the
+  same payload landed — so no case could pass against a verb that refused
+  everything.
 - `ingest_stage_test.go`: `TestRunMetadataLandsLast`,
   `TestOrphanedStageIsReportedAndCleared`,
+  `TestOrphanSweepLeavesACommittedRunAlone`,
   `TestItemLevelViolationLandsTheRest`,
-  `TestListLevelRefusalWritesRefusalRecordOnly`.
+  `TestListLevelRefusalWritesRefusalRecordOnly`,
+  `TestRunIDNeverBuildsAPathBeforeItIsChecked`.
 - `ingest_identity_test.go`: `TestManifestReferenceMustResolve`,
   `TestManifestHashMismatchRefusesRun`,
   `TestInstrumentIdentityRequiresAllThreeParts`,
-  `TestItemIDsAreMintedByTheVerb` (injected clock and entropy; a
-  payload-supplied id is an unknown field).
+  `TestItemIDsAreMintedByTheVerb` (the mint's shape; a payload-supplied id is
+  an unknown field).
 - `internal/surface/cli/reading_surface_test.go`:
-  `TestIngestRequiresOutputJSON`, `TestIngestReachesBothPlanes`. The
-  no-operator-surface guard on the regime is spc-62's
+  `TestIngestRequiresOutputJSON`, `TestIngestReachesBothPlanes` and
+  `TestIngestExecutesEndToEnd`, which assembles a run through the sibling verb
+  and ingests its output, so the wiring claim is a run rather than a tree walk.
+  The no-operator-surface guard on the regime is spc-62's
   `TestNoOperatorSurfaceSetsARegime`, in its own file.
+
+Four further cases hold properties this spec states in prose and would
+otherwise only assert there. `TestPatternFieldIsTheRecordEnvelopeField` holds
+the payload key to the record's own envelope field.
+`TestReservedNamesNeverCollideWithABodyField` keeps a reserved name from being
+a body field, which would refuse every legal output at that position.
+`TestOrphanSweepLeavesACommittedRunAlone` holds the rollback off a run that
+committed. `TestRunIDNeverBuildsAPathBeforeItIsChecked` is the trust boundary:
+the run id is the one payload value a path is built from, and a traversal id is
+refused before any file is opened.
 
 ## Out of scope
 
