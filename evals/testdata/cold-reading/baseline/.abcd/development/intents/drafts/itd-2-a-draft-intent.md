@@ -11,6 +11,10 @@ ABCD-EVAL-SENTINEL-DRAFT-BODY: the candidate the widening reading is asked to wi
 
 The draft's press release, which the entailment reading reads.
 
+## Mechanism
+
+The draft's mechanism claim, which the entailment reading reads.
+
 ## Residue
 
 ABCD-EVAL-SENTINEL-UNPROJECTED-SECTION in a draft section the projection does not

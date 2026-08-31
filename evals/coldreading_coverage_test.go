@@ -23,6 +23,30 @@ package evals
 // What it does NOT claim: that each Falsifier has been executed on every run.
 // The ones marked in the record as watched red have been; the rest are the
 // mutation each row is written against, stated so the next reader can run it.
+//
+// # What this matrix enumerates, and what it does not
+//
+// It enumerates the assembler's READ-BLOCK: the include table's rows and their
+// projections, the exclusion floor, the structural deny, and the mechanisms that
+// decide what reaches the assembled input. That is spc-64's subject — what a
+// reading sees — and the boundary is deliberate rather than a stopping point
+// nobody chose.
+//
+// It deliberately does NOT enumerate the assembler's refusals about the
+// INVOCATION and the TREE, which decide whether a run happens at all rather than
+// what it passes: refuseSelfAdmittingOutDir, refuseDirtyIncludedPaths,
+// resolveTarget and the closed position set, MaxFileBytes, the absent
+// record-lint.json refusal, requireConfiguredStores, the walk-row
+// must-be-a-directory refusal, and the symlinked-leaf rule. Each is covered by
+// internal/core/reading's own tests, and none of them can put warm content into
+// a bundle — the failure this eval exists to catch.
+//
+// Two read-block properties are also out: that a bundle item carries no
+// repository path (brief invariant 15) and that the manifest's own shape holds.
+// Both are properties of the ARTEFACT rather than of what was selected into it,
+// spc-64 names three assertions and neither is among them, and both are held by
+// TestBundleCarriesNoRepositoryPath in the assembler's package. They are named
+// here so their absence reads as a decision rather than an oversight.
 
 import (
 	"sort"
@@ -76,13 +100,12 @@ var coverage = []coverageRow{
 	{
 		Rule:      "brief/02-constraints is admitted whole at every position",
 		Falsifier: "delete the 02-constraints row from Table",
-		Gap: "no plant sits in that chapter, so its removal loses input without disarming " +
-			"an assertion; a leak eval has nothing to say about a row whose absence leaks nothing",
+		Caught:    caughtCarrier,
 	},
 	{
 		Rule:      "brief/glossary is admitted whole at every position",
 		Falsifier: "delete the glossary row from Table",
-		Gap:       "no plant sits in the glossary, for the same reason as 02-constraints",
+		Caught:    caughtCarrier,
 	},
 	{
 		Rule:      "intents/disciplines is admitted whole at every position",
@@ -142,13 +165,20 @@ var coverage = []coverageRow{
 	{
 		Rule:      "the shipped tree's source is admitted",
 		Falsifier: "delete the root `.go` row from Table",
-		Gap: "the fixture's own Go file is cold; the two planted Go files sit under the " +
-			"structural deny, where a different row of this matrix covers them",
+		Caught:    caughtCarrier,
 	},
 	{
 		Rule:      "the shipped tree's configuration and build files are admitted",
 		Falsifier: "delete the root config row from Table",
-		Gap:       "no plant sits in the fixture's configuration or build files",
+		Caught:    caughtCarrier,
+	},
+
+	{
+		Rule: "the intent projection is the FIVE contracted fields: press release, " +
+			"acceptance criteria, scope conditions, mechanism and spec_id",
+		Falsifier: "narrow intentProjection to []string{\"Press Release\"}",
+		Caught:    caughtCarrier,
+		Classes:   []string{"WARM-FIELD", "UNPROJECTED-SECTION", "DRAFT-ORIGIN"},
 	},
 
 	// ---- the per-position asymmetry ----
@@ -314,6 +344,13 @@ var coverage = []coverageRow{
 		Caught:    caughtRefusal,
 	},
 	{
+		Rule:      "the `.git` namespace is denied structurally",
+		Falsifier: "drop \".git\" from denySegments",
+		Gap: "the walk is intersected with the tracked set and git reports none of its own " +
+			"object database as tracked, so nothing under .git can be admitted however the " +
+			"deny is spelled; the segment is belt to that braces and its removal leaks nothing",
+	},
+	{
 		Rule:      "the record graph is what enumerates the record rows",
 		Falsifier: "point storeNodeType at a node type the graph does not report",
 		Caught:    caughtCarrier,
@@ -418,7 +455,7 @@ func TestEveryAssemblerRuleHasAFalsifier(t *testing.T) {
 
 	// The gap count is declared, so a row silently becoming unfalsifiable — the
 	// exact way this eval would decay — has to be an explicit edit.
-	const declaredGaps = 9
+	const declaredGaps = 6
 	if gaps != declaredGaps {
 		t.Errorf("the matrix declares %d unfalsifiable row(s) and holds %d; a rule sliding "+
 			"into or out of unfalsifiable coverage is the change this eval most needs said "+

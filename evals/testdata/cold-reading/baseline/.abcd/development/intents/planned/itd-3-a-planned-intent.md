@@ -9,6 +9,10 @@ spec_id: spc-1
 
 A planned promise the entailment reading reads.
 
+## Mechanism
+
+The planned mechanism claim, which the entailment reading reads.
+
 ## Residue
 
 ABCD-EVAL-SENTINEL-UNPROJECTED-SECTION in a planned section the projection does

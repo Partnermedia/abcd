@@ -293,74 +293,119 @@ type carrier struct {
 	Path string
 	// Positions are the positions it must reach. Empty means every position.
 	Positions []string
-	// Marker is a COLD string drawn from the carrier's own travelling text: not a
-	// sentinel, so it belongs in the bundle, and distinctive, so finding it in the
-	// bundle's bytes means this file's content arrived rather than its name.
+	// Markers are COLD strings drawn from the carrier's own travelling text: not
+	// sentinels, so they belong in the bundle, and distinctive, so finding one in
+	// the bundle's bytes means this file's content arrived rather than its name.
 	//
-	// Requiring the marker rather than the manifest path is the whole point. A
+	// Requiring a marker rather than the manifest path is the whole point. A
 	// manifest names what an assembly SAYS it passed; an assembly that emitted an
 	// empty text for every projected item would satisfy a path check exactly while
 	// every absence assertion over those items asserted nothing at all.
-	Marker string
+	//
+	// A PROJECTED carrier declares one marker per projected field it is pinning,
+	// because a single marker pins only the field it was drawn from: with every
+	// marker inside `## Press Release`, narrowing the projection to that one field
+	// drops four of the five contracted fields and every marker still arrives.
+	Markers []string
 	// Classes are the sentinel classes the file carries, so a missing carrier
-	// names the assertions it silently disarmed.
+	// names the assertions it silently disarmed. It may be empty for a carrier
+	// whose job is to pin an include row rather than a plant.
 	Classes []string
 	// Why states what the file is doing in the assembly.
 	Why string
 }
 
-// carriers is the plant-bearing half of the include list. Every Marker is COLD
-// text drawn from the carrier's own body, so requiring it in the bundle requires
-// the carrier's bytes rather than its name.
+// carriers pins the include list at content level: every row it names must
+// arrive at each position, carrying its own text.
+//
+// Six rows are plant-bearing, so a lost carrier disarms a named assertion. Four
+// carry no plant and exist only to make their include row falsifiable — the
+// carrier floor is a PRESENCE assertion, not a leak assertion, so it reaches a
+// row whose removal leaks nothing, which is a reach an absence assertion alone
+// does not have.
 var carriers = []carrier{
 	{
 		Path:    ".abcd/development/brief/01-product/01-press-release.md",
-		Marker:  "The fixture product, stated as it presently stands.",
-		Classes: []string{"WARM-KEY"},
+		Markers: []string{"The fixture product, stated as it presently stands."},
+		Classes: []string{"WARM-KEY", "WARM-FIELD"},
 		Why:     "a brief chapter admitted wholesale, carrying the production-mode key",
 	},
 	{
+		Path:    ".abcd/development/brief/02-constraints/03-invariants.md",
+		Markers: []string{"The core is transport agnostic."},
+		Why:     "the constraints chapter, which carries no plant; the carrier is what makes its row falsifiable",
+	},
+	{
+		Path:    ".abcd/development/brief/glossary/core/construal.md",
+		Markers: []string{"What the situation is treated as."},
+		Why:     "the glossary, which carries no plant; the carrier is what makes its row falsifiable",
+	},
+	{
 		Path:    ".abcd/development/intents/disciplines/itd-4-selection-criteria.md",
-		Marker:  "Six criteria, recorded as a standing commitment.",
-		Classes: []string{"WARM-KEY"},
+		Markers: []string{"Six criteria, recorded as a standing commitment."},
+		Classes: []string{"WARM-KEY", "WARM-FIELD"},
 		Why:     "a discipline admitted whole, carrying the origin key",
 	},
 	{
 		Path:    ".abcd/development/specs/open/spc-1-a-design-record.md",
-		Marker:  "The mechanics the capability was built against.",
+		Markers: []string{"The mechanics the capability was built against."},
 		Classes: []string{"WARM-KEY", "WARM-FIELD"},
-		Why:     "a spec admitted whole, carrying the origin key and an excluded heading",
+		Why:     "a spec admitted whole, carrying the origin key and two excluded headings",
 	},
 	{
-		Path:    ".abcd/development/intents/shipped/itd-1-a-shipped-intent.md",
-		Marker:  "The promise, as it was made.",
+		Path: ".abcd/development/intents/shipped/itd-1-a-shipped-intent.md",
+		Markers: []string{
+			"The promise, as it was made.",
+			"A positive include table over a hand-transcribed exclusion floor.",
+		},
 		Classes: []string{"WARM-FIELD", "UNPROJECTED-SECTION"},
-		Why:     "a shipped intent projected to its claim record",
+		Why:     "a shipped intent projected to its claim record, pinned at two of the five contracted fields",
 	},
 	{
 		Path:      ".abcd/development/intents/drafts/itd-2-a-draft-intent.md",
 		Positions: []string{posEntailment},
-		Marker:    "The draft's press release, which the entailment reading reads.",
-		Classes:   []string{"DRAFT-ORIGIN", "UNPROJECTED-SECTION"},
-		Why:       "the candidate set the entailment reading reads, carrying the origin key",
+		Markers: []string{
+			"The draft's press release, which the entailment reading reads.",
+			"The draft's mechanism claim, which the entailment reading reads.",
+		},
+		Classes: []string{"DRAFT-ORIGIN", "UNPROJECTED-SECTION"},
+		Why:     "the candidate set the entailment reading reads, carrying the origin key",
 	},
 	{
 		Path:      ".abcd/development/intents/planned/itd-3-a-planned-intent.md",
 		Positions: []string{posEntailment},
-		Marker:    "A planned promise the entailment reading reads.",
-		Classes:   []string{"UNPROJECTED-SECTION"},
-		Why:       "the planned half of the candidate set, projected the same way",
+		Markers: []string{
+			"A planned promise the entailment reading reads.",
+			"The planned mechanism claim, which the entailment reading reads.",
+		},
+		Classes: []string{"UNPROJECTED-SECTION"},
+		Why:     "the planned half of the candidate set, projected the same way",
+	},
+	{
+		Path:    "main.go",
+		Markers: []string{"func main() {}"},
+		Why:     "the shipped tree's source, which carries no plant; the carrier is what makes its row falsifiable",
+	},
+	{
+		Path:    "go.mod",
+		Markers: []string{"module example.invalid/coldreadingfixture"},
+		Why:     "the shipped tree's configuration, which carries no plant; the carrier is what makes its row falsifiable",
 	},
 }
 
-// tokens renders the carrier's sentinel classes as their tokens, for a message
-// that names the assertions a missing carrier would have disarmed.
-func (c carrier) tokens() []string {
-	out := make([]string, 0, len(c.Classes))
-	for _, name := range c.Classes {
-		out = append(out, sentinelPrefix+name)
+// stake says what a missing carrier costs: the assertions it would have
+// disarmed, or — for a carrier that pins an include row rather than a plant —
+// that its row can no longer be falsified.
+func (c carrier) stake() string {
+	if len(c.Classes) == 0 {
+		return "no plant depends on it, so nothing would leak, and its include row would " +
+			"become unfalsifiable without a test noticing"
 	}
-	return out
+	tokens := make([]string, 0, len(c.Classes))
+	for _, name := range c.Classes {
+		tokens = append(tokens, sentinelPrefix+name)
+	}
+	return "the " + strings.Join(tokens, " and ") + " assertion(s) over it would pass with nothing to catch"
 }
 
 // reachesAt reports whether the carrier must reach the assembly at position p.
