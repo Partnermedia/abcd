@@ -8,7 +8,7 @@ intent: itd-183
 
 ## Bundle
 
-itd-183, [itd-184](../../intents/planned/itd-184-four-cold-reading-definitions-one-blindness-core-each-positi.md)
+itd-183, [itd-184](../../intents/shipped/itd-184-four-cold-reading-definitions-one-blindness-core-each-positi.md)
 and [itd-185](../../intents/planned/itd-185-one-ingest-verb-validates-every-cold-reading-output-includin.md)
 are one design under one bundle kind, and the ceremony cannot give them one
 spec: a spec's `intent:` is a single id, captured as iss-2608300108376943, so
@@ -17,7 +17,7 @@ the three are written as one cross-linked design record.
 | Spec | Component it owns |
 | --- | --- |
 | spc-61 (this record) | The input assembler, the include table, the pathless bundle, the manifest, and the bundle's shared decisions |
-| [spc-62](../open/spc-62-four-cold-reading-definitions-one-blindness-core-each-positi.md) | The four reading definitions under `agents/` and the blindness-core byte-identity test |
+| [spc-62](spc-62-four-cold-reading-definitions-one-blindness-core-each-positi.md) | The four reading definitions under `agents/` and the blindness-core byte-identity test |
 | [spc-63](../open/spc-63-one-ingest-verb-validates-every-cold-reading-output-includin.md) | The output contract, the supply-regime gate, and the ingest sub-verb |
 
 **Shared decisions are stated once, here**, under "The package, the verb tree

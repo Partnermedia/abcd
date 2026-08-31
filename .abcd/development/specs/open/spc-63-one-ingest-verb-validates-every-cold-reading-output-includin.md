@@ -11,14 +11,14 @@ intent: itd-185
 itd-185,
 [itd-183](../../intents/shipped/itd-183-the-cold-reading-sees-exactly-what-the-assembler-passes-posi.md)
 and
-[itd-184](../../intents/planned/itd-184-four-cold-reading-definitions-one-blindness-core-each-positi.md)
+[itd-184](../../intents/shipped/itd-184-four-cold-reading-definitions-one-blindness-core-each-positi.md)
 are one design under one bundle kind, and the ceremony cannot give them one
 spec: a spec's `intent:` is a single id, captured as iss-2608300108376943.
 
 | Spec | Component it owns |
 | --- | --- |
 | [spc-61](../closed/spc-61-the-cold-reading-sees-exactly-what-the-assembler-passes-posi.md) | The input assembler, the include table, the pathless bundle, the manifest, and the bundle's shared decisions |
-| [spc-62](spc-62-four-cold-reading-definitions-one-blindness-core-each-positi.md) | The four reading definitions under `agents/` and the blindness-core byte-identity test |
+| [spc-62](../closed/spc-62-four-cold-reading-definitions-one-blindness-core-each-positi.md) | The four reading definitions under `agents/` and the blindness-core byte-identity test |
 | spc-63 (this record) | The output contract, the supply-regime gate, and the ingest sub-verb |
 
 The package name, the verb tree, the run-identifier form and the artefact
