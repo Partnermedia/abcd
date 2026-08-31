@@ -180,10 +180,20 @@ licence is the widest and comparison belongs to the comparative position.
 
 ## Acceptance criteria mapping
 
+The criteria were split on 2026-08-31, before this spec was built, so that each
+one names a single observable a gate can hold. The numbering below is the
+positional authority ac-1..ac-3.
+
 | itd-184 criterion | How spc-62 satisfies it | Test |
 | --- | --- | --- |
-| Given the four definitions, when they are diffed, then the blindness core is byte-identical across all four | One delimited core span, carried verbatim in each file, with the delimiters making the span exact | `TestBlindnessCoreIsByteIdenticalAcrossDefinitions`, `TestBlindnessCoreCarriesSevenConditions` |
-| Given any definition, when it is inspected, then its regime value is stated in the definition and not derivable from operator input | `regime:` is a frontmatter key of the definition file; spc-63 resolves it through the run's position, and no flag or configuration key can set it | `TestEveryDefinitionStatesItsRegime`, `TestRegimeValuesAreTheFourAndDistinct`, `TestNoRegimeFlagExists` (in `internal/surface/cli`) |
+| ac-1 — the blindness core is byte-identical across the four and carries its seven conditions in the fixed order | One delimited core span, carried verbatim in each file, the delimiters making the span exact rather than heuristic | `TestBlindnessCoreIsByteIdenticalAcrossDefinitions`, `TestBlindnessCoreCarriesSevenConditions` |
+| ac-2 — every definition states a regime, the four distinct and resolvable by position alone | `position:` and `regime:` are frontmatter keys of the definition file, which is what makes the regime the definition's property rather than the payload's | `TestEveryDefinitionStatesItsRegime`, `TestRegimeValuesAreTheFourAndDistinct` |
+| ac-3 — no registered flag and no registered configuration key sets or overrides a regime | The command tree is walked programmatically and every registered flag and configuration key inspected, so the guard cannot fall behind the surface it guards (itd-195). It is proved capable of failing by adding a `--regime` flag and watching it go red | `TestNoOperatorSurfaceSetsARegime`, in `internal/surface/cli/regime_surface_test.go` |
+
+The residue itd-184 discloses against ac-3 is a channel that was never
+registered. This spec adds no mechanism for one, and the walk sees every
+channel that is.
+
 
 ## Tests
 
@@ -211,6 +221,11 @@ them for spc-63's instrument identity.
 - `TestComparativeObjectIsTheWideningPreAdmissionOutput`: the settled reading
   of ruling (8), pinned so the two intents' disagreement cannot be
   reintroduced.
+- `TestNoOperatorSurfaceSetsARegime`, in
+  `internal/surface/cli/regime_surface_test.go`: walks the command tree and the
+  configuration schema and fails if any registered flag or key can set or
+  override a regime. Its own file, so the ingest verb's surface tests and this
+  guard never contend for one.
 - `record-lint` over the tree supplies the contract cases already: the four
   new prompts must carry the itd-5 frontmatter, a non-empty regular canary
   fixture each, and a CHANGELOG entry at `0.1.0`. A confirming case,

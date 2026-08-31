@@ -141,17 +141,24 @@ regardless.
 
 ## Acceptance criteria mapping
 
+The criteria were split on 2026-08-31, before this spec was built, because the
+second criterion as written named a precondition no eval may establish for
+itself. The numbering below is the positional authority ac-1..ac-4.
+
 | itd-187 criterion | How spc-65 satisfies it | Pinned by |
 |---|---|---|
-| Given an unchanged repository state, when one definition is assembled twice, then the two assembled inputs are byte-identical | Two assemblies over one commit from two paths, compared as whole artefacts with the manifest excluded | `TestAssembledInputIsByteIdenticalAcrossRuns` |
-| Given a nondeterminism introduced into the assembler (walk order, timestamps), when the eval runs, then it fails | Walk order is caught by the independent lexicographic oracle over the order-adversarial fixture; timestamps are caught by the manifest scan; the comparator itself is proven capable of failing by the meta-test | `TestWalkOrderIsLexicographic`, `TestManifestCarriesNoTimestamp`, `TestComparatorReportsADifference` |
+| ac-1 — two assemblies from two distinct paths over one commit are byte-identical, manifest excluded | Two assemblies over one commit from two temporary directories, compared as whole artefacts taken from the dry-run output directory | `TestAssembledInputIsByteIdenticalAcrossRuns` |
+| ac-2 — item paths agree with the eval's own lexicographic sort | The order oracle is the eval's sort, never the assembler's, run against the order-adversarial fixture, so a consistent-but-not-lexicographic order fails where byte identity alone would accept it | `TestWalkOrderIsLexicographic`, `TestFixtureOrderIsAdversarial` |
+| ac-3 — a timestamp-shaped key or scalar in the manifest fails | The timestamp scan is confined to the manifest, which carries paths, field names and hashes only, so a timestamp-shaped token there is unambiguously a defect | `TestManifestCarriesNoTimestamp` |
+| ac-4 — the comparator reports a difference naming the differing item | Two synthetic pairs, one differing in item order and one in a single scalar; the anti-vacuity guard without which a comparator that compared nothing would pass everything else here | `TestComparatorReportsADifference` |
 
-The second criterion is the one that cannot be pinned by holing the shipped
-assembler from inside the eval, since an eval must not patch the code under
-test. It is pinned in three parts instead: two assertions that catch each named
-nondeterminism through an oracle the assembler does not supply, and one
-meta-test over the comparator. The watched-red run below closes the gap by
-holing the assembler temporarily and by hand.
+The criterion these three replace read "given a nondeterminism introduced into
+the assembler, the eval fails", and its Given is unestablishable by any shipped
+artefact, since an eval must not patch the code under test. itd-187 discloses
+the remainder as a recorded hand-run: the walk sort removed by a one-line local
+patch, the test watched red, the patch reverted before the branch is pushed,
+and the run recorded in the pull-request body.
+
 
 ## Tests
 

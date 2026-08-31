@@ -38,17 +38,31 @@ None stated.
 
 ## Acceptance Criteria
 
-- **Given** the fixture state, **when** the eval runs, **then** it passes
-  only if the assembler output contains no planted warm content and no
-  field on the exclusion list.
-- **Given** a ledger path moved to a new location holding a plant,
-  **when** the eval runs, **then** it fails loudly.
-- **Given** a warm field introduced on a record type already on the
-  include list, **when** the eval runs, **then** it fails.
-- **Given** a repository state containing manifests and reading records
-  from prior runs, **when** the eval runs, **then** none of them appears
-  in the assembler's output — the instrument's own exhaust is tested
-  against its own read-block (added 2026-08-28; nothing else tests it).
+- **Given** the fixture state, **when** the eval runs, **then** it passes only if
+  the assembler output contains no planted warm content and no field on the
+  exclusion list.
+- **Given** a ledger path moved to a new location holding a plant, **when** the
+  eval runs, **then** it fails with a non-zero exit and a message naming the
+  leaked sentinel's class token and the position at which it leaked.
+- **Given** a warm field introduced on a record type already on the include
+  list, **when** the eval runs, **then** it fails.
+- **Given** a repository state containing manifests and reading records from
+  prior runs, **when** the eval runs, **then** none of them appears in the
+  assembler's output — the instrument's own exhaust is tested against its own
+  read-block (added 2026-08-28; nothing else tests it).
+- **Given** the eval package, **when** every Go file under `evals/` is parsed,
+  **then** no import path names the assembler's package or its include list, so
+  the oracle's exclusion table is transcribed rather than derived.
+- **Given** the materialised fixture, **when** the eval runs, **then** every
+  declared sentinel class is present the declared number of times, so a corpus
+  that lost a plant fails rather than passing silently.
+
+**Disclosed residue (ac-5).** The import guard holds the oracle structurally
+independent of the assembler, but a hand-transcribed table can still fall behind
+the exclusion list it mirrors. That staleness is bounded by the holed variant
+and by ac-6, never by the import check. Prose-borne warmth inside an included
+chapter carries no structural signal and stays the residue itd-183 records.
+
 
 ## Grounds
 

@@ -36,10 +36,28 @@ None stated.
 
 ## Acceptance Criteria
 
-- **Given** an unchanged repository state, **when** one definition is
-  assembled twice, **then** the two assembled inputs are byte-identical.
-- **Given** a nondeterminism introduced into the assembler (walk order,
-  timestamps), **when** the eval runs, **then** it fails.
+- **Given** an unchanged repository state at one commit, **when** one definition
+  is assembled twice from two distinct filesystem paths, **then** the two
+  assembled inputs are byte-identical, the manifest excluded from the
+  comparison.
+- **Given** the order-adversarial fixture, **when** the eval runs, **then** the
+  item paths in the assembled input agree with the eval's own lexicographic
+  sort, so a consistent-but-not-lexicographic order fails.
+- **Given** a manifest carrying a timestamp-shaped key or a timestamp-shaped
+  scalar value, **when** the eval runs, **then** it fails.
+- **Given** two artefacts differing only in item order, and two differing only in
+  one scalar value, **when** the comparator runs over each pair, **then** it
+  reports a difference naming the differing item.
+
+**Disclosed residue (ac-2 to ac-4).** A nondeterminism introduced into the
+shipped assembler is a precondition no eval may establish for itself, because an
+eval must not patch the code under test. The three criteria above catch each
+named nondeterminism through an oracle the assembler does not supply, and the
+comparator's own capacity to fail is proved by ac-4. What remains is discharged
+by hand: the walk sort removed by a one-line local patch, the test watched red,
+the patch reverted before the branch is pushed, and the run recorded in the
+pull-request body. That is a recorded hand-run, not a standing gate.
+
 
 ## Grounds
 

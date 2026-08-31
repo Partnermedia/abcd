@@ -2255,3 +2255,48 @@ together (the script's header says why there is no escape hatch).
   correct, the exit exists in a text editor, exposure is latent, and validating
   at capture time would contradict the adopted rule that capture stays
   frictionless.
+- 2026-08-31 — Phase 0 of the last four intents executed: the ruled criteria
+  split, applied to itd-184, itd-185, itd-186 and itd-187 before any builder
+  started, with the four specs' mapping tables rewritten in the same change so
+  intent and spec cannot drift. Splits: itd-184's regime criterion separated
+  the value stated in the definition from the absence of any operator surface
+  that sets it, the latter given its own observable and an executable
+  enumeration rather than a written list; itd-185's malformed-output criterion
+  separated refusal-with-no-partial-write from the crash window between staging
+  and the commit marker, and its registrative and explicative criteria each
+  separated the reserved-name half the schema holds absolutely from the
+  semantic half bounded by the signature registry; itd-187's second criterion
+  was replaced by three, because its Given — a nondeterminism introduced into
+  the shipped assembler — is unestablishable by any artefact, an eval being
+  forbidden to patch the code under test, and the remainder is disclosed as a
+  recorded hand-run. Every residue is stated in the record beside the criterion
+  it qualifies, so a later audit reads the bound rather than rediscovering it.
+  BEYOND THE LETTER OF THE RULING, and cheap to reverse because each sits
+  contiguously at the end of its list: three criteria added to itd-185 (named
+  provenance at every regime, the payload regime that disagrees with the
+  definition, and verb-minted item ids) and two to itd-186 (the oracle's
+  structural independence from the assembler, and the anti-vacuity guard that
+  every declared sentinel is planted). Each covers a promise already in the
+  intent's scope and already carrying a named test in its spec, and leaving a
+  load-bearing promise unmeasured is the same failure as an unmeetable
+  criterion, taken from the other side. Item-level refusal granularity in
+  itd-185 is the one such gap left unclosed, and is queued rather than added.
+  Rejected: splitting at build time (the criterion is rewritten in minutes
+  before the work and re-litigated in an audit after it) and leaving the
+  semantic halves conjoined under MET_WITH_CONCERNS (which stops carrying
+  information once it is the default outcome, and on the present trajectory it
+  is).
+- 2026-08-31 — The wave plan is re-cut, because itd-184 and itd-185 are not
+  independent: spc-63's regime gate resolves a run's position to
+  agents/cold-reading-<position>.md and reads its regime key, and recomputes
+  that file's hash for instrument identity, so itd-185 cannot be built until
+  itd-184's four definition files and their locator exist. The real graph is
+  two file-disjoint lanes — itd-184 then itd-185 over internal/core/reading and
+  agents/, itd-186 then itd-187 over evals/, the Makefile and ci.yml — so the
+  ceiling of two concurrent agents is held by running one lane in each rather
+  than by pairing the two deepest. itd-186 and itd-187 need no assembler change:
+  spc-64's four demands on spc-61's interface (dry-run, an operator-named output
+  directory, separate bundle and manifest artefacts, position and target flags,
+  non-zero exit) are all already shipped. Rejected: building itd-185 first
+  against fixture definitions, which would ship the keystone verb unwired to the
+  definitions that are its source of truth.
