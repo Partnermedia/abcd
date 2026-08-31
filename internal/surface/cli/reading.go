@@ -136,7 +136,58 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 	assembleCmd.Flags().BoolVar(&dryRun, "dry-run", false,
 		"write nothing; with --out the two artefacts still land in that directory")
 
+	var outputJSON string
+	ingestCmd := &cobra.Command{
+		Use:   "ingest --output-json <path>",
+		Short: "Validate one reading's returned output and write its records",
+		Long: "Validate the JSON a cold reading returned and write its reading records.\n\n" +
+			"The verb checks what the reading was LICENSED to produce, not only what it saw: the\n" +
+			"supply regime is read from the position's definition and compared with the output's own\n" +
+			"claim, each regime's reserved names are refused with the licence stated, and a registry\n" +
+			"of named signatures catches prose that ranks, settles or proposes without the field.\n\n" +
+			"Item identifiers are minted here. The payload carries none, so a supplied one is refused\n" +
+			"as an unknown field. Nothing durable is written until the whole payload validates, and\n" +
+			"the run metadata is written last as the commit marker: a run without one never happened,\n" +
+			"and an orphaned stage is named and cleared by the next invocation.",
+		Example: "  abcd reading ingest --output-json ./reading-output.json --json",
+		Args: func(_ *cobra.Command, args []string) error {
+			if len(args) > 0 {
+				return &exitError{Code: 2, Msg: "reading ingest: this verb takes no positional argument; " +
+					"the output names its own run, position and regime, and there is no operand that " +
+					"could set one"}
+			}
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if outputJSON == "" {
+				return &exitError{Code: 2, Msg: "reading ingest: --output-json <path> is required: " +
+					"the JSON the reading returned"}
+			}
+			// The operator's path means what the shell means by it; the core is
+			// handed the resolved one. The working directory is a transport fact
+			// the core does not hold.
+			cwd := mustCwd()
+			resolved := outputJSON
+			if !filepath.IsAbs(resolved) {
+				resolved = filepath.Join(cwd, filepath.FromSlash(resolved))
+			}
+			res, err := reading.Ingest(reading.IngestRequest{
+				RepoRoot:   captureRoot(cwd),
+				OutputPath: resolved,
+			})
+			if err != nil {
+				return &exitError{Code: 2, Msg: "reading ingest: " + scrubPaths(err)}
+			}
+			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				renderIngestResult(w, res)
+			})
+		},
+	}
+	ingestCmd.Flags().StringVar(&outputJSON, "output-json", "",
+		"path to the JSON the cold reading returned")
+
 	readingCmd.AddCommand(assembleCmd)
+	readingCmd.AddCommand(ingestCmd)
 	return readingCmd
 }
 
@@ -190,6 +241,32 @@ func renderAssembleResult(w io.Writer, res reading.AssembleResult) {
 	}
 	fmt.Fprintf(w, "  written:       %s and %s in %s\n",
 		reading.BundleFileName, reading.ManifestFileName, res.OutDir)
+}
+
+// renderIngestResult writes one ingest's text render.
+//
+// The refused items and the review flags are rendered by ORDINAL, rule and
+// signature id, never by body text: the bodies belong in the ledger records,
+// which the record writer redacts on the way in, and a refusal quoting a
+// reading's prose back to a terminal would leave that redaction behind.
+func renderIngestResult(w io.Writer, res reading.IngestResult) {
+	fmt.Fprintf(w, "%s: %d record(s) at the %s position under the %s regime\n",
+		res.RunID, len(res.Records), res.Position, res.Regime)
+	if res.RunRecordPath != "" {
+		fmt.Fprintf(w, "  run metadata:  %s\n", res.RunRecordPath)
+	}
+	for _, r := range res.RefusedItems {
+		fmt.Fprintf(w, "  refused:       item %d (%s): %s\n", r.Ordinal, r.Rule, r.Detail)
+	}
+	for _, f := range res.ReviewFlags {
+		fmt.Fprintf(w, "  review flag:   item %d matches %s\n", f.Ordinal, f.SignatureID)
+	}
+	if len(res.ClearedStages) > 0 {
+		fmt.Fprintf(w, "  cleared:       orphaned stage(s) of %s\n", strings.Join(res.ClearedStages, ", "))
+	}
+	if res.Degraded != "" {
+		fmt.Fprintf(w, "  redaction:     %s\n", res.Degraded)
+	}
 }
 
 // shortSha abbreviates a commit for the text render.

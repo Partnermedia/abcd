@@ -1091,6 +1091,19 @@
       ]
     },
     {
+      "path": "abcd reading ingest",
+      "hidden": false,
+      "flags": [
+        {
+          "name": "output-json",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        }
+      ]
+    },
+    {
       "path": "abcd rules",
       "hidden": false,
       "flags": []

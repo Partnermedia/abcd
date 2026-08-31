@@ -1,7 +1,7 @@
 ---
 name: reading
-description: Assemble the input a cold reading is handed, by invoking the abcd binary. Bare invocation is a read-only status render; assemble produces the assembled input and its hashed manifest.
-argument-hint: "[] | assemble --position <widening|entailment|comparative|detection> --target <HEAD|sha> [--out <dir>] [--dry-run]"
+description: Assemble the input a cold reading is handed and validate the output it returns, by invoking the abcd binary. Bare invocation is a read-only status render; assemble produces the assembled input and its hashed manifest, and ingest validates one reading's output and writes its records.
+argument-hint: "[] | assemble --position <widening|entailment|comparative|detection> --target <HEAD|sha> [--out <dir>] [--dry-run] | ingest --output-json <path>"
 ---
 
 # `/abcd:reading` — cold-reading input assembler
@@ -92,6 +92,87 @@ grant that reader **no repository access** — no file tools, no path, no workin
 directory. Hand it the bundle's items and nothing else. A reader that can open
 the repository is instructed blindness with extra steps, and no manifest can
 detect it after the fact.
+
+## Ingest one reading's output
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/abcd" reading ingest \
+  --output-json ./reading-output.json --json
+```
+
+`--output-json` names the JSON the reading returned. It is the only operand:
+the output states its own run, position and regime, and there is no flag that
+could set one. A missing operand, a positional argument, and every refusal
+below exit 2.
+
+### What the output carries
+
+One JSON document per run. The envelope names the run the assembly parked
+(`run_id`), the position it read at, the regime it claims, the content hash of
+that run's manifest, and the instrument — the model, the definition's content
+hash and the assembler version, all three required. Each item is a flat object
+carrying `pattern`, the pattern the reading read under, and exactly the body
+fields its position declares:
+
+| Position | Body fields |
+| --- | --- |
+| `widening` | `configuration`, `what_admits_it` |
+| `entailment` | `claim_surfaced`, `claim_type`, `what_implies_it` |
+| `comparative` | `candidate_id`, `criterion`, `characterisation` |
+| `detection` | `tension`, `constraint_in_play`, `why_a_tension` |
+
+**An item carries no identifier.** Identifiers are minted by the verb, and a
+payload supplying its own is refused as an unknown field. Unknown fields are
+refused at every level, so every violation names a field rather than guessing
+at one.
+
+### What is refused, and how far
+
+An **item-level** violation refuses that item and lands the rest: an empty or
+absent `pattern` at any position, a field the position's body does not declare,
+a reserved name, or a body matching a registered signature. A **list-level**
+violation refuses the whole run: a wrong `_type`, a run id that resolves to no
+parked manifest, a manifest hash that disagrees, an instrument claiming a
+definition hash or an assembler version the artefacts do not carry, a regime
+disagreeing with the definition, or a payload in which no item survived.
+
+**A refused run still leaves a record.** `refusal.json` under the run's
+directory carries the run metadata and the named reason and no items, so the
+event is durable; a rerun is a new run with a new run id, never an amendment.
+
+### The supply regime is the definition's
+
+Each position's definition states the regime the reading reads under, and the
+verb reads it from there. An output whose self-declared regime disagrees is
+refused. No operand and no configuration key sets a regime, by design.
+
+Per regime, the reserved names — a field naming one is refused with the licence
+stated:
+
+- `evaluative`: `order`, `rank`, `recommended`, `score`. Arrangement order is
+  never refused; items arrive in document order by mandate.
+- `registrative`: `fix`, `remedy`, `resolution`.
+- `explicative`: `disposition`, `status`.
+- `generative` has no reserved names. Its licence is the widest, and the
+  constraint on it falls at admission, so a signature hit there raises a review
+  flag on the run record instead of refusing the item.
+
+Prose that ranks, settles or proposes without the field is caught too, by a
+registry of named signatures (`RG-EVAL-ORDERING`, `RG-EVAL-RECOMMENDATION`,
+`RG-REG-FIXPROPOSAL`, `RG-EXPL-DISPOSITION`). That half is bounded by the
+registry: a fix proposal or a disposition phrased outside it is not caught, and
+the structural halves above carry no such bound.
+
+### Where the records land
+
+Nothing durable is written until the whole payload validates. The reading
+records land in the reading-record family, the run's manifest is promoted
+beside its run metadata, and the run metadata is written **last** as the commit
+marker — a run without one never happened. An ingest interrupted before that
+marker leaves a stage in the local tier, and the next invocation names the
+orphan, rolls the run back and clears it. Report from the JSON: `run_id`,
+`records`, `refused_items`, `review_flags`, `run_record` (or `refusal_record`)
+and `cleared_stages`.
 
 **Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
 provisions the binary into the plugin root, so this is the rung that fires for a
