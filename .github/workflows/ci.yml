@@ -7,7 +7,8 @@ name: ci
 # both and the `gofmt -l .` format gate, record-lint, docs-lint and the
 # site-render gate on the ubuntu leg alone. Separate jobs run full-history
 # secret scanning, a workflow audit, the reviews-charter and issue-resolution
-# gates (RS001-RS003), dependency review, govulncheck, and the smoke harness.
+# gates (RS001-RS003), dependency review, govulncheck, the smoke harness, and the
+# cold-reading evals.
 #
 # The `changes` job classifies the diff, and the duplicated lanes stand down on a
 # change confined to the record and the user-facing docs. Two properties make
@@ -27,6 +28,10 @@ name: ci
 # only a source change can move: the macOS leg, the race lane, the smoke harness,
 # and the workflow audit (anything under .github/ is not inert, so the audit
 # still runs on every change it could be auditing).
+#
+# What it does not skip, besides the ubuntu unit lane, is the cold-reading evals.
+# Their subject is the allowlist itself — the record and the docs are the material
+# the assembler includes — so an inert change is the one most able to break them.
 #
 # What it does not skip is the ubuntu unit lane. Tests read the live tree under
 # the allowlist — lifeboat coverage and the glossary index are asserted against
@@ -451,6 +456,40 @@ jobs:
           go-version: '1.26.7'
       - name: Smoke every command
         run: make smoke
+
+  # The cold-reading evals (evals/coldreading_*_test.go), on EVERY event. This job
+  # carries no `inert` condition, deliberately, and it is the one lane in this
+  # workflow besides the ubuntu unit lane that does not.
+  #
+  # The smoke job above stands down on a pull request confined to docs/,
+  # .abcd/development/, .abcd/work/ and the root prose files. Those are precisely
+  # the paths these evals read: a record-only change is the diff MOST able to
+  # introduce warm content into material the assembler includes, so standing the
+  # eval down there is anti-correlated with the risk — and a stood-down job still
+  # reports its check context green, which is a green for work that did not
+  # happen. The reasoning is the ubuntu unit lane's, one property further on: that
+  # lane always runs because its tests read the live tree under the allowlist, and
+  # this one always runs because its subject IS the allowlist.
+  #
+  # It runs the cold-reading evals ALONE, behind their own make target, so the
+  # rest of the smoke harness keeps standing down: the command-tree walk is moved
+  # only by a source change, and duplicating it here would pay for it on every
+  # record-only pull request. The target selects by build tag, so a second
+  # cold-reading eval joins this lane by carrying `//go:build smoke ||
+  # coldreading` and needs no edit here.
+  cold-reading-evals:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26.7'
+      - name: Falsify the cold-reading read-block
+        run: make evals-cold-reading
 
   # The one supply-chain vector unreadable by eye: a dependency swap. Diffs the
   # PR's dependency changes against the advisory databases and fails on a known
