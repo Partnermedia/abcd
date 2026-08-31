@@ -450,6 +450,13 @@ var (
 		`(?is)<h[1-6](?:\s[^>]*)?/?>|<[a-z][a-z0-9-]*\s[^>]*role\s*=\s*["']?heading\b[^>]*>`)
 	// blankLine bounds a raw heading's text where no closing tag does.
 	blankLine = regexp.MustCompile(`\n[ \t]*\n`)
+	// fenceDelimiter matches a fenced code block's delimiter. A heading inside a
+	// fence is an EXAMPLE — a record template showing its own shape — and the
+	// assembler leaves one alone on exactly that ground, so reporting it would be
+	// a false red rather than a leak. Widening this scan to setext and raw HTML is
+	// what makes the fence matter: those are the forms an example most often
+	// carries.
+	fenceDelimiter = regexp.MustCompile("^[ \t]*```")
 	// headingMarkup is the markup a title carries without changing how it reads:
 	// HTML comments and tags.
 	headingMarkup = regexp.MustCompile(`(?s)<!--.*?-->|</?[A-Za-z][A-Za-z0-9-]*(?:\s[^>]*)?/?>`)
@@ -464,18 +471,48 @@ var (
 func headingsIn(text string) []string {
 	var out []string
 	lines := strings.Split(text, "\n")
+	fenced := fencedLines(lines)
+	blockOpen, blockClose := firstDelimitedBlock(lines, fenced)
 	for i, line := range lines {
+		if fenced[i] {
+			continue
+		}
 		if m := atxHeading.FindStringSubmatch(line); m != nil {
 			out = append(out, m[1])
 			continue
 		}
-		if i+1 < len(lines) && strings.TrimSpace(line) != "" &&
-			setextUnderline.MatchString(lines[i+1]) {
-			out = append(out, line)
+		if i+1 >= len(lines) || fenced[i+1] || !setextUnderline.MatchString(lines[i+1]) {
+			continue
+		}
+		if strings.TrimSpace(line) == "" {
+			continue // a blank line underlines nothing
+		}
+		// Two shapes inside a record's own frontmatter that a setext scan reads as
+		// headings and no reader does. The block's closing `---` sits directly
+		// under the block's last line: it CLOSES a block, it underlines nothing.
+		// And a line indented inside the block is a block scalar's continuation,
+		// which is a value rather than a title — the shape this corpus grew when
+		// the block-scalar plant went in.
+		if blockClose >= 0 && i+1 == blockClose {
+			continue
+		}
+		if blockOpen >= 0 && i > blockOpen && (blockClose < 0 || i < blockClose) &&
+			strings.HasPrefix(line, " ") {
+			continue
+		}
+		out = append(out, line)
+	}
+	// The raw-HTML scan runs over the text JOINED with the fenced lines blanked,
+	// because an opening tag, its text and its close need not share a line.
+	unfenced := make([]string, len(lines))
+	for i, line := range lines {
+		if !fenced[i] {
+			unfenced[i] = line
 		}
 	}
-	for _, loc := range rawHeadingOpen.FindAllStringIndex(text, -1) {
-		rest := text[loc[1]:]
+	scan := strings.Join(unfenced, "\n")
+	for _, loc := range rawHeadingOpen.FindAllStringIndex(scan, -1) {
+		rest := scan[loc[1]:]
 		if cut := strings.Index(rest, "<"); cut >= 0 {
 			rest = rest[:cut]
 		}
@@ -485,6 +522,48 @@ func headingsIn(text string) []string {
 		out = append(out, rest)
 	}
 	return out
+}
+
+// fencedLines reports, per line, whether it sits inside a fenced code block. The
+// delimiter itself counts as inside.
+func fencedLines(lines []string) []bool {
+	mask := make([]bool, len(lines))
+	inside := false
+	for i, line := range lines {
+		if fenceDelimiter.MatchString(line) {
+			inside = !inside
+			mask[i] = true
+			continue
+		}
+		mask[i] = inside
+	}
+	return mask
+}
+
+// firstDelimitedBlock locates a document's opening `---` block: the line that
+// opens it and the line that closes it, or -1 for either. The block must be the
+// document's first non-blank content, so a thematic break further down is not
+// mistaken for one.
+func firstDelimitedBlock(lines []string, fenced []bool) (int, int) {
+	open := -1
+	for i, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if !fenced[i] && strings.TrimSpace(line) == "---" {
+			open = i
+		}
+		break
+	}
+	if open < 0 {
+		return -1, -1
+	}
+	for i := open + 1; i < len(lines); i++ {
+		if !fenced[i] && strings.HasPrefix(strings.TrimSpace(lines[i]), "---") {
+			return open, i
+		}
+	}
+	return open, -1
 }
 
 // headingTitle reduces a heading to the text a reader sees: markup removed, link
