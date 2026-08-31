@@ -9,6 +9,11 @@ found_during: "itd-189-fidelity-audit"
 origin: researcher-authored
 production_mode: hand-written
 found_at: "internal/core/capture/reading.go"
+resolution: "The cold-reading ingest verb is that caller: reading.Ingest validates the reading's output and hands the items to capture.IngestReading, reachable from abcd reading ingest on the CLI and from the plugin markdown surface."
+impact: additive
+resolved_by:
+  intent: "itd-185"
+  spec: "spc-63"
 ---
 
 the reading item mint has no caller outside its own package so the admission and surprise schemas gate a corpus nothing can populate
@@ -35,3 +40,7 @@ That record currently says two criteria flip to NOT_MET if itd-185 does not
 land: itd-178 ac-2 and itd-180 ac-1. Itd-189's three criteria now rest on the
 same intent. The conditional's blast radius is at least five criteria across
 three intents, not two across two.
+
+## Grounds
+
+- pursued: the record writer gains its intended caller and the reading-record family becomes populatable from the shipped product; a run that ingested and left no rdi-N record would show this wrong
