@@ -116,6 +116,19 @@ the first run. A run-to-run comparison in one directory cannot see that leak, an
 it is both a determinism failure and a breach of the rule that no absolute local
 path enters an artefact.
 
+The artefacts are also held to a **path detector**, not a list of two names.
+Both trees are created under one temporary parent, so that parent is an absolute
+local path both runs carry identically — the byte comparison agrees about it and
+reports nothing, which is the same blindness the two-path design exists to close,
+one level up. The detector runs two mechanisms: every ancestor of the fixture's
+root and HOME up to the process temporary directory, and a shape match for any
+other absolute path, which is what reaches the machine's own directories that no
+list could enumerate. `TestTheAbsolutePathGuardSeesMoreThanTheTwoRoots` falsifies
+each half separately, and its negative rows — repo-relative item paths, a URL —
+hold the detector to reporting paths rather than every slash. Failure messages
+name a leaked path by its last two components alone: a guard against absolute
+paths in artefacts must not put one in a CI log itself.
+
 The manifest is not therefore unasserted. Two weaker properties hold on it: no
 key and no scalar in it is timestamp-shaped, and its item paths agree with the
 eval's **own** lexicographic sort. The scan is confined to the manifest because a
