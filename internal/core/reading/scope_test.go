@@ -445,9 +445,38 @@ func TestBundleScopeCarriesNoRepositoryPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encode: %v", err)
 	}
-	if strings.Contains(string(raw), secret) {
-		t.Errorf("the bundle carries the repository path %q from its scope; the assembled input "+
-			"is the reading's whole working set and no repository path may enter it", secret)
+	// Checked against the SCOPE BLOCK and the structural keys, not against the
+	// whole document. Item text legitimately contains path-like strings — a
+	// record's prose mentions packages, and Go source carries import paths —
+	// and that is pre-existing and inherent to carrying content at all. What
+	// invariant 15 forbids is the bundle's own STRUCTURE mapping items to
+	// locations: item keys are ordinals and the path mapping lives in the
+	// manifest alone. A whole-document scan would pass here only for as long as
+	// no fixture happened to mention the path, which is not a property.
+	var doc map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if strings.Contains(string(doc["scope"]), secret) {
+		t.Errorf("the bundle's scope carries the repository path %q; the assembled input is the "+
+			"reading's whole working set and no repository path may enter its structure", secret)
+	}
+	for key, val := range doc {
+		if key == "items" {
+			continue
+		}
+		if strings.Contains(string(val), secret) {
+			t.Errorf("the bundle's %q carries the repository path %q", key, secret)
+		}
+	}
+	var items []map[string]json.RawMessage
+	if err := json.Unmarshal(doc["items"], &items); err != nil {
+		t.Fatalf("decode items: %v", err)
+	}
+	for i, item := range items {
+		if _, has := item["path"]; has {
+			t.Errorf("bundle item %d carries a path key; the mapping is the manifest's alone", i)
+		}
 	}
 	// The reading must still be TOLD it was narrowed, or it reports the absent
 	// material as a finding against the record.
