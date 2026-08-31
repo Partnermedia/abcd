@@ -12,6 +12,11 @@ package reading
 // locator that answered from the table would make the frontmatter decorative and
 // a drift between the two undetectable.
 //
+// A drift is REFUSED instead, which is the detection that sentence asks for: a
+// file stating a legal regime under the wrong position resolves to nothing at
+// all rather than to a confident wrong licence. Refusing and substituting are
+// different acts, and only the second would make the frontmatter decorative.
+//
 // The assembler never reads a definition into a bundle: `agents` is denied
 // structurally to every assembly (see deny.go and the exclusion floor). Locating
 // a definition and passing one to a reading are different acts.
@@ -104,6 +109,18 @@ func LoadDefinition(repoRoot string, p Position) (Definition, error) {
 		return Definition{}, fmt.Errorf("reading: %s states regime %q; the set is closed: %s",
 			rel, regime, strings.Join(knownRegimes(), ", "))
 	}
+	// Membership and AGREEMENT are two questions, and a legal regime under the
+	// wrong position is still the wrong licence. The locator is the one thing
+	// that claims to resolve a position to its regime, and its caller is the
+	// ingest verb, whose whole purpose is to catch a reading that exceeded the
+	// licence it read under — so a resolver returning a confidently wrong answer
+	// would make that gate enforce the wrong licence, silently, which is exactly
+	// the failure shape the gate exists to close (iss-2608311145258479).
+	if want := issueschema.ReadingRegime(string(pos)); regime != want {
+		return Definition{}, fmt.Errorf("reading: %s states regime %q under position %s, which carries "+
+			"the %s regime; the definition states the licence a reading reads under, and a definition "+
+			"stating another position's licence is refused rather than resolved", rel, regime, pos, want)
+	}
 
 	return Definition{Position: pos, Regime: regime, Path: rel, SHA256: sha256Hex(raw)}, nil
 }
@@ -150,9 +167,12 @@ func scalar(value string) string {
 }
 
 // knownRegime reports whether token is one of the four supply regimes. The
-// vocabulary is read off the reading-record schema rather than restated here:
-// membership is one question and the position-to-regime mapping is another, and
-// only the first is asked.
+// vocabulary is read off the reading-record schema rather than restated here.
+//
+// It answers MEMBERSHIP alone. Agreement with the position is the second
+// question, asked separately by LoadDefinition against the same schema table, so
+// a definition naming a regime that exists but is not its own is refused with a
+// message about the position rather than about the vocabulary.
 func knownRegime(token string) bool {
 	for _, p := range issueschema.ReadingPositions {
 		if p.Regime == token {
