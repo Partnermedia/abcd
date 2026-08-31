@@ -55,3 +55,8 @@ None stated.
 ## Grounds
 
 - pursued: Pursued now because declining a proposal costs nothing epistemically while admitting one is where the frame is actually engaged, and uniform adoption of everything a reading proposes is equally consistent with careful judgement and with abdication. Only a record that carries grounds on each admission and a disposition on each decline can tell the two apart, and it has to exist before the first widening run rather than after it.
+
+## Audit Notes
+
+<!-- abcd-review: OWED receipt=rcp-6b45c296b217 -->
+Fidelity review OWED (receipt rcp-6b45c296b217).
