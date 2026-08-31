@@ -7,6 +7,10 @@ category: "tech-debt"
 source: "user-observation"
 found_during: "itd-179-delta-close"
 found_at: "internal/core/grounds/grounds.go"
+resolution: "The vocabulary is now rendered rather than copied. The one copy that was a GATE, the degeneracy set, is built from Vocabulary; the six copies a user reads are rendered by grounds.UsageSpelling and grounds.ProseList, and the refusals keep rendering through vocabularyList. The rendered strings are byte-identical, so the generated CLI reference page is unchanged. What stays true, deliberately: the prose documentation still spells the values by hand, because prose is free text and the maintainer scoped it out; and a test now pins the three renderings, so a change to the closed set fails beside the set rather than in a regenerated page nobody read."
+impact: internal
+resolved_by:
+  intent: "itd-179"
 ---
 
 grounds.Vocabulary claimed to be the one copy every gate and every flag description reads, and no surface reads it
@@ -62,3 +66,6 @@ so cannot be maintained. The remedy is iss-2608301918362294: make it executable,
 and decide there what counts as a copy, since the package that defines the tokens
 legitimately spells them.
 
+## Grounds
+
+- pursued: we expect a rendered vocabulary to make its copies unable to disagree, where four hand-corrected enumerations of them each introduced a fresh error

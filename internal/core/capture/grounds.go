@@ -30,8 +30,8 @@ func requireGrounds(repoRoot, verb, raw string) (g grounds.Grounds, redacted int
 	if strings.TrimSpace(raw) == "" {
 		return grounds.Grounds{}, 0, "", fmt.Errorf(
 			"%s: %w — grounds are required (nothing written); say why this is being pursued as "+
-				"`<pursued|deferred|declined>: <the conjecture being acted on>`, not the route taken",
-			verb, ErrGroundsRefused)
+				"`%s: <the conjecture being acted on>`, not the route taken",
+			verb, ErrGroundsRefused, grounds.UsageSpelling())
 	}
 	parsed, err := grounds.Parse(raw)
 	if err != nil {
