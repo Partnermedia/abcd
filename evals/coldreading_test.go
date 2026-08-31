@@ -75,6 +75,9 @@ func TestReadBlockCatchesAHoledFirewall(t *testing.T) {
 			// The message an operator reads has to carry both, or a failure names
 			// no way back to the plant that caused it.
 			for _, v := range vs {
+				if v.Rule != ruleSentinel {
+					continue // already reported above; it carries no class token
+				}
 				msg := v.String()
 				if !strings.Contains(msg, sentinelPrefix+v.Class) || !strings.Contains(msg, position) {
 					t.Errorf("the failure message %q names neither the class token nor the position", msg)
