@@ -1,6 +1,7 @@
-# `/abcd:reading` — The Cold-Reading Input Assembler
+# `/abcd:reading` — The Cold-Reading Instrument Surface
 
-`/abcd:reading` assembles the input a cold reading is handed. The location
+`/abcd:reading` assembles the input a cold reading is handed and validates the
+output it returns. The location
 tiering the repository already has is organisational, not an access control:
 nothing in it prevents a reading reaching ledger content, so every claim an
 instrument makes about what it saw rests on a disclosure taken on trust. This
@@ -21,6 +22,7 @@ assembly and diff the result.
 | Verb | Bucket | Status |
 |---|---|---|
 | `assemble` | — | shipped |
+| `ingest` | gate | shipped |
 
 ## The invocation carries no free text
 
@@ -80,6 +82,45 @@ cannot ride in either.
 A run identifier is `rdg-<yymmddHHMMSS><rrrr>`, minted per adr-45: the mint
 reads no maximum, so two checkouts assembling in the same window cannot
 converge on one id.
+
+## `ingest` checks what the reading was licensed to produce
+
+`ingest --output-json <path>` validates the JSON a reading returned and writes
+its reading records. It is the output-contract idiom the repository already
+carries — an agent emits JSON, a deterministic verb validates it, the verb
+writes the record — and it adds a check no structural schema performs: what the
+reading was LICENSED to produce, not only what it saw.
+
+Three properties distinguish it. **Item identifiers are minted by the verb**, so
+the payload carries none and one it supplies is refused as an unknown field.
+**The supply regime is the definition's**, read from the position's definition
+file and compared against the output's own claim, with no operand and no
+configuration key able to reach it. And **named provenance is enforced at every
+regime without exception**: an item whose `pattern` is empty or absent is
+refused, which the definitions instruct and nothing else checks.
+
+Refusal has two granularities. An item-level violation refuses that item and
+lands the rest, naming the ordinal, the rule and the field. A list-level
+violation refuses the run, and **a refused run still leaves a durable record**:
+`refusal.json` carries the run metadata and the named reason and no items, so a
+rerun is a new run with a new run id rather than an amendment.
+
+The regime gate has two layers. Each regime declares reserved names — a field
+naming one is refused with the licence stated — and a registry of named
+signatures catches prose that ranks, settles or proposes without the field.
+Every signature ships enforced; the degradation path exists as a code change
+plus a decision-log entry, which is what makes weakening a claimed property from
+enforced to observed a recorded act rather than a runtime toggle. That second
+layer is bounded by the registry, and the bound is disclosed on itd-185: a fix
+proposal or a disposition phrased outside the registry's signatures is not
+caught. The reserved names carry no such bound, because a field is present or it
+is not.
+
+Writes are staged. Nothing durable exists until the whole payload validates; the
+reading records land in the reading-record family; and the run metadata is
+written **last**, as the commit marker, so a run without one never happened. An
+ingest interrupted before that marker leaves a stage in the local tier, and the
+next invocation names the orphan, rolls the run back and clears it.
 
 ## What this surface does not claim
 

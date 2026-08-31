@@ -548,3 +548,98 @@ func TestDescribeReportsTheDefinitionsTheLocatorResolves(t *testing.T) {
 		t.Error("Describe listed a definition the locator refuses, so the render is a directory scan")
 	}
 }
+
+// TestLoadDefinitionRefusesARegimeThatDisagreesWithItsPosition is the locator's
+// second regime question, and the one that matters at runtime.
+//
+// Membership in the four regimes and AGREEMENT with the position are different
+// questions, and only the first stops a file that states a legal regime under
+// the wrong position. Such a file resolves confidently and hands its caller the
+// wrong licence — and the caller is the ingest verb, whose entire purpose is to
+// catch a reading that exceeded the licence it read under. A gate enforcing the
+// wrong licence is the failure shape itd-185 exists to close, so the drift is
+// refused HERE, in the one place that claims to resolve a position to its
+// regime, rather than cross-checked again in every caller.
+//
+// The locator still never SUBSTITUTES the table's value for the file's. It
+// refuses, which is what makes the drift visible at runtime instead of only in
+// the tests that pin the pair (iss-2608311145258479).
+func TestLoadDefinitionRefusesARegimeThatDisagreesWithItsPosition(t *testing.T) {
+	for _, p := range Positions() {
+		p := p
+		t.Run(string(p), func(t *testing.T) {
+			mine := issueschema.ReadingRegime(string(p))
+			for _, other := range issueschema.ReadingPositions {
+				if other.Regime == mine {
+					continue
+				}
+				root := t.TempDir()
+				writeDefinition(t, root, p, "position: "+string(p)+"\nregime: "+other.Regime+"\n")
+				_, err := LoadDefinition(root, p)
+				if err == nil {
+					t.Fatalf("the %s definition stating regime %q resolved without an error; a legal "+
+						"regime under the wrong position is still the wrong licence", p, other.Regime)
+				}
+				for _, want := range []string{other.Regime, mine} {
+					if !strings.Contains(err.Error(), want) {
+						t.Errorf("the refusal does not name %q: %v", want, err)
+					}
+				}
+			}
+
+			// The agreeing file still resolves. Without this the case above
+			// would pass against a locator that refused every definition.
+			root := t.TempDir()
+			writeDefinition(t, root, p, "position: "+string(p)+"\nregime: "+mine+"\n")
+			def, err := LoadDefinition(root, p)
+			if err != nil {
+				t.Fatalf("the agreeing %s definition was refused: %v", p, err)
+			}
+			if def.Regime != mine {
+				t.Errorf("resolved regime %q, want %q", def.Regime, mine)
+			}
+		})
+	}
+
+	// And the whole-set resolver reports it rather than skipping it: a render
+	// listing three instruments where four were meant is worse than an error.
+	root := t.TempDir()
+	writeDefinition(t, root, PositionWidening, "position: widening\nregime: registrative\n")
+	if _, err := LoadDefinitions(root); err == nil {
+		t.Error("LoadDefinitions skipped a definition whose regime disagrees with its position")
+	}
+}
+
+// TestLoadDefinitionReadsInsideTheRepositoryOnly: the hash this returns is the
+// definition half of an instrument identity, and the identity is sold as proving
+// that two runs read under the same instructions. A symlinked ancestor under
+// agents/ would have it hash a file that is not in this repository at all, which
+// makes that a claim about an unknown artefact.
+//
+// The read is harmless in itself. The CLAIM is what is guarded.
+func TestLoadDefinitionReadsInsideTheRepositoryOnly(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, definitionPrefix+"detection.md"),
+		[]byte("---\nposition: detection\nregime: registrative\n---\n\n# elsewhere\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, DefinitionsDir)); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := LoadDefinition(root, PositionDetection); err == nil {
+		t.Fatal("a definition was hashed through a symlink pointing outside the repository, so the " +
+			"instrument identity it reports names a file this repository does not hold")
+	}
+
+	// The same definition, actually in the repository, still resolves — so this
+	// is containment rather than a blanket refusal.
+	if err := os.Remove(filepath.Join(root, DefinitionsDir)); err != nil {
+		t.Fatal(err)
+	}
+	writeDefinition(t, root, PositionDetection, "position: detection\nregime: registrative\n")
+	if _, err := LoadDefinition(root, PositionDetection); err != nil {
+		t.Fatalf("an in-repository definition was refused: %v", err)
+	}
+}

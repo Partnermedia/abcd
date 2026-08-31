@@ -31,16 +31,20 @@ import (
 	"syscall"
 
 	"github.com/intentdriven/abcd/internal/core/issueschema"
+	"github.com/intentdriven/abcd/internal/core/recordid"
 	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
-// The three families' id grammars. Each is checked BEFORE the value is used to
+// The disposition family's id grammar. It is checked BEFORE the value is used to
 // build a path, so a traversal id can never touch the filesystem.
-var (
-	reRunID         = regexp.MustCompile(`^` + issueschema.ReadingRunFamily + `-[0-9]+$`)
-	reReadingItemID = regexp.MustCompile(`^` + issueschema.ReadingItemFamily + `-[0-9]+$`)
-	reDispositionID = regexp.MustCompile(`^` + issueschema.DispositionFamily + `-[0-9]+$`)
-)
+//
+// The reading run's and the reading item's grammars are NOT restated here: they
+// are recordid.ValidReadingRunID and recordid.ValidReadingItemID. The
+// cold-reading ingest verb builds a directory name out of a run id arriving off
+// an untrusted payload, and its rollback DELETES by the item id — one rule
+// refusing a traversal id, and bounding a delete, on both sides is the point of
+// that package.
+var reDispositionID = regexp.MustCompile(`^` + issueschema.DispositionFamily + `-[0-9]+$`)
 
 // ReadingItem is one thing the instrument returned: the pattern it named (an
 // envelope field, because a universal core condition must not live in a variant
@@ -146,7 +150,7 @@ func IngestReading(req IngestReadingRequest) (IngestReadingResult, error) {
 	if err != nil {
 		return IngestReadingResult{}, err
 	}
-	if !reRunID.MatchString(req.Run) {
+	if !recordid.ValidReadingRunID(req.Run) {
 		return IngestReadingResult{}, fmt.Errorf("%w: run %q does not match ^%s-[0-9]+$",
 			ErrMalformedFrontmatter, req.Run, issueschema.ReadingRunFamily)
 	}
@@ -211,6 +215,21 @@ func IngestReading(req IngestReadingRequest) (IngestReadingResult, error) {
 			if err != nil {
 				return fmt.Errorf("item %d: %w", i+1, err)
 			}
+			// The record's size is DECIDED here, on the assembled bytes, because
+			// this is the only place the exact count exists: the values are
+			// already redacted, already escaped, and this string is what reaches
+			// the disk. Every check upstream is an estimate over one of those
+			// steps, and an estimate that models one lengthening step and misses
+			// the next writes a record past the cap — which every reader of the
+			// family then refuses, leaving the item durable and unanswerable.
+			// That is the split RecordReadLimit exists to prevent, so the
+			// decision belongs where guessing is unnecessary.
+			if n := len(content); n > issueschema.RecordReadLimit {
+				return fmt.Errorf("item %d: %w: the record would be %d bytes, past the %d-byte limit "+
+					"every reader of this family applies; a record written past it is durable and "+
+					"unreadable, so it can never be dispositioned",
+					i+1, ErrInvariantViolation, n, issueschema.RecordReadLimit)
+			}
 			pending = append(pending, staged{id: id, content: content})
 		}
 
@@ -262,7 +281,7 @@ func Disposition(req DispositionRequest) (DispositionResult, error) {
 	if err != nil {
 		return DispositionResult{}, err
 	}
-	if !reReadingItemID.MatchString(req.Item) {
+	if !recordid.ValidReadingItemID(req.Item) {
 		return DispositionResult{}, fmt.Errorf("%w: item %q does not match ^%s-[0-9]+$",
 			ErrMalformedFrontmatter, req.Item, issueschema.ReadingItemFamily)
 	}
@@ -485,10 +504,10 @@ func validateReadingStrict(fm map[string]any) error {
 		}
 	}
 	id := fm["id"].(string)
-	if !reReadingItemID.MatchString(id) {
+	if !recordid.ValidReadingItemID(id) {
 		return fmt.Errorf("%w: id %q does not match ^%s-[0-9]+$", ErrMalformedFrontmatter, id, issueschema.ReadingItemFamily)
 	}
-	if run := fm["run"].(string); !reRunID.MatchString(run) {
+	if run := fm["run"].(string); !recordid.ValidReadingRunID(run) {
 		return fmt.Errorf("%w: run %q does not match ^%s-[0-9]+$", ErrMalformedFrontmatter, run, issueschema.ReadingRunFamily)
 	}
 	position := fm["position"].(string)
@@ -562,7 +581,7 @@ func validateDispositionStrict(fm map[string]any, position string) error {
 	if id := fm["id"].(string); !reDispositionID.MatchString(id) {
 		return fmt.Errorf("%w: id %q does not match ^%s-[0-9]+$", ErrMalformedFrontmatter, id, issueschema.DispositionFamily)
 	}
-	if item := fm["item"].(string); !reReadingItemID.MatchString(item) {
+	if item := fm["item"].(string); !recordid.ValidReadingItemID(item) {
 		return fmt.Errorf("%w: item %q does not match ^%s-[0-9]+$", ErrMalformedFrontmatter, item, issueschema.ReadingItemFamily)
 	}
 	state := fm["state"].(string)
@@ -617,7 +636,7 @@ func validateDispositionStrict(fm map[string]any, position string) error {
 			return fmt.Errorf("%w: recurs must be a list of prior item ids", ErrMalformedFrontmatter)
 		}
 		for _, it := range items {
-			if !reReadingItemID.MatchString(it) {
+			if !recordid.ValidReadingItemID(it) {
 				return fmt.Errorf("%w: recurs item %q does not match ^%s-[0-9]+$",
 					ErrMalformedFrontmatter, it, issueschema.ReadingItemFamily)
 			}
@@ -676,7 +695,7 @@ func findReadingItem(issuesRoot, item string) (string, error) {
 // An absent readings tree is no matches, not an error — a repository that has
 // commissioned no reading is in a state, not a fault.
 func readingItemPaths(issuesRoot, item string) ([]string, error) {
-	if !reReadingItemID.MatchString(item) {
+	if !recordid.ValidReadingItemID(item) {
 		return nil, fmt.Errorf("invalid %s-N identifier: %q", issueschema.ReadingItemFamily, item)
 	}
 	readingsRoot := filepath.Join(issuesRoot, issueschema.ReadingsDir)
@@ -692,7 +711,7 @@ func readingItemPaths(issuesRoot, item string) ([]string, error) {
 	}
 	var matches []string
 	for _, run := range runs {
-		if !reRunID.MatchString(run.Name()) {
+		if !recordid.ValidReadingRunID(run.Name()) {
 			continue
 		}
 		// Every run directory is checked, not only the ones a walk would descend

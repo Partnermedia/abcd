@@ -96,6 +96,26 @@ func withLedgerLock(issuesRoot string, fn func() error) error {
 	return err
 }
 
+// WithLedgerLock runs fn while holding this ledger's exclusive allocator lock,
+// for a caller OUTSIDE this package that mutates the ledger's files directly.
+//
+// The cold-reading ingest verb is the one such caller: its orphan sweep unlinks
+// reading records whose run never committed, and without this that delete races
+// this package's own readers. Exporting the lock rather than the path is what
+// keeps one file the lock: a caller that rebuilt the path would be holding a
+// different lock the day this one moves.
+//
+// It is NOT reentrant — an flock blocks a second acquisition in the same process
+// — so a caller must not hold it across any exported verb of this package, every
+// one of which takes it internally.
+func WithLedgerLock(repoRoot string, fn func() error) error {
+	_, issuesRoot, err := resolveRoots(repoRoot, "")
+	if err != nil {
+		return err
+	}
+	return withLedgerLock(issuesRoot, fn)
+}
+
 // minter is the capture family's mint seam (adr-45; mechanics per spc-33). The
 // zero value is the production configuration — real clock, crypto entropy;
 // tests inject both so same-instant and race cases are deterministic.

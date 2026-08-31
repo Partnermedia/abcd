@@ -814,6 +814,36 @@ abcd reading assemble --position widening --target HEAD --dry-run
     --out .abcd/.work.local/scratch/reading-runs/manual --json
 ```
 
+#### `abcd reading ingest`
+
+Validate one reading's returned output and write its records
+
+**Usage:** `abcd reading ingest --output-json <path> [flags]`
+
+Validate the JSON a cold reading returned and write its reading records.
+
+The verb checks what the reading was LICENSED to produce, not only what it saw: the
+supply regime is read from the position's definition and compared with the output's own
+claim, each regime's reserved names are refused with the licence stated, and a registry
+of named signatures catches prose that ranks, settles or proposes without the field.
+
+Item identifiers are minted here. The payload carries none, so a supplied one is refused
+as an unknown field. Nothing durable is written until the whole payload validates, and
+the run metadata is written last as the commit marker: a run without one never happened,
+and an orphaned stage is named and cleared by the next invocation.
+
+**Flags:**
+
+```
+      --output-json string   path to the JSON the cold reading returned
+```
+
+**Example:**
+
+```
+abcd reading ingest --output-json ./reading-output.json --json
+```
+
 ### `abcd rules`
 
 Render the active rule set; a positional DOMAIN scopes to one (read-only)

@@ -152,12 +152,29 @@ None stated.
   own item identifier is refused as an unknown field.
 
 **Disclosed residue (ac-5 and ac-9).** The two semantic criteria are enforced
-over the signature registry, not over the space of things a sentence can do: a
-fix proposal or a disposition phrased outside the registry's signatures is not
-caught. The registry sits in the calibration band, and whether the signatures
-lint cleanly in practice is this intent's recorded open question. Their
-structural halves — ac-4, ac-6 and ac-8 — carry no such residue, because a field
-is present or it is not.
+over the signature registry, not over the space of things a sentence can do, and
+the residue has two parts.
+
+The first is the one this intent has always disclosed: a fix proposal or a
+disposition **phrased** outside the registry's signatures is not caught. The
+registry sits in the calibration band, and whether the signatures lint cleanly
+in practice is this intent's recorded open question.
+
+The second is narrower and is named here rather than left to be discovered. The
+detectors read a folded copy of the body, so an invisible or
+compatibility-equivalent rune cannot decide whether a signature fires: every
+Unicode space folds to ASCII, every invisible rune is dropped, and NFKC folds
+the compatibility forms. A script-**confusable** substitution is not folded — a
+Cyrillic that is not the Latin one, and no normalisation equates them — so a
+signature's own phrasing written in a confusable script is not caught. Closing
+that needs a confusables table, which is a new dependency and a maintainer's
+decision; until it is taken, this class is open.
+
+The distinction between the two parts is the same test throughout: the
+registry's phrasing with a byte substituted is a defect in the gate, and
+phrasing outside the registry is a limit of it. Their structural halves — ac-4,
+ac-6 and ac-8 — carry no residue of either kind, because a field is present or
+it is not.
 
 
 ## Grounds
