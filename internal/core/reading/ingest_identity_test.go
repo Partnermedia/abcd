@@ -87,7 +87,7 @@ func TestInstrumentIdentityRequiresAllThreeParts(t *testing.T) {
 
 	for _, part := range []string{"model", "definition_sha256", "assembler_version"} {
 		t.Run("missing "+part, func(t *testing.T) {
-			doc := f.payload(1)
+			doc := f.nextRun(f.payload(1))
 			doc["instrument"].(map[string]any)[part] = ""
 			if _, err := f.ingest(doc); err == nil {
 				t.Fatalf("an instrument missing %s was accepted", part)
@@ -96,7 +96,7 @@ func TestInstrumentIdentityRequiresAllThreeParts(t *testing.T) {
 	}
 
 	t.Run("definition hash is recomputed", func(t *testing.T) {
-		doc := f.payload(1)
+		doc := f.nextRun(f.payload(1))
 		doc["instrument"].(map[string]any)["definition_sha256"] = sha256Hex([]byte("another definition"))
 		_, err := f.ingest(doc)
 		if err == nil {
@@ -108,7 +108,7 @@ func TestInstrumentIdentityRequiresAllThreeParts(t *testing.T) {
 	})
 
 	t.Run("assembler version is the manifest's", func(t *testing.T) {
-		doc := f.payload(1)
+		doc := f.nextRun(f.payload(1))
 		doc["instrument"].(map[string]any)["assembler_version"] = "0.0.0-not-this-one"
 		_, err := f.ingest(doc)
 		if err == nil {
@@ -119,7 +119,7 @@ func TestInstrumentIdentityRequiresAllThreeParts(t *testing.T) {
 		}
 	})
 
-	f.mustIngest(f.payload(1))
+	f.mustIngest(f.nextRun(f.payload(1)))
 }
 
 // TestItemIDsAreMintedByTheVerb is ac-13, and it is two claims.
@@ -147,7 +147,7 @@ func TestItemIDsAreMintedByTheVerb(t *testing.T) {
 	}
 
 	for _, field := range []string{"id", "rdi", "item_id"} {
-		doc := f.payload(1)
+		doc := f.nextRun(f.payload(1))
 		doc["items"].([]any)[0].(map[string]any)[field] = "rdi-2608310000000042"
 		_, err := f.ingest(doc)
 		if err == nil {

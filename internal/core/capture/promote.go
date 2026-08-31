@@ -8,6 +8,7 @@ import (
 	"github.com/intentdriven/abcd/internal/core/intent"
 	"github.com/intentdriven/abcd/internal/core/issueschema"
 	"github.com/intentdriven/abcd/internal/core/provenance"
+	"github.com/intentdriven/abcd/internal/core/recordid"
 	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
@@ -106,7 +107,7 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 	// disposition record, which promoteReadingItem refuses to act without. It
 	// takes no grounds argument, so the gate below would refuse it for a value
 	// that route never writes — hence the dispatch runs first.
-	if reReadingItemID.MatchString(req.ID) {
+	if recordid.ValidReadingItemID(req.ID) {
 		return promoteReadingItem(repoRoot, issuesRoot, req)
 	}
 	// BEFORE anything is minted or stamped. Promote's residue contract is

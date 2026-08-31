@@ -35,16 +35,16 @@ import (
 	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
-// The two families' id grammars this file states. Each is checked BEFORE the
-// value is used to build a path, so a traversal id can never touch the
-// filesystem. The run id's grammar is NOT restated here: it is
-// recordid.ValidReadingRunID, because the cold-reading ingest verb builds a
-// directory name out of the same id arriving off an untrusted payload, and one
-// rule refusing a traversal id on both sides is the point of that package.
-var (
-	reReadingItemID = regexp.MustCompile(`^` + issueschema.ReadingItemFamily + `-[0-9]+$`)
-	reDispositionID = regexp.MustCompile(`^` + issueschema.DispositionFamily + `-[0-9]+$`)
-)
+// The disposition family's id grammar. It is checked BEFORE the value is used to
+// build a path, so a traversal id can never touch the filesystem.
+//
+// The reading run's and the reading item's grammars are NOT restated here: they
+// are recordid.ValidReadingRunID and recordid.ValidReadingItemID. The
+// cold-reading ingest verb builds a directory name out of a run id arriving off
+// an untrusted payload, and its rollback DELETES by the item id — one rule
+// refusing a traversal id, and bounding a delete, on both sides is the point of
+// that package.
+var reDispositionID = regexp.MustCompile(`^` + issueschema.DispositionFamily + `-[0-9]+$`)
 
 // ReadingItem is one thing the instrument returned: the pattern it named (an
 // envelope field, because a universal core condition must not live in a variant
@@ -266,7 +266,7 @@ func Disposition(req DispositionRequest) (DispositionResult, error) {
 	if err != nil {
 		return DispositionResult{}, err
 	}
-	if !reReadingItemID.MatchString(req.Item) {
+	if !recordid.ValidReadingItemID(req.Item) {
 		return DispositionResult{}, fmt.Errorf("%w: item %q does not match ^%s-[0-9]+$",
 			ErrMalformedFrontmatter, req.Item, issueschema.ReadingItemFamily)
 	}
@@ -489,7 +489,7 @@ func validateReadingStrict(fm map[string]any) error {
 		}
 	}
 	id := fm["id"].(string)
-	if !reReadingItemID.MatchString(id) {
+	if !recordid.ValidReadingItemID(id) {
 		return fmt.Errorf("%w: id %q does not match ^%s-[0-9]+$", ErrMalformedFrontmatter, id, issueschema.ReadingItemFamily)
 	}
 	if run := fm["run"].(string); !recordid.ValidReadingRunID(run) {
@@ -566,7 +566,7 @@ func validateDispositionStrict(fm map[string]any, position string) error {
 	if id := fm["id"].(string); !reDispositionID.MatchString(id) {
 		return fmt.Errorf("%w: id %q does not match ^%s-[0-9]+$", ErrMalformedFrontmatter, id, issueschema.DispositionFamily)
 	}
-	if item := fm["item"].(string); !reReadingItemID.MatchString(item) {
+	if item := fm["item"].(string); !recordid.ValidReadingItemID(item) {
 		return fmt.Errorf("%w: item %q does not match ^%s-[0-9]+$", ErrMalformedFrontmatter, item, issueschema.ReadingItemFamily)
 	}
 	state := fm["state"].(string)
@@ -621,7 +621,7 @@ func validateDispositionStrict(fm map[string]any, position string) error {
 			return fmt.Errorf("%w: recurs must be a list of prior item ids", ErrMalformedFrontmatter)
 		}
 		for _, it := range items {
-			if !reReadingItemID.MatchString(it) {
+			if !recordid.ValidReadingItemID(it) {
 				return fmt.Errorf("%w: recurs item %q does not match ^%s-[0-9]+$",
 					ErrMalformedFrontmatter, it, issueschema.ReadingItemFamily)
 			}
@@ -680,7 +680,7 @@ func findReadingItem(issuesRoot, item string) (string, error) {
 // An absent readings tree is no matches, not an error — a repository that has
 // commissioned no reading is in a state, not a fault.
 func readingItemPaths(issuesRoot, item string) ([]string, error) {
-	if !reReadingItemID.MatchString(item) {
+	if !recordid.ValidReadingItemID(item) {
 		return nil, fmt.Errorf("invalid %s-N identifier: %q", issueschema.ReadingItemFamily, item)
 	}
 	readingsRoot := filepath.Join(issuesRoot, issueschema.ReadingsDir)

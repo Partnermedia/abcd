@@ -44,6 +44,7 @@ import (
 	"sort"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/intentdriven/abcd/internal/core/capture"
 	"github.com/intentdriven/abcd/internal/core/issueschema"
@@ -76,12 +77,18 @@ const IngestStageDir = ".abcd/.work.local/scratch/reading-ingest"
 // manifest, the run metadata, and a refusal.
 const ReadingsRecordDir = ".abcd/development/readings"
 
-// The three filenames under a run's durable directory.
+// The three filenames under a run's durable directory, and the stage's lock.
 const (
 	RunFileName     = "run.json"
 	RefusalFileName = "refusal.json"
 	stageFileName   = "stage.json"
+	stageLockName   = ".lock"
 )
+
+// ingestLockTimeout bounds the wait for a peer ingest to finish. An ingest is a
+// validation pass and one batch of small writes, so a wait past this is a stuck
+// process rather than a busy one, and reporting contention beats hanging.
+const ingestLockTimeout = 30 * time.Second
 
 // PatternField is the envelope's provenance field: the pattern the reading read
 // under. It is the reading RECORD's own field name (issueschema.ReadingRequired)
@@ -90,15 +97,28 @@ const (
 // pattern named; there is one field, and this is its wire name.
 const PatternField = "pattern"
 
-// maxEchoedRunes caps a payload-derived string echoed into a message or a
+// maxEchoedBytes caps a payload-derived string echoed into a message or a
 // durable record. A refusal that quoted a four-megabyte field would be a denial
 // of service against the reader of the refusal.
-const maxEchoedRunes = 120
+//
+// maxQuotedNames caps how MANY payload-chosen names one refusal quotes, which is
+// the same denial in the other dimension: a per-name cap bounds nothing when the
+// payload chooses the number of names.
+const (
+	maxEchoedBytes = 120
+	maxQuotedNames = 8
+)
 
-// readingItemFileRe is the grammar the orphan rollback removes by. A rollback
-// deletes what an ingest wrote and nothing else, so it matches file names rather
-// than clearing a directory.
-var readingItemFileRe = regexp.MustCompile(`^` + issueschema.ReadingItemFamily + `-[0-9]+\.md$`)
+// isReadingItemFile reports whether name is a reading record's filename.
+//
+// A rollback deletes what an ingest wrote and nothing else, so it matches file
+// NAMES rather than clearing a directory — and the id inside the name is judged
+// by the shared predicate, not by a second copy of the grammar here. A delete
+// bounded by a pattern is only as bounded as the pattern.
+func isReadingItemFile(name string) bool {
+	id, ok := strings.CutSuffix(name, ".md")
+	return ok && recordid.ValidReadingItemID(id)
+}
 
 // Instrument is the identity of the thing that read: the model, the content hash
 // of the definition it read under, and the version of the assembler that built
@@ -211,8 +231,13 @@ type IngestResult struct {
 	RunRecordPath string                     `json:"run_record,omitempty"`
 	RefusalPath   string                     `json:"refusal_record,omitempty"`
 	ClearedStages []string                   `json:"cleared_stages,omitempty"`
-	Redacted      int                        `json:"redacted,omitempty"`
-	Degraded      string                     `json:"redaction_degraded,omitempty"`
+	// RolledBack names the reading records the sweep REMOVED from the committed
+	// ledger, because their run never reached its commit marker. A delete in the
+	// committed tier is reported by id: "cleared an orphaned stage" does not tell
+	// an operator that records left the ledger with it.
+	RolledBack []string `json:"rolled_back_records,omitempty"`
+	Redacted   int      `json:"redacted,omitempty"`
+	Degraded   string   `json:"redaction_degraded,omitempty"`
 }
 
 // The two points in the staged-write protocol a fault can be injected at.
@@ -263,60 +288,127 @@ func Ingest(req IngestRequest) (IngestResult, error) {
 		return res, errors.New("reading: ingest needs the reading's output JSON")
 	}
 
-	cleared, err := sweepOrphanStages(repoRoot)
-	res.ClearedStages = cleared
+	// Every path this verb reads, writes or DELETES inside the repository is
+	// resolved through this root.
+	//
+	// Containment cannot rest on the run-id grammar. That check makes the run id
+	// a single safe path COMPONENT and says nothing about the components above
+	// it, and this verb walks and removes files under two directories a hostile
+	// clone can commit a symlink at — git mode 120000 on the ledger's run
+	// directory or on the readings tree lands a write, or a DELETE, outside the
+	// repository, and the orphan sweep runs before the payload is even read.
+	// os.Root resolves every component in the kernel and refuses the traversal,
+	// which is the containment fsutil.ReadGuardedInRoot and WriteFileAtomicInRoot
+	// already exist to give, and the stance core/capture takes on the same ledger
+	// directory.
+	root, err := os.OpenRoot(repoRoot)
 	if err != nil {
+		return res, fmt.Errorf("reading: opening the repository root: %w", err)
+	}
+	defer root.Close()
+
+	// One ingest at a time in one checkout, from the sweep through the commit
+	// marker.
+	//
+	// The sweep DELETES committed reading records, and its only test for an
+	// orphan is that a stage exists with no commit marker beside it — which is
+	// exactly what a live ingest looks like between its ledger write and its
+	// marker. Without this lock a second invocation rolls the first one back
+	// mid-flight, and the first then writes a run record naming records that no
+	// longer exist and exits 0. capture's ledger lock cannot serve:
+	// IngestReading re-takes it internally, and the sweep sits outside it.
+	if err := ensureStageRoot(root); err != nil {
 		return res, err
+	}
+	lock := filepath.Join(repoRoot, filepath.FromSlash(IngestStageDir), stageLockName)
+	err = fsutil.WithFileLock(lock, ingestLockTimeout, func() error {
+		return ingestUnderLock(root, repoRoot, req, &res)
+	})
+	if errors.Is(err, fsutil.ErrLockContention) {
+		return res, fmt.Errorf("reading: another ingest is running in this checkout and did not finish "+
+			"within %s; the sweep removes a run whose commit marker is missing, so two at once would "+
+			"roll each other back", ingestLockTimeout)
+	}
+	return res, err
+}
+
+// ensureStageRoot creates the stage root through the containment root and
+// refuses a symlinked one, so the lock file and every sweep after it act on a
+// real directory inside this repository.
+func ensureStageRoot(root *os.Root) error {
+	if err := root.MkdirAll(IngestStageDir, 0o755); err != nil {
+		return fmt.Errorf("reading: preparing the ingest stage: %w", err)
+	}
+	fi, err := root.Lstat(IngestStageDir)
+	if err != nil {
+		return fmt.Errorf("reading: preparing the ingest stage: %w", err)
+	}
+	if fi.Mode()&os.ModeSymlink != 0 || !fi.IsDir() {
+		return fmt.Errorf("reading: %s is not a real directory; the ingest stage is a directory in this "+
+			"repository, never a pointer at another one", IngestStageDir)
+	}
+	return nil
+}
+
+// ingestUnderLock is Ingest's body, everything the stage lock has to cover.
+func ingestUnderLock(root *os.Root, repoRoot string, req IngestRequest, res *IngestResult) error {
+	cleared, rolledBack, err := sweepOrphanStages(root)
+	res.ClearedStages = cleared
+	res.RolledBack = rolledBack
+	if err != nil {
+		return err
 	}
 
 	raw, err := readOutputFile(req.OutputPath)
 	if err != nil {
-		return res, err
+		return err
 	}
 	out, err := decodeOutput(raw)
 	if err != nil {
-		return res, err
+		return err
 	}
 
 	pos, err := checkEnvelope(out)
 	if err != nil {
-		return res, err
+		return err
 	}
 	res.RunID = out.RunID
 	res.Position = pos
 
-	manifest, err := resolveParkedManifest(repoRoot, out)
+	manifest, err := resolveParkedManifest(root, out)
 	if err != nil {
-		return res, err
+		return err
 	}
 
 	// The run's identity is proven from here: the payload names a parked run and
 	// cites its manifest by the manifest's own content hash. A refusal below is
-	// therefore recordable against that run.
+	// therefore recordable against that run — which is exactly why a run that
+	// already HAS an outcome is refused before anything can overwrite one.
+	if err := refuseARerun(root, out.RunID); err != nil {
+		return err
+	}
+
 	def, err := LoadDefinition(repoRoot, pos)
 	if err != nil {
-		return res, err
+		return err
 	}
 	res.Regime = def.Regime
 
 	if err := checkRegime(out, def); err != nil {
-		return refuse(repoRoot, &res, out, manifest, def, err)
+		return refuse(root, res, out, manifest, def, err)
 	}
 	if err := checkInstrument(out, def, manifest); err != nil {
-		return refuse(repoRoot, &res, out, manifest, def, err)
+		return refuse(root, res, out, manifest, def, err)
 	}
 
 	items, refusals, flags, err := validateItems(out, def)
 	res.RefusedItems = refusals
 	res.ReviewFlags = flags
 	if err != nil {
-		return refuse(repoRoot, &res, out, manifest, def, err)
+		return refuse(root, res, out, manifest, def, err)
 	}
 
-	if err := write(repoRoot, &res, out, manifest, def, items); err != nil {
-		return res, err
-	}
-	return res, nil
+	return write(root, repoRoot, res, out, manifest, def, items)
 }
 
 // readOutputFile reads the untrusted payload behind fsutil.ReadGuarded
@@ -398,12 +490,14 @@ var sha256HexRe = regexp.MustCompile(`^[0-9a-f]{64}$`)
 // unforgeable reference, because it cannot be asserted without the bytes. A
 // reference that resolves to nothing, or to a manifest whose hash disagrees,
 // refuses the run.
-func resolveParkedManifest(repoRoot string, out Output) (Manifest, error) {
-	// out.RunID has already been matched against the run-id grammar, which is
-	// what makes this join safe: it holds no separator and no dot, so it cannot
-	// escape the run directory.
+func resolveParkedManifest(root *os.Root, out Output) (Manifest, error) {
+	// out.RunID has already been matched against the run-id grammar, which makes
+	// it a single safe path COMPONENT: it holds no separator and no dot. That
+	// says nothing about the components above it, so the read is resolved through
+	// the repository root as well — a manifest served from outside this
+	// repository through a symlinked ancestor is not this repository's run.
 	rel := DefaultRunDir + "/" + out.RunID + "/" + ManifestFileName
-	raw, err := fsutil.ReadGuarded(filepath.Join(repoRoot, filepath.FromSlash(rel)), MaxFileBytes)
+	raw, err := fsutil.ReadGuardedInRoot(root, rel, MaxFileBytes)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return Manifest{}, fmt.Errorf("reading: %s cites run %s, whose manifest is not parked at %s; "+
@@ -437,10 +531,10 @@ func resolveParkedManifest(repoRoot string, out Output) (Manifest, error) {
 
 // write is the staged-write protocol. Nothing durable exists for the run until
 // step 1 has already validated everything, and the run metadata is written last.
-func write(repoRoot string, res *IngestResult, out Output, m Manifest, def Definition, items []capture.ReadingItem) error {
-	stageDir := filepath.Join(repoRoot, filepath.FromSlash(IngestStageDir), out.RunID)
+func write(root *os.Root, repoRoot string, res *IngestResult, out Output, m Manifest, def Definition, items []capture.ReadingItem) error {
+	stageRel := IngestStageDir + "/" + out.RunID
 	marker := stageMarker{Type: StageType, RunID: out.RunID, Records: []string{}}
-	if err := writeJSON(filepath.Join(stageDir, stageFileName), marker); err != nil {
+	if err := writeJSONIn(root, stageRel+"/"+stageFileName, marker); err != nil {
 		return err
 	}
 	if err := fireFault(faultAfterStage); err != nil {
@@ -462,18 +556,22 @@ func write(repoRoot string, res *IngestResult, out Output, m Manifest, def Defin
 		return fmt.Errorf("reading: writing the records of run %s: %w", out.RunID, err)
 	}
 
-	// The marker now names what landed, so a rollback removes exactly the files
-	// this ingest wrote rather than clearing a directory it did not fill.
+	// The marker names what landed. The rollback does NOT read it — it removes by
+	// the item-id filename grammar over the run's own directory, which also
+	// catches a batch that failed before this second write — so what the marker
+	// buys is evidence a person can read: which run was in flight, and which ids
+	// it had reached. Saying that plainly is the point; a comment claiming the
+	// rollback consults it would be describing code that does not exist.
 	marker.Records = recordIDs(written.Records)
-	if err := writeJSON(filepath.Join(stageDir, stageFileName), marker); err != nil {
+	if err := writeJSONIn(root, stageRel+"/"+stageFileName, marker); err != nil {
 		return err
 	}
 	if err := fireFault(faultAfterLedger); err != nil {
 		return err
 	}
 
-	runDir := filepath.Join(repoRoot, filepath.FromSlash(ReadingsRecordDir), out.RunID)
-	if err := writeJSON(filepath.Join(runDir, ManifestFileName), m); err != nil {
+	runRel := ReadingsRecordDir + "/" + out.RunID
+	if err := writeJSONIn(root, runRel+"/"+ManifestFileName, m); err != nil {
 		return err
 	}
 	run := RunRecord{
@@ -488,13 +586,52 @@ func write(repoRoot string, res *IngestResult, out Output, m Manifest, def Defin
 	if run.ReviewFlags == nil {
 		run.ReviewFlags = []ReviewFlag{}
 	}
-	if err := writeJSON(filepath.Join(runDir, RunFileName), run); err != nil {
+	if err := writeJSONIn(root, runRel+"/"+RunFileName, run); err != nil {
 		return err
 	}
-	res.RunRecordPath = ReadingsRecordDir + "/" + out.RunID + "/" + RunFileName
+	res.RunRecordPath = runRel + "/" + RunFileName
 
-	// The commit marker is down. The stage has nothing left to be evidence of.
-	return os.RemoveAll(stageDir)
+	// The commit marker is down, so the run HAPPENED. A stage that will not clear
+	// is reported as what it is — a leftover the next invocation sweeps — rather
+	// than as a failed ingest, because an operator told the run failed retries it,
+	// and a retry of a committed run is refused (refuseARerun) or, worse, would
+	// duplicate its records.
+	if err := root.RemoveAll(stageRel); err != nil {
+		res.Degraded = strings.TrimSpace(res.Degraded + " " + fmt.Sprintf(
+			"the run committed but its stage at %s could not be cleared (%v); the next invocation sweeps it",
+			stageRel, err))
+	}
+	return nil
+}
+
+// refuseARerun holds "a rerun is a NEW run with a new run id, never an
+// amendment" as a check rather than as a sentence.
+//
+// The run id is payload-chosen, so without this a second ingest of one run
+// overwrites its metadata while the first run's records stay in the ledger named
+// by nothing — and unreachable from any later sweep, because the rollback bails
+// whenever a commit marker exists. A refusal could likewise land beside a commit
+// marker, leaving one directory asserting both that the run committed and that
+// it was refused.
+//
+// It runs before the refusal path for that second reason: a rerun must not
+// overwrite the refusal record of the run it is repeating either.
+func refuseARerun(root *os.Root, runID string) error {
+	for _, name := range []string{RunFileName, RefusalFileName} {
+		rel := ReadingsRecordDir + "/" + runID + "/" + name
+		_, err := root.Lstat(rel)
+		switch {
+		case err == nil:
+			return fmt.Errorf("reading: run %s already has an outcome at %s; a rerun is a new run with a "+
+				"new run id, never an amendment — assemble again, and ingest the run that assembly parked",
+				runID, rel)
+		case os.IsNotExist(err):
+			continue
+		default:
+			return fmt.Errorf("reading: probing the outcome of run %s: %w", runID, err)
+		}
+	}
+	return nil
 }
 
 // refuse records a list-level refusal and returns it.
@@ -503,19 +640,25 @@ func write(repoRoot string, res *IngestResult, out Output, m Manifest, def Defin
 // happened, and a rerun is a NEW run with a new run id, never an amendment. It
 // carries the run metadata and the named reason and no items, and nothing was
 // ever moved out of the stage — so there are no reading records to leave behind.
-func refuse(repoRoot string, res *IngestResult, out Output, m Manifest, def Definition, cause error) (IngestResult, error) {
+func refuse(root *os.Root, res *IngestResult, out Output, m Manifest, def Definition, cause error) error {
 	rec := RefusalRecord{
 		Type: RefusalType, SchemaVersion: SchemaVersion, RunID: out.RunID,
 		Position: def.Position, Regime: def.Regime, TargetCommit: m.TargetCommit,
 		ManifestSHA256: out.ManifestSHA256, Instrument: sanitizeInstrument(out.Instrument),
-		Reason: echo(cause.Error()),
+		// The reason is carried WHOLE. Every payload-derived substring inside it
+		// was already cleaned where it was interpolated, so a second cap here
+		// would only cut the repository's own prose — and it did: a 338-rune
+		// refusal reached the record as 123 runes, ending mid-word, and an
+		// every-item-refused run lost its per-item refusals entirely. A record
+		// whose stated purpose is to carry the named reason has to carry it.
+		Reason: cause.Error(),
 	}
 	rel := ReadingsRecordDir + "/" + out.RunID + "/" + RefusalFileName
-	if err := writeJSON(filepath.Join(repoRoot, filepath.FromSlash(rel)), rec); err != nil {
-		return *res, fmt.Errorf("reading: %w (and the refusal record could not be written: %v)", cause, err)
+	if err := writeJSONIn(root, rel, rec); err != nil {
+		return fmt.Errorf("reading: %w (and the refusal record could not be written: %v)", cause, err)
 	}
 	res.RefusalPath = rel
-	return *res, fmt.Errorf("reading: %w; the refusal is recorded at %s", cause, rel)
+	return fmt.Errorf("reading: %w; the refusal is recorded at %s", cause, rel)
 }
 
 // sweepOrphanStages reports and clears every stage a previous invocation left.
@@ -525,82 +668,118 @@ func refuse(repoRoot string, res *IngestResult, out Output, m Manifest, def Defi
 // no reading records behind. The rollback therefore removes what the stage says
 // the ingest wrote, then the run's own directory when the commit marker is
 // absent. A stage whose run DID commit is a leftover and only the stage goes.
-func sweepOrphanStages(repoRoot string) ([]string, error) {
-	root := filepath.Join(repoRoot, filepath.FromSlash(IngestStageDir))
-	entries, err := os.ReadDir(root)
+func sweepOrphanStages(root *os.Root) (cleared, rolledBack []string, err error) {
+	entries, err := readDirIn(root, IngestStageDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return nil, nil, nil
 		}
-		return nil, fmt.Errorf("reading: listing the ingest stage: %w", err)
+		return nil, nil, fmt.Errorf("reading: listing the ingest stage: %w", err)
 	}
-	var cleared []string
 	for _, e := range entries {
-		// Only a well-formed run id is swept. A directory named anything else was
-		// not written by this verb, and a sweep that removed it would be deleting
+		// Only a well-formed run id is swept, and only a real directory: a
+		// DirEntry for a symlink reports IsDir false, so a planted link is
+		// skipped rather than followed. A directory named anything else was not
+		// written by this verb, and a sweep that removed it would be deleting
 		// somebody else's file on a guess.
 		if !e.IsDir() || !recordid.ValidReadingRunID(e.Name()) {
 			continue
 		}
-		if err := rollbackRun(repoRoot, e.Name()); err != nil {
-			return cleared, err
+		removed, err := rollbackRun(root, e.Name())
+		if err != nil {
+			return cleared, nil, err
 		}
-		if err := os.RemoveAll(filepath.Join(root, e.Name())); err != nil {
-			return cleared, fmt.Errorf("reading: clearing the orphaned stage of run %s: %w", e.Name(), err)
+		rolledBack = append(rolledBack, removed...)
+		if err := root.RemoveAll(IngestStageDir + "/" + e.Name()); err != nil {
+			return cleared, rolledBack, fmt.Errorf("reading: clearing the orphaned stage of run %s: %w",
+				e.Name(), err)
 		}
 		cleared = append(cleared, e.Name())
 	}
 	sort.Strings(cleared)
-	return cleared, nil
+	sort.Strings(rolledBack)
+	return cleared, rolledBack, nil
 }
 
 // rollbackRun removes the durable half of a run whose commit marker never
 // landed. A run WITH a commit marker is left entirely alone: its stage is a
 // leftover from a crash after the marker, and the run is complete.
-func rollbackRun(repoRoot, runID string) error {
-	runDir := filepath.Join(repoRoot, filepath.FromSlash(ReadingsRecordDir), runID)
-	if _, err := os.Stat(filepath.Join(runDir, RunFileName)); err == nil {
-		return nil
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("reading: probing the commit marker of run %s: %w", runID, err)
+func rollbackRun(root *os.Root, runID string) ([]string, error) {
+	runRel := ReadingsRecordDir + "/" + runID
+	_, err := root.Lstat(runRel + "/" + RunFileName)
+	switch {
+	case err == nil:
+		return nil, nil
+	case os.IsNotExist(err):
+	default:
+		return nil, fmt.Errorf("reading: probing the commit marker of run %s: %w", runID, err)
 	}
 
-	ledgerDir := filepath.Join(repoRoot, filepath.FromSlash(capture.LedgerRelPath),
-		issueschema.ReadingsDir, runID)
-	entries, err := os.ReadDir(ledgerDir)
+	var removed []string
+	ledgerRel := capture.LedgerRelPath + "/" + issueschema.ReadingsDir + "/" + runID
+	entries, err := readDirIn(root, ledgerRel)
 	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("reading: listing the records of orphaned run %s: %w", runID, err)
+		return nil, fmt.Errorf("reading: listing the records of orphaned run %s: %w", runID, err)
 	}
 	for _, e := range entries {
 		// Bounded by the item-id grammar: a rollback removes reading records and
 		// nothing else, so a file a person put in the directory survives it.
-		if e.IsDir() || !readingItemFileRe.MatchString(e.Name()) {
+		if e.IsDir() || !isReadingItemFile(e.Name()) {
 			continue
 		}
-		if err := os.Remove(filepath.Join(ledgerDir, e.Name())); err != nil {
-			return fmt.Errorf("reading: rolling back record %s of run %s: %w", e.Name(), runID, err)
+		if err := root.Remove(ledgerRel + "/" + e.Name()); err != nil {
+			return nil, fmt.Errorf("reading: rolling back record %s of run %s: %w", e.Name(), runID, err)
 		}
+		removed = append(removed, strings.TrimSuffix(e.Name(), ".md"))
 	}
-	// os.Remove on a directory succeeds only when it is empty, which is the
-	// guard wanted here: a directory still holding something is left standing.
-	_ = os.Remove(ledgerDir)
-	_ = os.Remove(filepath.Join(runDir, ManifestFileName))
-	_ = os.Remove(runDir)
-	return nil
+	// Remove on a directory succeeds only when it is empty, which is the guard
+	// wanted here: a directory still holding something is left standing.
+	_ = root.Remove(ledgerRel)
+	_ = root.Remove(runRel + "/" + ManifestFileName)
+	_ = root.Remove(runRel)
+	sort.Strings(removed)
+	return removed, nil
 }
 
-// writeJSON renders one artefact through the package's canonical encoder and
-// writes it atomically, so a reader never opens a half-written record.
-func writeJSON(path string, v any) error {
+// readDirIn lists a directory INSIDE the containment root, refusing a symlinked
+// leaf before it is walked.
+//
+// The root already stops a link leaving the repository. This refuses one
+// pointing at another directory INSIDE it, which is the stance core/capture
+// takes on the same ledger directory (refuseSymlinkedDir) and the right one for
+// a path a rollback deletes from: a run's directory is a run's directory, never
+// a pointer at somebody else's.
+func readDirIn(root *os.Root, rel string) ([]os.DirEntry, error) {
+	fi, err := root.Lstat(rel)
+	if err != nil {
+		return nil, err
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
+		return nil, fmt.Errorf("reading: %s is a symlink; a directory this verb walks or removes from is "+
+			"a real directory, never a pointer at another one", rel)
+	}
+	if !fi.IsDir() {
+		return nil, fmt.Errorf("reading: %s is not a directory", rel)
+	}
+	d, err := root.Open(rel)
+	if err != nil {
+		return nil, err
+	}
+	defer d.Close()
+	return d.ReadDir(-1)
+}
+
+// writeJSONIn renders one artefact through the package's canonical encoder and
+// writes it atomically INSIDE the containment root, so a reader never opens a
+// half-written record and a symlinked ancestor cannot land it outside the
+// repository. The missing parents are created through the root too.
+func writeJSONIn(root *os.Root, rel string, v any) error {
 	data, err := encode(v)
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return fmt.Errorf("reading: %w", err)
-	}
-	if err := fsutil.WriteFileAtomic(path, data, 0o644); err != nil {
-		return fmt.Errorf("reading: writing %s: %w", filepath.Base(path), err)
+	if err := fsutil.WriteFileAtomicInRoot(root, rel, data, 0o644); err != nil {
+		return fmt.Errorf("reading: writing %s: %w", rel, err)
 	}
 	return nil
 }
@@ -614,16 +793,39 @@ func recordIDs(refs []capture.ReadingRecordRef) []string {
 	return out
 }
 
-// echo renders a payload-derived string for a terminal or a durable record:
-// terminal-display attack runes masked, and the length capped. Every message in
-// this file that quotes the payload goes through it.
+// echo renders a payload-derived string for a terminal or a durable record. It
+// is termsafe.CleanProseLine under this package's cap, NOT a fourth
+// sanitise-and-cap: that package declares itself the canonical home for the
+// untrusted-prose cleaner every host-delegated ingest boundary needs, and
+// lifeboat, release and ideate already route through it. Using it here also
+// picks up the HTML-opener neutralisation a hand-rolled mask would have missed.
+//
+// The line form is the right one: every value this wraps is interpolated into a
+// one-line message or a single JSON field, so a newline in it would forge a line
+// the reader did not get from this binary.
 func echo(s string) string {
-	s = termsafe.Sanitize(s)
-	r := []rune(s)
-	if len(r) <= maxEchoedRunes {
-		return s
+	return termsafe.CleanProseLine(s, maxEchoedBytes)
+}
+
+// echoAll is echo over a list of payload-chosen strings.
+func echoAll(names []string) []string {
+	out := make([]string, 0, len(names))
+	for _, n := range names {
+		out = append(out, echo(n))
 	}
-	return string(r[:maxEchoedRunes]) + "..."
+	return out
+}
+
+// boundedNames caps how many payload-chosen names one refusal quotes. Each name
+// is capped by echo; the LIST is not, and a payload carrying ten thousand
+// unknown keys would otherwise put a megabyte of model-chosen text into a
+// committed record.
+func boundedNames(names []string) []string {
+	if len(names) <= maxQuotedNames {
+		return names
+	}
+	out := append([]string{}, names[:maxQuotedNames]...)
+	return append(out, fmt.Sprintf("and %d more", len(names)-maxQuotedNames))
 }
 
 // sanitizeInstrument is echo applied to the one payload-supplied identity that

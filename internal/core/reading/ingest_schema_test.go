@@ -157,7 +157,7 @@ func TestWrongPositionBodyIsUndecodable(t *testing.T) {
 		}
 	}
 	f.nothingDurableInTheLedger(f.runID)
-	f.mustIngest(f.payload(1))
+	f.mustIngest(f.nextRun(f.payload(1)))
 }
 
 // TestMissingBodyFieldRefusesTheItem is the body schema's other direction, and
@@ -223,7 +223,7 @@ func TestNoDurableWriteBeforeValidation(t *testing.T) {
 	if f.exists(IngestStageDir + "/" + f.runID) {
 		t.Error("the refused run left a stage behind")
 	}
-	f.mustIngest(f.payload(3))
+	f.mustIngest(f.nextRun(f.payload(3)))
 }
 
 // hostileRune reports whether r is one of the classes termsafe.Sanitize masks:
@@ -324,7 +324,135 @@ func assertSafeEcho(t *testing.T, msg string, expectCapped bool) {
 			return
 		}
 	}
-	if expectCapped && strings.Contains(msg, strings.Repeat("z", maxEchoedRunes+1)) {
+	if expectCapped && strings.Contains(msg, strings.Repeat("z", maxEchoedBytes+1)) {
 		t.Errorf("an oversized payload value reached the message uncapped (%d bytes): %.200q", len(msg), msg)
 	}
+}
+
+// TestAnOversizeItemIsRefusedRatherThanWrittenUnreadable: nothing between the
+// payload cap and the record write enforced the family's read limit, so an item
+// large enough became a committed record every reader then refuses — including
+// the disposition that is the only way to answer it. Durable, and permanently
+// unanswerable.
+func TestAnOversizeItemIsRefusedRatherThanWrittenUnreadable(t *testing.T) {
+	f := newIngestFixture(t, "detection")
+	doc := f.payload(2)
+	doc["items"].([]any)[1].(map[string]any)["why_a_tension"] =
+		strings.Repeat("the record and the tree disagree. ", issueschema.RecordReadLimit/16)
+
+	r := f.refusedItem(doc, 2, 2)
+	if r.Rule != "record-too-large" {
+		t.Errorf("the refusal cites rule %q", r.Rule)
+	}
+
+	// Every record that DID land is readable back under the family's own limit.
+	for _, name := range f.ledgerRecords(f.runID) {
+		info, err := os.Stat(filepath.Join(f.root, ".abcd", "work", "issues",
+			issueschema.ReadingsDir, f.runID, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Size() > issueschema.RecordReadLimit {
+			t.Errorf("%s is %d bytes, past the %d-byte limit every reader of the family applies",
+				name, info.Size(), issueschema.RecordReadLimit)
+		}
+	}
+}
+
+// TestAClosedBodyVocabularyIsEnforced: claim_type's three tokens are instructed
+// by the entailment definition and tabled in the spec, and were enforced
+// nowhere — not by this verb, not by the record writer, not by the schema — so
+// an arbitrary value landed in the durable record.
+func TestAClosedBodyVocabularyIsEnforced(t *testing.T) {
+	if _, ok := ClosedVocabularies["claim_type"]; !ok {
+		t.Fatal("claim_type declares no closed vocabulary")
+	}
+	f := newIngestFixture(t, "entailment")
+	doc := f.payload(2)
+	doc["items"].([]any)[1].(map[string]any)["claim_type"] = "assertion"
+
+	r := f.refusedItem(doc, 2, 2)
+	if r.Rule != "closed-vocabulary" {
+		t.Errorf("the refusal cites rule %q", r.Rule)
+	}
+	if !strings.Contains(r.Detail, "assertion") || !strings.Contains(r.Detail, "criterion") {
+		t.Errorf("the refusal names neither the value nor the set: %q", r.Detail)
+	}
+
+	// Every token in the set is accepted, so the check cannot be a blanket refusal.
+	for _, token := range ClosedVocabularies["claim_type"] {
+		g := newIngestFixture(t, "entailment")
+		ok := g.payload(1)
+		ok["items"].([]any)[0].(map[string]any)["claim_type"] = token
+		if res := g.mustIngest(ok); len(res.Records) != 1 {
+			t.Errorf("claim_type %q landed %d record(s)", token, len(res.Records))
+		}
+	}
+}
+
+// TestTheCommittedRecordCarriesNoHiddenRunes is the trust boundary at the RECORD
+// end. The record writer's own scalar guard refuses runes below 0x20 and nothing
+// above, so a bidi override, a C1 control or a zero-width rune in an item body
+// would land verbatim in a committed markdown file a reviewer reads in a
+// terminal — Trojan Source, in the ledger.
+//
+// The encoding is lossless, so the bytes are still recoverable; what is gone is
+// their ability to reorder or hide what the reader sees.
+func TestTheCommittedRecordCarriesNoHiddenRunes(t *testing.T) {
+	f := newIngestFixture(t, "detection")
+	doc := f.payload(1)
+	item := doc["items"].([]any)[0].(map[string]any)
+	item["tension"] = "the record says " + hostileText + " and the tree says otherwise"
+	item[PatternField] = "a pattern " + hostileText
+
+	res := f.mustIngest(doc)
+	if len(res.Records) != 1 {
+		t.Fatalf("landed %d record(s)", len(res.Records))
+	}
+	raw, err := os.ReadFile(filepath.Join(f.root, filepath.FromSlash(res.Records[0].Path)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, r := range string(raw) {
+		if hostileRune(r) {
+			t.Fatalf("the committed record carries U+%04X at byte %d", r, i)
+		}
+	}
+	// And the text is still there, encoded rather than dropped.
+	if !strings.Contains(string(raw), "the record says") {
+		t.Error("the record lost the item's text")
+	}
+}
+
+// TestTheRefusalRecordCarriesTheWholeReason: the record whose stated purpose is
+// to carry the named reason has to carry it. A second sanitise-and-cap over the
+// composed cause truncated the repository's OWN prose — every payload-derived
+// substring inside it is already cleaned where it is interpolated — and cut a
+// 338-rune refusal to 123 runes, mid-word.
+func TestTheRefusalRecordCarriesTheWholeReason(t *testing.T) {
+	f := newIngestFixture(t, "detection")
+	doc := f.payload(1)
+	doc["regime"] = RegimeEvaluative
+
+	_, err := f.ingest(doc)
+	if err == nil {
+		t.Fatal("a regime mismatch was accepted")
+	}
+	rec := f.readRefusalRecord(f.runID)
+
+	if len([]rune(rec.Reason)) <= maxEchoedBytes {
+		t.Errorf("the recorded reason is %d runes, at or under the per-VALUE cap (%d): the whole "+
+			"sentence is what the record exists to carry", len([]rune(rec.Reason)), maxEchoedBytes)
+	}
+	// The terminal message is the recorded reason plus the pointer at the record.
+	if !strings.Contains(err.Error(), rec.Reason) {
+		t.Errorf("the recorded reason is not what the operator was told:\n record: %q\n told:   %q",
+			rec.Reason, err.Error())
+	}
+	for _, want := range []string{RegimeEvaluative, RegimeRegistrative, "refuses the run"} {
+		if !strings.Contains(rec.Reason, want) {
+			t.Errorf("the recorded reason does not carry %q: %q", want, rec.Reason)
+		}
+	}
+	assertSafeEcho(t, rec.Reason, false)
 }

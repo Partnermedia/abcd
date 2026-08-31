@@ -28,6 +28,7 @@ import (
 
 	"github.com/intentdriven/abcd/internal/core/capture"
 	"github.com/intentdriven/abcd/internal/core/issueschema"
+	"github.com/intentdriven/abcd/internal/termsafe"
 )
 
 // The four supply regimes, named where the gate branches on them so a literal
@@ -194,13 +195,48 @@ func validateItems(out Output, def Definition) ([]capture.ReadingItem, []ItemRef
 			refusals = append(refusals, *r)
 			continue
 		}
+
+		// Encode the hidden runes on the way OUT, once the item has been judged.
+		//
+		// The text becomes a committed markdown record, and the record writer's
+		// own scalar guard refuses runes below 0x20 and nothing above — so a bidi
+		// override, a C1 control or a zero-width rune would land verbatim in a
+		// file a reviewer reads in a terminal. termsafe's encoder is the
+		// canonical, LOSSLESS form for that boundary: a mask substitutes the byte,
+		// this preserves it percent-encoded, and it is a no-op on clean text.
+		//
+		// It runs AFTER the checks and not before, because encoding changes what
+		// the checks would see: a pattern of one tab encodes to "%09", which is no
+		// longer blank, and the provenance rule that refuses a whitespace-only
+		// pattern would have passed it.
+		encoded := make(map[string]string, len(bodyFields)+1)
+		encoded[PatternField] = termsafe.EncodeHiddenRunes(fields[PatternField])
+		for _, f := range bodyFields {
+			encoded[f] = termsafe.EncodeHiddenRunes(fields[f])
+		}
+
+		// The record this item becomes must be one the ledger's own readers can
+		// read back. Nothing between the payload cap and the record write enforces
+		// the family's read limit, so without this an oversized item lands as a
+		// committed record every reader then refuses — including the disposition
+		// that is the only way to answer it. The item would be durable and
+		// permanently unanswerable, which is the split the single read limit
+		// exists to prevent. It is measured on the ENCODED text, because encoding
+		// is what will be written and it can only grow.
+		if n := recordBytes(encoded, bodyFields); n > issueschema.RecordReadLimit {
+			refusals = append(refusals, ItemRefusal{Ordinal: ordinal, Rule: "record-too-large",
+				Detail: fmt.Sprintf("item %d would write a %d-byte record, past the %d-byte limit every "+
+					"reader of the family applies", ordinal, n, issueschema.RecordReadLimit)})
+			continue
+		}
+
 		flags = append(flags, itemReviewFlags(ordinal, fields, def, bodyFields)...)
 
 		body := make(map[string]string, len(bodyFields))
 		for _, f := range bodyFields {
-			body[f] = fields[f]
+			body[f] = encoded[f]
 		}
-		items = append(items, capture.ReadingItem{Pattern: fields[PatternField], Body: body})
+		items = append(items, capture.ReadingItem{Pattern: encoded[PatternField], Body: body})
 	}
 
 	if len(items) == 0 {
@@ -240,7 +276,13 @@ func checkItem(ordinal int, fields map[string]string, def Definition,
 		}
 	}
 	if len(unknown) > 0 {
+		// A KEY is payload text as much as a value is, and this refusal lands in
+		// the committed run record and in the JSON render. It is the one refusal
+		// field built from payload-chosen names rather than from a table, so it
+		// goes through the same cleaner and the same caps — per name, and on the
+		// number of names.
 		sort.Strings(unknown)
+		unknown = echoAll(boundedNames(unknown))
 		return &ItemRefusal{Ordinal: ordinal, Rule: "unknown-field", Field: strings.Join(unknown, ", "),
 			Detail: fmt.Sprintf("item %d carries %s, which the %s body does not declare (%s); the item "+
 				"identity is the verb's to mint and the envelope is the verb's to compose, so neither has "+
@@ -257,6 +299,12 @@ func checkItem(ordinal int, fields map[string]string, def Definition,
 		return &ItemRefusal{Ordinal: ordinal, Rule: "missing-body-field", Field: strings.Join(missing, ", "),
 			Detail: fmt.Sprintf("item %d states no %s; the %s body is %s",
 				ordinal, renderFields(missing), def.Regime, renderFields(bodyFields))}
+	}
+
+	if field, want, ok := closedVocabulary(fields, bodyFields); !ok {
+		return &ItemRefusal{Ordinal: ordinal, Rule: "closed-vocabulary", Field: field,
+			Detail: fmt.Sprintf("item %d states %s %s; the set is closed: %s",
+				ordinal, field, echo(fields[field]), strings.Join(want, ", "))}
 	}
 
 	for _, s := range Signatures {
@@ -294,6 +342,55 @@ func itemReviewFlags(ordinal int, fields map[string]string, def Definition, body
 		}
 	}
 	return out
+}
+
+// ClosedVocabularies are the body fields whose value set is closed. The
+// definitions instruct them and spc-63 tables them; without a check here the
+// instruction is the only thing enforcing them, which makes it a suggestion.
+var ClosedVocabularies = map[string][]string{
+	"claim_type": {"criterion", "causal", "context"},
+}
+
+// closedVocabulary reports the first body field whose value is outside its
+// closed set, with the set, so a refusal can quote what was allowed.
+func closedVocabulary(fields map[string]string, bodyFields []string) (field string, want []string, ok bool) {
+	for _, f := range bodyFields {
+		allowed, closed := ClosedVocabularies[f]
+		if !closed {
+			continue
+		}
+		if !containsToken(allowed, fields[f]) {
+			return f, allowed, false
+		}
+	}
+	return "", nil, true
+}
+
+// containsToken reports exact membership.
+func containsToken(set []string, token string) bool {
+	for _, s := range set {
+		if s == token {
+			return true
+		}
+	}
+	return false
+}
+
+// recordBytes over-estimates the reading record this item becomes: the envelope
+// the writer composes, plus every body key with its value. It over-estimates on
+// purpose — an under-estimate writes a record the reader then refuses, which is
+// the very split it exists to prevent.
+func recordBytes(fields map[string]string, bodyFields []string) int {
+	// A generous fixed allowance for the envelope: the schema version, the
+	// minted id, the run, the manifest reference, the position and the regime,
+	// with their keys, the frontmatter delimiters and the newlines.
+	const envelope = 512
+	const perField = 8
+	n := envelope + len(PatternField) + len(fields[PatternField]) + perField
+	for _, f := range bodyFields {
+		n += len(f) + len(fields[f]) + perField
+	}
+	return n
 }
 
 // bodyText is what a signature reads: the item's body values, joined. The
