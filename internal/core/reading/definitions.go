@@ -25,7 +25,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -73,8 +72,21 @@ func LoadDefinition(repoRoot string, p Position) (Definition, error) {
 	if err != nil {
 		return Definition{}, fmt.Errorf("reading: %w", err)
 	}
+	// Read through the repository root, not through a joined path. The hash this
+	// returns is the definition half of an instrument identity — the thing that
+	// makes "two runs claiming the same instrument are provably the same" a proof
+	// — and a symlinked ancestor under agents/ would have it hash a file that is
+	// not in this repository at all. The read itself is harmless; the CLAIM about
+	// what was read is not, and a claim about an unknown artefact is worse than
+	// no claim.
+	root, err := os.OpenRoot(repoRoot)
+	if err != nil {
+		return Definition{}, fmt.Errorf("reading: opening the repository root: %w", err)
+	}
+	defer root.Close()
+
 	rel := DefinitionPath(pos)
-	raw, err := fsutil.ReadGuarded(filepath.Join(repoRoot, filepath.FromSlash(rel)), MaxFileBytes)
+	raw, err := fsutil.ReadGuardedInRoot(root, rel, MaxFileBytes)
 	if err != nil {
 		return Definition{}, fmt.Errorf("reading: the %s definition at %s: %w", pos, rel, err)
 	}

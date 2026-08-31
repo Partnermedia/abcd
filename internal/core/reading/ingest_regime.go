@@ -25,6 +25,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/intentdriven/abcd/internal/core/capture"
 	"github.com/intentdriven/abcd/internal/core/issueschema"
@@ -172,7 +173,7 @@ func checkInstrument(out Output, def Definition, m Manifest) error {
 // in which nothing survives becomes a list-level refusal, because a run with no
 // items is not a run with an empty item set — it is a run whose every finding
 // was refused, and recording it as the former would lose that.
-func validateItems(out Output, def Definition) ([]capture.ReadingItem, []ItemRefusal, []ReviewFlag, error) {
+func validateItems(out Output, def Definition) ([]capture.ReadingItem, []ItemRefusal, []ReviewFlag, int, error) {
 	bodyFields := issueschema.ReadingBodyFields[string(def.Position)]
 	allowed := map[string]bool{PatternField: true}
 	for _, f := range bodyFields {
@@ -239,11 +240,33 @@ func validateItems(out Output, def Definition) ([]capture.ReadingItem, []ItemRef
 		items = append(items, capture.ReadingItem{Pattern: encoded[PatternField], Body: body})
 	}
 
+	total := len(refusals)
+	refusals = boundedRefusals(refusals)
 	if len(items) == 0 {
-		return nil, refusals, flags, fmt.Errorf("every one of the %d item(s) was refused, so the run "+
-			"carries nothing to record: %s", len(out.Items), renderRefusals(refusals))
+		return nil, refusals, flags, total, fmt.Errorf("every one of the %d item(s) was refused, so the "+
+			"run carries nothing to record: %s", len(out.Items), renderRefusals(refusals))
 	}
-	return items, refusals, flags, nil
+	return items, refusals, flags, total, nil
+}
+
+// boundedRefusals caps how many item refusals are carried into a message and a
+// durable record.
+//
+// The item COUNT is payload-chosen, so a per-name cap on the field names inside
+// one refusal bounds nothing: a payload of ten thousand illegal items produced a
+// refusal record and a terminal message hundreds of kilobytes long. The same
+// principle the quoted-name cap states applies to the refusals themselves — a
+// record whose whole purpose is to be read has to stay readable. The total is
+// reported separately, so nothing is hidden by the truncation.
+func boundedRefusals(refusals []ItemRefusal) []ItemRefusal {
+	if len(refusals) <= maxReportedRefusals {
+		return refusals
+	}
+	out := append([]ItemRefusal{}, refusals[:maxReportedRefusals]...)
+	return append(out, ItemRefusal{
+		Rule:   "refusals-elided",
+		Detail: fmt.Sprintf("and %d more item(s) refused; refused_count carries the total", len(refusals)-maxReportedRefusals),
+	})
 }
 
 // checkItem judges one item, returning the first rule it breaks.
@@ -377,32 +400,76 @@ func containsToken(set []string, token string) bool {
 }
 
 // recordBytes over-estimates the reading record this item becomes: the envelope
-// the writer composes, plus every body key with its value. It over-estimates on
-// purpose — an under-estimate writes a record the reader then refuses, which is
-// the very split it exists to prevent.
+// the writer composes, plus every body key with its value.
+//
+// It must over-estimate, and the first version did not. The measurement is taken
+// here, before two writer steps that LENGTHEN text, so a body of double quotes
+// landed a record roughly twice the measured size and past the limit — durable,
+// committed, and unreadable by every reader of the family.
+//
+// Each value is therefore counted DOUBLE, and the factor is exact rather than a
+// guess: the record's scalar writer escapes exactly two characters, a backslash
+// and a double quote, one byte each, and the hidden-rune encoder that runs before
+// it emits neither. No value can more than double.
+//
+// The envelope allowance is generous for the other step: the ledger redactor runs
+// after this measurement and can lengthen text where a placeholder is longer than
+// the secret it replaces. That growth is bounded by the number of secrets in one
+// item rather than by its length, so an allowance covers it — but it is an
+// allowance, not a proof, and a record dense in short secrets is the shape that
+// would exceed it.
 func recordBytes(fields map[string]string, bodyFields []string) int {
-	// A generous fixed allowance for the envelope: the schema version, the
-	// minted id, the run, the manifest reference, the position and the regime,
-	// with their keys, the frontmatter delimiters and the newlines.
-	const envelope = 512
-	const perField = 8
-	n := envelope + len(PatternField) + len(fields[PatternField]) + perField
+	const envelope = 4096
+	const perField = 16
+	n := envelope + len(PatternField) + 2*len(fields[PatternField]) + perField
 	for _, f := range bodyFields {
-		n += len(f) + len(fields[f]) + perField
+		n += len(f) + 2*len(fields[f]) + perField
 	}
 	return n
 }
 
-// bodyText is what a signature reads: the item's body values, joined. The
-// pattern is not among them — it names the reading's own basis, not a finding —
-// and no key name is either, because a detector over key names would be the
-// reserved-name table written twice.
+// bodyText is what a signature reads: the item's body values, joined and folded.
+// The pattern is not among them — it names the reading's own basis, not a
+// finding — and no key name is either, because a detector over key names would
+// be the reserved-name table written twice.
 func bodyText(fields map[string]string, bodyFields []string) string {
 	parts := make([]string, 0, len(bodyFields))
 	for _, f := range bodyFields {
 		parts = append(parts, fields[f])
 	}
-	return strings.Join(parts, "\n")
+	return foldForMatching(strings.Join(parts, "\n"))
+}
+
+// foldForMatching normalises text for SIGNATURE MATCHING only: every Unicode
+// space becomes an ASCII space, and every format rune (zero-width joiners, the
+// bidi controls, a soft hyphen) is dropped. What is stored is untouched.
+//
+// Without it the gate is evaded by one invisible byte. Go's regexp is RE2, whose
+// \s and \b classes are ASCII-only, and termsafe.Sanitize does not mask U+00A0 —
+// so "we recommend option B" written with a NON-BREAKING space between two words
+// matches no signature at all, and the item lands with no refusal and no flag.
+// A zero-width space inside a keyword does the same.
+//
+// This is deliberately NOT the residue itd-185 discloses. That residue is a fix
+// proposal or a disposition PHRASED outside the registry's signatures, which is
+// a stated limit of a registry-bounded check. This was the registry's own
+// phrasing with one byte substituted, which is an evasion of the gate rather
+// than a limit of it, and filing it under the disclosure would turn an honest
+// residue into cover for a defect.
+//
+// Dropping rather than folding the format runes is what catches the zero-width
+// case: folding one to a space would split a keyword in two, and the signature
+// would still not match.
+func foldForMatching(text string) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case unicode.Is(unicode.Cf, r):
+			return -1
+		case unicode.IsSpace(r):
+			return ' '
+		}
+		return r
+	}, text)
 }
 
 // present returns the members of names the item carries, in the table's order.

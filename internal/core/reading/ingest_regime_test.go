@@ -345,3 +345,72 @@ func TestReservedNamesNeverCollideWithABodyField(t *testing.T) {
 		}
 	}
 }
+
+// TestTheRegimeGateIsNotEvadedByInvisibleRunes.
+//
+// Go's regexp is RE2, whose whitespace and word-boundary classes are ASCII-only,
+// and the terminal sanitiser does not mask U+00A0. So a registered signature's
+// OWN phrasing, with a non-breaking space between two words or a zero-width
+// space inside a keyword, matched nothing and the item landed with no refusal
+// and no flag — inside the gate this verb exists to be.
+//
+// This is not the residue itd-185 discloses. That residue covers a fix proposal
+// or a disposition phrased OUTSIDE the registry's signatures. This was the
+// registry's own phrasing with one invisible byte substituted.
+//
+// The last case is the one that keeps the fix honest: a non-breaking space in
+// innocent prose must still be ACCEPTED, or an evasion has been traded for a
+// false refusal.
+func TestTheRegimeGateIsNotEvadedByInvisibleRunes(t *testing.T) {
+	const (
+		nbsp       = " "
+		zeroWidth  = "​"
+		narrowNbsp = " "
+		ideoSpace  = "　"
+	)
+	evasions := []struct {
+		name, position, field, text, signature string
+	}{
+		{"non-breaking space", "detection", "why_a_tension",
+			"the record and the tree disagree; the" + nbsp + "fix" + nbsp + "is to restate the constraint",
+			"RG-REG-FIXPROPOSAL"},
+		{"zero-width space inside a keyword", "detection", "why_a_tension",
+			"the record and the tree disagree; the fi" + zeroWidth + "x is to restate the constraint",
+			"RG-REG-FIXPROPOSAL"},
+		{"narrow no-break space", "entailment", "what_implies_it",
+			"the passed material implies it, and the claim is" + narrowNbsp + "already" + narrowNbsp + "accepted",
+			"RG-EXPL-DISPOSITION"},
+		{"ideographic space", "comparative", "characterisation",
+			"options of this shape behave unremarkably, and we" + ideoSpace + "recommend option B",
+			"RG-EVAL-RECOMMENDATION"},
+	}
+	for _, tc := range evasions {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			f := newIngestFixture(t, Position(tc.position))
+			doc := f.payload(2)
+			doc["items"].([]any)[1].(map[string]any)[tc.field] = tc.text
+
+			r := f.refusedItem(doc, 2, 2)
+			if r.Rule != tc.signature {
+				t.Errorf("the refusal cites rule %q, want the registered signature %s", r.Rule, tc.signature)
+			}
+		})
+	}
+
+	// The folding is for MATCHING only: the stored text keeps its own bytes.
+	t.Run("innocent prose carrying a non-breaking space is accepted", func(t *testing.T) {
+		f := newIngestFixture(t, "detection")
+		doc := f.payload(1)
+		doc["items"].([]any)[0].(map[string]any)["why_a_tension"] =
+			"the constraint names a budget of 30" + nbsp + "ms, and the shipped path exceeds it"
+
+		res := f.mustIngest(doc)
+		if len(res.Records) != 1 {
+			t.Fatalf("innocent prose was refused: %v", res.RefusedItems)
+		}
+		if len(res.RefusedItems) != 0 {
+			t.Errorf("an evasion was traded for a false refusal: %v", res.RefusedItems)
+		}
+	})
+}

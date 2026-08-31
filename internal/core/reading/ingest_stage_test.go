@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/intentdriven/abcd/internal/core/capture"
 	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
@@ -366,5 +367,55 @@ func TestTheStageLockIsHeldAcrossTheSweepAndTheWrite(t *testing.T) {
 	f.mustIngest(f.nextRun(f.payload(1)))
 	if err := fsutil.WithFileLock(lock, 0, func() error { return nil }); err != nil {
 		t.Errorf("the stage lock was not released after the ingest returned: %v", err)
+	}
+}
+
+// TestTheLedgerLockIsHeldWhileTheSweepUnlinks.
+//
+// The stage lock serialises ingest against ingest and says nothing about
+// core/capture, whose own verbs READ these records. The sweep unlinks committed
+// reading records, so without capture's ledger lock a concurrent disposition or
+// promote can be reading a record as it disappears.
+//
+// The lock is probed from inside the unlink, for the reason the stage-lock case
+// gives: a lock held across a window cannot be observed from outside the
+// process, and a race driven by two real processes would be timing-dependent.
+// The probe goes through capture's own exported helper rather than rebuilding
+// the lock path, so it is the same lock by construction.
+func TestTheLedgerLockIsHeldWhileTheSweepUnlinks(t *testing.T) {
+	f := newIngestFixture(t, "detection")
+	orphan := "rdg-2608310000000021"
+	f.write(IngestStageDir+"/"+orphan+"/"+stageFileName,
+		[]byte(`{"_type":"`+StageType+`","run_id":"`+orphan+`","records":[]}`))
+	f.write(".abcd/work/issues/readings/"+orphan+"/rdi-2608310000000022.md",
+		[]byte("---\nid: rdi-2608310000000022\n---\n"))
+
+	probed := false
+	prior := ingestFault
+	ingestFault = func(at string) error {
+		if at != faultDuringRollback {
+			return nil
+		}
+		probed = true
+		// capture's own timeout bounds this; it returns contention rather than
+		// hanging, which is what makes the assertion deterministic.
+		if err := capture.WithLedgerLock(f.root, func() error { return nil }); err == nil {
+			t.Error("the ledger lock was free while the sweep unlinked committed records; a concurrent " +
+				"disposition or promote could be reading one as it disappears")
+		}
+		return nil
+	}
+	t.Cleanup(func() { ingestFault = prior })
+
+	f.mustIngest(f.payload(1))
+	if !probed {
+		t.Fatal("the unlink was never reached, so the lock was never probed")
+	}
+	if f.exists(".abcd/work/issues/readings/" + orphan + "/rdi-2608310000000022.md") {
+		t.Error("the orphaned run's record survived the rollback")
+	}
+	// And it is released: the next ledger mutation is not blocked by the sweep.
+	if err := capture.WithLedgerLock(f.root, func() error { return nil }); err != nil {
+		t.Errorf("the ledger lock was not released after the sweep: %v", err)
 	}
 }
