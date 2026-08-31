@@ -107,6 +107,10 @@ const PatternField = "pattern"
 const (
 	maxEchoedBytes = 120
 	maxQuotedNames = 8
+	// maxReportedRefusals caps how many item refusals reach a message and a
+	// durable record, for the same reason in a third dimension: the number of
+	// ITEMS is payload-chosen too.
+	maxReportedRefusals = 20
 )
 
 // isReadingItemFile reports whether name is a reading record's filename.
@@ -181,6 +185,7 @@ type RunRecord struct {
 	Instrument     Instrument                 `json:"instrument"`
 	Records        []capture.ReadingRecordRef `json:"records"`
 	RefusedItems   []ItemRefusal              `json:"refused_items"`
+	RefusedCount   int                        `json:"refused_count"`
 	ReviewFlags    []ReviewFlag               `json:"review_flags"`
 }
 
@@ -222,15 +227,19 @@ type IngestRequest struct {
 
 // IngestResult is what an ingest did.
 type IngestResult struct {
-	RunID         string                     `json:"run_id"`
-	Position      Position                   `json:"position"`
-	Regime        string                     `json:"regime"`
-	Records       []capture.ReadingRecordRef `json:"records"`
-	RefusedItems  []ItemRefusal              `json:"refused_items,omitempty"`
-	ReviewFlags   []ReviewFlag               `json:"review_flags,omitempty"`
-	RunRecordPath string                     `json:"run_record,omitempty"`
-	RefusalPath   string                     `json:"refusal_record,omitempty"`
-	ClearedStages []string                   `json:"cleared_stages,omitempty"`
+	RunID        string                     `json:"run_id"`
+	Position     Position                   `json:"position"`
+	Regime       string                     `json:"regime"`
+	Records      []capture.ReadingRecordRef `json:"records"`
+	RefusedItems []ItemRefusal              `json:"refused_items,omitempty"`
+	// RefusedCount is how many items were refused in total. RefusedItems is
+	// capped — the item count is payload-chosen — so the two differ when a run
+	// refused more than the cap, and the count is what nothing truncates.
+	RefusedCount  int          `json:"refused_count,omitempty"`
+	ReviewFlags   []ReviewFlag `json:"review_flags,omitempty"`
+	RunRecordPath string       `json:"run_record,omitempty"`
+	RefusalPath   string       `json:"refusal_record,omitempty"`
+	ClearedStages []string     `json:"cleared_stages,omitempty"`
 	// RolledBack names the reading records the sweep REMOVED from the committed
 	// ledger, because their run never reached its commit marker. A delete in the
 	// committed tier is reported by id: "cleared an orphaned stage" does not tell
@@ -240,10 +249,12 @@ type IngestResult struct {
 	Degraded   string   `json:"redaction_degraded,omitempty"`
 }
 
-// The two points in the staged-write protocol a fault can be injected at.
+// The three points the test seam can be entered at: the two windows of the
+// staged-write protocol, and the sweep's unlink of a rolled-back run's records.
 const (
-	faultAfterStage  = "after-stage"
-	faultAfterLedger = "after-ledger"
+	faultAfterStage     = "after-stage"
+	faultAfterLedger    = "after-ledger"
+	faultDuringRollback = "during-rollback"
 )
 
 // ingestFault is the staged-write protocol's test seam, nil in production.
@@ -401,8 +412,9 @@ func ingestUnderLock(root *os.Root, repoRoot string, req IngestRequest, res *Ing
 		return refuse(root, res, out, manifest, def, err)
 	}
 
-	items, refusals, flags, err := validateItems(out, def)
+	items, refusals, flags, refusedCount, err := validateItems(out, def)
 	res.RefusedItems = refusals
+	res.RefusedCount = refusedCount
 	res.ReviewFlags = flags
 	if err != nil {
 		return refuse(root, res, out, manifest, def, err)
@@ -578,7 +590,8 @@ func write(root *os.Root, repoRoot string, res *IngestResult, out Output, m Mani
 		Type: RunType, SchemaVersion: SchemaVersion, RunID: out.RunID,
 		Position: def.Position, Regime: def.Regime, TargetCommit: m.TargetCommit,
 		ManifestSHA256: out.ManifestSHA256, Instrument: sanitizeInstrument(out.Instrument),
-		Records: written.Records, RefusedItems: res.RefusedItems, ReviewFlags: res.ReviewFlags,
+		Records: written.Records, RefusedItems: res.RefusedItems, RefusedCount: res.RefusedCount,
+		ReviewFlags: res.ReviewFlags,
 	}
 	if run.RefusedItems == nil {
 		run.RefusedItems = []ItemRefusal{}
@@ -716,29 +729,60 @@ func rollbackRun(root *os.Root, runID string) ([]string, error) {
 	}
 
 	var removed []string
+	// The stage lock serialises ingest against ingest. It says nothing about
+	// core/capture, whose own verbs read these records — so the unlink below
+	// takes the LEDGER lock as well, and a concurrent disposition or promote
+	// waits rather than reading a record as it disappears.
+	//
+	// It is taken here and not around the whole ingest, because
+	// capture.IngestReading re-takes it internally: an flock is not reentrant,
+	// and holding it across that call would deadlock the verb against itself.
+	// The two locks are always acquired stage-then-ledger and never the other
+	// way, so no cycle exists.
 	ledgerRel := capture.LedgerRelPath + "/" + issueschema.ReadingsDir + "/" + runID
 	entries, err := readDirIn(root, ledgerRel)
 	if err != nil && !os.IsNotExist(err) {
 		return nil, fmt.Errorf("reading: listing the records of orphaned run %s: %w", runID, err)
 	}
-	for _, e := range entries {
-		// Bounded by the item-id grammar: a rollback removes reading records and
-		// nothing else, so a file a person put in the directory survives it.
-		if e.IsDir() || !isReadingItemFile(e.Name()) {
-			continue
+	unlink := func() error {
+		if err := fireFault(faultDuringRollback); err != nil {
+			return err
 		}
-		if err := root.Remove(ledgerRel + "/" + e.Name()); err != nil {
-			return nil, fmt.Errorf("reading: rolling back record %s of run %s: %w", e.Name(), runID, err)
+		for _, e := range entries {
+			// Bounded by the item-id grammar: a rollback removes reading records
+			// and nothing else, so a file a person put in the directory survives.
+			if e.IsDir() || !isReadingItemFile(e.Name()) {
+				continue
+			}
+			if err := root.Remove(ledgerRel + "/" + e.Name()); err != nil {
+				return fmt.Errorf("reading: rolling back record %s of run %s: %w", e.Name(), runID, err)
+			}
+			removed = append(removed, strings.TrimSuffix(e.Name(), ".md"))
 		}
-		removed = append(removed, strings.TrimSuffix(e.Name(), ".md"))
+		// Remove on a directory succeeds only when it is empty, which is the
+		// guard wanted here: a directory still holding something is left standing.
+		_ = root.Remove(ledgerRel)
+		return nil
 	}
-	// Remove on a directory succeeds only when it is empty, which is the guard
-	// wanted here: a directory still holding something is left standing.
-	_ = root.Remove(ledgerRel)
+	if len(entries) > 0 {
+		if err := underLedgerLock(root.Name(), unlink); err != nil {
+			return nil, err
+		}
+	}
 	_ = root.Remove(runRel + "/" + ManifestFileName)
 	_ = root.Remove(runRel)
 	sort.Strings(removed)
 	return removed, nil
+}
+
+// underLedgerLock runs fn while holding core/capture's ledger lock, so a delete
+// in the committed ledger cannot race that package's own readers.
+//
+// The lock file is capture's, and its name is capture's to state — this asks for
+// it through the exported helper rather than restating the path, so the two
+// cannot come to disagree about which file is the lock.
+func underLedgerLock(repoRoot string, fn func() error) error {
+	return capture.WithLedgerLock(repoRoot, fn)
 }
 
 // readDirIn lists a directory INSIDE the containment root, refusing a symlinked

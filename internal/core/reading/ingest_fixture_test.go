@@ -296,6 +296,24 @@ func (f *ingestFixture) ledgerRecords(runID string) []string {
 	return out
 }
 
+// assertEveryRecordIsReadable holds every record the run landed to the limit
+// every reader of the family applies. A record past it is durable, committed and
+// unreadable — which makes the item it carries permanently unanswerable.
+func (f *ingestFixture) assertEveryRecordIsReadable() {
+	f.t.Helper()
+	for _, name := range f.ledgerRecords(f.runID) {
+		info, err := os.Stat(filepath.Join(f.root, ".abcd", "work", "issues",
+			issueschema.ReadingsDir, f.runID, name))
+		if err != nil {
+			f.t.Fatal(err)
+		}
+		if info.Size() > issueschema.RecordReadLimit {
+			f.t.Errorf("%s is %d bytes, past the %d-byte limit every reader of the family applies",
+				name, info.Size(), issueschema.RecordReadLimit)
+		}
+	}
+}
+
 // exists reports whether a repo-relative path is present.
 func (f *ingestFixture) exists(rel string) bool {
 	f.t.Helper()

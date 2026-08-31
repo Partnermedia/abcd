@@ -174,3 +174,40 @@ func TestASymlinkedParkedRunCannotRedirectTheManifestRead(t *testing.T) {
 		t.Error("a manifest resolved through a symlink pointing outside the repository")
 	}
 }
+
+// TestASymlinkedRunDirectoryInsideTheRepoIsRefusedToo: os.Root contains a link
+// that leaves the repository, and nothing more. A link pointing at ANOTHER
+// directory inside the repository is still followed by the kernel, and the
+// rollback would then delete reading records out of whatever it points at.
+//
+// That is why the sweep refuses a symlinked directory outright rather than
+// resting on containment alone — the stance core/capture takes on the same
+// ledger directory. Without the extra refusal every case above still passes,
+// which is exactly the vacuity this one closes.
+func TestASymlinkedRunDirectoryInsideTheRepoIsRefusedToo(t *testing.T) {
+	f := newIngestFixture(t, "detection")
+	orphan := "rdg-2608310000000015"
+
+	// A real, in-repo directory holding a reading record that belongs to another
+	// run entirely.
+	victim := ".abcd/work/issues/readings/rdg-2608310000000016"
+	f.write(victim+"/rdi-2608310000000017.md", []byte("---\nid: rdi-2608310000000017\n---\n"))
+
+	f.write(IngestStageDir+"/"+orphan+"/"+stageFileName,
+		[]byte(`{"_type":"`+StageType+`","run_id":"`+orphan+`","records":[]}`))
+	// RELATIVE, and pointing inside the repository. An absolute symlink is
+	// refused by the containment root on its own, so a case using one would
+	// pass whether or not the explicit refusal existed — which is what made the
+	// first version of this case vacuous (iss-2608311306539528).
+	f.linkTo(".abcd/work/issues/readings/"+orphan, "rdg-2608310000000016")
+
+	if _, err := Ingest(IngestRequest{
+		RepoRoot:   f.root,
+		OutputPath: filepath.Join(f.t.TempDir(), "absent.json"),
+	}); err == nil {
+		t.Error("a symlinked run directory was walked rather than refused")
+	}
+	if !f.exists(victim + "/rdi-2608310000000017.md") {
+		t.Error("the rollback followed a symlink and deleted another run's record")
+	}
+}

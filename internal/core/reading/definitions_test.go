@@ -609,3 +609,37 @@ func TestLoadDefinitionRefusesARegimeThatDisagreesWithItsPosition(t *testing.T) 
 		t.Error("LoadDefinitions skipped a definition whose regime disagrees with its position")
 	}
 }
+
+// TestLoadDefinitionReadsInsideTheRepositoryOnly: the hash this returns is the
+// definition half of an instrument identity, and the identity is sold as proving
+// that two runs read under the same instructions. A symlinked ancestor under
+// agents/ would have it hash a file that is not in this repository at all, which
+// makes that a claim about an unknown artefact.
+//
+// The read is harmless in itself. The CLAIM is what is guarded.
+func TestLoadDefinitionReadsInsideTheRepositoryOnly(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, definitionPrefix+"detection.md"),
+		[]byte("---\nposition: detection\nregime: registrative\n---\n\n# elsewhere\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, DefinitionsDir)); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := LoadDefinition(root, PositionDetection); err == nil {
+		t.Fatal("a definition was hashed through a symlink pointing outside the repository, so the " +
+			"instrument identity it reports names a file this repository does not hold")
+	}
+
+	// The same definition, actually in the repository, still resolves — so this
+	// is containment rather than a blanket refusal.
+	if err := os.Remove(filepath.Join(root, DefinitionsDir)); err != nil {
+		t.Fatal(err)
+	}
+	writeDefinition(t, root, PositionDetection, "position: detection\nregime: registrative\n")
+	if _, err := LoadDefinition(root, PositionDetection); err != nil {
+		t.Fatalf("an in-repository definition was refused: %v", err)
+	}
+}

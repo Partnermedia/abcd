@@ -161,6 +161,17 @@ Two enforcement layers sit behind that:
   widening prohibitions raise review flags on the run record instead, because
   the generative licence is the widest and the constraint falls at admission.
 
+**Matching runs over a folded copy.** Go's regexp is RE2, whose whitespace and
+word-boundary classes are ASCII-only, and the terminal sanitiser does not mask
+U+00A0 — so a signature's own phrasing with a non-breaking space between two
+words, or a zero-width space inside a keyword, matched nothing and the item
+landed. The detectors therefore read a copy with every Unicode space folded to
+ASCII and every format rune dropped; the stored text is untouched. This is
+deliberately NOT the residue itd-185 discloses, which covers a fix proposal or
+disposition PHRASED outside the registry: this was the registry's own phrasing
+with one invisible byte substituted, and filing it under the disclosure would
+turn an honest residue into cover for a defect (iss-2608311306535485).
+
 **Every signature ships enforced.** Each registry entry carries a literal mode
 (`enforce` or `flag`) in Go, with no configuration seam: degrading a signature
 on observed noise is a code change plus a decision-log entry, which is what
@@ -206,6 +217,14 @@ the rendered records into a second issues root would move that probe off the
 real ledger and reopen what the lock was taken for. One record writer, one mint,
 one lock — and the stage does the job ac-2 actually asks of it.
 
+**Two locks, always in one order.** The stage flock covers the sweep through the
+commit marker; the sweep's unlink of committed reading records additionally takes
+core/capture's LEDGER lock through `capture.WithLedgerLock`, so a concurrent
+disposition or promote waits rather than reading a record as it disappears. The
+ledger lock is taken around the unlink alone and never around
+`capture.IngestReading`, which re-takes it internally — an flock is not
+reentrant. The order is always stage-then-ledger, so no cycle exists.
+
 **One ingest at a time in one checkout**, from the sweep through the commit
 marker, behind an flock on the stage root (`fsutil.WithFileLock`). The sweep
 DELETES committed reading records, and its only test for an orphan is a stage
@@ -248,6 +267,20 @@ is refused when a closed body vocabulary is broken (`claim_type`), and when the
 record it would become would exceed `issueschema.RecordReadLimit` — an oversize
 record is durable and, because every reader of the family applies that limit,
 permanently unanswerable.
+
+The size check counts every value DOUBLE. It is measured before two writer steps
+that lengthen text, and the doubling is exact rather than a guess: the record's
+scalar writer escapes exactly two characters, one byte each, and the hidden-rune
+encoder emits neither. The envelope allowance covers the other step, the ledger
+redactor, whose growth is bounded by the number of secrets in an item rather
+than by its length — an allowance, not a proof, and the disclosed residue is a
+record dense in short secrets.
+
+Three caps bound what a payload can put into a message or a durable record, in
+the three dimensions it chooses: the length of one value, the number of field
+NAMES one refusal quotes, and the number of REFUSALS a run carries. A per-value
+cap bounds nothing when the payload chooses how many values there are. The
+refusal count is reported separately, so bounding the list hides nothing.
 
 Item text is passed to the record writer through `termsafe.EncodeHiddenRunes`,
 after the checks rather than before: the record is a committed markdown file a
@@ -324,6 +357,8 @@ Each case is written to fail before the change and pass after, in
   `TestNoDurableWriteBeforeValidation`,
   `TestMissingBodyFieldRefusesTheItem`,
   `TestAnOversizeItemIsRefusedRatherThanWrittenUnreadable`,
+  `TestEscapingCannotPushARecordPastTheLimit`,
+  `TestTheRefusalListIsBoundedInCount`,
   `TestAClosedBodyVocabularyIsEnforced`,
   `TestARefusalNeverEchoesRawPayloadBytes`,
   `TestTheCommittedRecordCarriesNoHiddenRunes`,
@@ -354,6 +389,10 @@ Each case is written to fail before the change and pass after, in
   `TestRunIDNeverBuildsAPathBeforeItIsChecked`,
   `TestARerunOfACommittedRunIsRefused`,
   `TestTheStageLockIsHeldAcrossTheSweepAndTheWrite`.
+- `ingest_regime_test.go` also carries
+  `TestTheRegimeGateIsNotEvadedByInvisibleRunes`, whose last case is the one
+  that keeps the fix honest: a non-breaking space in innocent prose is still
+  ACCEPTED, so an evasion has not been traded for a false refusal.
 - `ingest_containment_test.go`: the adversarial-repository cases —
   `TestASymlinkedReadingsTreeCannotRedirectTheDurableWrite`,
   `TestASymlinkedLedgerRunCannotRedirectTheRollback`,

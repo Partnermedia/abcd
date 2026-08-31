@@ -5,6 +5,7 @@ package reading
 // nothing durable exists anywhere for that run.
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -283,17 +284,43 @@ func TestARefusalNeverEchoesRawPayloadBytes(t *testing.T) {
 		}
 	}
 
-	// An item's KEY is payload text too, and it reaches a message through the
-	// unknown-field refusal.
+	// An item's KEY is payload text too, and it is the one refusal field built
+	// from payload-chosen NAMES rather than from a table. Two items, so the run
+	// lands and the refusal reaches the DURABLE run record and the render — where
+	// encoding/json escapes C0 and leaves C1, DEL, bidi overrides and zero-width
+	// runes raw, so a cap and a mask are the only things standing there.
 	t.Run("item key", func(t *testing.T) {
 		f := newIngestFixture(t, "detection")
-		doc := f.payload(1)
-		doc["items"].([]any)[0].(map[string]any)[hostileText] = "x"
-		_, err := f.ingest(doc)
-		if err == nil {
-			t.Fatal("an item key carrying terminal-attack runes was accepted")
+		doc := f.payload(2)
+		doc["items"].([]any)[1].(map[string]any)[hostileText+strings.Repeat("k", 3000)] = "x"
+
+		r := f.refusedItem(doc, 2, 2)
+		assertSafeEcho(t, r.Field, true)
+		assertSafeEcho(t, r.Detail, false)
+
+		run := f.readRunRecord(f.runID)
+		if len(run.RefusedItems) != 1 {
+			t.Fatalf("the run record carries %d refusal(s)", len(run.RefusedItems))
 		}
-		assertSafeEcho(t, err.Error(), false)
+		assertSafeEcho(t, run.RefusedItems[0].Field, true)
+	})
+
+	// And the NUMBER of names is capped as well as each name: a per-name cap
+	// bounds nothing when the payload chooses how many names there are.
+	t.Run("many item keys", func(t *testing.T) {
+		f := newIngestFixture(t, "detection")
+		doc := f.payload(2)
+		item := doc["items"].([]any)[1].(map[string]any)
+		for i := 0; i < 500; i++ {
+			item[fmt.Sprintf("smuggled_%03d", i)] = "x"
+		}
+		r := f.refusedItem(doc, 2, 2)
+		if n := strings.Count(r.Field, ", ") + 1; n > maxQuotedNames+1 {
+			t.Errorf("the refusal quotes %d names, past the %d-name cap: %q", n, maxQuotedNames, r.Field)
+		}
+		if !strings.Contains(r.Field, "more") {
+			t.Errorf("the refusal does not say how many names it left out: %q", r.Field)
+		}
 	})
 
 	// And the DURABLE record: a list-level refusal writes the instrument's model
@@ -345,18 +372,90 @@ func TestAnOversizeItemIsRefusedRatherThanWrittenUnreadable(t *testing.T) {
 		t.Errorf("the refusal cites rule %q", r.Rule)
 	}
 
-	// Every record that DID land is readable back under the family's own limit.
-	for _, name := range f.ledgerRecords(f.runID) {
-		info, err := os.Stat(filepath.Join(f.root, ".abcd", "work", "issues",
-			issueschema.ReadingsDir, f.runID, name))
+	f.assertEveryRecordIsReadable()
+}
+
+// TestEscapingCannotPushARecordPastTheLimit is the same criterion at the
+// boundary, and it is the case the first estimate failed.
+//
+// The size is measured before the record writer escapes, so an item of double
+// quotes — each written as two bytes — landed a record roughly twice the
+// measured size, straight past the limit. Durable, committed, and unreadable by
+// every reader of the family, which is the outcome the check exists to prevent.
+// This body passes a single-counted estimate and fails a double-counted one.
+func TestEscapingCannotPushARecordPastTheLimit(t *testing.T) {
+	f := newIngestFixture(t, "detection")
+	doc := f.payload(2)
+	doc["items"].([]any)[1].(map[string]any)["why_a_tension"] =
+		strings.Repeat(`"`, 3*issueschema.RecordReadLimit/4)
+
+	r := f.refusedItem(doc, 2, 2)
+	if r.Rule != "record-too-large" {
+		t.Errorf("the refusal cites rule %q", r.Rule)
+	}
+	f.assertEveryRecordIsReadable()
+}
+
+// TestTheRefusalListIsBoundedInCount: the item COUNT is payload-chosen, so a cap
+// on the names quoted inside one refusal bounds nothing. A payload of many
+// illegal items produced a refusal record and a terminal message hundreds of
+// kilobytes long — a record whose whole purpose is to be read.
+//
+// The total is reported separately, so bounding the list hides nothing.
+func TestTheRefusalListIsBoundedInCount(t *testing.T) {
+	t.Run("an accepted run with many refused items", func(t *testing.T) {
+		f := newIngestFixture(t, "detection")
+		const items = 200
+		doc := f.payload(items)
+		for i, raw := range doc["items"].([]any) {
+			if i == 0 {
+				continue
+			}
+			delete(raw.(map[string]any), PatternField)
+		}
+
+		res := f.mustIngest(doc)
+		if res.RefusedCount != items-1 {
+			t.Errorf("refused_count is %d, want %d: the total is what nothing truncates",
+				res.RefusedCount, items-1)
+		}
+		if len(res.RefusedItems) > maxReportedRefusals+1 {
+			t.Errorf("the result carries %d refusals, past the %d-refusal cap",
+				len(res.RefusedItems), maxReportedRefusals)
+		}
+		run := f.readRunRecord(f.runID)
+		if len(run.RefusedItems) > maxReportedRefusals+1 {
+			t.Errorf("the run record carries %d refusals, past the cap", len(run.RefusedItems))
+		}
+		if run.RefusedCount != items-1 {
+			t.Errorf("the run record's refused_count is %d, want %d", run.RefusedCount, items-1)
+		}
+	})
+
+	t.Run("a run in which every item is refused", func(t *testing.T) {
+		f := newIngestFixture(t, "detection")
+		doc := f.payload(200)
+		for _, raw := range doc["items"].([]any) {
+			delete(raw.(map[string]any), PatternField)
+		}
+		if _, err := f.ingest(doc); err == nil {
+			t.Fatal("a payload whose every item was illegal was accepted")
+		}
+
+		info, err := os.Stat(filepath.Join(f.root, filepath.FromSlash(
+			ReadingsRecordDir+"/"+f.runID+"/"+RefusalFileName)))
 		if err != nil {
 			t.Fatal(err)
 		}
-		if info.Size() > issueschema.RecordReadLimit {
-			t.Errorf("%s is %d bytes, past the %d-byte limit every reader of the family applies",
-				name, info.Size(), issueschema.RecordReadLimit)
+		if info.Size() > 64<<10 {
+			t.Errorf("the refusal record is %d bytes; a record whose purpose is to be read has to stay "+
+				"readable", info.Size())
 		}
-	}
+		rec := f.readRefusalRecord(f.runID)
+		if !strings.Contains(rec.Reason, "more item(s) refused") {
+			t.Errorf("the bounded reason does not say how many refusals it left out: %q", rec.Reason)
+		}
+	})
 }
 
 // TestAClosedBodyVocabularyIsEnforced: claim_type's three tokens are instructed
