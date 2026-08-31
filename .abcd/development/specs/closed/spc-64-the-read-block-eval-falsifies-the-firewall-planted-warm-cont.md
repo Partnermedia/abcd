@@ -7,7 +7,7 @@ intent: itd-186
 
 ## Summary
 
-spc-64 delivers [itd-186](../../intents/planned/itd-186-the-read-block-eval-falsifies-the-firewall-planted-warm-cont.md):
+spc-64 delivers [itd-186](../../intents/shipped/itd-186-the-read-block-eval-falsifies-the-firewall-planted-warm-cont.md):
 a repository eval that plants sentinel warm content across every warm location
 class in a fixture repository state, runs the cold-reading input assembler
 ([itd-183](../../intents/shipped/itd-183-the-cold-reading-sees-exactly-what-the-assembler-passes-posi.md),
@@ -212,9 +212,9 @@ Every test below is watched red before the change and green after.
   (spc-61); the four reading definitions and the blindness core
   ([spc-62](../closed/spc-62-four-cold-reading-definitions-one-blindness-core-each-positi.md));
   validating what a reading was licensed to produce
-  ([spc-63](spc-63-one-ingest-verb-validates-every-cold-reading-output-includin.md));
+  ([spc-63](../open/spc-63-one-ingest-verb-validates-every-cold-reading-output-includin.md));
   and determinism of the assembled input
-  ([spc-65](spc-65-amnesia-is-a-repository-property-proven-by-an-eval-the-same.md)).
+  ([spc-65](../open/spc-65-amnesia-is-a-repository-property-proven-by-an-eval-the-same.md)).
 - Prose-borne warmth inside an included chapter, which carries no structural
   signal. The eval catches a planted token wherever it sits, so it is stronger
   than the assembler's filter here, but unplanted prose warmth stays the
