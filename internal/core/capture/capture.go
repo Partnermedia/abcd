@@ -150,6 +150,12 @@ type CaptureRequest struct {
 	RelatedSpecs   []string
 	BlockedBy      []string // iss-N dependency edges; each must match ^iss-[0-9]+$
 	ForceID        string   // migrator-only; "" = auto-allocate
+	// ProductionMode is how the issue's text was produced (itd-178): one of the
+	// closed provenance vocabulary, or empty for the vocabulary's default. There
+	// is no free-text form. The record's `origin` has no request member at all —
+	// it is derived from which command ran, and a capture is researcher-authored
+	// by construction.
+	ProductionMode string
 }
 
 // CaptureResult is the outcome of a successful Capture. The timestamp-numeric
@@ -201,6 +207,13 @@ type ResolveRequest struct {
 	// itd-179 exists to close, and resolve mints the value in the same call, so
 	// it has no corpus to fix and refuses from the start.
 	Grounds string
+	// ProductionMode RESTAMPS the record's production_mode (itd-178). A
+	// resolution note is new text with its own mode, so the key is not frozen at
+	// mint — but an empty value leaves the existing stamp alone rather than
+	// overwriting it with a default, because a transition that declares nothing
+	// has made no claim about how the note was produced. `origin` is never
+	// rewritten: where a record came from does not change when it is resolved.
+	ProductionMode string
 }
 
 // WontfixRequest moves an open issue to wontfix/.
@@ -216,6 +229,9 @@ type WontfixRequest struct {
 	// reason and the conjecture are not always the same sentence. The token stays
 	// declined: a non-action is what that value names.
 	Grounds string
+	// ProductionMode restamps production_mode on the same terms as
+	// ResolveRequest's: declared restamps, absent leaves the stamp alone.
+	ProductionMode string
 }
 
 // TransitionResult is the outcome of a Resolve or Wontfix. ResolvedBy echoes
@@ -327,10 +343,35 @@ var (
 	// filename<->frontmatter slug agreement, which stays on the stricter
 	// recordid.SplitRecordFilename (validate.go) because that check EXTRACTS and
 	// compares the slug; detection only needs the ordinal.
-	issFileNumRe  = recordid.FilenameNumRe(issFamily)
-	reAbcdListID  = regexp.MustCompile(`^(itd|fn|iss)-[0-9]+$`)
-	reSortIssID   = regexp.MustCompile(`^iss-([0-9]+)(-|$|\.)`)
-	reScalarKey   = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
-	statusDirs    = [3]State{StateOpen, StateResolved, StateWontfix}
-	statusDirName = map[State]string{StateOpen: "open", StateResolved: "resolved", StateWontfix: "wontfix"}
+	issFileNumRe = recordid.FilenameNumRe(issFamily)
+	reAbcdListID = regexp.MustCompile(`^(itd|fn|iss)-[0-9]+$`)
+	reSortIssID  = regexp.MustCompile(`^iss-([0-9]+)(-|$|\.)`)
+	reScalarKey  = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
+	// statusDirs is the ledger's status list projected into State, and
+	// statusDirName its inverse. Both are DERIVED from issueschema.StatusDirs —
+	// the one canonical list the allocator provisions, the readers scan and the
+	// deterministic gates scope to — rather than restated here, so the State
+	// projection and the directory names cannot disagree about what a status is.
+	statusDirs    = stateProjection()
+	statusDirName = dirNameProjection()
 )
+
+// stateProjection renders the canonical status list as States, in the same order.
+func stateProjection() []State {
+	out := make([]State, 0, len(issueschema.StatusDirs))
+	for _, d := range issueschema.StatusDirs {
+		out = append(out, State(d))
+	}
+	return out
+}
+
+// dirNameProjection is stateProjection's inverse: a State back to the directory
+// name it names. A State and its directory are the same string by construction,
+// which is the point — the two spellings cannot drift because there is only one.
+func dirNameProjection() map[State]string {
+	out := make(map[State]string, len(issueschema.StatusDirs))
+	for _, d := range issueschema.StatusDirs {
+		out[State(d)] = d
+	}
+	return out
+}

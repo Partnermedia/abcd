@@ -48,7 +48,7 @@ whose proposals it admits.
 
 **The declined-proposal disposition is not new.** Ruling (19) (2026-08-28)
 already reserves `declined` for the widening position, and
-[spc-58](spc-58-a-cold-reading-s-findings-land-as-reading-records-and-the-re.md)
+[spc-58](../closed/spc-58-a-cold-reading-s-findings-land-as-reading-records-and-the-re.md)
 already delivers the disposition record, its `disposition_grounds` field and its
 state-availability check. A second declined-proposal record type would be a
 parallel store for a state the disposition vocabulary already holds. This spec

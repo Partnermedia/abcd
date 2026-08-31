@@ -33,6 +33,7 @@ import (
 	"github.com/intentdriven/abcd/internal/core/lifeboat"
 	"github.com/intentdriven/abcd/internal/core/lint"
 	"github.com/intentdriven/abcd/internal/core/memory"
+	"github.com/intentdriven/abcd/internal/core/provenance"
 	"github.com/intentdriven/abcd/internal/core/record"
 	"github.com/intentdriven/abcd/internal/core/rules"
 	"github.com/intentdriven/abcd/internal/core/spec"
@@ -337,6 +338,7 @@ func NewRootCommand() *cobra.Command {
 	root.AddCommand(newDisembarkCommand(&asJSON))
 	root.AddCommand(newEmbarkCommand(&asJSON))
 	root.AddCommand(newSiteCommand(&asJSON))
+	root.AddCommand(newReadingCommand(&asJSON))
 
 	// A cobra usage error (unknown flag, unknown subcommand, stray positional
 	// argument) is a plain error with no ExitCode(), so Run() would map it to
@@ -1465,7 +1467,7 @@ func newRulesCommand(asJSON *bool) *cobra.Command {
 // lifecycle status board (never mutates); the `plan` and `link` sub-verbs carry
 // the mutations. Usage/lookup failures exit 2.
 func newIntentCommand(asJSON *bool) *cobra.Command {
-	var intentImpact string
+	var intentImpact, intentProductionMode string
 	intentCmd := &cobra.Command{
 		Use:   "intent [text]",
 		Short: "Intent lifecycle; bare invocation is read-only status, quoted text files a draft",
@@ -1498,7 +1500,7 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 						"unknown intent subcommand %q (nothing created — a lone word is read as a sub-verb, never as a draft title; a draft title must contain a space, so write the whole sentence)",
 						args[0])}
 				}
-				return createIntentFromText(cmd, cwd, strings.Join(args, " "), intentImpact, *asJSON)
+				return createIntentFromText(cmd, cwd, strings.Join(args, " "), intentImpact, intentProductionMode, *asJSON)
 			}
 			v, err := intent.Status(cwd)
 			if err != nil {
@@ -1523,6 +1525,11 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 	// travels unchanged to shipped/, where intent_impact_valid requires it — so the
 	// tool's own create->plan->ship path can produce a record that clears the gate.
 	intentCmd.Flags().StringVar(&intentImpact, "impact", "", "stamp the draft's product impact: additive|breaking|fix (optional)")
+	// --production-mode is a CLOSED CHOICE, refused outright outside the
+	// vocabulary — the same shape as --impact and --severity, both of which
+	// already stamp machine-read enums. There is no flag for `origin`: it is
+	// derived from which command ran (itd-178).
+	intentCmd.Flags().StringVar(&intentProductionMode, "production-mode", "", productionModeFlagHelp)
 
 	// new "<text>" — backwards-compatible alias for the sub-verb-free create path
 	// (itd-46, lean a): routes to the same create engine and warns on stderr that
@@ -1542,12 +1549,13 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 			}
 			fmt.Fprintln(cmd.ErrOrStderr(),
 				"WARNING: `abcd intent new` is deprecated; use `abcd intent \"<text>\"` (quoted text is the create signal).")
-			return createIntentFromText(cmd, cwd, strings.Join(args, " "), "", *asJSON)
+			return createIntentFromText(cmd, cwd, strings.Join(args, " "), "", "", *asJSON)
 		},
 	})
 
 	// plan <itd-N> — mint the spec, write both link sides, move drafts -> planned.
-	intentCmd.AddCommand(&cobra.Command{
+	var planProductionMode string
+	planCmd := &cobra.Command{
 		Use:   "plan <itd-N>",
 		Short: "Plan a draft intent (mint its spec, link both sides, move drafts -> planned); on an already-planned intent, stamp its unmarked scope conditions",
 		Args:  cobra.ExactArgs(1),
@@ -1556,7 +1564,13 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := intent.Plan(cwd, args[0])
+			// The mode belongs to the SPEC this mints; the intent's own stamp was
+			// written when its draft was created and is never rewritten.
+			mode, err := resolveProductionMode(cwd, planProductionMode)
+			if err != nil {
+				return err
+			}
+			res, err := intent.Plan(cwd, args[0], mode)
 			if err != nil {
 				return &exitError{Code: 2, Msg: "abcd intent plan: " + err.Error()}
 			}
@@ -1578,7 +1592,9 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 				}
 			})
 		},
-	})
+	}
+	planCmd.Flags().StringVar(&planProductionMode, "production-mode", "", productionModeFlagHelp)
+	intentCmd.AddCommand(planCmd)
 
 	// ready <itd-N> — the read-only implement-readiness gate. Exit codes are the
 	// machine seam an autonomous run gates on: 0 ready, 1 not ready (the rendered
@@ -1718,9 +1734,46 @@ const ideateRoutingRule = "  a big, unproven idea? `abcd ideate` runs the option
 // `abcd intent "<text>"` and the deprecated `abcd intent new "<text>"` alias: it
 // files a new draft via intent.CreateFromText and renders the created record. The
 // engine refuses empty/whitespace text and mints the id under the store lock, so
+// resolveProductionMode turns the --production-mode flag into the value a MINT
+// path stamps: the operator's declared choice, or the repo's own declared
+// default from the identity pin (itd-91's seam), which is hand-written when the
+// pin declares none.
+//
+// The value is validated HERE as well as in the core, because a surface refusal
+// costs nothing and names the closed set before any id is minted — and because
+// "the operator supplies a closed choice, never free text" is the property
+// itd-178 rests on, which belongs at the door the operator types at.
+//
+// It is deliberately NOT used by the ledger transitions: a resolve or wontfix
+// that declares no mode must leave the record's existing stamp alone, and
+// defaulting there would silently overwrite it.
+func resolveProductionMode(cwd, flag string) (string, error) {
+	if flag != "" {
+		m, err := provenance.ParseMode(flag)
+		if err != nil {
+			return "", &exitError{Code: 2, Msg: "abcd: " + err.Error() + " (nothing written)"}
+		}
+		return string(m), nil
+	}
+	m, err := identity.DeclaredProductionMode(cwd)
+	if err != nil {
+		return "", &exitError{Code: 2, Msg: "abcd: " + err.Error() + " (nothing written)"}
+	}
+	return string(m), nil
+}
+
+// productionModeFlagHelp is the one help string every verb carrying the flag
+// shows, composed from the vocabulary so it cannot drift from the enum.
+var productionModeFlagHelp = "how this record's text was produced: " + provenance.ModeList() +
+	" (default: the repo's declared mode, else " + string(provenance.DefaultMode) + ")"
+
 // this surface stays a thin marshaller.
-func createIntentFromText(cmd *cobra.Command, cwd, text, impact string, asJSON bool) error {
-	it, mintWarning, err := intent.CreateFromText(cwd, text, impact)
+func createIntentFromText(cmd *cobra.Command, cwd, text, impact, productionMode string, asJSON bool) error {
+	mode, err := resolveProductionMode(cwd, productionMode)
+	if err != nil {
+		return err
+	}
+	it, mintWarning, err := intent.CreateFromText(cwd, text, impact, mode)
 	if err != nil {
 		return &exitError{Code: 2, Msg: "abcd intent: " + err.Error()}
 	}
@@ -1792,6 +1845,12 @@ func newIntentAuditCommand(asJSON *bool) *cobra.Command {
 				case "ingested":
 					fmt.Fprintf(w, "  criteria %d: MET %d · MET_WITH_CONCERNS %d · NOT_MET %d · INCONCLUSIVE %d\n",
 						res.Criteria, res.Met, res.MetWithConcern, res.NotMet, res.Inconclusive)
+					// Only an intent that records scope conditions has a disposition
+					// split to report; a conditionless one has no surface here.
+					if res.Conditions > 0 {
+						fmt.Fprintf(w, "  scope conditions %d: survived %d · narrowed %d · falsified %d · untested %d\n",
+							res.Conditions, res.Survived, res.Narrowed, res.Falsified, res.Untested)
+					}
 				case "dead_letter":
 					fmt.Fprintf(w, "  DEAD_LETTER: %s\n  raw payload: %s\n", res.Reason, res.DeadLetterPath)
 				}
@@ -2369,7 +2428,7 @@ func (p *stdinPrompter) Prompt(key string, choices []string, def string) string 
 // appends an issue; list/resolve/wontfix/promote are thin consumers of capture
 // core.
 func newCaptureCommand(asJSON *bool) *cobra.Command {
-	var severity, category, source, slug, foundDuring, foundAt, lapsedAt, blockedBy string
+	var severity, category, source, slug, foundDuring, foundAt, lapsedAt, blockedBy, captureProductionMode string
 
 	captureCmd := &cobra.Command{
 		Use:   "capture [text]",
@@ -2386,7 +2445,15 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 				if err != nil {
 					return err
 				}
-				return render(cmd.OutOrStdout(), *asJSON, st, func(w io.Writer) {
+				// The outstanding-readings report rides the same board. It is the
+				// SAME function the lint rule calls, not a second scan: an item
+				// nobody has answered has no state to sit in, and two readings of
+				// that one question would be two answers to it.
+				board, err := captureBoardOf(cwd, st)
+				if err != nil {
+					return err
+				}
+				return render(cmd.OutOrStdout(), *asJSON, board, func(w io.Writer) {
 					fmt.Fprintf(w, "abcd capture — open %d · resolved %d · wontfix %d\n",
 						st.OpenCount, st.ResolvedCount, st.WontfixCount)
 					if len(st.RecentOpen) > 0 {
@@ -2403,6 +2470,54 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 					// own name and bytes, so both are sanitised before the terminal.
 					for _, sk := range st.Skipped {
 						fmt.Fprintf(w, "  skipped %s: %s\n", termsafe.Sanitize(sk.Path), termsafe.Sanitize(sk.Error))
+					}
+					// Beside the skipped roster, and for the same reason it is
+					// there: a record the board does not name is one nobody is
+					// counting. An unanswered reading item is reported as
+					// outstanding because no state means "already covered", and an
+					// open hold renders WITH its exit condition, which is the only
+					// thing that distinguishes a hold from a parking space.
+					for _, o := range board.Outstanding.Undispositioned {
+						fmt.Fprintf(w, "  outstanding %s (run %s) — no disposition\n",
+							termsafe.Sanitize(o.Item), termsafe.Sanitize(o.Run))
+					}
+					// A widening proposal is answered by an admission carrying its
+					// grounds or by a decline, so it gets its own line: the
+					// disposition-only line above would name the wrong remedy.
+					for _, o := range board.Outstanding.Unadmitted {
+						fmt.Fprintf(w, "  unadmitted %s (run %s) — a widening proposal with neither an admission nor a decline\n",
+							termsafe.Sanitize(o.Item), termsafe.Sanitize(o.Run))
+					}
+					// More than one standing answer is named in full, never resolved
+					// by picking one: which is in force is a judgement the ledger
+					// does not contain.
+					for _, c := range board.Outstanding.Contested {
+						fmt.Fprintf(w, "  contested %s (run %s) — %d standing answers: %s\n",
+							termsafe.Sanitize(c.Item), termsafe.Sanitize(c.Run),
+							len(c.Standing), termsafe.Sanitize(strings.Join(c.Standing, ", ")))
+					}
+					// An item answered twice and standing none is a fault, not an
+					// unanswered item, and saying "carries no disposition" about it
+					// would be a confident wrong statement.
+					for _, c := range board.Outstanding.Cyclic {
+						fmt.Fprintf(w, "  tangled %s (run %s) — its dispositions supersede one another, so none stands\n",
+							termsafe.Sanitize(c.Item), termsafe.Sanitize(c.Run))
+					}
+					// An answer that exists and cannot be read is not an absent one.
+					for _, u := range board.Outstanding.Unreadable {
+						fmt.Fprintf(w, "  illegible %s (run %s) — stands on %s, which no reader can read\n",
+							termsafe.Sanitize(u.Item), termsafe.Sanitize(u.Run), termsafe.Sanitize(u.Disposition))
+					}
+					// A tree the walk declined to enter is named, because a tree
+					// nobody walked looks exactly like a tree with nothing in it.
+					for _, u := range board.Outstanding.Unsafe {
+						fmt.Fprintf(w, "  unread %s — %s; what it holds is neither outstanding nor answered\n",
+							termsafe.Sanitize(u.Path), termsafe.Sanitize(u.Reason))
+					}
+					for _, h := range board.Outstanding.OpenHolds {
+						fmt.Fprintf(w, "  held %s (%s) — exits when: %s\n",
+							termsafe.Sanitize(h.Item), termsafe.Sanitize(h.Disposition),
+							termsafe.Sanitize(h.ExitCondition))
 					}
 					fmt.Fprint(w, ledgerDecisionRule)
 					fmt.Fprint(w, ideateRoutingRule)
@@ -2456,6 +2571,9 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 				LapsedAt:    lapsedAt,
 				BlockedBy:   blocked,
 			}
+			if req.ProductionMode, err = resolveProductionMode(cwd, captureProductionMode); err != nil {
+				return err
+			}
 			// --lapsed-at has NO default, and this is where the caller learns it: a
 			// lapse capture that omits the instant is refused in flag terms before
 			// anything is reserved or written. Core refuses the same record on its
@@ -2494,6 +2612,10 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	// clock at write-up, which is the one value the lapse log exists to rule out.
 	captureCmd.Flags().StringVar(&lapsedAt, "lapsed-at", "", "RFC 3339 instant a discipline gave way (the lapse, not the write-up)")
 	captureCmd.Flags().StringVar(&blockedBy, "blocked-by", "", "comma-separated iss-ids this issue is blocked by")
+	// A closed choice, refused outright outside the vocabulary — the same shape
+	// as --severity. There is no flag for `origin`: a capture is
+	// researcher-authored by construction (itd-178).
+	captureCmd.Flags().StringVar(&captureProductionMode, "production-mode", "", productionModeFlagHelp)
 
 	// list — the earned SD001 exception: a filter flag is REQUIRED.
 	var lsOpen, lsResolved, lsWontfix, lsAll bool
@@ -2535,7 +2657,8 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	// resolve — open -> resolved with a note, a required product impact, and
 	// optional resolved_by provenance (spc-25): the intent, spec, or commit
 	// that fixed it.
-	var resolveImpact, resolveByIntent, resolveBySpec, resolveByCommit, resolveShippedIn, resolveGrounds string
+	var resolveImpact, resolveByIntent, resolveBySpec, resolveByCommit, resolveShippedIn string
+	var resolveGrounds, resolveModeRestamp string
 	resolveCmd := &cobra.Command{
 		Use:   "resolve <iss-N> <note> --impact <additive|breaking|fix|internal> --grounds \"<token>: <text>\" [--intent itd-N] [--spec spc-N] [--commit sha] [--shipped-in vX.Y.Z]",
 		Short: "Mark an open issue resolved (open/ -> resolved/), optionally naming what fixed it",
@@ -2552,6 +2675,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 				RepoRoot: cwd, ID: args[0], Resolution: args[1], Impact: resolveImpact,
 				ByIntent: resolveByIntent, BySpec: resolveBySpec, ByCommit: resolveByCommit,
 				ShippedIn: resolveShippedIn, Grounds: resolveGrounds,
+				ProductionMode: resolveModeRestamp,
 			})
 			if err != nil {
 				return groundsUsageError("resolve", err)
@@ -2579,28 +2703,49 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	// commit, so the cut is right without it. The derivation leaves such a record out of the current
 	// cut, so the release record cannot announce old work as new. Absent by
 	// default, and never inferred — a record that says nothing belongs to this cut.
+	// A transition RESTAMPS production_mode, so the flag is passed through
+	// unresolved: an undeclared mode must leave the record's existing stamp alone,
+	// and taking the repo default here would silently overwrite it (itd-178).
+	resolveCmd.Flags().StringVar(&resolveModeRestamp, "production-mode", "",
+		"restamp how this record's text was produced: "+provenance.ModeList()+" (default: leave the record's existing stamp alone; refused on a record that predates disclosure)")
 	resolveCmd.Flags().StringVar(&resolveShippedIn, "shipped-in", "", "MIGRATION USE: the release that already carried this work (vX.Y.Z), leaving the record out of the current cut; unnecessary in a repo abcd managed from the start")
 	captureCmd.AddCommand(resolveCmd)
 
-	// promote — graduate an issue into an intent draft (spc-24, step 2 of the
-	// record walk). Default mode mints a draft and stamps the issue's
+	// promote — graduate an issue, or a dispositioned reading item, into an
+	// intent draft (spc-24, step 2 of the record walk; spc-58 for the reading
+	// item). Default mode mints a draft and stamps the source record's
 	// promoted_to in one invocation; --intent is the stamp-only repair/link
-	// mode. The issue keeps its status folder — promotion is not resolution.
-	var promoteIntent, promoteGrounds string
+	// mode. The issue keeps its status folder — promotion is not resolution —
+	// and an undispositioned rdi-N is refused before anything is minted.
+	var promoteIntent, promoteGrounds, promoteProductionMode string
 	promoteCmd := &cobra.Command{
-		Use:   "promote <iss-N> --grounds \"<token>: <text>\"",
-		Short: "Graduate an issue into an intent draft (mints + stamps promoted_to)",
+		Use:   "promote <iss-N> --grounds \"<token>: <text>\" | promote <rdi-N>",
+		Short: "Graduate an issue or a dispositioned reading item into an intent draft (mints + stamps promoted_to)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
 			if err != nil {
 				return err
 			}
-			if err := requireGroundsFlag("promote", promoteGrounds); err != nil {
+			// The grounds argument belongs to the ISSUE route, which has no
+			// other place to say why the conjecture is being pursued. A reading
+			// item records that in its DISPOSITION, a separate record promote
+			// already refuses to act without, so demanding a second conjecture
+			// here would collect a value nothing writes.
+			if !strings.HasPrefix(args[0], issueschema.ReadingItemFamily+"-") {
+				if err := requireGroundsFlag("promote", promoteGrounds); err != nil {
+					return err
+				}
+			}
+			// The mode belongs to the DRAFT this mints; stamp-only mode mints
+			// nothing, so it carries none.
+			mode, err := resolveProductionMode(cwd, promoteProductionMode)
+			if err != nil {
 				return err
 			}
 			res, err := capture.Promote(capture.PromoteRequest{
 				RepoRoot: cwd, ID: args[0], LinkIntent: promoteIntent, Grounds: promoteGrounds,
+				ProductionMode: mode,
 			})
 			if err != nil {
 				return groundsUsageError("promote", err)
@@ -2622,14 +2767,72 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	}
 	promoteCmd.Flags().StringVar(&promoteIntent, "intent", "", "stamp-only mode: link this existing itd-N instead of minting a draft")
 	promoteCmd.Flags().StringVar(&promoteGrounds, "grounds", "", groundsFlagUsage)
+	promoteCmd.Flags().StringVar(&promoteProductionMode, "production-mode", "", productionModeFlagHelp)
 	captureCmd.AddCommand(promoteCmd)
+
+	// disposition — the researcher's answer to ONE reading item, written as a
+	// separate record keyed to that item (spc-58). It is a distinct verb rather
+	// than a flag on anything else because the reading and the answer are two
+	// acts: collapsing them into one write would leave nothing able to show that
+	// a finding existed before it was answered.
+	var dispState, dispGrounds, dispExit, dispSupersedes, dispRecurs string
+	var dispHoldFrame, dispHoldMoscow string
+	dispositionCmd := &cobra.Command{
+		Use:   "disposition <rdi-N> --state <accepted|rejected|declined|held> [--grounds <text>] [--exit-condition <text>] [--supersedes <dsp-N>] [--recurs <rdi-N,...>]",
+		Short: "Answer one reading item (a separate record, keyed to the item)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cwd, err := os.Getwd()
+			if err != nil {
+				return err
+			}
+			recurs, err := parseRecurs(dispRecurs)
+			if err != nil {
+				return err
+			}
+			res, err := capture.Disposition(capture.DispositionRequest{
+				RepoRoot: cwd, Item: args[0], State: dispState,
+				Grounds: dispGrounds, ExitCondition: dispExit,
+				Supersedes: dispSupersedes, Recurs: recurs,
+				HoldFrameLocation: dispHoldFrame, HoldMoscow: dispHoldMoscow,
+			})
+			if err != nil {
+				return err
+			}
+			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+				fmt.Fprintf(w, "%s  %s %s (%s) — %s\n",
+					res.ID, res.Item, res.State, res.Position, termsafe.Sanitize(res.Path))
+				if res.Redacted > 0 {
+					fmt.Fprintf(w, "  redacted %d span(s) before writing (home paths and identifiers are never committed)\n", res.Redacted)
+				}
+				if res.Degraded != "" {
+					fmt.Fprintf(w, "  WARNING: %s\n", termsafe.Sanitize(res.Degraded))
+				}
+			})
+		},
+	}
+	// --state carries no default. Which answer a researcher gave is the whole
+	// content of the record, and a defaulted judgement is a judgement nobody
+	// made; the core refuses an empty state rather than inventing one. It stays
+	// unmarked as cobra-required to keep the tree's no-required-flags invariant.
+	dispositionCmd.Flags().StringVar(&dispState, "state", "", "the answer: accepted | rejected | declined | held (availability varies by the item's position)")
+	dispositionCmd.Flags().StringVar(&dispGrounds, "grounds", "", "disposition_grounds: why this answer (free text; required on every state except held)")
+	dispositionCmd.Flags().StringVar(&dispExit, "exit-condition", "", "what would end a held disposition (required on held; a hold exits only through a superseding disposition that cites it)")
+	dispositionCmd.Flags().StringVar(&dispSupersedes, "supersedes", "", "the standing dsp-N this answer replaces; required once an item already carries one")
+	dispositionCmd.Flags().StringVar(&dispRecurs, "recurs", "", "comma-separated prior rdi-ids this item recurs from — the recorded form of a warm recognition, never a mechanical join")
+	// The two-axis hold field is RESERVED and dormant. The flags exist so the
+	// reservation is a behaviour a caller meets rather than a comment nobody
+	// reads: a populated value is refused, and the refusal states the grammar.
+	dispositionCmd.Flags().StringVar(&dispHoldFrame, "hold-frame-location", "", "RESERVED (dormant): the frame element a hold sits at; a populated value is refused until activation is ruled")
+	dispositionCmd.Flags().StringVar(&dispHoldMoscow, "hold-moscow", "", "RESERVED (dormant): must | should | could | wont; a populated value is refused until activation is ruled")
+	captureCmd.AddCommand(dispositionCmd)
 
 	// wontfix — open -> wontfix with a reason. It needs no required --grounds:
 	// the reason is already mandatory, so a wontfix could never be recorded
 	// without grounds — what it lacked was the TYPE, which it stamps as
 	// `declined: <reason>`. The flag overrides the TEXT for the case where the
 	// conjecture is worth stating separately from the user-facing reason.
-	var wontfixGrounds string
+	var wontfixGrounds, wontfixProductionMode string
 	wontfixCmd := &cobra.Command{
 		Use:   "wontfix <iss-N> <reason> [--grounds \"declined: <text>\"]",
 		Short: "Record an explicit non-action decision (open/ -> wontfix/)",
@@ -2641,6 +2844,7 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 			}
 			res, err := capture.Wontfix(capture.WontfixRequest{
 				RepoRoot: cwd, ID: args[0], Reason: args[1], Grounds: wontfixGrounds,
+				ProductionMode: wontfixProductionMode,
 			})
 			if err != nil {
 				return groundsUsageError("wontfix", err)
@@ -2656,6 +2860,8 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 	// `--grounds declined` and lost the word (iss-2608301212428844).
 	wontfixCmd.Flags().StringVar(&wontfixGrounds, "grounds", "",
 		"override the recorded grounds text (the token stays declined — a wontfix IS that non-action)")
+	wontfixCmd.Flags().StringVar(&wontfixProductionMode, "production-mode", "",
+		"restamp how this record's text was produced: "+provenance.ModeList()+" (default: leave the record's existing stamp alone; refused on a record that predates disclosure)")
 	captureCmd.AddCommand(wontfixCmd)
 
 	return captureCmd
@@ -2798,6 +3004,10 @@ func listState(open, resolved, wontfix, all bool) (capture.State, error) {
 // ^iss-[0-9]+$ schema constraint).
 var issIDRe = regexp.MustCompile(`^iss-[0-9]+$`)
 
+// readingItemIDRe validates a --recurs token at the CLI boundary (mirrors the
+// core ^rdi-[0-9]+$ schema constraint).
+var readingItemIDRe = regexp.MustCompile(`^rdi-[0-9]+$`)
+
 // recordIDRe matches any abcd record id (issue, intent, or spec). It is used
 // only by suspectedTypoedSubcommand's shape check — distinct from issIDRe, which
 // validates a real iss-only --blocked-by token — so the typo guard recognises a
@@ -2932,6 +3142,72 @@ func parseBlockedBy(raw string) ([]string, error) {
 		}
 		if !issIDRe.MatchString(tok) {
 			return nil, fmt.Errorf("capture: --blocked-by token %q must match iss-N", tok)
+		}
+		ids = append(ids, tok)
+	}
+	return ids, nil
+}
+
+// captureBoard is the bare status board: the ledger counts and the
+// outstanding-readings report, flattened into one envelope so the --json and
+// text renders answer the same question. The report is embedded rather than
+// re-derived — ReadReadingOutstanding is the one implementation, shared with the
+// reading_outstanding lint rule.
+type captureBoard struct {
+	capture.StatusResult
+	Outstanding lint.OutstandingReadings `json:"reading_outstanding"`
+}
+
+// captureBoardOf composes the board, normalising the report's collections to
+// empty slices: a collection is never null in this surface's envelope.
+func captureBoardOf(repoRoot string, st capture.StatusResult) (captureBoard, error) {
+	// repoRoot is the SAME value handed to capture.Status, so the two halves of
+	// one board can never resolve two different ledgers.
+	report, err := lint.ReadReadingOutstanding(repoRoot, capture.LedgerRelPath)
+	if err != nil {
+		return captureBoard{}, err
+	}
+	if report.Undispositioned == nil {
+		report.Undispositioned = []lint.OutstandingItem{}
+	}
+	if report.Unadmitted == nil {
+		report.Unadmitted = []lint.OutstandingItem{}
+	}
+	if report.OpenHolds == nil {
+		report.OpenHolds = []lint.OpenHold{}
+	}
+	if report.Unsafe == nil {
+		report.Unsafe = []lint.UnsafePath{}
+	}
+	if report.Cyclic == nil {
+		report.Cyclic = []lint.OutstandingItem{}
+	}
+	if report.Contested == nil {
+		report.Contested = []lint.ContestedItem{}
+	}
+	if report.Unreadable == nil {
+		report.Unreadable = []lint.UnreadableAnswer{}
+	}
+	return captureBoard{StatusResult: st, Outstanding: report}, nil
+}
+
+// parseRecurs splits the comma-separated --recurs list into prior reading-item
+// ids. Shape is checked here so a typo is a usage error rather than a refusal
+// from deep inside the ledger writer; membership (does the item exist) is
+// deliberately NOT checked, because a recurrence may cite an item from a run
+// this ledger no longer carries.
+func parseRecurs(raw string) ([]string, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	var ids []string
+	for _, tok := range strings.Split(raw, ",") {
+		tok = strings.TrimSpace(tok)
+		if tok == "" {
+			continue
+		}
+		if !readingItemIDRe.MatchString(tok) {
+			return nil, fmt.Errorf("capture: --recurs token %q must match rdi-N", tok)
 		}
 		ids = append(ids, tok)
 	}

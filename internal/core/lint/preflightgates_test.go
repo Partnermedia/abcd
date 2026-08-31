@@ -4,8 +4,11 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/intentdriven/abcd/internal/core/issueschema"
 )
 
 // preflight's prerequisite list is a DERIVED value, and every surface that
@@ -133,4 +136,32 @@ func readRepoFile(t *testing.T, root, rel string) string {
 		t.Fatalf("read %s: %v", rel, err)
 	}
 	return string(b)
+}
+
+// The issue-resolution gate scopes its git pathspecs to the ledger's STATUS
+// directories, and the shell cannot import Go — so the script holds the second
+// and last spelling of the list issueschema.StatusDirs owns. This reads the
+// array the script declares and holds it to that one value.
+//
+// It matters because the ledger tree gained sibling record families (readings/,
+// dispositions/) whose files are not issue records: RS002 and RS003 scan every
+// `.md` under the pathspec and would read a `commit:`-shaped line out of one of
+// them. Scoping is what keeps them out, and a scope that drifts from the
+// canonical list either re-admits them or drops a real status folder — the
+// second of which fails open, silently.
+func TestIssueResolutionGateScopesToStatusDirs(t *testing.T) {
+	root := filepath.Join("..", "..", "..")
+	script := readRepoFile(t, root, "scripts/check-issue-resolution.sh")
+
+	m := regexp.MustCompile(`(?m)^STATUS_DIRS=\(([^)]*)\)`).FindStringSubmatch(script)
+	if m == nil {
+		t.Fatalf("scripts/check-issue-resolution.sh declares no STATUS_DIRS=(...) array;\n" +
+			"the gate must scope to the ledger's status directories, and the array is where it says which")
+	}
+	got := strings.Fields(m[1])
+	want := issueschema.StatusDirs
+	if !slices.Equal(got, want) {
+		t.Fatalf("scripts/check-issue-resolution.sh declares STATUS_DIRS=%v, want %v (issueschema.StatusDirs)",
+			got, want)
+	}
 }

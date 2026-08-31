@@ -30,6 +30,43 @@ editing a field. Do not add `README.md` files inside `open/`, `resolved/`, or
 `wontfix/`: only genuine `iss-N` files belong there (stray markdown is ignored
 by the scanner, but keeping the folders clean keeps the contract honest).
 
+## The four sibling families
+
+Beside the three status directories the ledger root holds four families that are
+**not** issues and whose status is not folder membership:
+
+- `readings/<run-id>/rdi-<N>.md` — one reading record per item a cold-reading
+  run returned, under the run that returned it (itd-180, spc-58).
+- `dispositions/<item-id>/dsp-<N>.md` — the researcher's answers to one item,
+  in a directory keyed by that item.
+- `admissions/<run-id>/adm-<N>.md` — one proposal admitted into a widening
+  reading's candidate set, with the grounds it was admitted on, under the run
+  whose set it joins (itd-189, spc-67).
+- `surprises/srp-<N>.md` — one thing the researcher did not expect, keyed by the
+  `occasioned_by` it carries rather than by a directory, which is why the store
+  is flat. A surprise is never a field on a disposition and never shares a key
+  with one.
+
+A reading item's status is the presence of its keyed disposition directory —
+one probe — and the standing answer is the disposition no sibling supersedes.
+Superseded records stay in place: a hold that vanished when it was answered
+would take its own exit condition with it. A widening proposal's answer set is
+wider: it is answered by an admission carrying its grounds **or** by a
+disposition in the `declined` state.
+
+None of the four is in `issueschema.StatusDirs`, so every gate scoped to the
+ledger's status directories ignores them all — the issue-resolution gate
+(`scripts/check-issue-resolution.sh`) among them. `record_schema` declares each
+as a store of its own; the three run- and item-keyed families are bucketed by
+grammar because their buckets are minted rather than enumerated, and the
+surprise store is flat. The admission and surprise stores also declare their
+frontmatter schemas, so a hand-written record missing its `grounds` or carrying
+a key outside the allow-list is a blocker finding — no verb writes either
+family yet, and wiring the shapes to the gate that reads committed records is
+what keeps them from being schemas no code reads. The report that says which
+items nobody has answered is `reading_outstanding`, which is pinned to `info`
+and gates nothing.
+
 ## Schema fields
 
 Frontmatter is validated strictly (unknown keys are rejected). The reader

@@ -18,6 +18,22 @@ import (
 	"time"
 )
 
+// StatusDirs is the issue ledger's status-directory list, in the order a
+// surface renders them. The directory a record sits in IS its status — there is
+// no status field — so this list is simultaneously the set of folders the writer
+// provisions, the set the readers scan, and the set the deterministic gates scope
+// their pathspecs to. Those three had four spellings between them (lint's own
+// list, two literals in capture's allocator, and the shell gate's pathspec), and
+// the day a SIBLING family joined the ledger tree was the day the fourth spelling
+// became a silent divergence: a record can only land somewhere every side agrees
+// to look.
+//
+// It lives here for the same reason the property allow-list does — the one leaf
+// both core/capture and core/lint already read the ledger's schema from. The
+// shell gate cannot import Go and therefore holds the second and last spelling,
+// pinned to this value by a test.
+var StatusDirs = []string{"open", "resolved", "wontfix"}
+
 // Required is every property the issue schema marks required, in the order a
 // record writes them. A record missing one is not a lax record: the ledger reader
 // refuses it and skips it, so it goes silently invisible to every capture surface
@@ -60,6 +76,17 @@ var Known = map[string]bool{
 	// one is refused, which is exactly how the first draft of this feature shipped
 	// a flag that could never execute.
 	"shipped_in": true,
+	// origin and production_mode are the disclosure pair (itd-178): where an
+	// item came from, and how its text was produced. Both are optional here —
+	// population is forward-only, and an existing record carries neither — but
+	// both must be KNOWN properties, or the reader drops every stamped record as
+	// malformed and it goes invisible to every capture surface. The VALUES are
+	// not judged here: the record_provenance lint rule is the gate on them, and a
+	// mistyped disclosure key must not hide the finding the record carries. The
+	// vocabulary itself lives in core/provenance, which reads this package for
+	// the reading families' spelling — so the keys are literals here, pinned to
+	// provenance's own constants by a test there.
+	"origin": true, "production_mode": true,
 	// impact is the product judgement the derived version and the generated
 	// changelog are computed from (spc-10). It is optional here — an open issue
 	// has not been judged yet, and the record-lint blocker issue_impact_valid is

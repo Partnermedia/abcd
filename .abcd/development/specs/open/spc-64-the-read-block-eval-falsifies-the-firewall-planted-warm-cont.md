@@ -10,8 +10,8 @@ intent: itd-186
 spc-64 delivers [itd-186](../../intents/planned/itd-186-the-read-block-eval-falsifies-the-firewall-planted-warm-cont.md):
 a repository eval that plants sentinel warm content across every warm location
 class in a fixture repository state, runs the cold-reading input assembler
-([itd-183](../../intents/planned/itd-183-the-cold-reading-sees-exactly-what-the-assembler-passes-posi.md),
-spec [spc-61](spc-61-the-cold-reading-sees-exactly-what-the-assembler-passes-posi.md))
+([itd-183](../../intents/shipped/itd-183-the-cold-reading-sees-exactly-what-the-assembler-passes-posi.md),
+spec [spc-61](../closed/spc-61-the-cold-reading-sees-exactly-what-the-assembler-passes-posi.md))
 over it, and asserts that no sentinel and no excluded field reaches the
 assembled input. It is the only component in the workstream capable of
 falsifying the read-block rather than restating it, so its oracle is the planted
@@ -145,6 +145,22 @@ the diff classifier stands the `smoke` job down on a pull request confined to
 `docs/`, `.abcd/development/`, `.abcd/work/`, and the root prose files, so a
 record-only pull request does not exercise this eval. The merge-queue entry runs
 the full set on the would-be merge result, so the property still gates the merge.
+
+**Ruled by the maintainer, 2026-08-30 — the evals get their own always-run CI
+job.** The `smoke` job stands down on a pull request confined to `docs/`,
+`.abcd/development/`, `.abcd/work/` and the root prose files, and those are
+precisely the paths these evals read: a record-only change is the diff most able
+to introduce warm content into material the assembler includes, so standing the
+eval down there is anti-correlated with the risk. A stood-down job still reports
+its check context green, which is a green for work that did not happen.
+
+The remedy follows the reasoning `ci.yml` already documents for the ubuntu unit
+lane, which never stands down because its tests read the live tree under the
+allowlist. So: a small CI job carrying no `inert` condition, running these two
+evals alone behind their own make target, while the rest of the smoke harness
+keeps standing down. The workflow edit lands with this spec's build, reviewed
+alongside the evals it serves; the merge-queue entry continues to run everything
+regardless.
 
 ## Acceptance criteria mapping
 
