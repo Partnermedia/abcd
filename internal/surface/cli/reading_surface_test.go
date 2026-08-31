@@ -878,3 +878,32 @@ func mustMarshalIngestFields(t *testing.T) []byte {
 	}
 	return raw
 }
+
+// TestTheTextRenderSaysWhenTheRegimeDidNotResolve: a run refused because its
+// definition does not resolve has no regime, and the header interpolated the
+// empty string into "under the  regime" — two spaces and a sentence asserting a
+// regime that is not there. The refusal record leaves the field empty on
+// purpose; the render has to say so rather than render the emptiness.
+func TestTheTextRenderSaysWhenTheRegimeDidNotResolve(t *testing.T) {
+	var buf bytes.Buffer
+	renderIngestResult(&buf, reading.IngestResult{
+		RunID: "rdg-2608310000000071", Position: "detection",
+		RefusalPath: ".abcd/development/readings/rdg-2608310000000071/refusal.json",
+	})
+	out := buf.String()
+	if strings.Contains(out, "the  regime") {
+		t.Errorf("the render interpolates an empty regime:\n%s", out)
+	}
+	if !strings.Contains(out, "did not resolve") {
+		t.Errorf("the render does not say the regime is unresolved:\n%s", out)
+	}
+
+	// And a resolved regime is still named.
+	buf.Reset()
+	renderIngestResult(&buf, reading.IngestResult{
+		RunID: "rdg-2608310000000072", Position: "detection", Regime: "registrative",
+	})
+	if !strings.Contains(buf.String(), "under the registrative regime") {
+		t.Errorf("the render dropped a resolved regime:\n%s", buf.String())
+	}
+}

@@ -400,11 +400,20 @@ func trimCorePrefix(msg string) string {
 // which the record writer redacts on the way in, and a refusal quoting a
 // reading's prose back to a terminal would leave that redaction behind.
 func renderIngestResult(w io.Writer, res reading.IngestResult) {
-	// A refusal before the run's identity is proven has no run to head the
-	// render with; what follows is then the disclosure alone.
-	if res.RunID == "" {
+	// Two headings this render cannot write. A refusal before the run's
+	// identity is proven has no run to head the render with; what follows is
+	// then the disclosure alone. And a run whose DEFINITION did not resolve is
+	// proven but carries no regime — the record leaves that field empty on
+	// purpose, because the regime is the definition's — so the render says so
+	// rather than interpolating the emptiness, which read as "under the  regime":
+	// a doubled space asserting a regime that is not there.
+	switch {
+	case res.RunID == "":
 		fmt.Fprintln(w, "no run: the output was refused before the run it names was proven")
-	} else {
+	case res.Regime == "":
+		fmt.Fprintf(w, "%s: %d record(s) at the %s position; the regime did not resolve\n",
+			res.RunID, len(res.Records), res.Position)
+	default:
 		fmt.Fprintf(w, "%s: %d record(s) at the %s position under the %s regime\n",
 			res.RunID, len(res.Records), res.Position, res.Regime)
 	}
