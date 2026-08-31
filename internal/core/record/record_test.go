@@ -398,3 +398,34 @@ func TestDescribeADRRefusesHostileLeaves(t *testing.T) {
 		t.Fatalf("an oversized adr must not resolve")
 	}
 }
+
+// The evidence record_schema's duplicate-key message rests on: what the ADR
+// dispatcher does with a record carrying one top-level key twice.
+//
+// It renders it. readRecordHead reads with frontmatter.Fields, the lenient
+// scanner, which keeps the first value and reports no error — so describeADR
+// confirms the id and returns the record with the FIRST status. The dispatcher
+// does validate the id before it renders, which is why readerFailsClosed is true
+// of this store; it does not validate the frontmatter's shape, which is why
+// readerRefusesDuplicateKey is not, and why the gate's duplicate-key finding must
+// not tell an ADR's author their file is skipped by every ADR surface
+// (iss-2608301656200729).
+//
+// The pin cuts both ways. If a strict-parsing ADR reader lands, this test goes
+// red and points at the message that has to change with it.
+func TestADRReaderRendersARecordWithADuplicateKey(t *testing.T) {
+	repo := t.TempDir()
+	write(t, repo, ".abcd/development/decisions/adrs/0009-a-decision.md",
+		"---\nid: adr-9\nstatus: accepted\nstatus: draft\n---\n\n# A decision\n")
+
+	d, err := Describe(repo, "adr-9")
+	if err != nil {
+		t.Fatalf("the ADR dispatcher renders a duplicated key rather than refusing it: %v", err)
+	}
+	if d.ID != "adr-9" || d.Path == "" {
+		t.Fatalf("the record is rendered, not skipped: %+v", d)
+	}
+	if d.Status != "accepted" {
+		t.Errorf("the lenient scanner keeps the FIRST value, so status = %q, want %q", d.Status, "accepted")
+	}
+}

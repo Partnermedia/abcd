@@ -2440,6 +2440,13 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 						fmt.Fprintf(w, "  outstanding %s (run %s) — no disposition\n",
 							termsafe.Sanitize(o.Item), termsafe.Sanitize(o.Run))
 					}
+					// A widening proposal is answered by an admission carrying its
+					// grounds or by a decline, so it gets its own line: the
+					// disposition-only line above would name the wrong remedy.
+					for _, o := range board.Outstanding.Unadmitted {
+						fmt.Fprintf(w, "  unadmitted %s (run %s) — a widening proposal with neither an admission nor a decline\n",
+							termsafe.Sanitize(o.Item), termsafe.Sanitize(o.Run))
+					}
 					// More than one standing answer is named in full, never resolved
 					// by picking one: which is in force is a judgement the ledger
 					// does not contain.
@@ -3004,6 +3011,9 @@ func captureBoardOf(repoRoot string, st capture.StatusResult) (captureBoard, err
 	}
 	if report.Undispositioned == nil {
 		report.Undispositioned = []lint.OutstandingItem{}
+	}
+	if report.Unadmitted == nil {
+		report.Unadmitted = []lint.OutstandingItem{}
 	}
 	if report.OpenHolds == nil {
 		report.OpenHolds = []lint.OpenHold{}

@@ -375,6 +375,33 @@ git -C "$d" commit -qm "chore: answer a reading item"
 expect pass "$d" "a disposition is outside the gate's scope" -- ledger HEAD
 expect pass "$d" "a disposition is outside the commits scan too" -- commits main HEAD
 
+d="$(newrepo admission-ignored)"
+mkdir -p "$d/$ISS_DIR/admissions/rdg-1" "$d/$ISS_DIR/surprises"
+cat >"$d/$ISS_DIR/admissions/rdg-1/adm-4.md" <<'EOF'
+---
+schema_version: 1
+id: "adm-4"
+run: "rdg-1"
+proposal: "rdi-2"
+grounds: "the configuration it admits is one the frame does not hold"
+cited_by:
+  commit: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+---
+EOF
+cat >"$d/$ISS_DIR/surprises/srp-5.md" <<'EOF'
+---
+schema_version: 1
+id: "srp-5"
+occasioned_by: "rdi-2"
+cited_by:
+  commit: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+---
+EOF
+git -C "$d" add -A
+git -C "$d" commit -qm "chore: admit a proposal and record a surprise"
+expect pass "$d" "the step-2 records are outside the gate's scope" -- ledger HEAD
+expect pass "$d" "the step-2 records are outside the commits scan too" -- commits main HEAD
+
 if [ "$failures" -gt 0 ]; then
 	printf 'cases: FAILED — %d case(s) did not behave\n' "$failures" >&2
 	exit 1

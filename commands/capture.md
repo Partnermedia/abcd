@@ -206,6 +206,30 @@ grammars are stated and a populated value is refused until activation is ruled.
 Nothing means "already covered" — an item nobody has answered is reported as
 outstanding by `abcd lint`, never named as a state.
 
+**Admissions and surprises are written by hand.** A widening proposal admitted
+into the candidate set carries an **admission record** (`adm-N`, under
+`.abcd/work/issues/admissions/<run-id>/`) whose `grounds` say what it was
+admitted on; a **surprise entry** (`srp-N`, under
+`.abcd/work/issues/surprises/`) records what was unexpected, keyed by
+`occasioned_by` to whatever occasioned it and never folded into a disposition. A
+declined proposal is not a third record: it is the disposition above in its
+`declined` state. Neither shape has a sub-verb — this surface writes no `adm-N`
+and no `srp-N`, and the command-side refusal is the next iteration's. What holds
+today is the committed-tree gate: `record_schema` refuses an admission whose
+`grounds` carries no value on the key's own line in one of the spellings it
+tests — empty, whitespace, quoted-empty, quoted-whitespace, an empty flow
+collection (`[]`, `{}`), a YAML null (`~`, `null`, `!!null`) or a block scalar
+holding nothing — an admission with no `proposal`, a surprise whose
+`occasioned_by` names a record the corpus does not hold, and either record filed
+in the other's store.
+That list is the set the gate reads, not every way YAML can carry nothing. A
+trailing comment on the value defeats all of it (iss-2608301744268001), and
+spellings built from a tag, an anchor or an alias — `!!null null`,
+`!<tag:yaml.org,2002:null>`, `!!str ''`, `&anchor`, `!!seq []` — carry nothing
+and pass green (iss-2608301808198621).
+`abcd lint` reports a widening proposal carrying neither an admission nor a
+decline, at `info`.
+
 ## Promote an issue into an intent
 
 When a one-line issue turns out to be a capability, graduate it without

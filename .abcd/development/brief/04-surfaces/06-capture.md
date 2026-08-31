@@ -141,6 +141,20 @@ A later phase, not yet built — the migration rides the `abcd dev-sync work` su
   spc-58's own — it consumes the output contract and adds no second validation
   path — and it is the reason `IngestReading` is an exported primitive rather
   than a verb of this surface.
+- **Step-2 admission records (itd-189, spc-67):** the admission record (`adm-N`
+  under `.abcd/work/issues/admissions/<run-id>/`) and the surprise entry
+  (`srp-N` under `.abcd/work/issues/surprises/`) ship as SCHEMAS, declared in
+  `internal/core/issueschema` beside the reading families and wired to
+  `record_schema` rather than to a verb. A declined proposal is no third record
+  type: it is the disposition in its `declined` state. This surface has no
+  sub-verb that writes either shape — the records are hand-written and the
+  command-side refusal is iteration 2 — so what is armed today is the
+  committed-tree gate: a blank `grounds`, an absent `proposal`, an
+  `occasioned_by` naming no record, and either family filed in the other's
+  store are each a blocker, and `reading_outstanding` reports a widening
+  proposal carrying neither an admission nor a decline at `info`. The
+  sequencing is the same one the reading families carry above: no reading has
+  run, so there is nothing to write yet.
 - **`promote <iss-N>` bridge:** a native engine sub-verb (spc-24, itd-119) —
   `internal/core/capture/promote.go` mints the draft under `intents/drafts/`
   and stamps the issue's `promoted_to` field itself, one invocation writing
