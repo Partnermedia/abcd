@@ -13,8 +13,9 @@ import (
 // iss-2608270500207987). Both sides call these predicates rather than restating
 // the pattern, so the gate and the runtime cannot drift apart.
 var (
-	intentIDRe = regexp.MustCompile(`^itd-[0-9]+$`)
-	specIDRe   = regexp.MustCompile(`^spc-[0-9]+$`)
+	intentIDRe     = regexp.MustCompile(`^itd-[0-9]+$`)
+	specIDRe       = regexp.MustCompile(`^spc-[0-9]+$`)
+	readingRunIDRe = regexp.MustCompile(`^rdg-[0-9]+$`)
 )
 
 // ValidIntentID reports whether id is a well-formed intent id (itd-N).
@@ -22,6 +23,16 @@ func ValidIntentID(id string) bool { return intentIDRe.MatchString(id) }
 
 // ValidSpecID reports whether id is a well-formed spec id (spc-N).
 func ValidSpecID(id string) bool { return specIDRe.MatchString(id) }
+
+// ValidReadingRunID reports whether id is a well-formed reading run id (rdg-N).
+//
+// It is the THIRD path-building record id, and it joins the two above for their
+// reason rather than getting a fourth copy of the pattern: the reading ledger
+// writer (core/capture) and the cold-reading ingest verb (core/reading) both
+// build a directory name out of a run id that arrives from outside — an ingest's
+// run id comes off an untrusted payload — so a traversal id must be refused by
+// exactly one rule, before either side touches a path.
+func ValidReadingRunID(id string) bool { return readingRunIDRe.MatchString(id) }
 
 // recordFilenameRe splits a record filename into its family prefix (group 1,
 // with its hyphen; empty for the ADR store's bare numeric form), its id number
