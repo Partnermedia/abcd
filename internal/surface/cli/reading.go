@@ -164,8 +164,10 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 		Long: "Validate the JSON a cold reading returned and write its reading records.\n\n" +
 			"The verb checks what the reading was LICENSED to produce, not only what it saw: the\n" +
 			"supply regime is read from the position's definition and compared with the output's own\n" +
-			"claim, each regime's reserved names are refused with the licence stated, and a registry\n" +
-			"of named signatures catches prose that ranks, settles or proposes without the field.\n\n" +
+			"claim, the reserved names a regime declares are refused with the licence stated, and a\n" +
+			"registry of named signatures watches for prose that ranks, settles or proposes without\n" +
+			"the field. Those signatures are observed, not enforcing: a hit raises a review flag on\n" +
+			"the run record and the item lands.\n\n" +
 			"Item identifiers are minted here. The payload carries none, so a supplied one is refused\n" +
 			"as an unknown field. Nothing durable is written or deleted until the whole payload\n" +
 			"validates — a refusal after the run is proven leaves its refusal record and nothing else —\n" +

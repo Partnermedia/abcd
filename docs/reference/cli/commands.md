@@ -830,8 +830,10 @@ Validate the JSON a cold reading returned and write its reading records.
 
 The verb checks what the reading was LICENSED to produce, not only what it saw: the
 supply regime is read from the position's definition and compared with the output's own
-claim, each regime's reserved names are refused with the licence stated, and a registry
-of named signatures catches prose that ranks, settles or proposes without the field.
+claim, the reserved names a regime declares are refused with the licence stated, and a
+registry of named signatures watches for prose that ranks, settles or proposes without
+the field. Those signatures are observed, not enforcing: a hit raises a review flag on
+the run record and the item lands.
 
 Item identifiers are minted here. The payload carries none, so a supplied one is refused
 as an unknown field. Nothing durable is written or deleted until the whole payload

@@ -168,7 +168,8 @@ at one.
 
 An **item-level** violation refuses that item and lands the rest: an empty or
 absent `pattern` at any position, a field the position's body does not declare,
-a reserved name, or a body matching a registered signature. A **list-level**
+or a reserved name. A registered signature does not refuse — it flags. A
+**list-level**
 violation refuses the whole run: a wrong `_type`, a run id that resolves to no
 parked manifest, a manifest hash that disagrees, an instrument claiming a
 definition hash or an assembler version the artefacts do not carry, a regime
@@ -201,14 +202,17 @@ stated:
 - `registrative`: `fix`, `remedy`, `resolution`.
 - `explicative`: `disposition`, `status`.
 - `generative` has no reserved names. Its licence is the widest, and the
-  constraint on it falls at admission, so a signature hit there raises a review
-  flag on the run record instead of refusing the item.
+  constraint on it falls at admission, so it runs the WHOLE registry as review
+  flags rather than only its own regime's.
 
-Prose that ranks, settles or proposes without the field is caught too, by a
+Prose that ranks, settles or proposes without the field is watched too, by a
 registry of named signatures (`RG-EVAL-ORDERING`, `RG-EVAL-RECOMMENDATION`,
-`RG-REG-FIXPROPOSAL`, `RG-EXPL-DISPOSITION`). That half is bounded by the
-registry: a fix proposal or a disposition phrased outside it is not caught, and
-the structural halves above carry no such bound.
+`RG-REG-FIXPROPOSAL`, `RG-EXPL-DISPOSITION`). All four are **observed, not
+enforcing**: a hit raises a review flag on the run record naming the item and
+the signature id, and the item lands. They cannot tell a reading that proposes
+from one reporting that the document proposes, so an enforcing registry refused
+a reading for quoting its own material. Report `review_flags` and read them; the
+structural halves above are the ones that refuse.
 
 ### Where the records land
 

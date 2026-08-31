@@ -155,11 +155,13 @@ Two enforcement layers sit behind that:
   is refused with the field named and the licence stated. Arrangement order is
   never refused: items arrive in document order by mandate.
 - **Semantic signatures.** Prose that ranks, settles or proposes without the
-  field is checked too, through a registry of named detectors over body text
+  field is checked too, through a registry of named detectors over item text
   (`RG-EVAL-ORDERING`, `RG-EVAL-RECOMMENDATION`, `RG-REG-FIXPROPOSAL`,
-  `RG-EXPL-DISPOSITION`). `generative` carries no regime-specific refusal; the
-  widening prohibitions raise review flags on the run record instead, because
-  the generative licence is the widest and the constraint falls at admission.
+  `RG-EXPL-DISPOSITION`). All four are OBSERVED: a hit raises a review flag
+  naming the item and the signature id, the flag is carried on the run record,
+  and the item lands. `generative` carries no regime-specific refusal either,
+  and runs the whole registry as flags, because its licence is the widest and
+  the constraint falls at admission.
 
 **Matching runs over a folded copy, and so does the provenance rule.** Go's
 regexp is RE2, whose whitespace and word-boundary classes are ASCII-only, and
@@ -181,7 +183,10 @@ closure:** a script-CONFUSABLE substitution. A Cyrillic that is not the Latin
 one, and no normalisation equates them, so a signature's phrasing written in a
 confusable script is not caught. Closing it needs a confusables table, a new
 dependency and a maintainer's decision. itd-185's disclosed residue names this
-class alongside the phrased-outside-the-registry one.
+class alongside the phrased-outside-the-registry one, and names the OTHER
+direction with it: the registry cannot tell a reading that proposes from one
+reporting somebody else proposing, so it over-catches as well as under-catches,
+and over-catching is the larger risk on the evidence there is.
 
 The line between defect and residue is one test: the registry's phrasing with a
 byte substituted is an evasion of the gate, and phrasing outside the registry is
@@ -190,13 +195,21 @@ and are closed (iss-2608311306535485, iss-2608311351290623); the confusable
 class falls on the defect side too and is open, which is why it is disclosed
 rather than filed under the calibration residue.
 
-**Every signature ships enforced.** Each registry entry carries a literal mode
-(`enforce` or `flag`) in Go, with no configuration seam: degrading a signature
-on observed noise is a code change plus a decision-log entry, which is what
-makes it a recorded weakening of the claimed property from enforced to
-observed rather than a quiet runtime toggle. Whether the signatures lint
-cleanly in practice is the recorded open question, and the degradation path
-exists precisely because of it.
+**Every signature ships in a recorded mode, and all four ship observed.** Each
+registry entry carries a literal mode (`enforce` or `flag`) in Go, with no
+configuration seam, and a test pins each entry's mode by name so a move in
+either direction fails: changing one is a code change plus a decision-log entry,
+which is what makes the property's standing between enforced and observed a
+recorded act rather than a quiet runtime toggle. The four semantic signatures
+took the degradation path on 2026-08-31. The evidence was synthetic — fourteen
+of thirty-four constructed realistic reading outputs were caught, every one for
+REPORTING what the read document said rather than for proposing anything — and
+the ruled condition was noise observed in practice, which this is not. It was
+taken anyway because the alternative is enforcement over a calibration that has
+never been taken and cannot be taken while the assembled input is too large to
+hand to a reading (iss-2608311501186646); of the two departures, this is the one
+that cannot refuse a real reading. The enforcing branch stays live and tested,
+and the first real reading is the revisit point.
 
 ### Manifest reference
 
