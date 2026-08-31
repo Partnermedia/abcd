@@ -9,58 +9,90 @@ package reading
 // everything establishes nothing about the rule it names.
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/intentdriven/abcd/internal/core/issueschema"
 )
 
-// TestRegimeComesFromTheDefinitionNotThePayload is ac-12 from the other side: the
-// verb follows the DEFINITION FILE, not the position table. Rewriting the file's
-// regime makes the payload that agreed with the table refuse, and the payload
-// that agrees with the file pass. A verb that answered from the table could not
-// tell the two apart.
+// TestRegimeComesFromTheDefinitionNotThePayload is ac-12 from the verb's side:
+// the regime is READ, from the position's definition file, and a run whose
+// definition the locator cannot resolve has no regime at all.
+//
+// Removing the file is the discriminator. A verb that answered from
+// issueschema's position table would carry straight on — the table still binds
+// detection to registrative whether or not any file exists — so this case
+// separates a verb that reads the definition from one that only says it does.
 func TestRegimeComesFromTheDefinitionNotThePayload(t *testing.T) {
 	f := newIngestFixture(t, "detection")
-	f.mustIngest(f.payload(1))
+	legal := f.payload(1)
+	f.mustIngest(legal)
 
-	// The file now states a regime the position table does not.
-	f.writeDefinition("detection", RegimeEvaluative)
-	def, err := LoadDefinition(f.root, "detection")
-	if err != nil {
-		t.Fatalf("reload the rewritten definition: %v", err)
+	if err := os.Remove(filepath.Join(f.root, filepath.FromSlash(DefinitionPath("detection")))); err != nil {
+		t.Fatal(err)
 	}
-	if def.Regime != RegimeEvaluative {
-		t.Fatalf("the locator read regime %q from a file stating %q", def.Regime, RegimeEvaluative)
-	}
-
 	f.parkRun("rdg-2608310000000002", "detection", AssemblerVersion)
 	doc := f.payload(1)
 	doc["run_id"] = "rdg-2608310000000002"
 	doc["manifest_sha256"] = f.manifestHashOf("rdg-2608310000000002")
-	doc["instrument"].(map[string]any)["definition_sha256"] = def.SHA256
-	doc["regime"] = issueschema.ReadingRegime("detection")
+
+	_, err := f.ingest(doc)
+	if err == nil {
+		t.Fatal("a run whose definition is absent was accepted; the regime then came from somewhere " +
+			"other than the definition")
+	}
+	if !strings.Contains(err.Error(), DefinitionPath("detection")) {
+		t.Errorf("the refusal does not name the definition it could not resolve: %v", err)
+	}
+	f.nothingDurableInTheLedger("rdg-2608310000000002")
+}
+
+// TestADriftedDefinitionRefusesTheRunRatherThanChangingTheLicence is the
+// adversarial half of ac-12, which the criterion does not state: ac-12 is the
+// PAYLOAD lying about its regime, and this is the DEFINITION lying.
+//
+// A file stating a legal regime under the wrong position would hand this verb
+// the wrong licence with no refusal anywhere in the path — the gate whose whole
+// purpose is to catch a reading that exceeded its licence would then be
+// enforcing a different one, silently. The refusal lives in the locator, which
+// is the one thing that claims to resolve a position to its regime
+// (iss-2608311145258479); this case holds the ingest path to it, so the fix
+// cannot be undone in the locator without a reading-side test going red.
+//
+// No refusal record is written, and that is deliberate: a run's durable record
+// states the regime it read under, and a run whose definition does not resolve
+// has none the verb could honestly write down.
+func TestADriftedDefinitionRefusesTheRunRatherThanChangingTheLicence(t *testing.T) {
+	f := newIngestFixture(t, "detection")
+	f.mustIngest(f.payload(1))
+
+	// The detection definition now states the evaluative licence. Under it, the
+	// evaluative reserved names would be enforced against a registrative
+	// reading, and the registrative ones would not be enforced at all.
+	f.writeDefinition("detection", RegimeEvaluative)
+
+	f.parkRun("rdg-2608310000000007", "detection", AssemblerVersion)
+	doc := f.payload(1)
+	doc["run_id"] = "rdg-2608310000000007"
+	doc["manifest_sha256"] = f.manifestHashOf("rdg-2608310000000007")
 
 	res, err := f.ingest(doc)
 	if err == nil {
-		t.Fatal("the payload agreeing with the POSITION TABLE was accepted against a definition " +
-			"stating a different regime; the definition is the source of truth")
+		t.Fatal("a definition stating another position's regime was resolved rather than refused, so " +
+			"the run read under a licence nothing checked")
 	}
-	if !strings.Contains(err.Error(), RegimeEvaluative) {
-		t.Errorf("the refusal does not name the regime the definition states: %v", err)
+	for _, want := range []string{RegimeEvaluative, RegimeRegistrative, DefinitionPath("detection")} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal does not name %q: %v", want, err)
+		}
 	}
-	// The refusal must be THIS verb's regime gate, not a downstream writer
-	// noticing the same disagreement: a list-level refusal writes a refusal
-	// record and leaves the ledger untouched, and a record writer's complaint
-	// arrives after the stage has already been taken.
-	if res.RefusalPath == "" {
-		t.Error("the run was refused without a refusal record, so the refusal came from somewhere " +
-			"other than the regime gate")
+	if res.RefusalPath != "" {
+		t.Errorf("a run with no resolvable regime wrote a refusal record at %s, which would have to "+
+			"state a regime the verb could not resolve", res.RefusalPath)
 	}
-	if !strings.Contains(err.Error(), DefinitionPath("detection")) {
-		t.Errorf("the refusal does not cite the definition it read the regime from: %v", err)
-	}
-	f.nothingDurableInTheLedger("rdg-2608310000000002")
+	f.nothingDurable("rdg-2608310000000007")
 }
 
 // TestSelfDeclaredRegimeMismatchRefusesRun is ac-12: a self-declared regime that
