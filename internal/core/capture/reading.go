@@ -31,13 +31,17 @@ import (
 	"syscall"
 
 	"github.com/intentdriven/abcd/internal/core/issueschema"
+	"github.com/intentdriven/abcd/internal/core/recordid"
 	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
-// The three families' id grammars. Each is checked BEFORE the value is used to
-// build a path, so a traversal id can never touch the filesystem.
+// The two families' id grammars this file states. Each is checked BEFORE the
+// value is used to build a path, so a traversal id can never touch the
+// filesystem. The run id's grammar is NOT restated here: it is
+// recordid.ValidReadingRunID, because the cold-reading ingest verb builds a
+// directory name out of the same id arriving off an untrusted payload, and one
+// rule refusing a traversal id on both sides is the point of that package.
 var (
-	reRunID         = regexp.MustCompile(`^` + issueschema.ReadingRunFamily + `-[0-9]+$`)
 	reReadingItemID = regexp.MustCompile(`^` + issueschema.ReadingItemFamily + `-[0-9]+$`)
 	reDispositionID = regexp.MustCompile(`^` + issueschema.DispositionFamily + `-[0-9]+$`)
 )
@@ -146,7 +150,7 @@ func IngestReading(req IngestReadingRequest) (IngestReadingResult, error) {
 	if err != nil {
 		return IngestReadingResult{}, err
 	}
-	if !reRunID.MatchString(req.Run) {
+	if !recordid.ValidReadingRunID(req.Run) {
 		return IngestReadingResult{}, fmt.Errorf("%w: run %q does not match ^%s-[0-9]+$",
 			ErrMalformedFrontmatter, req.Run, issueschema.ReadingRunFamily)
 	}
@@ -488,7 +492,7 @@ func validateReadingStrict(fm map[string]any) error {
 	if !reReadingItemID.MatchString(id) {
 		return fmt.Errorf("%w: id %q does not match ^%s-[0-9]+$", ErrMalformedFrontmatter, id, issueschema.ReadingItemFamily)
 	}
-	if run := fm["run"].(string); !reRunID.MatchString(run) {
+	if run := fm["run"].(string); !recordid.ValidReadingRunID(run) {
 		return fmt.Errorf("%w: run %q does not match ^%s-[0-9]+$", ErrMalformedFrontmatter, run, issueschema.ReadingRunFamily)
 	}
 	position := fm["position"].(string)
@@ -692,7 +696,7 @@ func readingItemPaths(issuesRoot, item string) ([]string, error) {
 	}
 	var matches []string
 	for _, run := range runs {
-		if !reRunID.MatchString(run.Name()) {
+		if !recordid.ValidReadingRunID(run.Name()) {
 			continue
 		}
 		// Every run directory is checked, not only the ones a walk would descend
