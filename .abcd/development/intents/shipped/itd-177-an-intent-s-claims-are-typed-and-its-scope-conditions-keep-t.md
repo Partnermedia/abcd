@@ -171,3 +171,7 @@ Gap audit:
     evidence: .abcd/development/intents/shipped/itd-177-an-intent-s-claims-are-typed-and-its-scope-conditions-keep-t.md:51 — "a deletion retires the marker, reported at the next gate pass."
     evidence: .abcd/development/specs/closed/spc-55-an-intent-s-claims-are-typed-and-its-scope-conditions-keep-t.md:106 — "nothing here reads the record's history to notice — the gate judges the record in front of it, and a retired identity is spc-59's to account for"
     evidence: internal/core/intent/ready.go:193 — "func scopeConditionsCheck(it Intent, claims Claims) ReadyCheck"
+
+## Grounds
+
+- pursued: Pursued now because adr-51 shipped the sections as a format and explicitly deferred their enforcement to "its own record", and because spc-59 cannot key a disposition to anything until a condition has an identity that outlives its wording. Enforcement without identity would record dispositions against sentences, which is the failure the gradient exists to prevent.

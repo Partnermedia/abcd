@@ -50,3 +50,6 @@ None stated.
   in the assembler's output — the instrument's own exhaust is tested
   against its own read-block (added 2026-08-28; nothing else tests it).
 
+## Grounds
+
+- pursued: Every other component in the workstream asserts the blindfold; this one is the only component capable of falsifying it, and an eval that read the assembler's own include table could only ever confirm the table rather than test the property. It is pursued now because the assembler exists to hold a firewall whose failure is otherwise silent: warm content that reaches a reading contaminates the reading invisibly, and nothing else in the cycle would notice.

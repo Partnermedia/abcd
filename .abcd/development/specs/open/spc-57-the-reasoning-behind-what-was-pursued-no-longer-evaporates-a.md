@@ -33,11 +33,13 @@ conjecture somebody can later find wrong.
 - **Readiness gate** (`internal/core/intent/ready.go`): A `grounds` check,
   reported last, failing when the record carries no well-formed entry.
 - **Ledger side** (`internal/core/capture`): A `Grounds` member on
-  `PromoteRequest`, `ResolveRequest` and `WontfixRequest`, stamped as a
-  `grounds` frontmatter scalar through the existing `setScalarField`, inside the
+  `PromoteRequest`, `ResolveRequest` and `WontfixRequest`, APPENDED to the
+  record's `## Grounds` section through the shared record form, inside the
   existing ledger lock and atomic transition.
-- **Issue schema** (`internal/core/issueschema/issueschema.go`): `grounds` added
-  to `Known`, without which capture's reader refuses every stamped record.
+- **Issue schema** (`internal/core/issueschema/issueschema.go`): `grounds`
+  TOLERATED in `Known` as a legacy key a record written by an older abcd may
+  carry, its value read by nothing; the record lint's `record_schema` blocks a
+  frontmatter `grounds:` and names the section it belongs in.
 - **Surfaces** (`internal/surface/cli/cli.go`, `commands/intent.md`,
   `commands/capture.md`): `--grounds` on `abcd intent ready`,
   `abcd capture promote`, `abcd capture resolve` and `abcd capture wontfix`.
@@ -60,31 +62,51 @@ question is asked of a possibly-unattended caller.
 
 **Decision — grounds live on the intent record, not on the spec.** The
 conjecture is the intent's, and the gate that reads it takes an `itd-N`. The
-`## Grounds (pursued)` sections currently carried by spc-55, spc-56, spc-57 and
-spc-59 are the pre-tooling stand-in named in their own text; the change that
-lands this spec moves those four entries up to their intents and retires the
-stand-in sections, so the corpus has one home for grounds rather than two.
+pre-tooling stand-in was a `## Grounds (pursued)` section on the spec, named as
+such in its own text; the change that lands this spec moves every such entry up
+to its intent and retires the stand-in sections, so the corpus has one home for
+grounds rather than two. Thirteen specs carry one, open and closed alike — the
+migration covers all of them, not the four the record named when this was
+written, because a stand-in left standing anywhere is a second home.
 
-**Decision — wontfix is stamped `declined` and needs no new required flag.**
+**Decision — wontfix records `declined` and needs no new required flag.**
 `capture.transition` already refuses an empty `wontfix_reason`, so a wontfix can
 never be recorded without grounds; what it lacks is the type. Wontfix therefore
-stamps `grounds: declined: <reason>` from the reason it already takes, and
+appends `- declined: <reason>` from the reason it already takes, and
 `--grounds` overrides the text when the conjecture is worth stating separately
 from the user-facing reason. Promote and resolve, which have no such note,
 refuse without the flag.
 
-**The grammar is one line, parsed once.** `grounds: <token>: <text>` is a plain
-YAML scalar readable by `frontmatter.Fields` in every store; `grounds.Parse`
-splits on the first colon, validates the token against the closed set, and
-returns the text. On the intent side the same value renders as a bullet
-`- pursued: <text>` under `## Grounds`, so the record reads as prose and the
-gate reads it as data with no second parser.
+**The grammar is one line, parsed once, and the record form is one section.**
+`<token>: <text>` is a single line; `grounds.Parse` splits on the first colon,
+validates the token against the closed set, and returns the text. Both record
+families carry it as a bullet `- pursued: <text>` under `## Grounds`, so the
+record reads as prose and the gate reads it as data with no second parser.
+
+**Recording is APPEND-ONLY, on both sides.** A frontmatter scalar is SET, so the
+ledger's first shape let a resolve overwrite the conjecture the promote before it
+recorded — silently, with a success result, on the sequence fourteen resolved
+records already follow (iss-2608301657354776). Refusing the overwrite was never
+open: promote, resolve and wontfix all REQUIRE grounds, so a refusal would make a
+promoted issue impossible to resolve. The earlier conjecture is precisely what a
+later reader checks the outcome against, which is the argument the intent half
+already made for the same data, so the two halves now share ONE record form
+rather than holding two.
 
 **The substance floor is a shape check, and it says so.** "Name the conjecture,
 not only the decision" is a review property; no machine reads a sentence and
 knows whether it names a conjecture. What ships is a floor that refuses the
-degenerate cases: empty or whitespace-only text, text shorter than the floor,
-and text that is only the vocabulary token or the verb's own name repeated. The
+degenerate cases: empty or whitespace-only text, text below either half of the
+floor — the LEXICAL-UNIT count and the LETTER count, neither of which a text of
+twenty zero-width spaces can clear, a unit being a letter-run where the script
+separates words and a single LETTER where it does not, so that a script written
+without inter-word spaces is not refused for having one run, and the letter
+count reading letters rather than runes so that padding does not answer it —
+text carrying a control
+character the frontmatter serialiser refuses (below U+0020, the class
+`yamlScalar` will not write, which is narrower than what a record cannot hold:
+the store carries DEL, C1, the line separator and the bidi overrides), and text
+that is only the vocabulary token or the verb's own name repeated. The
 substantive requirement is carried by the prompt in `commands/intent.md` and
 `commands/capture.md`, where the interview asks for the expectation and its
 falsifier. The spec claims the floor, not the judgement.
@@ -101,17 +123,22 @@ because rewriting somebody's reasoning silently is worse than not recording it.
 the ADR family's Alternatives Considered. This spec adds the finer grain beside
 them and takes no position on the coarser one.
 
-**Staging.** The recording path, the vocabulary and the stamping land first with
-the `grounds` check reporting `OK`; the refusal is promoted in a second commit
-once the `planned/` bucket carries entries, so the gate does not arrive as a
-wall of pre-existing failures. Promote and resolve refuse from the first commit,
-because they mint the grounds in the same call and have no corpus to fix.
+**Staging.** The recording path, the vocabulary and the writers land first with
+the `grounds` check reporting `OK`; the refusal is promoted in a second commit.
+The promotion is deliberately forward-only rather than staged behind a populated
+corpus: measured at the branch tip, 10 of the 66 `planned/` records carry an
+entry, 56 fail the grounds check, and 36 of those were READY before this change
+and are NOT READY after it. Each records its grounds when it is next picked up,
+which is the moment the conjecture is still known — the cost this buys is that a
+third of the planned bucket answers the gate before it can be implemented.
+Promote and resolve refuse from the first commit, because they mint the grounds
+in the same call and have no corpus to fix.
 
 ## Acceptance criteria mapping
 
 | itd-179 criterion | How spc-57 satisfies it | Test that pins it |
 | --- | --- | --- |
-| A capture routed to an intent draft, triaged without grounds → the command refuses | `PromoteRequest.Grounds` is validated before any mint or stamp, and an absent value returns an error with nothing written | `TestPromoteRefusesWithoutGrounds`, `TestPromoteWithoutGroundsWritesNothing`, CLI `TestCapturePromoteMissingGroundsExit2` |
+| A capture routed to an intent draft, triaged without grounds → the command refuses | `PromoteRequest.Grounds` is validated before any mint or write, and an absent value returns an error with nothing written | `TestPromoteRefusesWithoutGrounds`, `TestPromoteWithoutGroundsWritesNothing`, CLI `TestCapturePromoteMissingGroundsExit2` |
 | A recorded gate decision → the grounds name the conjecture, not only the decision | The three-value token plus the substance floor, with the conjecture-naming prompt on both surfaces | `TestGroundsParseVocabulary`, `TestGroundsRefusesDegenerateText`, `TestRecordGroundsWritesEntry` |
 
 ## Tests
@@ -143,16 +170,6 @@ Each fails first: `internal/core/grounds` does not exist, `ReadyResult` has no
 - `internal/surface/cli/intent_cli_test.go`:
   `TestIntentReadyGroundsFlagRecordsThenReports` (the write happens, the report
   is unchanged, exit 0), `TestIntentReadyGroundsWriteFailureExits2`.
-
-## Grounds (pursued)
-
-_Pre-tooling: recorded in the plan record until the grounds argument (itd-179) ships._
-
-Pursued now because the reasoning behind what went forward is the half of the
-record that is never written down, and it is unrecoverable once the session
-ends: a wontfix keeps its note and an ADR keeps its alternatives, while every
-pursued conjecture leaves only its outcome. Recording it at the moment of
-pursuit is the only moment it is still known.
 
 ## Out of scope
 

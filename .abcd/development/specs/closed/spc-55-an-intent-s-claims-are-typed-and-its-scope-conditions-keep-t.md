@@ -167,16 +167,6 @@ does not exist, `ReadyResult.Checks` is asserted at length four in
   runs on the record that printed it) and the exit-code cases for the two new
   refusals.
 
-## Grounds (pursued)
-
-_Pre-tooling: recorded in the plan record until the grounds argument (itd-179) ships._
-
-Pursued now because adr-51 shipped the sections as a format and explicitly
-deferred their enforcement to "its own record", and because spc-59 cannot key a
-disposition to anything until a condition has an identity that outlives its
-wording. Enforcement without identity would record dispositions against
-sentences, which is the failure the gradient exists to prevent.
-
 ## Out of scope
 
 - The gradient's rationale, its staging argument and its exemptions: the

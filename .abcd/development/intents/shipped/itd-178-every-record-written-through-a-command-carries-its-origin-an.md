@@ -181,3 +181,7 @@ Gap audit:
     evidence: .abcd/development/intents/shipped/itd-178-every-record-written-through-a-command-carries-its-origin-an.md:17 — "**A record now says where each of its items came from and how its text was"
     evidence: .abcd/record-lint.json:257 — "\"record_stores\": {"
     evidence: internal/core/lint/provenance.go:25 — "Population is forward-only (the ruled population property): a record carrying"
+
+## Grounds
+
+- pursued: Pursued now because a record says nothing about where its items came from or how its text was produced, and the reading workstream is about to start contributing items that a reader must be able to tell apart from researcher-authored ones. The keys have to exist before the first contributed item lands, or the distinction is unrecoverable.

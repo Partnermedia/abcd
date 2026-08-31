@@ -351,7 +351,7 @@ func TestIntentReadyGreenExit0(t *testing.T) {
 	t.Chdir(repo)
 	writeRepoFile(t, repo, cliPlanned+"/itd-10-alpha.md",
 		"---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n"+
-			"## Scope Conditions\n\nNone stated.\n\n## Acceptance Criteria\n\n- ok\n")
+			"## Scope Conditions\n\nNone stated.\n\n## Acceptance Criteria\n\n- ok\n"+cliGroundsSection)
 	writeRepoFile(t, repo, cliSpecsOpen+"/spc-1-alpha.md",
 		"---\nid: spc-1\nslug: alpha\nintent: itd-10\n---\n# alpha\n\n## Summary\n\nA written design record.\n")
 
@@ -372,7 +372,7 @@ func TestIntentReadyUnknownExit2(t *testing.T) {
 }
 
 // TestIntentReadyJSON proves the machine seam: --json emits the full ReadyResult
-// (6 fixed checks) even on the not-ready path, alongside exit 1.
+// (7 fixed checks) even on the not-ready path, alongside exit 1.
 func TestIntentReadyJSON(t *testing.T) {
 	repo := t.TempDir()
 	t.Chdir(repo)
@@ -393,8 +393,8 @@ func TestIntentReadyJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
 		t.Fatalf("ready --json not JSON: %v\n%s", err, out)
 	}
-	if got.Ready || len(got.Checks) != 6 {
-		t.Fatalf("ready --json = %+v, want ready=false with 6 checks", got)
+	if got.Ready || len(got.Checks) != 7 {
+		t.Fatalf("ready --json = %+v, want ready=false with 7 checks", got)
 	}
 	if got.Checks[0].Name != "bucket" || got.Checks[0].OK || got.Checks[0].Remedy == "" {
 		t.Fatalf("bucket check = %+v, want fail with remedy", got.Checks[0])
@@ -430,7 +430,7 @@ func TestIntentReadyJSONRendersConditionIdentities(t *testing.T) {
 			"## Scope Conditions\n\n"+
 			"- holds on a POSIX shell <!-- cond: cond-2608300102030405 -->\n"+
 			"- holds below 10k records <!-- cond: cond-2608300102030406 -->\n\n"+
-			"## Acceptance Criteria\n\n- ok\n")
+			"## Acceptance Criteria\n\n- ok\n"+cliGroundsSection)
 	writeRepoFile(t, repo, cliSpecsOpen+"/spc-1-alpha.md",
 		"---\nid: spc-1\nslug: alpha\nintent: itd-10\n---\n# alpha\n\n## Summary\n\nA written design record.\n")
 
@@ -470,7 +470,7 @@ func TestIntentPlanStampsAPlannedRecord(t *testing.T) {
 	t.Chdir(repo)
 	writeRepoFile(t, repo, cliPlanned+"/itd-10-alpha.md",
 		"---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n"+
-			"## Scope Conditions\n\n- written after planning\n\n## Acceptance Criteria\n\n- ok\n")
+			"## Scope Conditions\n\n- written after planning\n\n## Acceptance Criteria\n\n- ok\n"+cliGroundsSection)
 	writeRepoFile(t, repo, cliSpecsOpen+"/spc-1-alpha.md",
 		"---\nid: spc-1\nslug: alpha\nintent: itd-10\n---\n# alpha\n\n## Summary\n\nA written design record.\n")
 
@@ -501,7 +501,7 @@ func TestIntentPlanStampOnlyJSONNamesTheLinkedSpec(t *testing.T) {
 	t.Chdir(repo)
 	writeRepoFile(t, repo, cliPlanned+"/itd-10-alpha.md",
 		"---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n"+
-			"## Scope Conditions\n\n- written after planning\n\n## Acceptance Criteria\n\n- ok\n")
+			"## Scope Conditions\n\n- written after planning\n\n## Acceptance Criteria\n\n- ok\n"+cliGroundsSection)
 	writeRepoFile(t, repo, cliSpecsOpen+"/spc-1-alpha.md",
 		"---\nid: spc-1\nslug: alpha\nintent: itd-10\n---\n# alpha\n\n## Summary\n\nA written design record.\n")
 
@@ -587,5 +587,156 @@ func TestProductionModeFlagRefusesFreeText(t *testing.T) {
 		if n := ledgerIssueCount(t, repo); n != 0 {
 			t.Errorf("%v: a refused command wrote %d record(s)", argv[0], n)
 		}
+	}
+}
+
+// TestIntentReadyGroundsFlagRecordsThenReports: `--grounds` is wired as two
+// calls — RecordGrounds, then the unchanged read-only Ready. The write is the
+// flag's whole effect; the report is unchanged by it, and the exit code is the
+// gate's own.
+func TestIntentReadyGroundsFlagRecordsThenReports(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+	writeRepoFile(t, repo, cliPlanned+"/itd-10-alpha.md",
+		"---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n"+
+			"## Scope Conditions\n\nNone stated.\n\n## Acceptance Criteria\n\n- ok\n")
+	writeRepoFile(t, repo, cliSpecsOpen+"/spc-1-alpha.md",
+		"---\nid: spc-1\nslug: alpha\nintent: itd-10\n---\n# alpha\n\n## Summary\n\nA written design record.\n")
+
+	const text = "we expect a stamped identity to survive rewording, which nothing else does"
+	out, errb, err := runCLISplit(t, "intent", "ready", "itd-10", "--grounds", "pursued: "+text)
+	if exitCodeOf(err) != 0 {
+		t.Fatalf("exit = %d (%v), want 0\n%s\n%s", exitCodeOf(err), err, out, errb)
+	}
+	if !strings.Contains(out, "READY") {
+		t.Fatalf("the report is unchanged by the flag:\n%s", out)
+	}
+	body, rerr := os.ReadFile(filepath.Join(repo, cliPlanned, "itd-10-alpha.md"))
+	if rerr != nil {
+		t.Fatal(rerr)
+	}
+	if !strings.Contains(string(body), "- pursued: "+text) {
+		t.Fatalf("the grounds entry was not written:\n%s", body)
+	}
+}
+
+// TestIntentReadyGroundsWriteFailureExits2: a failed grounds write is a
+// structural fault, never the gate's own "not ready" verdict — a caller that
+// maps exit 1 to SKIP must not read a lost write as a skipped item.
+func TestIntentReadyGroundsWriteFailureExits2(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+	writeRepoFile(t, repo, cliDrafts+"/itd-10-alpha.md", cliDraftWithAC("itd-10", "alpha"))
+
+	// An unknown intent: the write cannot happen, and the gate is never reached.
+	if _, err := runCLIErr(t, "intent", "ready", "itd-999", "--grounds", "pursued: a conjecture nobody can record"); exitCodeOf(err) != 2 {
+		t.Fatalf("unknown intent exit = %d (%v), want 2", exitCodeOf(err), err)
+	}
+	// A malformed operand: refused at the flag, with nothing written.
+	if _, err := runCLIErr(t, "intent", "ready", "itd-10", "--grounds", "planned: out of vocabulary"); exitCodeOf(err) != 2 {
+		t.Fatalf("bad token exit = %d (%v), want 2", exitCodeOf(err), err)
+	}
+	body, rerr := os.ReadFile(filepath.Join(repo, cliDrafts, "itd-10-alpha.md"))
+	if rerr != nil {
+		t.Fatal(rerr)
+	}
+	if strings.Contains(string(body), "## Grounds") {
+		t.Fatalf("a refused operand still wrote to the record:\n%s", body)
+	}
+}
+
+// cliGroundsSection is the recorded-grounds section a fixture carries when the
+// test is about a gate check other than the grounds one — the readiness gate
+// refuses a planned record that names no conjecture.
+const cliGroundsSection = "\n## Grounds\n\n- pursued: we expect the recorded conjecture to outlive the session that had it\n"
+
+// TestIntentReadyGroundsJSONCarriesTheWriteReceipt is iss-2608300930057882's
+// headline: the plugin surface tells the host to report `redacted` from this
+// verb's JSON, and the JSON was the unchanged readiness result — so the
+// redaction-is-never-silent promise was broken on the one plane the feature is
+// wired for. With the flag, the envelope carries the grounds result beside the
+// readiness result.
+func TestIntentReadyGroundsJSONCarriesTheWriteReceipt(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+	writeRepoFile(t, repo, cliPlanned+"/itd-10-alpha.md",
+		"---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n"+
+			"## Scope Conditions\n\nNone stated.\n\n## Acceptance Criteria\n\n- ok\n")
+	writeRepoFile(t, repo, cliSpecsOpen+"/spc-1-alpha.md",
+		"---\nid: spc-1\nslug: alpha\nintent: itd-10\n---\n# alpha\n\n## Summary\n\nA written design record.\n")
+
+	// A FAKE home-path shape, matched only by shape, never a real path.
+	const fakeHome = "/Users/alice/bin/prove.sh"
+	out, errb, err := runCLISplit(t, "intent", "ready", "itd-10", "--json",
+		"--grounds", "pursued: we expect the receipt at "+fakeHome+" to be what proves it")
+	if exitCodeOf(err) != 0 {
+		t.Fatalf("exit = %d (%v)\n%s\n%s", exitCodeOf(err), err, out, errb)
+	}
+	var env struct {
+		Grounds *struct {
+			IntentID string `json:"intent_id"`
+			Path     string `json:"path"`
+			Token    string `json:"token"`
+			Text     string `json:"text"`
+			Entries  int    `json:"entries"`
+			Redacted int    `json:"redacted"`
+		} `json:"grounds"`
+		Ready *struct {
+			Ready  bool `json:"ready"`
+			Checks []struct {
+				Name string `json:"name"`
+			} `json:"checks"`
+		} `json:"ready"`
+	}
+	if jerr := json.Unmarshal([]byte(out), &env); jerr != nil {
+		t.Fatalf("envelope not JSON: %v\n%s", jerr, out)
+	}
+	if env.Grounds == nil || env.Ready == nil {
+		t.Fatalf("envelope must carry both halves: %s", out)
+	}
+	if env.Grounds.Path == "" || env.Grounds.Entries != 1 || env.Grounds.Token != "pursued" {
+		t.Fatalf("grounds half = %+v, want the written path, one entry, the token", env.Grounds)
+	}
+	if env.Grounds.Redacted == 0 {
+		t.Fatalf("grounds half reports no redaction after a redacting write: %+v", env.Grounds)
+	}
+	if strings.Contains(out, "/Users/alice") {
+		t.Fatalf("the envelope echoed the raw home path:\n%s", out)
+	}
+	if !env.Ready.Ready || len(env.Ready.Checks) != 7 {
+		t.Fatalf("readiness half = %+v, want the unchanged 7-check result", env.Ready)
+	}
+	// And the write is announced on stderr too, so a later readiness fault — which
+	// carries no envelope at all — can never hide that a write happened.
+	if !strings.Contains(errb, "recorded grounds on") {
+		t.Fatalf("stderr carries no write receipt:\n%s", errb)
+	}
+}
+
+// TestIntentReadyGroundsTextReceiptPrecedesTheReport: the receipt is printed
+// BEFORE the gate runs, so a structural fault in the gate cannot swallow the
+// news that a record was written — a retry would otherwise append a second
+// entry.
+func TestIntentReadyGroundsTextReceiptPrecedesTheReport(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+	writeRepoFile(t, repo, cliPlanned+"/itd-10-alpha.md",
+		"---\nid: itd-10\nslug: alpha\nspec_id: spc-1\nkind: standalone\n---\n# alpha\n\n"+
+			"## Scope Conditions\n\nNone stated.\n\n## Acceptance Criteria\n\n- ok\n")
+	writeRepoFile(t, repo, cliSpecsOpen+"/spc-1-alpha.md",
+		"---\nid: spc-1\nslug: alpha\nintent: itd-10\n---\n# alpha\n\n## Summary\n\nA written design record.\n")
+
+	out := string(runCLI(t, "intent", "ready", "itd-10",
+		"--grounds", "pursued: we expect the receipt to be printed before the gate is consulted"))
+	receipt := strings.Index(out, "recorded grounds on")
+	report := strings.Index(out, "abcd intent ready — itd-10")
+	if receipt < 0 || report < 0 {
+		t.Fatalf("expected both the receipt and the report:\n%s", out)
+	}
+	if receipt > report {
+		t.Fatalf("the receipt must precede the report:\n%s", out)
+	}
+	if !strings.Contains(out, "(1 entries)") && !strings.Contains(out, "(1 entry)") {
+		t.Fatalf("the receipt must say how many entries the record now carries:\n%s", out)
 	}
 }

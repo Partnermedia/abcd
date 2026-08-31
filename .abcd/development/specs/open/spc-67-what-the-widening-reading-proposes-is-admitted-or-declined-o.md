@@ -131,17 +131,6 @@ The corpus fixtures are one well-formed admission record, one well-formed
 surprise entry and one declined disposition, each of which the gate must pass:
 a rule watched only failing is a rule that might refuse everything.
 
-## Grounds (pursued)
-
-_Pre-tooling: recorded in the plan record until the grounds argument (itd-179) ships._
-
-Pursued now because declining a proposal costs nothing epistemically while
-admitting one is where the frame is actually engaged, and uniform adoption of
-everything a reading proposes is equally consistent with careful judgement and
-with abdication. Only a record that carries grounds on each admission and a
-disposition on each decline can tell the two apart, and it has to exist before
-the first widening run rather than after it.
-
 ## Out of scope
 
 - The commands that write these records. Iteration 2, by itd-189's own words;

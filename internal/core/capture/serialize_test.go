@@ -4,6 +4,8 @@ import (
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/intentdriven/abcd/internal/core/frontmatter"
 )
 
 func TestBuildIssueTextRoundTrip(t *testing.T) {
@@ -131,9 +133,9 @@ func TestYamlScalarEscaping(t *testing.T) {
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}
-	// Round-trips through unquote.
-	if back := unquote(got[1 : len(got)-1]); back != `he said "hi" \ end` {
-		t.Fatalf("unquote = %q", back)
+	// Round-trips through the shared decoder this package's reader uses.
+	if back := frontmatter.Unquote(got[1 : len(got)-1]); back != `he said "hi" \ end` {
+		t.Fatalf("Unquote = %q", back)
 	}
 }
 

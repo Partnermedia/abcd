@@ -257,33 +257,11 @@ func splitInlineListItems(inner string) []string {
 // decodeScalar decodes a single non-list scalar token.
 func decodeScalar(s string) (any, error) {
 	if strings.HasPrefix(s, `"`) && strings.HasSuffix(s, `"`) && len(s) >= 2 {
-		return unquote(s[1 : len(s)-1]), nil
+		return frontmatter.Unquote(s[1 : len(s)-1]), nil
 	}
 	if n, err := strconv.Atoi(s); err == nil {
 		return n, nil
 	}
 	// Bare token (unquoted string, e.g. an abcd id or a legacy value).
 	return s, nil
-}
-
-// unquote reverses yamlScalar's backslash + dquote escaping.
-func unquote(s string) string {
-	var b strings.Builder
-	esc := false
-	for _, r := range s {
-		if esc {
-			b.WriteRune(r)
-			esc = false
-			continue
-		}
-		if r == '\\' {
-			esc = true
-			continue
-		}
-		b.WriteRune(r)
-	}
-	if esc {
-		b.WriteRune('\\')
-	}
-	return b.String()
 }

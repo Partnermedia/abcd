@@ -176,16 +176,6 @@ refuses both keys today, and no write path emits them.
 - `internal/surface/cli/capture_surface_test.go` and `intent_cli_test.go`:
   `--production-mode` accepted, defaulted, and refused out of vocabulary.
 
-## Grounds (pursued)
-
-_Pre-tooling: recorded in the plan record until the grounds argument (itd-179) ships._
-
-Pursued now because a record says nothing about where its items came from or how
-its text was produced, and the reading workstream is about to start contributing
-items that a reader must be able to tell apart from researcher-authored ones.
-The keys have to exist before the first contributed item lands, or the
-distinction is unrecoverable.
-
 ## Out of scope
 
 - Passing either key to a cold reading. Both are excluded by the input

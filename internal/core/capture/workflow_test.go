@@ -45,7 +45,7 @@ func TestTransitionSerializesOnLedgerLock(t *testing.T) {
 	lockTimeout = 200 * time.Millisecond
 	defer func() { lockTimeout = orig }()
 
-	_, err = Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "x", Impact: "fix"})
+	_, err = Resolve(ResolveRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "x", Impact: "fix"})
 	if !errors.Is(err, ErrAllocatorContention) {
 		t.Fatalf("transition must serialize on the ledger lock (expect contention while held), got err=%v", err)
 	}
@@ -272,7 +272,7 @@ func TestResolveTransition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tr, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "patched in fn-9", Impact: "fix"})
+	tr, err := Resolve(ResolveRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "patched in fn-9", Impact: "fix"})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -295,15 +295,15 @@ func TestResolveConflictAndUnknown(t *testing.T) {
 		RepoRoot: repo, IssuesRoot: ir, Text: "b", Severity: SeverityMinor,
 		Category: "bug", Source: "manual-test", Slug: "s", FoundDuring: "t",
 	})
-	if _, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "done", Impact: "fix"}); err != nil {
+	if _, err := Resolve(ResolveRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "done", Impact: "fix"}); err != nil {
 		t.Fatal(err)
 	}
 	// Already resolved -> conflict.
-	if _, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "again", Impact: "fix"}); !errors.Is(err, ErrTransitionConflict) {
+	if _, err := Resolve(ResolveRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "again", Impact: "fix"}); !errors.Is(err, ErrTransitionConflict) {
 		t.Fatalf("want ErrTransitionConflict, got %v", err)
 	}
 	// Unknown id.
-	if _, err := Wontfix(WontfixRequest{RepoRoot: repo, IssuesRoot: ir, ID: "iss-999", Reason: "nope"}); !errors.Is(err, ErrUnknownIssueID) {
+	if _, err := Wontfix(WontfixRequest{Grounds: "declined: we expect this to stay out of scope for the foreseeable cycle", RepoRoot: repo, IssuesRoot: ir, ID: "iss-999", Reason: "nope"}); !errors.Is(err, ErrUnknownIssueID) {
 		t.Fatalf("want ErrUnknownIssueID, got %v", err)
 	}
 }
@@ -328,7 +328,7 @@ func TestTransitionRemoveFailureDoesNotStrandIssueInTwoDirs(t *testing.T) {
 	removeSourceHook = func(string) error { return injected }
 	defer func() { removeSourceHook = nil }()
 
-	if _, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "x", Impact: "fix"}); !errors.Is(err, injected) {
+	if _, err := Resolve(ResolveRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "x", Impact: "fix"}); !errors.Is(err, injected) {
 		t.Fatalf("expected the injected remove failure to surface, got %v", err)
 	}
 
@@ -344,7 +344,7 @@ func TestTransitionRemoveFailureDoesNotStrandIssueInTwoDirs(t *testing.T) {
 	// A single copy must remain findable: a retry (remove now unblocked) should
 	// succeed cleanly rather than tripping ErrDuplicateIssueID.
 	removeSourceHook = nil
-	if _, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "x", Impact: "fix"}); err != nil {
+	if _, err := Resolve(ResolveRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "x", Impact: "fix"}); err != nil {
 		t.Fatalf("retry after rollback should succeed, got %v", err)
 	}
 }
@@ -355,7 +355,7 @@ func TestWontfixTransition(t *testing.T) {
 		RepoRoot: repo, IssuesRoot: ir, Text: "b", Severity: SeverityMinor,
 		Category: "process", Source: "user-observation", Slug: "meh", FoundDuring: "t",
 	})
-	if _, err := Wontfix(WontfixRequest{RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Reason: "platform constraint"}); err != nil {
+	if _, err := Wontfix(WontfixRequest{Grounds: "declined: we expect this to stay out of scope for the foreseeable cycle", RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Reason: "platform constraint"}); err != nil {
 		t.Fatalf("Wontfix: %v", err)
 	}
 	lr, _ := List(ListRequest{RepoRoot: repo, IssuesRoot: ir, State: StateWontfix})
@@ -436,7 +436,7 @@ func TestStatusCountsAndRecentOpen(t *testing.T) {
 		ids = append(ids, res.ID)
 	}
 	// Resolve the first one.
-	if _, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: ids[0], Resolution: "done", Impact: "fix"}); err != nil {
+	if _, err := Resolve(ResolveRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: ids[0], Resolution: "done", Impact: "fix"}); err != nil {
 		t.Fatal(err)
 	}
 	st, err := Status(StatusRequest{RepoRoot: repo, IssuesRoot: ir})
@@ -627,6 +627,7 @@ func TestCaptureAcceptsResolvedBlockedByTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := Resolve(ResolveRequest{
+		Grounds:  testGrounds,
 		RepoRoot: repo, IssuesRoot: ir, ID: root.ID, Resolution: "fixed", Impact: "fix",
 	}); err != nil {
 		t.Fatal(err)
@@ -692,7 +693,7 @@ func TestDerivedPriorityUnblockedFirstThenSeverity(t *testing.T) {
 
 	// Resolve the blocker: iss-2 becomes unblocked and sorts to the front by its
 	// critical severity.
-	if _, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: "iss-1", Resolution: "fixed", Impact: "fix"}); err != nil {
+	if _, err := Resolve(ResolveRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: "iss-1", Resolution: "fixed", Impact: "fix"}); err != nil {
 		t.Fatal(err)
 	}
 	lr2, err := List(ListRequest{RepoRoot: repo, IssuesRoot: ir, State: StateOpen})
@@ -857,6 +858,7 @@ func TestTransitionRestampsProductionMode(t *testing.T) {
 	}
 	if _, err := Resolve(ResolveRequest{
 		RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "fixed", Impact: "fix",
+		Grounds:        testGrounds,
 		ProductionMode: "scribe-transcribed",
 	}); err != nil {
 		t.Fatal(err)
@@ -886,6 +888,7 @@ func TestTransitionRestampsProductionMode(t *testing.T) {
 	// An out-of-vocabulary mode is refused and the issue does not move.
 	if _, err := Resolve(ResolveRequest{
 		RepoRoot: repo, IssuesRoot: ir, ID: res2.ID, Resolution: "x", Impact: "fix",
+		Grounds:        testGrounds,
 		ProductionMode: "typed",
 	}); err == nil {
 		t.Error("an out-of-vocabulary production mode must be refused")
@@ -907,6 +910,7 @@ func TestTransitionLeavesOriginAlone(t *testing.T) {
 	}
 	if _, err := Resolve(ResolveRequest{
 		RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "fixed", Impact: "fix",
+		Grounds:        testGrounds,
 		ProductionMode: "scribe-transcribed",
 	}); err != nil {
 		t.Fatal(err)
@@ -938,6 +942,7 @@ func TestTransitionRefusesRestampOnUnstampedRecord(t *testing.T) {
 
 	_, err = Resolve(ResolveRequest{
 		RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "fixed", Impact: "fix",
+		Grounds:        testGrounds,
 		ProductionMode: "scribe-transcribed",
 	})
 	if err == nil {
@@ -965,6 +970,7 @@ func TestTransitionRefusesRestampOnUnstampedRecord(t *testing.T) {
 	// record nobody can close.
 	if _, err := Resolve(ResolveRequest{
 		RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "fixed", Impact: "fix",
+		Grounds: testGrounds,
 	}); err != nil {
 		t.Fatalf("an unstamped record must still resolve when no mode is declared: %v", err)
 	}

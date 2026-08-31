@@ -145,17 +145,6 @@ Every case below is watched to fail before its change lands.
   `docs/reference/cli/commands.md` is regenerated, which is the mechanism that
   keeps the new flag documented.
 
-## Grounds (pursued)
-
-_Pre-tooling: recorded in the plan record until the grounds argument (itd-179) ships._
-
-Pursued now because the lapse log is not merely a disclosure obligation: the
-working claim under test in this cycle is that recording at the point of
-commitment prevents retrospective reconstruction, and the lapse log is the
-evidence bearing on that claim. A log opened after the cycle's lapses have
-already accumulated is reconstruction, and so cannot be evidence about
-reconstruction.
-
 ## Out of scope
 
 - A separate lapse store, a separate enum, or a lapse-specific record type.

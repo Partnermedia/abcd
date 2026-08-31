@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/changelog"
+	"github.com/intentdriven/abcd/internal/core/grounds"
 	"github.com/intentdriven/abcd/internal/core/issueschema"
 	"github.com/intentdriven/abcd/internal/core/recordid"
 )
@@ -289,6 +290,7 @@ func issueFromFrontmatter(fm map[string]any, status State, path, body string) Is
 		FoundAt:       asString(fm["found_at"]),
 		LapsedAt:      asString(fm["lapsed_at"]),
 		PromotedTo:    asString(fm["promoted_to"]),
+		Grounds:       groundsEntries(body),
 		Resolution:    asString(fm["resolution"]),
 		WontfixReason: asString(fm["wontfix_reason"]),
 		Status:        status,
@@ -320,4 +322,26 @@ func asStrList(v any) []string {
 		return nil
 	}
 	return l
+}
+
+// groundsEntries reads the record's `## Grounds` section through core/grounds's
+// own reader, so what an ENTRY is has one definition and a bullet one writer
+// appends is a bullet the other finds.
+//
+// It asks ParseSection where the intent half asks ParseSectionAboveFloor: the
+// two families read the same section by the same rules and part company on the
+// FLOOR alone. A wontfix stamps its grounds from a reason whose own contract is
+// merely non-empty, so applying the floor here would drop entries the ledger has
+// always accepted and leave a surface reporting no recorded grounds about a
+// record that visibly carries one.
+func groundsEntries(body string) []string {
+	entries := grounds.ParseSection(body)
+	if len(entries) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(entries))
+	for _, g := range entries {
+		out = append(out, g.String())
+	}
+	return out
 }

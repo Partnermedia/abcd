@@ -227,17 +227,6 @@ Every case below is watched to fail before its change lands.
 - `scripts/check-issue-resolution-cases.sh` gains `reading-record-ignored` and
   `disposition-ignored`, each a fixture repository the gate must pass.
 
-## Grounds (pursued)
-
-_Pre-tooling: recorded in the plan record until the grounds argument (itd-179) ships._
-
-Pursued now because the instrument's first run happens in this cycle, and a
-record written after the fact is precisely the retrospective reconstruction the
-ledger exists to prevent: unless the reading record and the disposition are two
-writes from the start, nothing can later show that a finding existed before it
-was answered. Ruling (2) settled the shape; the only remaining question was
-whether to build it before or after the first run, and after is too late.
-
 ## Out of scope
 
 - The output contract that "validated" refers to. It is owned by the

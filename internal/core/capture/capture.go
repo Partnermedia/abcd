@@ -101,18 +101,30 @@ type Issue struct {
 	// LapsedAt is the RFC 3339 instant at which a recorded discipline gave way —
 	// the lapse itself, never the write-up (spc-60). Required exactly when
 	// Category is lapse; optional, and rarely meaningful, for every other.
-	LapsedAt       string      `json:"lapsed_at,omitempty"`
-	RelatedIntents []string    `json:"related_intents,omitempty"`
-	RelatedSpecs   []string    `json:"related_specs,omitempty"`
-	RelatedIssues  []string    `json:"related_issues,omitempty"`
-	BlockedBy      []string    `json:"blocked_by,omitempty"` // iss-N dependency edges
-	PromotedTo     string      `json:"promoted_to,omitempty"`
-	Resolution     string      `json:"resolution,omitempty"`
-	WontfixReason  string      `json:"wontfix_reason,omitempty"`
-	ResolvedBy     *ResolvedBy `json:"resolved_by,omitempty"`
-	Status         State       `json:"status"` // derived from folder
-	Path           string      `json:"path"`   // repo-relative locator (iss-81)
-	Body           string      `json:"body"`
+	LapsedAt       string   `json:"lapsed_at,omitempty"`
+	RelatedIntents []string `json:"related_intents,omitempty"`
+	RelatedSpecs   []string `json:"related_specs,omitempty"`
+	RelatedIssues  []string `json:"related_issues,omitempty"`
+	BlockedBy      []string `json:"blocked_by,omitempty"` // iss-N dependency edges
+	PromotedTo     string   `json:"promoted_to,omitempty"`
+	// Grounds is the record's recorded conjectures, in the order they were
+	// written: one `<token>: <text>` value in the shared core/grounds vocabulary
+	// per grounds-bearing act. Appended by promote, resolve and wontfix; never by
+	// the create path, because an observation being filed is not yet a conjecture
+	// being pursued.
+	//
+	// It is a LIST because recording is append-only. A record promoted and then
+	// resolved carries both conjectures, and the earlier one is precisely what a
+	// later reader checks the outcome against (iss-2608301657354776). The values
+	// live in the body's `## Grounds` section, not in frontmatter: a frontmatter
+	// scalar is set, and setting is what destroyed the first of them.
+	Grounds       []string    `json:"grounds,omitempty"`
+	Resolution    string      `json:"resolution,omitempty"`
+	WontfixReason string      `json:"wontfix_reason,omitempty"`
+	ResolvedBy    *ResolvedBy `json:"resolved_by,omitempty"`
+	Status        State       `json:"status"` // derived from folder
+	Path          string      `json:"path"`   // repo-relative locator (iss-81)
+	Body          string      `json:"body"`
 	// BlockedByOpen is the derived subset of BlockedBy whose targets are still in
 	// open/ (the priority projection populated by List/Status). Not a stored
 	// field: an empty slice means the issue is unblocked.
@@ -189,6 +201,12 @@ type ResolveRequest struct {
 	ByIntent string // itd-N
 	BySpec   string // spc-N
 	ByCommit string // 7–64 hex chars (64 covers a SHA-256 repo)
+	// Grounds is the REQUIRED conjecture behind the resolution, in the shared
+	// `<token>: <text>` grammar (core/grounds). There is no default and none may
+	// be invented: a route recorded without its reasoning is the evaporation
+	// itd-179 exists to close, and resolve mints the value in the same call, so
+	// it has no corpus to fix and refuses from the start.
+	Grounds string
 	// ProductionMode RESTAMPS the record's production_mode (itd-178). A
 	// resolution note is new text with its own mode, so the key is not frozen at
 	// mint — but an empty value leaves the existing stamp alone rather than
@@ -204,6 +222,13 @@ type WontfixRequest struct {
 	IssuesRoot string
 	ID         string
 	Reason     string
+	// Grounds optionally overrides the text stamped as `declined: <text>`. A
+	// wontfix can never be recorded without grounds — transition already refuses
+	// an empty Reason — so what it lacked was the TYPE, not the text, and the
+	// reason supplies the default. The override exists because the user-facing
+	// reason and the conjecture are not always the same sentence. The token stays
+	// declined: a non-action is what that value names.
+	Grounds string
 	// ProductionMode restamps production_mode on the same terms as
 	// ResolveRequest's: declared restamps, absent leaves the stamp alone.
 	ProductionMode string
@@ -274,6 +299,14 @@ var (
 	ErrAllocatorContention = errors.New("allocator contention")
 	// ErrChecksumMismatch means a concurrent edit occurred during a transition.
 	ErrChecksumMismatch = errors.New("checksum mismatch")
+	// ErrGroundsRefused means the triage's grounds argument was absent, outside
+	// the closed vocabulary, malformed, or below the substance floor. It is one
+	// sentinel for every one of those because they are one thing to a caller —
+	// the argument was not usable and nothing was written — and a surface that
+	// distinguished them by exit code would teach a script that a misspelled
+	// token is a different KIND of failure from a missing one
+	// (iss-2608300930057882).
+	ErrGroundsRefused = errors.New("grounds refused")
 	// ErrInvariantViolation means frontmatter passed the schema but violates a
 	// folder-status cross-field invariant.
 	ErrInvariantViolation = errors.New("invariant violation")

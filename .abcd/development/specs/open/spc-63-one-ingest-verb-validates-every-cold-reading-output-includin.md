@@ -224,17 +224,6 @@ Each case is written to fail before the change and pass after, in
   `TestIngestRequiresOutputJSON`, `TestNoRegimeFlagExists`,
   `TestIngestReachesBothPlanes`.
 
-## Grounds (pursued)
-
-_Pre-tooling: recorded in the plan record until the grounds argument (itd-179) ships._
-
-This conjecture is pursued now because the failure it catches is silent
-everywhere else: a reading that quietly proposes, ranks, or arrives already
-dispositioned passes every structural test while violating the one property
-its position is defined by, and the read-block eval covers only what a reading
-saw, never what it was licensed to produce. Building the gate later would mean
-trusting outputs produced before anything checked them.
-
 ## Out of scope
 
 - **Running a reading.** The instrument ships unrun for the whole cycle: this

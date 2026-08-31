@@ -22,6 +22,11 @@ type PromoteRequest struct {
 	// that has been dispositioned.
 	ID         string
 	LinkIntent string // itd-N; "" mints
+	// Grounds is the REQUIRED conjecture behind the promotion, in the shared
+	// `<token>: <text>` grammar (core/grounds). A capture routed to an intent
+	// draft is a conjecture being pursued, and there is nothing to stage here:
+	// promote mints the value in the same call, so it has no corpus to fix.
+	Grounds string
 	// ProductionMode is how the MINTED DRAFT's seed text was produced (itd-178),
 	// or empty for the vocabulary's default. It has no effect in stamp-only mode,
 	// where nothing is minted. The draft's `origin` is not a member here: promote
@@ -48,6 +53,12 @@ type PromoteResult struct {
 	IntentPath  string `json:"intent_path"`
 	Linked      bool   `json:"linked"`
 	MintWarning string `json:"mint_warning,omitempty"`
+	// Redacted / Degraded mirror TransitionResult: the grounds text is free prose
+	// written to the same committed ledger, so it goes through the same redactor
+	// and reports the same way. Rewriting somebody's reasoning in silence is worse
+	// than not recording it.
+	Redacted int    `json:"redacted,omitempty"`
+	Degraded string `json:"redaction_degraded,omitempty"`
 }
 
 // stampWriteHook, when non-nil, replaces the atomic in-place write inside
@@ -77,6 +88,12 @@ var beforeStampHook func()
 // does — so a failure after the mint leaves an orphan draft; the returned
 // error names the draft and the stamp-only remedy
 // (`capture promote <iss-N> --intent <itd-N>`).
+//
+// Every refusal that can be established from the bytes in hand is therefore
+// raised BEFORE the mint: the grounds text, and whether the record can take the
+// append at all. What is left to the stamp is what only a write under the lock
+// can discover, which is the residue the remedy above is for — never a
+// deterministic refusal that would leak one draft per attempt.
 func Promote(req PromoteRequest) (PromoteResult, error) {
 	repoRoot, issuesRoot, err := resolveRoots(req.RepoRoot, req.IssuesRoot)
 	if err != nil {
@@ -85,8 +102,20 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 	if err := mutationPreamble(issuesRoot); err != nil {
 		return PromoteResult{}, err
 	}
+	// The reading item is a DIFFERENT route with its own recorded reasoning: its
+	// disposition record, which promoteReadingItem refuses to act without. It
+	// takes no grounds argument, so the gate below would refuse it for a value
+	// that route never writes — hence the dispatch runs first.
 	if reReadingItemID.MatchString(req.ID) {
 		return promoteReadingItem(repoRoot, issuesRoot, req)
+	}
+	// BEFORE anything is minted or stamped. Promote's residue contract is
+	// mint-first-stamp-second, so a refusal raised any later than here would leave
+	// an orphan draft behind for a missing argument — the exact residue the rest
+	// of this path works to avoid.
+	g, gRedacted, gDegraded, err := requireGrounds(repoRoot, "promote", req.Grounds)
+	if err != nil {
+		return PromoteResult{}, err
 	}
 
 	// Pre-flight outside the lock: locate and read the issue, refuse a
@@ -105,6 +134,23 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 	}
 	if existing := asString(fm["promoted_to"]); existing != "" {
 		return PromoteResult{}, fmt.Errorf("%s is already promoted to %s; refusing to promote twice", req.ID, existing)
+	}
+	// Establish that the RECORD can accept the append, before anything is minted.
+	// requireGrounds above already gated the grounds TEXT; what it cannot answer
+	// is whether the bytes it will be appended to can hold it. A record whose body
+	// leaves a fence or a comment open masks everything appended below it, so the
+	// stamp's read-back refuses — permanently, and identically on every retry,
+	// including the retry through the repair verb the failure message names. With
+	// the mint first, that left one orphan draft per attempt and a draft counter
+	// climbing behind an operator who had no way to succeed (iss-2608301803423101).
+	//
+	// The dry run is the real append against the pre-flight bytes, discarded. It
+	// is not a substitute for the guard under the lock — the file may change
+	// between the two, and the write is judged again there — but the failure it
+	// removes is the deterministic one, where the record could never have taken
+	// the entry in the first place.
+	if _, err := appendGrounds("promote", content, g); err != nil {
+		return PromoteResult{}, err
 	}
 
 	var itdID, intentPath, mintWarning string
@@ -172,6 +218,10 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 		if err != nil {
 			return err
 		}
+		newContent, err = appendGrounds("promote", newContent, g)
+		if err != nil {
+			return err
+		}
 		newFM, _, err := parseFrontmatterAndBody(newContent)
 		if err != nil {
 			return err
@@ -213,6 +263,8 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 		IntentPath:  intentPath,
 		Linked:      linked,
 		MintWarning: mintWarning,
+		Redacted:    gRedacted,
+		Degraded:    gDegraded,
 	}, nil
 }
 
@@ -241,6 +293,18 @@ func issueTitleLine(body, fallback string) string {
 // writing the draft and the stamp by hand — is a lapse-log entry, not something
 // this gate can see.
 func promoteReadingItem(repoRoot, issuesRoot string, req PromoteRequest) (PromoteResult, error) {
+	// Grounds belong to the ISSUE route, which has nowhere else to say why. A
+	// reading item records its conjecture in its DISPOSITION, which this route
+	// already refuses to act without, and nothing here writes req.Grounds — so an
+	// operand supplied to this route is refused rather than written and ignored,
+	// on the same rule an exit condition outside `held` is (reading.go). Accepting
+	// it would report success over a conjecture that reached no record, which is
+	// the evaporation the grounds argument exists to close.
+	if strings.TrimSpace(req.Grounds) != "" {
+		return PromoteResult{}, fmt.Errorf(
+			"promote: %w: %s records its conjecture in its disposition, which this route already refuses to act without, so there is nothing here for grounds to say; nothing written",
+			ErrGroundsRefused, req.ID)
+	}
 	src, err := findReadingItem(issuesRoot, req.ID)
 	if err != nil {
 		return PromoteResult{}, err

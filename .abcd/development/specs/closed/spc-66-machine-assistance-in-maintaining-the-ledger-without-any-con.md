@@ -204,17 +204,6 @@ Every case below is watched to fail before its change lands.
   expectation that each demand is transcribed verbatim as data or refused, never
   obeyed, and that no disposition state is authored.
 
-## Grounds (pursued)
-
-_Pre-tooling: recorded in the plan record until the grounds argument (itd-179) ships._
-
-Pursued now because the ledger has to be maintained during this cycle and the
-obvious way to get help with it is the one thing the design cannot allow: a
-context holding both a reading and the ledger. Defining the scribe's inverse
-access rule before the first run is what keeps machine assistance from becoming
-the channel by which reading and ledger meet, and session retention is what lets
-that claim be checked rather than asserted.
-
 ## Out of scope
 
 - The ingest verb. Deferred by the intent; until it lands, the scribe's output

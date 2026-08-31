@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/intentdriven/abcd/internal/core/mdrecord"
 	"github.com/intentdriven/abcd/internal/core/recordid"
 	"github.com/intentdriven/abcd/internal/core/spec"
 	"github.com/intentdriven/abcd/internal/fsutil"
@@ -78,10 +79,6 @@ var (
 	rcpIDRe = regexp.MustCompile(`^rcp-[0-9a-f]{12}$`)
 	// auditHeadingRe matches the `## Audit Notes` heading (any heading depth).
 	auditHeadingRe = regexp.MustCompile(`^#{1,6}\s+Audit Notes\s*$`)
-	// bulletRe matches a TOP-LEVEL markdown list item. Acceptance-Criteria bullets
-	// are numbered positionally ac-1..ac-K, so only column-0 bullets count — an
-	// indented sub-bullet is detail of its parent, not a separate criterion.
-	bulletRe = regexp.MustCompile(`^[-*]\s+\S`)
 	// markerRe matches a parked review marker line inside the Audit Notes.
 	markerRe = regexp.MustCompile(`<!-- abcd-review: (OWED|INGESTED|DEAD_LETTER) receipt=(rcp-[0-9a-f]+) -->`)
 	// auditPlaceholderRe matches an intent template's Audit Notes placeholder,
@@ -94,12 +91,6 @@ var (
 	auditPlaceholderRe = regexp.MustCompile(`^\s*[_<]Empty\b.*[_>]\s*$`)
 	// criterionIDRe validates a criterion id shape before it is positionally bounded.
 	criterionIDRe = regexp.MustCompile(`^ac-([0-9]+)$`)
-	// linkRefDefRe matches a markdown link-reference definition (`[label]: dest`),
-	// up to three leading spaces per CommonMark. A shipped intent can park such a
-	// definition at the tail of its Audit Notes section (itd-114's `[iss-80]:` ref);
-	// a new review block must be inserted ABOVE the trailing run of them rather than
-	// appended below it (iss-2608210737265820).
-	linkRefDefRe = regexp.MustCompile(`^ {0,3}\[[^\]]+\]:\s+\S`)
 )
 
 // ---------------------------------------------------------------------------
@@ -689,7 +680,7 @@ func upsertReviewBlock(content, rcp, newBlock string) string {
 		end := len(lines)
 		for j := start + 1; j < len(lines); j++ {
 			t := strings.TrimRight(lines[j], "\r")
-			if markerRe.MatchString(t) || headingRe.MatchString(t) {
+			if markerRe.MatchString(t) || mdrecord.IsHeading(t) {
 				end = j
 				break
 			}
@@ -721,7 +712,7 @@ func appendToAuditNotes(content, block string) string {
 	// Find the end of the Audit Notes section (next heading or EOF).
 	end := len(lines)
 	for j := head + 1; j < len(lines); j++ {
-		if headingRe.MatchString(strings.TrimRight(lines[j], "\r")) {
+		if mdrecord.IsHeading(strings.TrimRight(lines[j], "\r")) {
 			end = j
 			break
 		}
@@ -745,7 +736,7 @@ func appendToAuditNotes(content, block string) string {
 	// definition parked at the end of the Audit Notes belongs below the review
 	// prose, and appending the block after it detaches the block from the section
 	// it documents (iss-2608210737265820).
-	trailingRefs := peelTrailingLinkRefs(&section)
+	trailingRefs := mdrecord.PeelTrailingLinkRefs(&section)
 	rebuilt := make([]string, 0, len(lines)+8)
 	rebuilt = append(rebuilt, lines[:head+1]...)
 	rebuilt = append(rebuilt, "")
@@ -761,46 +752,6 @@ func appendToAuditNotes(content, block string) string {
 	rebuilt = append(rebuilt, "")
 	rebuilt = append(rebuilt, lines[end:]...)
 	return strings.Join(rebuilt, "\n")
-}
-
-// peelTrailingLinkRefs removes a trailing run of markdown link-reference
-// definitions (and any blank lines interspersed with them) from *section and
-// returns that run, so appendToAuditNotes can re-emit it BELOW the new review
-// block. The run must contain at least one real definition — a tail of pure blank
-// lines is not refs and is left to the caller's blank-trimming. Both the newly
-// exposed end of *section and the leading blanks of the returned run are trimmed,
-// so the caller reinstates exactly one separator on each side.
-func peelTrailingLinkRefs(section *[]string) []string {
-	s := *section
-	start := len(s)
-	for i := len(s) - 1; i >= 0; i-- {
-		t := strings.TrimRight(s[i], "\r")
-		if strings.TrimSpace(t) == "" || linkRefDefRe.MatchString(t) {
-			start = i
-			continue
-		}
-		break
-	}
-	hasRef := false
-	for _, ln := range s[start:] {
-		if linkRefDefRe.MatchString(strings.TrimRight(ln, "\r")) {
-			hasRef = true
-			break
-		}
-	}
-	if !hasRef {
-		return nil
-	}
-	refs := s[start:]
-	s = s[:start]
-	for len(s) > 0 && strings.TrimSpace(s[len(s)-1]) == "" {
-		s = s[:len(s)-1]
-	}
-	for len(refs) > 0 && strings.TrimSpace(refs[0]) == "" {
-		refs = refs[1:]
-	}
-	*section = s
-	return refs
 }
 
 // ---------------------------------------------------------------------------
@@ -937,12 +888,12 @@ func renderEvidence(e verdictEvidence) string {
 
 // sectionBody returns the text of the section introduced by the first heading
 // matching headRe, up to the next heading or end of file. It reads the section
-// through sectionLineRange (claims.go), the package's single notion of where a
-// section starts and stops; an absent section and an empty one both read as ""
+// through mdrecord.SectionLineRange, the single notion of where a section
+// starts and stops; an absent section and an empty one both read as ""
 // here, and a caller that must tell them apart asks for the bounds directly.
 func sectionBody(content string, headRe *regexp.Regexp) string {
 	lines := strings.Split(content, "\n")
-	start, end, ok := sectionLineRange(lines, headRe)
+	start, end, ok := mdrecord.SectionLineRange(lines, headRe)
 	if !ok {
 		return ""
 	}
@@ -954,7 +905,7 @@ func sectionBody(content string, headRe *regexp.Regexp) string {
 func countAcceptanceCriteria(content string) int {
 	n := 0
 	for _, ln := range strings.Split(sectionBody(content, acHeadingRe), "\n") {
-		if bulletRe.MatchString(strings.TrimRight(ln, "\r")) {
+		if mdrecord.IsTopLevelBullet(strings.TrimRight(ln, "\r")) {
 			n++
 		}
 	}

@@ -1,7 +1,7 @@
 ---
 name: intent
 description: Press-release intent lifecycle — status, quoted-text create, the implement-readiness gate, and the human planning interview that turns a draft into a planned, specced intent.
-argument-hint: "[text] | ready <itd-N> | plan <itd-N> | link <itd-N> <spc-N> | audit [<itd-N>]"
+argument-hint: "[text] | ready <itd-N> [--grounds \"<pursued|deferred|declined>: <conjecture>\"] | plan <itd-N> | link <itd-N> <spc-N> | audit [<itd-N>]"
 ---
 
 # `/abcd:intent` — intent lifecycle
@@ -121,6 +121,73 @@ Before implementing ANY `itd-N` — or whenever the user asks you to "build",
 - **Exit 2 (fault):** the id is malformed, the intent is unknown, or a record
   is unreadable — report the diagnostic; there is nothing to gate.
 
+## Grounds: why this is being pursued
+
+The gate also records the CONJECTURE behind the decision, at the granularity of
+the thing being pursued rather than of the architecture:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/abcd" intent ready <itd-N> --grounds "pursued: <conjecture>" --json
+```
+
+The vocabulary is closed — `pursued`, `deferred`, `declined` — and the text is
+free prose. The flag writes one entry to the record's `## Grounds` section and
+then reports the gate exactly as it would without it: the report is unchanged by
+the flag, the exit code is the gate's own, and a failed write exits 2 rather than
+borrowing the gate's exit 1.
+
+**With the flag, `--json` emits an envelope, not the bare readiness result:**
+
+```json
+{ "grounds": { "intent_id": "…", "path": "…", "token": "pursued",
+               "text": "…", "entries": 1, "redacted": 0 },
+  "ready":   { "…the usual ReadyResult…" } }
+```
+
+Read the verdict from `ready`, and report `grounds.path` and `grounds.entries`
+so the user knows a record was written. **Report `grounds.redacted` whenever it
+is non-zero** — the text is scanned before it is committed, and the user needs to
+know their wording was changed. There is no `degraded` member here: a scanner
+that cannot be built, or whose pattern set a per-repo override weakened, refuses
+the write at exit 2 rather than writing under a weakened detector. Without the
+flag the payload is the readiness result unchanged.
+
+The write is also announced before the gate runs — on stdout in the text render,
+on stderr under `--json` — as `recorded grounds on <path> (<n> entries)`. Relay
+it. Recording is append-only, so a caller who retries after missing the receipt
+adds a second entry rather than replacing the first.
+
+**The gate refuses a planned record that carries no entry.** The `grounds` check
+is the seventh and last row of the report, and its remedy names this exact
+command. Terminal buckets are exempt on the same rule the claim checks follow:
+`shipped/` and `superseded/` records are never backfilled, and a discipline
+record carries no conjecture of its own. The write enforces that rule too: this
+verb REFUSES a `shipped/` or `superseded/` record, so no grounds this tool
+writes can ever land on one.
+
+That is a statement about the TOOL, not about the corpus, and the difference is
+the migration exception. Three shipped intents do carry a `## Grounds` section —
+itd-177, itd-182 and itd-188 — relocated by hand from the pre-tooling
+`## Grounds (pursued)` section on the matching spec. A relocation is not a
+backfill: the text was authored at the moment of pursuit and nothing was
+reconstructed. The refusal covers both, deliberately, because nothing in the
+enforcement can tell relocated text from invented text — which is why the state
+those three records are in is not reachable through this verb.
+
+**Ask for the expectation and its falsifier.** "Planned it because it is next"
+restates the decision and records nothing; "planned it because we expect a
+stamped identity to survive rewording, which nothing else does" is a conjecture
+somebody can later find wrong. abcd refuses only the degenerate texts — empty,
+too short, or the vocabulary word repeated back — and cannot tell a conjecture
+from a restatement. That part is yours: put the question to the human and write
+down their answer, not a paraphrase of the route taken. A hand-typed bullet is
+held to the same floor: `- pursued: yes` is not an entry, and the gate reports
+the record as carrying none.
+
+Recording is append-only: a second decision on one record adds an entry beside
+the first, because the earlier conjecture is what a later reader checks the
+outcome against.
+
 ## The claim recording gradient
 
 An intent carries up to three kinds of claim, and the gate holds each to its
@@ -201,11 +268,18 @@ gate that will refuse the move mechanically is a recorded seed until built.
    re-decision. If the human states none, record the same exact token. Leave
    the identity markers to `plan` — never type one; a condition added after
    planning is stamped by re-running `abcd intent plan <itd-N>`.
-7. **Acceptance criteria:** walk EVERY Given-When-Then bullet; the human
+7. **Grounds (required at the gate):** ask why this is being pursued NOW —
+   the expectation, and what would show it wrong. Record the human's answer
+   with `abcd intent ready <itd-N> --grounds "pursued: <their words>"`. A
+   conjecture that is being left for later is `deferred:`; one being turned
+   down is `declined:`. Never write the restated decision; if the honest
+   answer is "it is next in the queue", say so to the human and ask what they
+   expect the work to prove.
+8. **Acceptance criteria:** walk EVERY Given-When-Then bullet; the human
    accepts, edits, or strikes each, and adds what is missing. Seeded criteria
    are proposals, never approvals.
-8. Edit the draft file to the confirmed content.
-9. Only after the human explicitly confirms the criteria are theirs, run:
+9. Edit the draft file to the confirmed content.
+10. Only after the human explicitly confirms the criteria are theirs, run:
 
    ```bash
    "${CLAUDE_PLUGIN_ROOT}/abcd" intent plan <itd-N> [--production-mode <mode>] --json
@@ -215,10 +289,10 @@ gate that will refuse the move mechanically is a recorded seed until built.
    or infer consent. It mints the spec stub, links both sides, stamps an
    identity onto every unmarked scope condition, and moves the intent
    `drafts/ → planned/`.
-10. **Spec build:** replace the minted spec body's `_Draft:` placeholder with
+11. **Spec build:** replace the minted spec body's `_Draft:` placeholder with
     the real design record — scope, approach, and how it satisfies each
     acceptance criterion.
-11. Re-run `abcd intent ready <itd-N>` and report READY to the user.
+12. Re-run `abcd intent ready <itd-N>` and report READY to the user.
 
 ## Autonomous runs
 
