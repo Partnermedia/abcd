@@ -472,3 +472,35 @@ func TestGroundsFloorCountsLettersNotPadding(t *testing.T) {
 		t.Fatalf("New(%q) = %v, want the conjecture accepted", conjecture, err)
 	}
 }
+
+// TestGroundsFloorRefusesEveryVocabularyWordAlone is the gate the degeneracy set
+// exists to be: a text made SOLELY of a vocabulary value carries no reasoning,
+// for EVERY value the set holds. It loops the vocabulary rather than naming the
+// three, so a fourth value that reached Vocabulary without reaching the
+// degeneracy set fails here instead of silently passing the floor
+// (iss-2608301836222858).
+func TestGroundsFloorRefusesEveryVocabularyWordAlone(t *testing.T) {
+	for _, v := range Vocabulary {
+		text := strings.TrimSpace(strings.Repeat(string(v)+" ", 4))
+		if _, err := New(Pursued, text); err == nil {
+			t.Errorf("New(%q) = nil error, want a refusal — the text is only the vocabulary", text)
+		}
+	}
+	for _, verb := range askingVerbs {
+		text := strings.TrimSpace(strings.Repeat(verb+" ", 5))
+		if _, err := New(Pursued, text); err == nil {
+			t.Errorf("New(%q) = nil error, want a refusal — the text is only the verb's own name", text)
+		}
+	}
+}
+
+// TestDegenerateWordsCoversVocabulary asserts the derivation directly. The
+// behavioural test above is the one that matters, but this says WHY it passes,
+// so a failure names the missing key rather than an accepted text.
+func TestDegenerateWordsCoversVocabulary(t *testing.T) {
+	for _, v := range Vocabulary {
+		if !degenerateWords[string(v)] {
+			t.Errorf("degenerateWords is missing the vocabulary value %q", v)
+		}
+	}
+}

@@ -138,19 +138,36 @@ var scriptioContinua = []*unicode.RangeTable{
 	unicode.Myanmar, unicode.Tibetan, unicode.Javanese,
 }
 
+// askingVerbs are the names of the verbs that ASK for a ground, and the name of
+// the argument itself. Answering `abcd capture resolve --grounds` with the word
+// "resolve" restates the route taken, which is the one thing the argument exists
+// to refuse.
+var askingVerbs = []string{"ready", "promote", "resolve", "wontfix", "grounds"}
+
 // degenerateWords are the words a text may not consist SOLELY of: the vocabulary
 // itself, and the names of the verbs that ask for it. A text made only of these
 // has restated the route taken and recorded no reasoning at all — the exact
 // failure the argument exists to close.
-// The three tokens below are a COPY of Vocabulary, and the only copy that is a
-// gate rather than a message: add a fourth token to Vocabulary without adding it
-// here and ValidateText silently stops refusing a grounds text made solely of
-// it, while the refusal it declines to raise still says the text only repeats
-// the vocabulary. Consolidate this one first (iss-2608301836222858).
-var degenerateWords = map[string]bool{
-	"pursued": true, "deferred": true, "declined": true,
-	"ready": true, "promote": true, "resolve": true, "wontfix": true,
-	"grounds": true,
+//
+// It is DERIVED from Vocabulary rather than spelled beside it, because this is
+// the one place the closed set is read for a DECISION rather than for a message.
+// A token that reached the set but not a hand-written copy here would leave
+// ValidateText accepting a text made solely of it, while the refusal it declined
+// to raise still spoke of repeating the vocabulary. Deriving it makes that
+// divergence unrepresentable rather than documented.
+var degenerateWords = newDegenerateWords()
+
+// newDegenerateWords builds the set. Keys are lower-cased because textUnits
+// lower-cases the units they are looked up by.
+func newDegenerateWords() map[string]bool {
+	m := make(map[string]bool, len(Vocabulary)+len(askingVerbs))
+	for _, v := range Vocabulary {
+		m[strings.ToLower(string(v))] = true
+	}
+	for _, v := range askingVerbs {
+		m[v] = true
+	}
+	return m
 }
 
 // Parse reads the `<token>: <text>` grammar — the one spelling written to a
