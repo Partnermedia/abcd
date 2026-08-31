@@ -185,14 +185,16 @@ var coverage = []coverageRow{
 	{
 		Rule: "a reading's object excludes what it exists to change: the widening, " +
 			"comparative and detection readings do not see the drafts",
-		Falsifier: "widen the drafts row's Positions to allPositions",
-		Caught:    caughtLeak,
-		Classes:   []string{"DRAFT-BODY"},
+		Falsifier: "widen the drafts row's Positions to allPositions AND delete the " +
+			"position-scoped drafts row from Exclusions",
+		Caught:  caughtLeak,
+		Classes: []string{"DRAFT-BODY"},
 	},
 	{
-		Rule:      "the same asymmetry for the planned intents",
-		Falsifier: "widen the planned row's Positions to allPositions",
-		Caught:    caughtFamily,
+		Rule: "the same asymmetry for the planned intents",
+		Falsifier: "widen the planned row's Positions to allPositions AND delete the " +
+			"position-scoped planned row from Exclusions",
+		Caught: caughtFamily,
 	},
 
 	// ---- the exclusion floor: keys ----
@@ -344,6 +346,40 @@ var coverage = []coverageRow{
 		Caught:    caughtRefusal,
 	},
 	{
+		Rule: "the body redaction is scoped to markdown and runs on nothing else, because a " +
+			"markdown section scan over a source file refuses a raw fence at the left margin",
+		Falsifier: "delete redactExcluded's non-markdown early return",
+		Caught:    caughtRefusal,
+		// The oracle and the assembler DISAGREE about this scope, and the assembler
+		// is right. Its key exclusion binds to markdown alone; the item-text scan in
+		// checkFieldAbsence binds to every item whatever its kind. itd-183 names the
+		// signal as a FRONTMATTER key, which is a record shape, so a top-level
+		// `origin:` in a YAML or TOML config file is not the excluded thing and
+		// redacting it would be wrong. The oracle is deliberately the broader of the
+		// two — the safe direction for a transcribed oracle, and the reason this row
+		// is a refusal rather than a leak: a corpus file that made the difference
+		// visible would have this eval report a violation over correct behaviour. No
+		// tracked non-markdown file the root rows admit carries either key today.
+	},
+	{
+		Rule:      "the `agents` namespace is denied structurally, from each row's own Source downward",
+		Falsifier: "drop \"agents\" from denySegments",
+		Caught:    caughtRefusal,
+	},
+	{
+		Rule:      "the `evals` namespace is denied structurally, from each row's own Source downward",
+		Falsifier: "drop \"evals\" from denySegments",
+		Caught:    caughtRefusal,
+	},
+	{
+		Rule:      "where two rows reach one path, the FIRST row owns the projection applied to it",
+		Falsifier: "make the claimed-path check keep the last row rather than the first",
+		Gap: "no fixture path is admitted by two rows, so there is no tie for the rule to " +
+			"break. The record rows name paths under .abcd, which every root row denies " +
+			"structurally, so constructing one needs a record store outside .abcd — a " +
+			"repository shape this corpus does not have and the record does not use",
+	},
+	{
 		Rule:      "the `.git` namespace is denied structurally",
 		Falsifier: "drop \".git\" from denySegments",
 		Gap: "the walk is intersected with the tracked set and git reports none of its own " +
@@ -407,6 +443,23 @@ var coverage = []coverageRow{
 func TestEveryAssemblerRuleHasAFalsifier(t *testing.T) {
 	requireOracleTables(t)
 
+	// The count pin catches a DELETED row. It does not catch a row SUBSTITUTED for
+	// a duplicate of another: swapping the structural-deny row for a second copy
+	// of the glossary row keeps the count, keeps the gap count, orphans no class,
+	// and drops the most load-bearing rule in the assembler's contract in silence.
+	// Distinct rule text closes the by-duplication half of that. The other half —
+	// a row rewritten to a rule the assembler does not have — is the declared
+	// limit above, and it needs a human reading the include table against this
+	// list.
+	byRule := map[string]bool{}
+	for _, row := range coverage {
+		if byRule[row.Rule] {
+			t.Errorf("two coverage rows carry the rule %q; a duplicated row keeps the count "+
+				"while the rule it replaced leaves the matrix in silence", row.Rule)
+		}
+		byRule[row.Rule] = true
+	}
+
 	declared := map[string]bool{}
 	for _, c := range sentinelClasses {
 		declared[c.Name] = true
@@ -455,7 +508,7 @@ func TestEveryAssemblerRuleHasAFalsifier(t *testing.T) {
 
 	// The gap count is declared, so a row silently becoming unfalsifiable — the
 	// exact way this eval would decay — has to be an explicit edit.
-	const declaredGaps = 6
+	const declaredGaps = 7
 	if gaps != declaredGaps {
 		t.Errorf("the matrix declares %d unfalsifiable row(s) and holds %d; a rule sliding "+
 			"into or out of unfalsifiable coverage is the change this eval most needs said "+
