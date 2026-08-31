@@ -157,9 +157,12 @@ var bannedImports = []string{"internal/core/reading", "internal/core/launch"}
 // exclusion table above is transcribed rather than derived.
 //
 // The check is over DIRECT import paths, which is the independence the record
-// asks for and the whole of what it asks for. The smoke lane's command-tree
-// walk imports the CLI surface, which reaches the assembler transitively; that
-// is disclosed rather than caught, and it is harmless here because no
+// asks for. The dedicated lane is stronger than that and can be checked by
+// hand: `go list -tags coldreading -deps -test ./evals/` reports this module's
+// gitutil and gittest and nothing else, so the assembler is not linked into the
+// cold-reading test binary at all, transitively or otherwise. The smoke lane's
+// command-tree walk imports the CLI surface, which does reach the assembler;
+// that is disclosed rather than caught, and it is harmless because no
 // cold-reading assertion reads a Go symbol at all — every one of them reads
 // bytes the built binary wrote.
 func TestOracleImportsNothingFromTheAssembler(t *testing.T) {
