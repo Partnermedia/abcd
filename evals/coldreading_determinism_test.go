@@ -25,6 +25,8 @@ package evals
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -92,19 +94,15 @@ func TestAssembledInputIsByteIdenticalAcrossRuns(t *testing.T) {
 					f    fixture
 					a    assembled
 				}{{"first", first, a}, {"second", second, b}} {
+					known := fixtureAbsolutePaths(t, side.f)
 					for _, art := range []struct {
 						name string
 						raw  []byte
 					}{{bundleFile, side.a.BundleRaw}, {manifestFile, side.a.ManifestRaw}} {
-						for _, leak := range []struct{ what, path string }{
-							{"its repository root", side.f.Root},
-							{"the HOME it ran under", side.f.Home},
-						} {
-							if strings.Contains(string(art.raw), leak.path) {
-								t.Errorf("the %s assembly's %s at %s names %s; an absolute local path "+
-									"in an artefact is both a determinism failure and a privacy one",
-									side.name, art.name, position, leak.what)
-							}
+						for _, leak := range absolutePathLeaks(known, art.raw) {
+							t.Errorf("the %s assembly's %s at %s %s; an absolute local path "+
+								"in an artefact is both a determinism failure and a privacy one",
+								side.name, art.name, position, leak)
 						}
 					}
 				}
@@ -114,6 +112,218 @@ func TestAssembledInputIsByteIdenticalAcrossRuns(t *testing.T) {
 				t.Fatalf("the assembled input at %s differs between two assemblies of ONE commit "+
 					"at two paths (%d difference(s)):\n%s\nthis is the assembler failing to be "+
 					"deterministic, not the eval being strict", position, len(diffs), reportDifferences(diffs))
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// The absolute-path detector.
+// ---------------------------------------------------------------------------
+
+// leakPath is one absolute path an artefact must not name, and what it is.
+type leakPath struct {
+	What string
+	Path string
+}
+
+// absolutePathShape matches an absolute path by SHAPE rather than by name: a
+// POSIX path of two or more components, or a Windows drive path.
+//
+// It is the second of the two mechanisms, and it is a second MECHANISM rather
+// than a wider list on purpose. The list below knows the paths this harness
+// created; this knows the shape of any other — the machine's own home directory,
+// a checkout path, a cache directory — none of which the list could enumerate.
+//
+// The leading boundary is a CAPTURED character because RE2 has no lookbehind,
+// and without one an ordinary repo-relative path matches on its own second
+// slash: `.abcd/development/brief` contains `/development/brief`. `/` and `:`
+// are excluded from the boundary class so a URL's `//host/path` is not read as a
+// filesystem path.
+var absolutePathShape = regexp.MustCompile(
+	`(?:^|[^A-Za-z0-9._~+%:/-])((?:/[A-Za-z0-9._~+%-]+){2,}|[A-Za-z]:\\[A-Za-z0-9._~+%\\-]+)`)
+
+// fixtureAbsolutePaths returns every absolute path the fixture occupies: the
+// repository root, the HOME, and EVERY ancestor of either up to and including
+// the process temporary directory they were created under.
+//
+// The ancestors are the repair. A two-string check over the two roots misses the
+// leak class the two-path design exists to close, one level up: both trees are
+// made under ONE temporary parent, so that parent is a real absolute local path
+// that both runs carry IDENTICALLY — the byte comparison agrees about it and
+// still reports nothing, and a check looking for the two leaves is not looking
+// for it.
+//
+// Bounding the walk at the process temporary directory is not a threshold that
+// can be raised again. It is where this harness's own directories stop and the
+// machine's begin, and `t.TempDir` creates under exactly that directory, so a
+// fixture outside it is a broken assumption rather than a case to widen for.
+func fixtureAbsolutePaths(t *testing.T, f fixture) []leakPath {
+	t.Helper()
+	tmp := filepath.Clean(os.TempDir())
+	if tmp == string(filepath.Separator) || tmp == "." {
+		t.Fatalf("the process temporary directory is %q, so the ancestor sweep has no bound; "+
+			"this guard cannot be run without one", tmp)
+	}
+	seen := map[string]bool{}
+	var out []leakPath
+	add := func(what, p string) {
+		p = filepath.Clean(p)
+		if seen[p] {
+			return
+		}
+		seen[p] = true
+		out = append(out, leakPath{What: what, Path: p})
+	}
+	for _, leaf := range []struct{ what, path string }{
+		{"its repository root", f.Root},
+		{"the HOME it ran under", f.Home},
+	} {
+		clean := filepath.Clean(leaf.path)
+		if !underOrEqual(clean, tmp) {
+			t.Fatalf("%s is at %s, which is not under the process temporary directory; the "+
+				"ancestor sweep is bounded there and cannot be bounded anywhere else",
+				leaf.what, elidePath(clean))
+		}
+		add(leaf.what, clean)
+		for dir := filepath.Dir(clean); underOrEqual(dir, tmp); dir = filepath.Dir(dir) {
+			add("a directory the fixtures were created under", dir)
+			if dir == tmp {
+				break
+			}
+		}
+	}
+	return out
+}
+
+// underOrEqual reports whether p is base or lies beneath it.
+func underOrEqual(p, base string) bool {
+	return p == base || strings.HasPrefix(p, base+string(filepath.Separator))
+}
+
+// absolutePathLeaks reports every absolute local path an artefact names: the
+// fixture's own directories and their ancestors by exact match, and anything
+// else that is merely SHAPED like one.
+//
+// The two mechanisms overlap deliberately. A known path is reported with what it
+// is, which is the message an operator can act on; a shaped one is reported
+// because no list of known paths can enumerate the machine's own.
+func absolutePathLeaks(known []leakPath, raw []byte) []string {
+	text := string(raw)
+	var out []string
+	var reported []string
+	for _, k := range known {
+		if !strings.Contains(text, k.Path) {
+			continue
+		}
+		out = append(out, fmt.Sprintf("names %s (%s)", k.What, elidePath(k.Path)))
+		reported = append(reported, k.Path)
+	}
+	shaped := map[string]bool{}
+	for _, m := range absolutePathShape.FindAllStringSubmatch(text, -1) {
+		hit := m[1]
+		if shaped[hit] {
+			continue
+		}
+		shaped[hit] = true
+		covered := false
+		for _, r := range reported {
+			if strings.Contains(r, hit) {
+				covered = true
+				break
+			}
+		}
+		if covered {
+			continue
+		}
+		out = append(out, fmt.Sprintf("carries the absolute path %s", elidePath(hit)))
+	}
+	return out
+}
+
+// elidePath renders an absolute path as its last two components alone.
+//
+// The failure message has to name the leak to be usable and must not itself
+// publish the machine's directory names into a CI log, which is the rule the
+// guard is enforcing. Two components identify which path leaked without
+// carrying the account name above them.
+func elidePath(p string) string {
+	parts := strings.Split(filepath.ToSlash(filepath.Clean(p)), "/")
+	if len(parts) <= 2 {
+		return p
+	}
+	return ".../" + strings.Join(parts[len(parts)-2:], "/")
+}
+
+// TestTheAbsolutePathGuardSeesMoreThanTheTwoRoots is the guard's own falsifier.
+//
+// The guard it replaces looked for the two fixture roots by name, which misses
+// the leak class the two-path design exists to close, one level up. Both trees
+// are created under ONE temporary parent: planting that parent leaves the byte
+// comparison green, because both runs carry the same string and therefore still
+// agree, and a two-string check is not looking for it. The first row below is
+// that exact plant.
+//
+// The negative rows are the other half. A detector that reports every slash
+// reports nothing: the repo-relative paths an artefact legitimately carries, and
+// a URL, must both stay clean.
+func TestTheAbsolutePathGuardSeesMoreThanTheTwoRoots(t *testing.T) {
+	base := t.TempDir()
+	f := fixture{
+		Root:    filepath.Join(base, "first", "repo"),
+		Home:    filepath.Join(base, "first", "home"),
+		Variant: "order",
+	}
+	known := fixtureAbsolutePaths(t, f)
+
+	// The mechanism claim, stated separately from the detection: the sweep has
+	// to KNOW the shared parent, or the first row below would be passing on the
+	// shape detector alone and the ancestor half would be untested.
+	held := false
+	for _, k := range known {
+		if k.Path == filepath.Clean(base) {
+			held = true
+		}
+	}
+	if !held {
+		t.Fatalf("the ancestor sweep over a fixture at %s does not name the temporary parent "+
+			"both trees are created under; that parent is the leak the two-string check missed",
+			elidePath(f.Root))
+	}
+
+	for _, tc := range []struct {
+		name string
+		text string
+		want bool
+	}{
+		{"the shared parent both trees are created under", `{"note":"` + base + `"}`, true},
+		{"the repository root", `{"note":"` + f.Root + `"}`, true},
+		{"the HOME it ran under", `{"note":"` + f.Home + `"}`, true},
+		{"a path inside the fixture tree", `{"note":"` + filepath.Join(f.Root, "main.go") + `"}`, true},
+		{"an absolute path this harness never made", `{"note":"/opt/elsewhere/cache"}`, true},
+		{"repo-relative item paths", `{"path":".abcd/development/brief/01-product/01-press-release.md"}`, false},
+		{"a repo-relative source path", `{"path":"internal/core/reading/include.go"}`, false},
+		{"a URL", `{"source":"https://example.invalid/one/two"}`, false},
+		{"a single-component reference", `{"note":"and/or a/b"}`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := absolutePathLeaks(known, []byte(tc.text))
+			switch {
+			case tc.want && len(got) == 0:
+				t.Errorf("the absolute-path guard reports nothing over %q, which carries one; "+
+					"a guard that cannot see it is the two-string check again", tc.text)
+			case !tc.want && len(got) > 0:
+				t.Errorf("the absolute-path guard reports %v over %q, which carries no absolute "+
+					"path at all; a detector that reports every slash reports nothing", got, tc.text)
+			}
+			// The message names the leak without republishing the machine's own
+			// directory names, which is the rule this guard is enforcing.
+			for _, g := range got {
+				if strings.Contains(g, filepath.Clean(os.TempDir())) {
+					t.Errorf("the failure message %q carries the machine's temporary directory "+
+						"in full; a guard against absolute paths in artefacts must not put one "+
+						"in a CI log itself", g)
+				}
 			}
 		})
 	}
