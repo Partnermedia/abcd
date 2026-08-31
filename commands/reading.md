@@ -177,7 +177,9 @@ disagreeing with the definition, or a payload in which no item survived.
 
 **A refusal leaves a record once the run's identity is proven** — that is, once
 the run id resolves to a parked manifest whose content hash matches. From that
-point a list-level refusal writes `refusal.json` under the run's directory,
+point every list-level refusal writes `refusal.json` under the run's directory,
+including a definition that does not resolve, whose record states no regime
+because there is none to state,
 carrying the run metadata and the named reason and no items, and the refusal
 message and the JSON render both name it. A refusal reached BEFORE that point —
 a wrong `_type`, a run id that resolves to nothing, a manifest hash that
@@ -217,15 +219,20 @@ structural halves above are the ones that refuse.
 ### Where the records land
 
 Nothing durable is written or deleted until the whole payload validates; a
-refusal after the run is proven leaves its refusal record and nothing else. The
-reading records land in the reading-record family, the run's manifest is
-promoted beside its run metadata, and the run metadata is written **last** as
-the commit marker — a run without one never happened. An ingest interrupted
-before that marker leaves a stage in the local tier. Every later invocation
-names that orphan; the next one whose payload validates rolls the run back and
-clears it, and a refused run reports the orphans it left in place. One ingest
-runs at a time in a checkout: a second waits, and reports contention rather
-than sweeping the first one's records away.
+refusal after the run is proven leaves its refusal record and nothing else, and
+before its identity is proven a run writes nothing anywhere. Once the payload
+validates the reading records land in the reading-record family as one batch,
+the run's manifest is promoted beside its run metadata, and the run metadata is
+written **last** as the commit marker — a run without one never happened.
+
+An ingest interrupted before that marker leaves a stage in the local tier.
+Every later invocation names that orphan; the next one whose payload validates
+sweeps it: it **rolls that run's reading records out of the committed ledger** —
+the run never happened, so it must leave none — and clears the stage. A refused
+run reports the orphans it left in place, and the ids a sweep removed are
+reported however the invocation ends. One ingest runs at a time in a checkout: a
+second waits, and reports contention rather than sweeping the first one's
+records away.
 
 Report from the JSON: `run_id`, `records`, `refused_items`, `review_flags`,
 `cleared_stages`, `rolled_back_records`, `pending_stages`, and `run_record` —

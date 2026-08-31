@@ -164,17 +164,24 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 		Long: "Validate the JSON a cold reading returned and write its reading records.\n\n" +
 			"The verb checks what the reading was LICENSED to produce, not only what it saw: the\n" +
 			"supply regime is read from the position's definition and compared with the output's own\n" +
-			"claim, the reserved names a regime declares are refused with the licence stated, and a\n" +
-			"registry of named signatures watches for prose that ranks, settles or proposes without\n" +
-			"the field. Those signatures are observed, not enforcing: a hit raises a review flag on\n" +
-			"the run record and the item lands.\n\n" +
+			"claim, and the reserved names a regime declares are refused with the licence stated (the\n" +
+			"generative position declares none). A registry of named signatures watches for prose that\n" +
+			"ranks, settles or proposes without the field; those signatures are observed rather than\n" +
+			"enforcing, at every position, so a hit raises a review flag on the run record and the item\n" +
+			"lands.\n\n" +
 			"Item identifiers are minted here. The payload carries none, so a supplied one is refused\n" +
-			"as an unknown field. Nothing durable is written or deleted until the whole payload\n" +
-			"validates — a refusal after the run is proven leaves its refusal record and nothing else —\n" +
-			"and the run metadata is written last as the commit marker: a run without one never\n" +
-			"happened. An orphaned stage is named by every invocation; it is cleared, and its\n" +
-			"never-committed records rolled back out of the ledger, only by the next invocation whose\n" +
-			"payload validates, and a refused run reports the orphans it left in place.",
+			"as an unknown field. A refusal becomes DURABLE once the run's identity is proven — the run\n" +
+			"id resolving to a parked manifest whose content hash matches — and from there a list-level\n" +
+			"refusal writes refusal.json under the run's directory; before that point nothing is written\n" +
+			"anywhere. Nothing durable is written or DELETED until the whole payload validates: a refusal\n" +
+			"after the run is proven leaves its refusal record and nothing else. The reading records land\n" +
+			"as one batch and the run metadata is written last as the commit marker: a run without one\n" +
+			"never happened.\n\n" +
+			"An ingest interrupted before that marker leaves an orphaned stage, and every invocation names\n" +
+			"it. Only the next one whose payload validates sweeps it: it ROLLS THAT RUN'S READING RECORDS\n" +
+			"OUT OF THE COMMITTED LEDGER because the run never happened, and clears the stage. A refused\n" +
+			"run reports the orphans it left in place, and the ids a sweep removed are reported as\n" +
+			"rolled_back_records on every exit, including a failing one.",
 		Example: "  abcd reading ingest --reading-json ./reading-output.json --json",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) > 0 {

@@ -230,9 +230,16 @@ the payload's claim; the assembler version is compared with the manifest's.
 
 ### Staged writes, run metadata last
 
-Nothing durable is written until the whole payload validates.
+The only durable thing a run writes before its payload validates is its own
+`refusal.json`, and only once its identity is proven.
 
-1. Validate: schema, regime, provenance, manifest reference, instrument.
+1. Validate: schema, regime, provenance, manifest reference, instrument. A
+   list-level refusal from the point the identity is proven writes
+   `refusal.json` and stops.
+1b. Sweep any orphaned stage, rolling its reading records out of the committed
+   ledger. This rides with the COMMIT and not with a refusal: the rollback is a
+   destructive act in the committed tier, and a run on its way to a refusal must
+   not perform one (iss-2608311517509690).
 2. Stage a write-aside marker into
    `.abcd/.work.local/scratch/reading-ingest/<run-id>/stage.json`.
 3. Write the reading records into the reading-record family (spc-58's

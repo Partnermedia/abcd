@@ -431,9 +431,19 @@ func TestIngestReachesBothPlanes(t *testing.T) {
 		t.Fatalf("read the plugin surface: %v", err)
 	}
 	body := string(raw)
-	for _, want := range []string{"reading ingest", "--reading-json", "refusal.json", "pattern"} {
+	// The keys the page tells a host to REPORT are part of the wiring: a key
+	// named on the page and absent from the result is a host instruction that
+	// cannot be followed, and a durable delete the page never names is the
+	// defect the sweep's own comment warns against.
+	for _, want := range []string{"reading ingest", "--reading-json", "refusal.json", "pattern",
+		"review_flags", "cleared_stages", "rolled_back_records"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("commands/reading.md does not mention %q", want)
+		}
+	}
+	for _, want := range []string{"review_flags", "cleared_stages", "rolled_back_records", "refusal_record"} {
+		if !strings.Contains(string(mustMarshalIngestFields(t)), want) {
+			t.Errorf("the ingest result carries no %q field for the page to report", want)
 		}
 	}
 }
@@ -847,4 +857,24 @@ func TestIngestRendersWhatTheSweepDidOnAnErrorExit(t *testing.T) {
 	if len(res.ClearedStages) != 1 || res.ClearedStages[0] != orphan {
 		t.Errorf("the render reports cleared_stages %v, want %s", res.ClearedStages, orphan)
 	}
+}
+
+// mustMarshalIngestFields renders one fully-populated IngestResult, so the
+// wiring test can check that every key the plugin page tells a host to report
+// is a key the result actually emits.
+func mustMarshalIngestFields(t *testing.T) []byte {
+	t.Helper()
+	raw, err := json.Marshal(reading.IngestResult{
+		RunID: "rdg-2608310000000061", Position: "detection", Regime: "registrative",
+		RefusedItems:  []reading.ItemRefusal{{Ordinal: 1, Rule: "named-provenance", Detail: "d"}},
+		RefusedCount:  1,
+		ReviewFlags:   []reading.ReviewFlag{{Ordinal: 1, SignatureID: "RG-REG-FIXPROPOSAL", Detail: "d"}},
+		RunRecordPath: "run.json", RefusalPath: "refusal.json",
+		ClearedStages: []string{"rdg-2608310000000062"},
+		RolledBack:    []string{"rdi-2608310000000063"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
 }
