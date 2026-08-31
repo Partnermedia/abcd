@@ -200,13 +200,17 @@ var coverage = []coverageRow{
 		Falsifier: "make Row.matches return true unconditionally",
 		Caught:    caughtLeak,
 		Classes:   []string{"UNMATCHED-KIND"},
-		// The two homes are the two grains the rule has to hold at, and one alone
-		// would not have caught it. A row naming a Source reaches only inside that
-		// directory; the three root rows reach every undenied path in the tree, so
-		// the match list is the whole of what keeps an unnamed extension out of
-		// them. Against a corpus where every file already carries a named
-		// extension the mutation leaves the manifests byte-identical, which is
-		// exactly how it stayed unnamed here for three review rounds.
+		// The stated falsifier fires on EITHER home. The two exist because the
+		// rule holds at two grains and a row is a claim about the rule, not about
+		// the cheapest way to trip it: a row naming a Source reaches only inside
+		// that directory, while the three root rows reach every undenied path in
+		// the tree, so a narrower mutation — dropping the match list from the root
+		// rows alone — is falsified by the root home and by nothing else.
+		//
+		// What made the rule invisible without either home is that against a
+		// corpus where every file already carries a named extension the mutation
+		// leaves the manifests byte-identical, which is how it stayed unnamed here
+		// through three review rounds.
 	},
 
 	{
