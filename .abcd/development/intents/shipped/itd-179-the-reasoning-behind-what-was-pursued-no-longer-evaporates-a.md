@@ -48,3 +48,8 @@ None stated.
 ## Grounds
 
 - pursued: Pursued now because the reasoning behind what went forward is the half of the record that is never written down, and it is unrecoverable once the session ends: a wontfix keeps its note and an ADR keeps its alternatives, while every pursued conjecture leaves only its outcome. Recording it at the moment of pursuit is the only moment it is still known.
+
+## Audit Notes
+
+<!-- abcd-review: OWED receipt=rcp-ff0fec29d2cf -->
+Fidelity review OWED (receipt rcp-ff0fec29d2cf).
