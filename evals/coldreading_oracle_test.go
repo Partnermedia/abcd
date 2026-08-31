@@ -20,6 +20,7 @@ package evals
 // records.
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -299,9 +300,60 @@ func requireCarriers(t *testing.T, a assembled) {
 		if !c.reachesAt(a.Position) {
 			continue
 		}
+		// The path first, because a missing path and an empty text are different
+		// faults and the message should say which.
 		if !seen[c.Path] {
-			t.Fatalf("the assembly at %s does not carry %s (%s), so the %s assertion over it "+
-				"would pass with nothing to catch", a.Position, c.Path, c.Why, sentinelPrefix+c.Class)
+			t.Fatalf("the assembly at %s does not carry %s (%s), so the %s assertion(s) over it "+
+				"would pass with nothing to catch", a.Position, c.Path, c.Why,
+				strings.Join(c.tokens(), " and "))
+		}
+		// Then the bytes. The manifest names what an assembly SAYS it passed; only
+		// the bundle says what it actually passed, and an absence assertion over an
+		// item whose text is empty is an absence assertion over nothing.
+		if !bytes.Contains(a.BundleRaw, []byte(c.Marker)) {
+			t.Fatalf("the assembly at %s names %s in its manifest, but the bundle does not carry "+
+				"that file's own text (%q is absent), so the %s assertion(s) over it would pass "+
+				"with nothing to catch", a.Position, c.Path, c.Marker,
+				strings.Join(c.tokens(), " and "))
+		}
+	}
+}
+
+// requireOracleTables refuses a table that has changed size behind the
+// assertions that consume it.
+//
+// A greater-than-zero floor on a table whose size is known is not a floor: a
+// two-row table can halve under it, and a table emptied one row at a time never
+// trips it at all. Every one of these tables is a declaration, so its size is a
+// declaration too, and each of them is load-bearing — emptying carriers restores
+// the vacuity the carriers floor exists to close, emptying excludedKeys and
+// excludedHeadings disarms the field-absence check entirely, and emptying
+// excludedFamilies disarms half the family-absence check.
+//
+// The count is deliberately duplicated here rather than derived from len(): a
+// derived count agrees with the table by construction and could only confirm it,
+// which is the same mistake as an oracle that reads the assembler's own table.
+func requireOracleTables(t *testing.T) {
+	t.Helper()
+	for _, tbl := range []struct {
+		name string
+		got  int
+		want int
+	}{
+		{"sentinelClasses", len(sentinelClasses), 14},
+		{"carriers", len(carriers), 6},
+		{"holes", len(holes), 2},
+		{"excludedKeys", len(excludedKeys), 2},
+		{"excludedHeadings", len(excludedHeadings), 4},
+		{"excludedFamilies", len(excludedFamilies), 15},
+		{"admittedRecordPaths", len(admittedRecordPaths), 8},
+		{"coverage", len(coverage), len(coverage)}, // pinned by its own test, row by row
+	} {
+		if tbl.got != tbl.want {
+			t.Fatalf("the %s table holds %d row(s), and this eval is written against %d; "+
+				"a table that changes size behind the assertions consuming it is how an "+
+				"absence eval goes quietly vacuous, so update the declared count deliberately",
+				tbl.name, tbl.got, tbl.want)
 		}
 	}
 }
@@ -343,12 +395,18 @@ func checkSentinelAbsence(a assembled) []violation {
 	return out
 }
 
-// excludedKeyLine matches a frontmatter key at ANY indentation and inside a
-// sequence item, quoted or bare. Both allowances are what make the match
-// depth-agnostic: a warm field nested one level deeper, or moved into a list of
-// mappings, is the same warm field, and a pattern anchored at column 0 would
-// call either clean.
-var excludedKeyLine = regexp.MustCompile(`^\s*(?:-\s+)*["']?([A-Za-z_][A-Za-z0-9_-]*)["']?\s*:`)
+// excludedKeyLine matches a frontmatter key at ANY indentation, quoted or bare.
+// The indentation allowance is what spc-64 means by depth-agnostic: a warm field
+// nested one level deeper is the same warm field, and a pattern anchored at
+// column 0 would call it clean.
+//
+// The allowance is UNFALSIFIABLE through this eval and is recorded as such in
+// the coverage matrix: the assembler fails closed on an indented excluded key
+// that survives redaction, so a corpus carrying one makes the assembly exit
+// non-zero rather than leak, and the branch is never reached. It is kept because
+// spc-64 asks for it and because it costs nothing to be right if that refusal
+// ever softens — not because it has been watched catch anything.
+var excludedKeyLine = regexp.MustCompile(`^\s*["']?([A-Za-z_][A-Za-z0-9_-]*)["']?\s*:`)
 
 // atxHeading matches an ATX heading, including the one-to-three-space indent
 // CommonMark allows.

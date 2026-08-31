@@ -21,3 +21,24 @@ in a reserved example domain so the manifest's commit reference resolves.
 Nothing here is a live record: the corpus is never scanned by this repository's
 own record, docs or site gates, whose roots are the repository's own `.abcd/`
 and `docs/`.
+
+## Why the plants sit where they do
+
+Each plant is placed so that some rule of the assembler's contract is
+falsifiable by it — the corpus is adversarial per rule, not merely
+representative. Two placements are load-bearing and easy to get wrong:
+
+- **An excluded heading needs a home on a record type that travels WHOLE.** On a
+  projected record type the projection keeps the heading out whatever the
+  exclusion floor says, so deleting that heading's exclusion row leaks nothing
+  and the rule cannot be falsified there. Every excluded heading therefore has a
+  home in a brief chapter, a discipline or a spec; the copies on the shipped
+  intent exercise the projected shape as well.
+- **The projection's positive half needs a section that is neither projected nor
+  excluded.** Without one, a corpus cannot tell "the projection is positive at
+  field granularity" from "the projection is gone and the redaction cleaned up
+  after it". That is the `## Residue` section on the shipped, draft and planned
+  intents.
+
+`evals/coldreading_coverage_test.go` holds the matrix that records this, rule by
+rule, including the rules this corpus cannot falsify and why.

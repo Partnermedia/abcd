@@ -21,6 +21,11 @@ The promise, as it was made.
 
 A positive include table over a hand-transcribed exclusion floor.
 
+## Residue
+
+ABCD-EVAL-SENTINEL-UNPROJECTED-SECTION in a section the projection does not name
+and the exclusion floor does not name either.
+
 ## Why This Matters
 
 ABCD-EVAL-SENTINEL-WARM-FIELD in a heading the projection leaves behind.
