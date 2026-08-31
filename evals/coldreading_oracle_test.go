@@ -269,11 +269,41 @@ func assemble(t *testing.T, f fixture, position string) assembled {
 		t.Fatalf("decoding the manifest at %s: %v", position, err)
 	}
 	a.Items, a.ManifestItems = bundle.Items, manifest.Items
+	requireCarriers(t, a)
+	return a
+}
+
+// requireCarriers is the floor under every absence assertion: the assembly must
+// be non-empty, and every plant-bearing file the include list names must be in
+// it at this position.
+//
+// The weaker floor — any item at all — cannot see the failure that matters. An
+// assembler that stopped enumerating one whole class of source would drop the
+// files carrying WARM-FIELD, two of the three WARM-KEY plants and both draft
+// plants, leave nine walk-row items behind, and turn every assertion in this
+// package green because there was nothing left to leak. That is the corpus
+// argument one step further on: an absence assertion cannot see a corpus that
+// lost its plants, and it cannot see an ASSEMBLY that lost their carriers
+// either.
+func requireCarriers(t *testing.T, a assembled) {
+	t.Helper()
 	if len(a.Items) == 0 {
 		t.Fatalf("the assembly at %s passed no items; an absence assertion over an empty "+
-			"bundle asserts nothing", position)
+			"bundle asserts nothing", a.Position)
 	}
-	return a
+	seen := make(map[string]bool, len(a.ManifestItems))
+	for _, it := range a.ManifestItems {
+		seen[it.Path] = true
+	}
+	for _, c := range carriers {
+		if !c.reachesAt(a.Position) {
+			continue
+		}
+		if !seen[c.Path] {
+			t.Fatalf("the assembly at %s does not carry %s (%s), so the %s assertion over it "+
+				"would pass with nothing to catch", a.Position, c.Path, c.Why, sentinelPrefix+c.Class)
+		}
+	}
 }
 
 // readArtefact reads one of the two artefacts, failing if it is absent — the
@@ -313,11 +343,12 @@ func checkSentinelAbsence(a assembled) []violation {
 	return out
 }
 
-// excludedKeyLine matches a frontmatter key at ANY indentation, quoted or bare.
-// The indentation is what makes the match depth-agnostic: a warm field nested
-// one level deeper is the same warm field, and a pattern anchored at column 0
-// would call it clean.
-var excludedKeyLine = regexp.MustCompile(`^\s*["']?([A-Za-z_][A-Za-z0-9_-]*)["']?\s*:`)
+// excludedKeyLine matches a frontmatter key at ANY indentation and inside a
+// sequence item, quoted or bare. Both allowances are what make the match
+// depth-agnostic: a warm field nested one level deeper, or moved into a list of
+// mappings, is the same warm field, and a pattern anchored at column 0 would
+// call either clean.
+var excludedKeyLine = regexp.MustCompile(`^\s*(?:-\s+)*["']?([A-Za-z_][A-Za-z0-9_-]*)["']?\s*:`)
 
 // atxHeading matches an ATX heading, including the one-to-three-space indent
 // CommonMark allows.

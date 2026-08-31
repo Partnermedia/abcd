@@ -30,14 +30,21 @@ const (
 	posDetection   = "detection"
 )
 
-// fullyAsserted are the positions every assertion runs at. The comparative
-// position is asserted only over the instrument's own stored prior outputs
-// (TestPriorRunExhaustNeverReaches): its in-cycle candidate set arrives by a
-// channel this eval makes no claim about.
-var fullyAsserted = []string{posWidening, posEntailment, posDetection}
-
 // everyPosition is the closed set, in charter order.
 var everyPosition = []string{posWidening, posEntailment, posComparative, posDetection}
+
+// fullyAsserted are the positions every assertion runs at: all four.
+//
+// The comparative position is included even though a comparative reading's
+// in-cycle candidate set arrives by a channel this eval makes no claim about.
+// The two are separable, and conflating them cost the eval a whole position:
+// the artefact asserted here is the bundle `reading assemble --position
+// comparative` wrote, and an assertion over those bytes claims nothing about
+// any other channel. Leaving comparative out left six of the ten sentinel
+// classes unasserted there, and left the oracle's own drafts-at-comparative
+// exclusion a row that could never fire — so an assembler admitting the
+// candidate set, or the local ledger tier, at that one position was green.
+var fullyAsserted = everyPosition
 
 // sentinelPrefix is the shape every planted token takes, so a leak names the
 // warm location class that leaked rather than reading as ordinary prose.
@@ -206,6 +213,9 @@ type hole struct {
 // material. A correct assembler passes both through, so the eval must report
 // exactly these two violations — which is the permanent proof that the
 // assertion can fail.
+// It is derived from nothing: emptying it would make the negative control pass
+// with no control in it, which is why TestReadBlockCatchesAHoledFirewall refuses
+// an empty table outright.
 var holes = []hole{
 	{
 		Class: "LEDGER-FRAMING",
@@ -219,6 +229,76 @@ var holes = []hole{
 		To:    "docs/reference/thing.md",
 		Why:   "the shipped tree's delivered documentation is admitted wholesale",
 	},
+}
+
+// carrier is one plant-bearing file the include table admits, and the positions
+// it must actually reach the assembly at.
+//
+// The anti-vacuity guard below the corpus proves the plants are on disk and
+// tracked. This proves they are IN THE ASSEMBLY, which is a different claim and
+// the one every absence assertion here rests on: an assembler that stopped
+// enumerating a whole class of source would drop the files carrying WARM-FIELD,
+// two of the three WARM-KEY plants and both draft plants, leave a bundle that is
+// still comfortably non-empty, and turn every assertion green for the reason
+// they exist to catch. A floor of "any item" cannot see that; a floor naming the
+// carriers can.
+//
+// The list is transcribed from the same source as the include list above —
+// itd-183's positive includes — never from the assembler.
+type carrier struct {
+	// Path is the repo-relative file, which must appear among the manifest's
+	// item paths.
+	Path string
+	// Positions are the positions it must reach. Empty means every position.
+	Positions []string
+	// Class is the sentinel class the file carries, so a missing carrier names
+	// the assertion it silently disarmed.
+	Class string
+	// Why states what the file is doing in the assembly.
+	Why string
+}
+
+// carriers is the plant-bearing half of the include list.
+var carriers = []carrier{
+	{
+		Path:  ".abcd/development/brief/01-product/01-press-release.md",
+		Class: "WARM-KEY",
+		Why:   "a brief chapter admitted wholesale, carrying the production-mode key",
+	},
+	{
+		Path:  ".abcd/development/intents/disciplines/itd-4-selection-criteria.md",
+		Class: "WARM-KEY",
+		Why:   "a discipline admitted whole, carrying the origin key",
+	},
+	{
+		Path:  ".abcd/development/specs/open/spc-1-a-design-record.md",
+		Class: "WARM-KEY",
+		Why:   "a spec admitted whole, carrying the origin key",
+	},
+	{
+		Path:  ".abcd/development/intents/shipped/itd-1-a-shipped-intent.md",
+		Class: "WARM-FIELD",
+		Why:   "a shipped intent projected to its claim record, carrying the three headings that stay behind",
+	},
+	{
+		Path:      ".abcd/development/intents/drafts/itd-2-a-draft-intent.md",
+		Positions: []string{posEntailment},
+		Class:     "DRAFT-ORIGIN",
+		Why:       "the candidate set the entailment reading reads, carrying the origin key",
+	},
+}
+
+// reachesAt reports whether the carrier must reach the assembly at position p.
+func (c carrier) reachesAt(p string) bool {
+	if len(c.Positions) == 0 {
+		return true
+	}
+	for _, q := range c.Positions {
+		if q == p {
+			return true
+		}
+	}
+	return false
 }
 
 // The fixture corpus on disk.

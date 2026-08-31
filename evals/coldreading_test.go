@@ -49,6 +49,11 @@ func TestReadBlockBaselineIsClean(t *testing.T) {
 // exactly the declared holes, naming their classes, so an assertion that stops
 // detecting anything fails here rather than passing quietly.
 func TestReadBlockCatchesAHoledFirewall(t *testing.T) {
+	if len(holes) == 0 {
+		t.Fatal("the holes table is empty, so the negative control controls nothing; " +
+			"this test is the permanent proof that the assertion can fail, and it cannot " +
+			"be that with no hole in it")
+	}
 	f := materialise(t, variantHoled)
 	want := make([]string, 0, len(holes))
 	for _, h := range holes {
@@ -119,9 +124,8 @@ func TestReadBlockCatchesWarmFieldsOnIncludedTypes(t *testing.T) {
 // TestPriorRunExhaustNeverReaches is ac-4: no prior-run manifest, reading record
 // or disposition reaches the assembled input.
 //
-// It is the one assertion that runs at the comparative position too. The
-// instrument's own exhaust is what a comparative reading is most likely to be
-// handed by accident, and nothing else in the cycle tests it.
+// The instrument's own exhaust is what a comparative reading is most likely to
+// be handed by accident, and nothing else in the cycle tests it.
 func TestPriorRunExhaustNeverReaches(t *testing.T) {
 	f := materialise(t, variantBaseline)
 	for _, position := range everyPosition {
