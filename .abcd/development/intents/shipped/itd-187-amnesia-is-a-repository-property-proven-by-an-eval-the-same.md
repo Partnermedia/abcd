@@ -62,3 +62,8 @@ pull-request body. That is a recorded hand-run, not a standing gate.
 ## Grounds
 
 - pursued: Amnesia is a property of what the assembler passes, not an instruction an agent can be trusted to follow, and a case run could only ever exhibit it rather than prove it. It is pursued now because a case run is the scarcest thing in the cycle: making amnesia a repository eval leaves the closing run of Iteration 2 carrying only the properties a case run can carry, purpose durability and convergence, and lets any reader check the rest for themselves.
+
+## Audit Notes
+
+<!-- abcd-review: OWED receipt=rcp-d3041aa2b510 -->
+Fidelity review OWED (receipt rcp-d3041aa2b510).

@@ -7,7 +7,7 @@ intent: itd-187
 
 ## Summary
 
-spc-65 delivers [itd-187](../../intents/planned/itd-187-amnesia-is-a-repository-property-proven-by-an-eval-the-same.md):
+spc-65 delivers [itd-187](../../intents/shipped/itd-187-amnesia-is-a-repository-property-proven-by-an-eval-the-same.md):
 a repository eval that assembles one reading definition twice over an unchanged
 repository state and asserts the two assembled inputs are byte-identical, the
 manifest excluded from the comparison. Amnesia becomes a property of what the

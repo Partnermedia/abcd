@@ -11,7 +11,7 @@ intent: itd-184
 itd-184,
 [itd-183](../../intents/shipped/itd-183-the-cold-reading-sees-exactly-what-the-assembler-passes-posi.md)
 and
-[itd-185](../../intents/planned/itd-185-one-ingest-verb-validates-every-cold-reading-output-includin.md)
+[itd-185](../../intents/shipped/itd-185-one-ingest-verb-validates-every-cold-reading-output-includin.md)
 are one design under one bundle kind, and the ceremony cannot give them one
 spec: a spec's `intent:` is a single id, captured as iss-2608300108376943.
 
@@ -19,7 +19,7 @@ spec: a spec's `intent:` is a single id, captured as iss-2608300108376943.
 | --- | --- |
 | [spc-61](../closed/spc-61-the-cold-reading-sees-exactly-what-the-assembler-passes-posi.md) | The input assembler, the include table, the pathless bundle, the manifest, and the bundle's shared decisions |
 | spc-62 (this record) | The four reading definitions under `agents/` and the blindness-core byte-identity test |
-| [spc-63](../open/spc-63-one-ingest-verb-validates-every-cold-reading-output-includin.md) | The output contract, the supply-regime gate, and the ingest sub-verb |
+| [spc-63](spc-63-one-ingest-verb-validates-every-cold-reading-output-includin.md) | The output contract, the supply-regime gate, and the ingest sub-verb |
 
 The package name, the verb tree, the run-identifier form and the artefact
 layout are the bundle's shared decisions, stated once in
@@ -53,7 +53,7 @@ its five parts and its regime value.
 **Out.** Enforcing the blindness, which is the assembler's job checked by
 [itd-186](../../intents/shipped/itd-186-the-read-block-eval-falsifies-the-firewall-planted-warm-cont.md)'s
 and
-[itd-187](../../intents/planned/itd-187-amnesia-is-a-repository-property-proven-by-an-eval-the-same.md)'s
+[itd-187](../../intents/shipped/itd-187-amnesia-is-a-repository-property-proven-by-an-eval-the-same.md)'s
 evals; validating what a reading produced against its regime, which is
 spc-63's gate; the reading-record schema, which is
 [itd-180](../../intents/shipped/itd-180-a-cold-reading-s-findings-land-as-reading-records-and-the-re.md)
