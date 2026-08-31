@@ -941,3 +941,29 @@ func TestGroundsFlagUsageRendersAStringPlaceholder(t *testing.T) {
 		}
 	}
 }
+
+// TestCapturePromoteReadingItemNeedsNoGrounds pins the one route the mandatory
+// --grounds flag does not govern. A reading item's reasoning is recorded in its
+// DISPOSITION — a separate record promote already refuses to act without — and
+// the reading promote path writes no grounds of its own, so demanding the flag
+// here would collect a conjecture nothing stores. The issue route, asserted by
+// TestCapturePromoteMissingGroundsExit2, is unaffected.
+func TestCapturePromoteReadingItemNeedsNoGrounds(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+	const run, item = "rdg-2608300000000001", "rdi-2608300000000002"
+	writeReadingFixture(t, repo, run, item)
+	runCLI(t, "capture", "disposition", item,
+		"--state", "accepted", "--grounds", "the tension is real and worth acting on")
+
+	out := runCLI(t, "capture", "promote", item, "--json")
+	var r struct {
+		IntentID string `json:"intent_id"`
+	}
+	if err := json.Unmarshal(out, &r); err != nil {
+		t.Fatalf("promote output not JSON: %v\n%s", err, out)
+	}
+	if r.IntentID == "" {
+		t.Fatalf("promoting a dispositioned reading item without --grounds must mint a draft:\n%s", out)
+	}
+}
