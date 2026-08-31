@@ -107,17 +107,22 @@ An identity assertion fails the way an absence assertion fails — two artefacts
 that agree because both are empty are green and worthless — so four guards stand
 under it:
 
-- `testdata/cold-reading/order/` is the order-adversarial corpus: five records
-  whose names sort one way by byte, another by case-folded comparison and a third
-  by numeric suffix, materialised in a creation order that is none of the three.
-  `TestFixtureOrderIsAdversarial` asserts those disagreements hold, so the order
-  oracle cannot pass by coincidence. The shared baseline corpus alone cannot
-  catch a numeric-suffix comparator; this one can.
+- `testdata/cold-reading/order/` is the order-adversarial corpus: six records
+  whose names sort one way by byte, another by case-folded comparison, a third by
+  numeric suffix and a fourth by path component, materialised in a creation order
+  that is none of the four. `TestFixtureOrderIsAdversarial` asserts those
+  disagreements hold, so the order oracle cannot pass by coincidence. The shared
+  baseline corpus alone cannot catch a numeric-suffix comparator, nor a
+  component-wise one — which is the order a directory walk yields, and so the
+  likeliest wrong order of the four; this corpus catches both.
 - `nonVacuous` refuses an assembly that has lost that corpus — by path in the
   manifest **and** by its own text in the bundle — rather than a bare "any item"
   floor, which a bundle of empty texts satisfies exactly.
 - The two runs are required to report **different run identifiers**, so the
-  comparison is over two invocations rather than one artefact read twice.
+  comparison is over two invocations rather than one artefact read twice. One
+  repeat is allowed before that is believed: an identifier is a one-second stamp
+  and a uniform four-digit draw, so a single collision is a documented outcome of
+  the mint and only a second one is evidence.
 - `TestComparatorReportsADifference` feeds the comparator artefacts that differ
   only in item order, only in one item's scalar, and only in the artefact header,
   and demands a reported difference naming the item that differs.
