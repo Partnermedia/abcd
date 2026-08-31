@@ -35,7 +35,7 @@ type Status struct {
 // Describe reports the assembler's state over a repository. It writes nothing.
 func Describe(repoRoot string) (Status, error) {
 	s := Status{
-		AssemblerVersion: AssemblerVersion,
+		AssemblerVersion: AssemblerVersion(),
 		SchemaVersion:    SchemaVersion,
 		CharterPath:      CharterPath,
 		Positions:        Positions(),

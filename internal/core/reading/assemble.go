@@ -56,18 +56,100 @@ type AssembleRequest struct {
 // operator's own string back on the result, so no absolute path nobody typed
 // reaches the success surface. Neither ARTEFACT carries an output path at all.
 type AssembleResult struct {
-	RunID            string   `json:"run_id"`
-	Position         Position `json:"position"`
-	TargetCommit     string   `json:"target_commit"`
-	AssemblerVersion string   `json:"assembler_version"`
-	ItemCount        int      `json:"item_count"`
-	ManifestHash     string   `json:"manifest_hash"`
-	OutDir           string   `json:"out_dir,omitempty"`
-	Artefacts        []string `json:"artefacts"`
-	Written          bool     `json:"written"`
+	RunID            string     `json:"run_id"`
+	Position         Position   `json:"position"`
+	TargetCommit     string     `json:"target_commit"`
+	AssemblerVersion string     `json:"assembler_version"`
+	ItemCount        int        `json:"item_count"`
+	ManifestHash     string     `json:"manifest_hash"`
+	Size             SizeReport `json:"size"`
+	OutDir           string     `json:"out_dir,omitempty"`
+	Artefacts        []string   `json:"artefacts"`
+	Written          bool       `json:"written"`
 
 	Bundle   Bundle   `json:"-"`
 	Manifest Manifest `json:"-"`
+}
+
+// tokenBytesPerToken is the divisor of the byte-derived token estimate,
+// measured rather than assumed: every tracked file in this repository was
+// tokenized through tiktoken under cl100k_base and o200k_base (which agreed
+// within 0.3 per cent), giving a byte-weighted 3.865 bytes per token across
+// 17,119,789 bytes. 3.85 is that figure rounded.
+//
+// It is a proxy. tiktoken is OpenAI's tokenizer and no reader's actual
+// tokenization is measured here or claimed, which is why every surface labels
+// the figure an estimate. A single divisor mis-states each kind in known
+// directions — test by about -7.7 per cent, prose by about +7 per cent — and
+// that bias is disclosed in spc-68 rather than removed, because the estimate
+// exists to judge plausibility at the order of magnitude. If it ever changes a
+// decision it should not have it is replaced by a real tokenizer, never tuned
+// (itd-198).
+const tokenBytesPerToken = 3.85
+
+// KindSize is one material kind's contribution to an assembly's weight.
+type KindSize struct {
+	Kind      Kind `json:"kind"`
+	Items     int  `json:"items"`
+	Bytes     int  `json:"bytes"`
+	TokensEst int  `json:"tokens_est"`
+}
+
+// SizeReport is what an assembly would cost a reader, per material kind and in
+// total. It rides on the result and never on the bundle: a reading has no use
+// for its own weight, and itd-198 ac-8 holds the bundle's shape unchanged.
+//
+// Bytes count the item text that actually travels, not the file on disk, so a
+// projected record is counted at what the reading receives rather than at what
+// the record weighs. No budget is enforced and none is invented: the assembler
+// cannot know what a given reader accepts.
+type SizeReport struct {
+	ByKind    []KindSize `json:"by_kind"`
+	Items     int        `json:"items"`
+	Bytes     int        `json:"bytes"`
+	TokensEst int        `json:"tokens_est"`
+	Basis     string     `json:"basis"`
+}
+
+// sizeBasis names the method and the divisor inside the artefact, so a report
+// read out of context still says what it is rather than looking like a count.
+var sizeBasis = fmt.Sprintf("estimated: bytes / %.2f (byte-derived, not a tokenizer's count)", tokenBytesPerToken)
+
+// sizeReport totals the collected candidates by kind, in the closed
+// vocabulary's order. A kind that passed no item is omitted rather than
+// reported as zero: an absent kind and an empty one are different facts, and
+// the manifest can settle which.
+func sizeReport(cands []candidate) SizeReport {
+	byKind := make(map[Kind]*KindSize, len(Kinds()))
+	rep := SizeReport{Basis: sizeBasis}
+	for _, c := range cands {
+		k, ok := byKind[c.kind]
+		if !ok {
+			k = &KindSize{Kind: c.kind}
+			byKind[c.kind] = k
+		}
+		n := len(c.text)
+		k.Items++
+		k.Bytes += n
+		rep.Items++
+		rep.Bytes += n
+	}
+	rep.ByKind = make([]KindSize, 0, len(byKind))
+	for _, kind := range Kinds() {
+		k, ok := byKind[kind]
+		if !ok {
+			continue
+		}
+		k.TokensEst = estimateTokens(k.Bytes)
+		rep.ByKind = append(rep.ByKind, *k)
+	}
+	rep.TokensEst = estimateTokens(rep.Bytes)
+	return rep
+}
+
+// estimateTokens converts bytes to the byte-derived token estimate.
+func estimateTokens(b int) int {
+	return int(float64(b) / tokenBytesPerToken)
 }
 
 // BundleFileName and ManifestFileName are the two artefacts an assembly writes:
@@ -167,7 +249,7 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 		RunID:            runID,
 		Position:         position,
 		TargetCommit:     target,
-		AssemblerVersion: AssemblerVersion,
+		AssemblerVersion: AssemblerVersion(),
 		Items:            make([]ManifestItem, 0, len(cands)),
 		Exclusions:       exclusions,
 	}
@@ -175,7 +257,7 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 		key := fmt.Sprintf("itm-%04d", i+1)
 		bundle.Items = append(bundle.Items, BundleItem{ItemKey: key, Kind: c.kind, Text: c.text})
 		manifest.Items = append(manifest.Items, ManifestItem{
-			ItemKey: key, Path: c.path, Field: c.field, SHA256: sha256Hex([]byte(c.text)),
+			ItemKey: key, Path: c.path, Field: c.field, Kind: c.kind, SHA256: sha256Hex([]byte(c.text)),
 		})
 	}
 
@@ -187,9 +269,10 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 		RunID:            runID,
 		Position:         position,
 		TargetCommit:     target,
-		AssemblerVersion: AssemblerVersion,
+		AssemblerVersion: AssemblerVersion(),
 		ItemCount:        len(bundle.Items),
 		ManifestHash:     hash,
+		Size:             sizeReport(cands),
 		Artefacts:        []string{},
 		Bundle:           bundle,
 		Manifest:         manifest,

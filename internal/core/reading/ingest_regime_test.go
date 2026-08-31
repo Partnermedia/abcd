@@ -33,7 +33,7 @@ func TestRegimeComesFromTheDefinitionNotThePayload(t *testing.T) {
 	if err := os.Remove(filepath.Join(f.root, filepath.FromSlash(DefinitionPath("detection")))); err != nil {
 		t.Fatal(err)
 	}
-	f.parkRun("rdg-2608310000000002", "detection", AssemblerVersion)
+	f.parkRun("rdg-2608310000000002", "detection", AssemblerVersion())
 	doc := f.payload(1)
 	doc["run_id"] = "rdg-2608310000000002"
 	doc["manifest_sha256"] = f.manifestHashOf("rdg-2608310000000002")
@@ -73,7 +73,7 @@ func TestADriftedDefinitionRefusesTheRunRatherThanChangingTheLicence(t *testing.
 	// reading, and the registrative ones would not be enforced at all.
 	f.writeDefinition("detection", RegimeEvaluative)
 
-	f.parkRun("rdg-2608310000000007", "detection", AssemblerVersion)
+	f.parkRun("rdg-2608310000000007", "detection", AssemblerVersion())
 	doc := f.payload(1)
 	doc["run_id"] = "rdg-2608310000000007"
 	doc["manifest_sha256"] = f.manifestHashOf("rdg-2608310000000007")

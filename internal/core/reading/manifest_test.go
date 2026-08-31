@@ -1,6 +1,7 @@
 package reading
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 	"testing"
@@ -179,7 +180,12 @@ func TestDecodeManifestIsStrict(t *testing.T) {
 		"unknown field":    strings.Replace(string(raw), "\"run_id\"", "\"run_when\"", 1),
 		"trailing content": string(raw) + "{}\n",
 		"wrong type":       strings.Replace(string(raw), ManifestType, "abcd.reading.bundle", 1),
-		"wrong schema":     strings.Replace(string(raw), "\"schema_version\": 1", "\"schema_version\": 99", 1),
+		// Derived from SchemaVersion, not written as a literal: pinned to "1"
+		// this replacement silently became a no-op the moment the schema moved,
+		// and a no-op replacement produces a VALID manifest, so the case went on
+		// asserting strictness while testing nothing (spc-68).
+		"wrong schema": strings.Replace(string(raw),
+			fmt.Sprintf("\"schema_version\": %d", SchemaVersion), "\"schema_version\": 99", 1),
 	} {
 		if _, err := DecodeManifest([]byte(bad)); err == nil {
 			t.Errorf("a manifest with a %s decoded", name)

@@ -51,7 +51,7 @@ A table that cannot say what a reading is about cannot distinguish four readings
 - **Any route from a scope to the local ledger tier.** Brief invariant 14 forbids every agent from consuming the framing traces "unconditionally and under no flag". The exclusion is measured from each row's source downward, is not expressible as a scope, and does not move.
 - **Widening beyond a position's admission.** A scope intersects what the include table already admits at that position and can only narrow it. No scope admits a row the table denies there — which is what keeps itd-184's deliberate drafts asymmetry intact, and what makes the all-scopes case finitely checkable.
 - **The supply regime**, which stays keyed on position: the licence bounds what may be produced, never what was seen, so a wide-scoped entailment reading is still `explicative`.
-- **The size report**, which is [itd-198](itd-198-an-assembly-reports-what-it-would-cost-before-a-reading-is.md)'s and lands first.
+- **The size report**, which is [itd-198](../planned/itd-198-an-assembly-reports-what-it-would-cost-before-a-reading-is.md)'s and lands first.
 - **A fifth position.** Position resolves to a definition and a regime and the disposition machinery keys on it; temperature is a scope, not a position.
 
 ## Scope Conditions

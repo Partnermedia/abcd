@@ -265,7 +265,7 @@ func TestBareReadingRenders(t *testing.T) {
 	t.Chdir(repo)
 
 	text := string(runCLI(t, "reading"))
-	if !strings.Contains(text, reading.AssemblerVersion) {
+	if !strings.Contains(text, reading.AssemblerVersion()) {
 		t.Errorf("the bare render does not name the assembler version:\n%s", text)
 	}
 	for _, p := range reading.Positions() {
@@ -278,7 +278,7 @@ func TestBareReadingRenders(t *testing.T) {
 	if err := json.Unmarshal(out, &status); err != nil {
 		t.Fatalf("the --json status does not decode: %v\n%s", err, out)
 	}
-	if status.AssemblerVersion != reading.AssemblerVersion {
+	if status.AssemblerVersion != reading.AssemblerVersion() {
 		t.Errorf("status names assembler version %q", status.AssemblerVersion)
 	}
 }
@@ -495,7 +495,7 @@ func TestIngestExecutesEndToEnd(t *testing.T) {
 		"manifest_sha256": assembled.ManifestHash,
 		"instrument": map[string]any{
 			"model": "a-model", "definition_sha256": def.SHA256,
-			"assembler_version": reading.AssemblerVersion,
+			"assembler_version": reading.AssemblerVersion(),
 		},
 		"items": []any{map[string]any{
 			"pattern": "the pattern this reading read under",
@@ -572,7 +572,7 @@ func TestIngestRendersARefusalRecord(t *testing.T) {
 		"manifest_sha256": assembled.ManifestHash,
 		"instrument": map[string]any{
 			"model": "a-model", "definition_sha256": def.SHA256,
-			"assembler_version": reading.AssemblerVersion,
+			"assembler_version": reading.AssemblerVersion(),
 		},
 		"items": []any{map[string]any{
 			"pattern": "the pattern this reading read under",
@@ -637,5 +637,79 @@ func TestTheTextRenderNamesNoItemZero(t *testing.T) {
 	}
 	if !strings.Contains(out, "and 178 more") {
 		t.Errorf("the render dropped the elision entry:\n%s", out)
+	}
+}
+
+// TestDryRunRendersTheSizeReport is itd-198 ac-2 on the CLI side: the per-kind
+// figures and the total appear on a run that writes nothing, which is the only
+// run that can be made BEFORE deciding whether the artefact is worth producing.
+func TestDryRunRendersTheSizeReport(t *testing.T) {
+	res := reading.AssembleResult{
+		RunID: "rdg-2608310000000001", Position: "widening", TargetCommit: "abcdef1234567890",
+		ItemCount: 3, ManifestHash: "deadbeef", Written: false,
+		Size: reading.SizeReport{
+			ByKind: []reading.KindSize{
+				{Kind: "source", Items: 2, Bytes: 3_400_000, TokensEst: 883_116},
+				{Kind: "test", Items: 1, Bytes: 4_100_000, TokensEst: 1_064_935},
+			},
+			Items: 3, Bytes: 7_500_000, TokensEst: 1_948_051,
+			Basis: "estimated: bytes / 3.85 (byte-derived, not a tokenizer's count)",
+		},
+	}
+	var buf bytes.Buffer
+	renderAssembleResult(&buf, res)
+	out := buf.String()
+
+	if !strings.Contains(out, "nothing (dry run") {
+		t.Fatalf("the fixture is not rendering a dry run:\n%s", out)
+	}
+	for _, want := range []string{"source", "test", "7.5 MB", "1,948,051", "estimated", "bytes / 3.85"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the dry-run render omits %q:\n%s", want, out)
+		}
+	}
+}
+
+// TestSizeReportRendersBeforeTheWrittenLine guards the ordering trap: the
+// dry-run branch returns early, so a report emitted after it would be invisible
+// on exactly the runs that exist to carry it.
+func TestSizeReportRendersBeforeTheWrittenLine(t *testing.T) {
+	res := reading.AssembleResult{
+		RunID: "rdg-2608310000000002", Position: "detection", TargetCommit: "abcdef1234567890",
+		ItemCount: 1, ManifestHash: "cafe", Written: true, OutDir: "out",
+		Size: reading.SizeReport{
+			ByKind: []reading.KindSize{{Kind: "doc", Items: 1, Bytes: 1200, TokensEst: 311}},
+			Items:  1, Bytes: 1200, TokensEst: 311, Basis: "estimated: bytes / 3.85",
+		},
+	}
+	var buf bytes.Buffer
+	renderAssembleResult(&buf, res)
+	out := buf.String()
+
+	size, written := strings.Index(out, "size:"), strings.Index(out, "written:")
+	if size < 0 || written < 0 {
+		t.Fatalf("render is missing a line:\n%s", out)
+	}
+	if size > written {
+		t.Errorf("the size report renders after the written line, so a dry run would "+
+			"return before reaching it:\n%s", out)
+	}
+}
+
+// TestHumanBytesAndThousands holds the two formatters the report leans on.
+func TestHumanBytesAndThousands(t *testing.T) {
+	for in, want := range map[int]string{
+		0: "0 B", 999: "999 B", 1_000: "1.0 kB", 9_800_000: "9.8 MB", 2_300_000_000: "2.3 GB",
+	} {
+		if got := humanBytes(in); got != want {
+			t.Errorf("humanBytes(%d) = %q, want %q", in, got, want)
+		}
+	}
+	for in, want := range map[int]string{
+		0: "0", 42: "42", 999: "999", 1_000: "1,000", 2_295_107: "2,295,107", -1_234: "-1,234",
+	} {
+		if got := thousands(in); got != want {
+			t.Errorf("thousands(%d) = %q, want %q", in, got, want)
+		}
 	}
 }

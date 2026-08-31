@@ -63,8 +63,21 @@ func prefixDenied(rel string) bool {
 // matches reports whether a basename satisfies the row's Match list: an entry
 // beginning with "." is an extension, any other entry is an exact basename.
 func (r Row) matches(base string) bool {
-	if len(r.Match) == 0 {
+	// Both forms empty admits every file, which no row uses. A row that
+	// declares only MatchSuffix must NOT fall through to that: an empty Match
+	// beside a non-empty MatchSuffix means the extension/basename form
+	// contributes nothing, not that everything is admitted (spc-68).
+	if len(r.Match) == 0 && len(r.MatchSuffix) == 0 {
 		return true
+	}
+	// Case-sensitive by construction: the Go toolchain recognises only a
+	// lowercase _test.go as a test file, so folding case here would label
+	// material a test that Go does not build as one. This deliberately differs
+	// from the extension form below, which folds.
+	for _, s := range r.MatchSuffix {
+		if strings.HasSuffix(base, s) {
+			return true
+		}
 	}
 	ext := path.Ext(base)
 	for _, m := range r.Match {

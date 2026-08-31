@@ -60,7 +60,7 @@ func TestRunMetadataLandsLast(t *testing.T) {
 
 			// The next invocation names the orphan and clears it, and the
 			// rollback leaves nothing durable for the run.
-			f.parkRun("rdg-2608310000000009", "detection", AssemblerVersion)
+			f.parkRun("rdg-2608310000000009", "detection", AssemblerVersion())
 			next := f.payload(1)
 			next["run_id"] = "rdg-2608310000000009"
 			next["manifest_sha256"] = f.manifestHashOf("rdg-2608310000000009")
@@ -141,7 +141,7 @@ func TestOrphanSweepLeavesACommittedRunAlone(t *testing.T) {
 	f.write(IngestStageDir+"/"+f.runID+"/"+stageFileName,
 		[]byte(`{"_type":"`+StageType+`","run_id":"`+f.runID+`","records":[]}`))
 
-	f.parkRun("rdg-2608310000000005", "detection", AssemblerVersion)
+	f.parkRun("rdg-2608310000000005", "detection", AssemblerVersion())
 	next := f.payload(1)
 	next["run_id"] = "rdg-2608310000000005"
 	next["manifest_sha256"] = f.manifestHashOf("rdg-2608310000000005")
@@ -235,7 +235,7 @@ func TestListLevelRefusalWritesRefusalRecordOnly(t *testing.T) {
 
 	// A rerun is a NEW run with a new run id, never an amendment, and the
 	// refusal record of the refused one stands.
-	f.parkRun("rdg-2608310000000006", "detection", AssemblerVersion)
+	f.parkRun("rdg-2608310000000006", "detection", AssemblerVersion())
 	next := f.payload(1)
 	next["run_id"] = "rdg-2608310000000006"
 	next["manifest_sha256"] = f.manifestHashOf("rdg-2608310000000006")
