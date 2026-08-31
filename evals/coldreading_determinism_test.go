@@ -135,7 +135,7 @@ type leakPath struct {
 // created; this knows the shape of any other — the machine's own home directory,
 // a checkout path, a cache directory — none of which the list could enumerate.
 //
-// The leading boundary is a CAPTURED character because RE2 has no lookbehind,
+// The leading boundary is a CONSUMED character because RE2 has no lookbehind,
 // and without one an ordinary repo-relative path matches on its own second
 // slash: `.abcd/development/brief` contains `/development/brief`. `/` and `:`
 // are excluded from the boundary class so a URL's `//host/path` is not read as a
@@ -220,12 +220,21 @@ func absolutePathLeaks(known []leakPath, raw []byte) []string {
 		reported = append(reported, k.Path)
 	}
 	shaped := map[string]bool{}
-	for _, m := range absolutePathShape.FindAllStringSubmatch(text, -1) {
-		hit := m[1]
+	for _, loc := range absolutePathShape.FindAllStringSubmatchIndex(text, -1) {
+		hit := text[loc[2]:loc[3]]
 		if shaped[hit] {
 			continue
 		}
 		shaped[hit] = true
+		// A root-relative markdown link target is a link, not a filesystem path,
+		// and it is a shape the corpus can legitimately grow. Skipping it costs
+		// the shape mechanism nothing that matters: the paths this harness made
+		// are matched by NAME above, with no boundary rule at all, so one of them
+		// written inside a link is still reported. The two mechanisms cover each
+		// other, which is why neither has to be widened to do the other's job.
+		if loc[2] >= 2 && text[loc[2]-2:loc[2]] == "](" {
+			continue
+		}
 		covered := false
 		for _, r := range reported {
 			if strings.Contains(r, hit) {
@@ -244,15 +253,22 @@ func absolutePathLeaks(known []leakPath, raw []byte) []string {
 // elidePath renders an absolute path as its last two components alone.
 //
 // The failure message has to name the leak to be usable and must not itself
-// publish the machine's directory names into a CI log, which is the rule the
-// guard is enforcing. Two components identify which path leaked without
-// carrying the account name above them.
+// publish the directories ABOVE it into a CI log, which is where an account name
+// lives and which is the rule the guard is enforcing. Two components identify
+// which path leaked; everything above them is dropped.
+//
+// A path of two components or fewer is returned whole, because there is nothing
+// above the last two to drop. `/tmp` is the case that matters — it is what
+// `os.TempDir()` reports on the Linux runner, and it names no account.
 func elidePath(p string) string {
 	parts := strings.Split(filepath.ToSlash(filepath.Clean(p)), "/")
 	if len(parts) <= 2 {
 		return p
 	}
-	return ".../" + strings.Join(parts[len(parts)-2:], "/")
+	// The ellipsis carries NO trailing separator, deliberately: `".../" + "tmp/x"`
+	// re-forms `/tmp/x`, so an elided path would still contain the path it elided
+	// and the elision would be cosmetic.
+	return "..." + strings.Join(parts[len(parts)-2:], "/")
 }
 
 // TestTheAbsolutePathGuardSeesMoreThanTheTwoRoots is the guard's own falsifier.
@@ -304,6 +320,7 @@ func TestTheAbsolutePathGuardSeesMoreThanTheTwoRoots(t *testing.T) {
 		{"repo-relative item paths", `{"path":".abcd/development/brief/01-product/01-press-release.md"}`, false},
 		{"a repo-relative source path", `{"path":"internal/core/reading/include.go"}`, false},
 		{"a URL", `{"source":"https://example.invalid/one/two"}`, false},
+		{"a root-relative markdown link target", `{"text":"see [the map](/docs/reference/thing.md)"}`, false},
 		{"a single-component reference", `{"note":"and/or a/b"}`, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -316,13 +333,25 @@ func TestTheAbsolutePathGuardSeesMoreThanTheTwoRoots(t *testing.T) {
 				t.Errorf("the absolute-path guard reports %v over %q, which carries no absolute "+
 					"path at all; a detector that reports every slash reports nothing", got, tc.text)
 			}
-			// The message names the leak without republishing the machine's own
-			// directory names, which is the rule this guard is enforcing.
+			// The message names the leak without republishing the directories
+			// above it, which is the rule this guard is enforcing.
+			//
+			// The property is ELISION, not the absence of some substring: on the
+			// Linux runner `os.TempDir()` is `/tmp`, and every fixture path
+			// legitimately carries `tmp` as a component, so "the message must not
+			// contain the temporary directory" is unsatisfiable there and would
+			// fail a lane `make preflight` does not reach. What must hold is that
+			// no path elidePath shortened appears in full.
 			for _, g := range got {
-				if strings.Contains(g, filepath.Clean(os.TempDir())) {
-					t.Errorf("the failure message %q carries the machine's temporary directory "+
-						"in full; a guard against absolute paths in artefacts must not put one "+
-						"in a CI log itself", g)
+				for _, k := range known {
+					if elidePath(k.Path) == k.Path {
+						continue // nothing above the last two components to drop
+					}
+					if strings.Contains(g, k.Path) {
+						t.Errorf("the failure message %q carries %s in full rather than its last "+
+							"two components; a guard against absolute paths in artefacts must not "+
+							"put one in a CI log itself", g, elidePath(k.Path))
+					}
 				}
 			}
 		})
