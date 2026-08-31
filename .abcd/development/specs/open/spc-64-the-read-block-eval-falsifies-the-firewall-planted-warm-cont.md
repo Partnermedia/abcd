@@ -210,7 +210,7 @@ Every test below is watched red before the change and green after.
 
 - The assembler itself, its include table, its projection, and its manifest
   (spc-61); the four reading definitions and the blindness core
-  ([spc-62](spc-62-four-cold-reading-definitions-one-blindness-core-each-positi.md));
+  ([spc-62](../closed/spc-62-four-cold-reading-definitions-one-blindness-core-each-positi.md));
   validating what a reading was licensed to produce
   ([spc-63](spc-63-one-ingest-verb-validates-every-cold-reading-output-includin.md));
   and determinism of the assembled input

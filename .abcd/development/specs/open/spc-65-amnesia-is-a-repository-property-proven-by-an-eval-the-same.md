@@ -189,7 +189,7 @@ Every test below is watched red before the change and green after.
 - What the assembler included or excluded, and the sentinel corpus that tests
   it: spc-64.
 - The reading definitions
-  ([spc-62](spc-62-four-cold-reading-definitions-one-blindness-core-each-positi.md))
+  ([spc-62](../closed/spc-62-four-cold-reading-definitions-one-blindness-core-each-positi.md))
   and the output contract
   ([spc-63](spc-63-one-ingest-verb-validates-every-cold-reading-output-includin.md)).
 - Determinism of anything downstream of the assembler: a reading's own output is

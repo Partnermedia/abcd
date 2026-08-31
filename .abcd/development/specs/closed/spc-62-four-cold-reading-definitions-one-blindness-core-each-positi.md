@@ -19,7 +19,7 @@ spec: a spec's `intent:` is a single id, captured as iss-2608300108376943.
 | --- | --- |
 | [spc-61](../closed/spc-61-the-cold-reading-sees-exactly-what-the-assembler-passes-posi.md) | The input assembler, the include table, the pathless bundle, the manifest, and the bundle's shared decisions |
 | spc-62 (this record) | The four reading definitions under `agents/` and the blindness-core byte-identity test |
-| [spc-63](spc-63-one-ingest-verb-validates-every-cold-reading-output-includin.md) | The output contract, the supply-regime gate, and the ingest sub-verb |
+| [spc-63](../open/spc-63-one-ingest-verb-validates-every-cold-reading-output-includin.md) | The output contract, the supply-regime gate, and the ingest sub-verb |
 
 The package name, the verb tree, the run-identifier form and the artefact
 layout are the bundle's shared decisions, stated once in
