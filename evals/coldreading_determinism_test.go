@@ -51,6 +51,27 @@ func TestAssembledInputIsByteIdenticalAcrossRuns(t *testing.T) {
 		t.Run(position, func(t *testing.T) {
 			a := assemble(t, first, position)
 			b := assemble(t, second, position)
+
+			// Freshness. Two invocations mint two run identifiers, so one
+			// identifier on both sides would mean one artefact was read twice —
+			// the classic silent pass for an identity assertion.
+			//
+			// The second assembly is retried once before that is believed. A run
+			// identifier is a one-second stamp and a uniform four-digit draw, and
+			// the two assemblies land in the same second, so a collision is a
+			// documented one-in-ten-thousand outcome of the mint rather than
+			// evidence of anything. Failing on the first collision would fail a
+			// required CI job about once in every few thousand runs and blame the
+			// assembler for what the mint is specified to do; two collisions in a
+			// row is one in a hundred million, which is a real finding.
+			if runIdentifier(t, a) == runIdentifier(t, b) {
+				b = assemble(t, second, position)
+			}
+			if ra, rb := runIdentifier(t, a), runIdentifier(t, b); ra == rb {
+				t.Fatalf("both assemblies at %s report run identifier %q twice over, so this is "+
+					"one run compared with itself rather than two", position, ra)
+			}
+
 			for _, side := range []struct {
 				name string
 				a    assembled
@@ -59,15 +80,6 @@ func TestAssembledInputIsByteIdenticalAcrossRuns(t *testing.T) {
 					t.Fatalf("the %s assembly at %s cannot support an identity assertion: %v",
 						side.name, position, err)
 				}
-			}
-
-			// Freshness. Two invocations mint two run identifiers; one identifier
-			// on both sides would mean one artefact was read twice, which is the
-			// classic silent pass for an identity assertion.
-			ra, rb := runIdentifier(t, a), runIdentifier(t, b)
-			if ra == rb {
-				t.Fatalf("both assemblies at %s report run identifier %q, so this is one run "+
-					"compared with itself rather than two", position, ra)
 			}
 
 			// The path leak first. It is a difference the byte comparison also

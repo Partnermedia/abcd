@@ -45,8 +45,13 @@ type orderRecord struct {
 }
 
 // orderRecords is the corpus in CREATION order, which is deliberately not its
-// sorted order in any of the three comparators. The order of this slice is
-// load-bearing: materialiseOrderPair writes the files in exactly this sequence.
+// sorted order under any of the four comparators below. materialiseOrderPair
+// writes the files in exactly this sequence.
+//
+// Writing them in that sequence is belt to the braces rather than the reach
+// itself: `os.ReadDir` sorts by name, so no assembler reachable through this
+// harness can observe creation order, and the creation-order row exists for an
+// enumeration that does not go through it.
 var orderRecords = []orderRecord{
 	{
 		Path:   ".abcd/development/brief/glossary/ordering/item-2-term.md",
@@ -73,6 +78,14 @@ var orderRecords = []orderRecord{
 		Marker: "A lowercase name that sorts after the uppercase one by byte and before it by fold.",
 		Why:    "the lowercase name the uppercase one is compared against",
 	},
+	{
+		Path:   ".abcd/development/brief/glossary/ordering.md",
+		Marker: "A file whose name shares its stem with the directory beside it",
+		Why: "the file sharing a stem with the directory beside it; byte order puts `.` before " +
+			"`/` and so puts this file first, while a walk that compares path components " +
+			"descends into the directory first — and component order is what a directory walk " +
+			"yields, so it is the order an assembler most easily produces by dropping its sort",
+	},
 }
 
 // requireOrderTable refuses a corpus table that has changed size behind the
@@ -82,7 +95,7 @@ var orderRecords = []orderRecord{
 // the table by construction.
 func requireOrderTable(t *testing.T) {
 	t.Helper()
-	if got, want := len(orderRecords), 5; got != want {
+	if got, want := len(orderRecords), 6; got != want {
 		t.Fatalf("the orderRecords table holds %d row(s), and this eval is written against %d; "+
 			"the order oracle's whole capacity to catch a wrong comparator lives in these "+
 			"names, so update the declared count deliberately", got, want)
@@ -213,6 +226,7 @@ func TestFixtureOrderIsAdversarial(t *testing.T) {
 		return a < b
 	})
 	naturalOrder := sortedCopy(creation, naturalLess)
+	componentOrder := sortedCopy(creation, componentLess)
 
 	for _, c := range []struct {
 		name  string
@@ -236,6 +250,13 @@ func TestFixtureOrderIsAdversarial(t *testing.T) {
 			order: naturalOrder,
 			why: "an assembler sorting numeric suffixes naturally is consistent but not " +
 				"lexicographic, and the oracle could not tell the two apart",
+		},
+		{
+			name:  "directory-walk order",
+			order: componentOrder,
+			why: "an assembler comparing path COMPONENTS rather than bytes is emitting exactly " +
+				"what a directory walk yields, which is the order dropping the sort produces " +
+				"and so the likeliest wrong order of the four",
 		},
 	} {
 		if strings.Join(c.order, ",") == strings.Join(byteOrder, ",") {
@@ -342,6 +363,22 @@ func sortedCopy(in []string, less func(a, b string) bool) []string {
 	out := append([]string{}, in...)
 	sort.SliceStable(out, func(i, j int) bool { return less(out[i], out[j]) })
 	return out
+}
+
+// componentLess compares two paths component by component, which is the order a
+// directory walk yields: a separator sorts before every other byte there,
+// whereas a byte comparison puts `.` before `/` and so puts a file ahead of the
+// directory it shares a stem with. Like naturalLess it exists only to prove the
+// corpus separates the comparator from byte order; the oracle itself sorts by
+// byte.
+func componentLess(a, b string) bool {
+	as, bs := strings.Split(a, "/"), strings.Split(b, "/")
+	for i := 0; i < len(as) && i < len(bs); i++ {
+		if as[i] != bs[i] {
+			return as[i] < bs[i]
+		}
+	}
+	return len(as) < len(bs)
 }
 
 // naturalLess compares two paths treating runs of digits as numbers, which is
