@@ -1287,3 +1287,30 @@ Per hand-run, append:
   (the previous one retired a stance into `loud-staging`), which is now enough
   of a pattern to say the table's most common non-trivial outcome is
   consolidation rather than minting.
+
+### 2026-08-31 — a claim about behaviour is executable (itd-195, hand-run at filing)
+
+- **Proposal:** prose stating how another part of the codebase behaves is backed
+  by something that runs, or it is not written; and the existing corpus is swept
+  for the shape.
+- **Initial routing:** three parts. (1) The rule every change inherits, with a
+  gate (discipline record, itd-195). (2) The codebase-wide sweep, which is the
+  rule's own staging work rather than a separate capability. (3) The stance —
+  checked against the principles shelf first, per the last two runs.
+- **Confirmed routing:** confirmed by the orchestrator under the facilitator's
+  standing authorisation; the facilitator asked for the filing directly
+  ("record it as a future intent ... this probably becomes a discipline"), so
+  the routing question put to them was the SHAPE, not whether to file.
+- **Verdict:** FILE-AS-IS as a discipline, with the sweep carried inside it.
+- **Notes:** part (3) is the interesting one and it did NOT close the way the
+  last two did. The shelf holds two near neighbours and neither is the home.
+  `enforcement-claims-are-facts` forbids describing a gate that does not run —
+  a claim about EXISTENCE, judged true or false when written. This rule is about
+  a claim STAYING true, which that one cannot reach, because a comment can be
+  exactly right the day it is written and false six months later.
+  `guards-prove-themselves` is the same instinct scoped to refusal paths. So the
+  new record is the GENERAL form and the two adopted principles are its special
+  cases; it is filed beside them with that relationship stated, and if adopted
+  they should say they are instances of it. Three consecutive hand-runs have now
+  turned on "is the home already occupied" — twice yes, once no — which is
+  becoming the table's most load-bearing question rather than an afterthought.
