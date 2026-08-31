@@ -803,6 +803,8 @@ or a tag moves and the manifest's re-runnability rests on a reference that canno
       --out string        an empty or absent directory the assembled input and the manifest are written to
                           (default: the local-tier run directory)
       --position string   the reading position: widening, entailment, comparative, detection
+      --scope string      what the reading is about: a record id (itd-N, spc-N, adr-N, iss-N), a material kind,
+                          or a committed preset. No repository path is accepted here; a preset is where one may be named
       --target string     the commit the assembly describes: HEAD, or a hexadecimal sha of 7 to 40 digits
 ```
 

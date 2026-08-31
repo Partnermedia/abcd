@@ -1082,6 +1082,13 @@
           "hidden": false
         },
         {
+          "name": "scope",
+          "shorthand": "",
+          "type": "string",
+          "required": false,
+          "hidden": false
+        },
+        {
           "name": "target",
           "shorthand": "",
           "type": "string",

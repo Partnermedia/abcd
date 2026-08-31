@@ -1,7 +1,7 @@
 ---
 name: reading
 description: Assemble the input a cold reading is handed and validate the output it returns, by invoking the abcd binary. Bare invocation is a read-only status render; assemble produces the assembled input and its hashed manifest, and ingest validates one reading's output and writes its records.
-argument-hint: "[] | assemble --position <widening|entailment|comparative|detection> --target <HEAD|sha> [--out <dir>] [--dry-run] | ingest --reading-json <path>"
+argument-hint: "[] | assemble --position <widening|entailment|detection> --target <HEAD|sha> --scope <record-id|kind|preset> [--out <dir>] [--dry-run] | ingest --reading-json <path>"
 ---
 
 # `/abcd:reading` — cold-reading input assembler
@@ -46,12 +46,34 @@ takes `HEAD` or a hexadecimal commit sha of 7 to 40 digits; a branch name or a
 tag is refused, because it moves and the manifest's re-runnability rests on a
 reference that cannot.
 
+`--scope` names what the reading is **about**, and is required. It takes one
+token in a closed grammar: a record id (`itd-N`, `spc-N`, `adr-N`, `iss-N`), a
+material kind, or the name of a preset committed in
+`.abcd/config/reading-presets.json`. **No repository path is accepted here** —
+a path may be named only inside the committed preset file, where it is
+reviewed, shape-validated and inside the dirty gate (adr-58). A scope
+intersects what the position already admits and can only narrow it.
+
+Naming a preset is running as reviewed. Naming a record or a kind directly is
+an override, and the manifest stamps it as one, so drift between the committed
+presets and what people actually run is countable.
+
+**The comparative position does not assemble.** Its object is the widening
+reading's pre-admission output, which is not repository material and has no
+channel today. It refuses and names that, rather than returning the detection
+position's corpus and reporting success.
+
 Assembly reads the working tree, so it refuses unless HEAD resolves to the
-target **and** no included path is uncommitted. Both refusals exit 2, as does
+target **and** no included path is uncommitted. The preset configuration is in
+that dirty set, for the same reason the record configuration is: an
+uncommitted edit to it reshapes the assembly. Both refusals exit 2, as does
 an unknown position, a missing operand, and any positional argument.
 
 Report from the JSON: `run_id`, `position`, `target_commit`, `item_count`,
 `manifest_hash`, and — where the run wrote — `out_dir` and `artefacts`.
+
+Report `scope` too: the token the operator gave, the selectors it resolved to,
+and whether the run was an override.
 
 Also report `size`, on every run including a dry run: the total `bytes` and
 `tokens_est`, and each row of `by_kind` (`kind`, `items`, `bytes`,

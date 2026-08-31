@@ -51,9 +51,19 @@ func pathContainsDeniedSegment(rel string) bool {
 
 // prefixDenied reports whether a repo-relative path lies at or beneath a denied
 // prefix.
+// It folds case, like segmentDenied beside it. It did not, and this file's own
+// header claimed the deny "binds EVERY path component case-insensitively" while
+// half of it did not — so `Internal/Core/Reading` was accepted where
+// `internal/core/reading` was refused (iss-2608312019544150). Nothing was
+// admitted by that: the walk emits the on-disk case and trackedSet intersects
+// with git. But itd-199 gave the lexical claim a second consumer,
+// validPresetPath, whose stated contract is that a path which LOOKS like it
+// reaches a denied place is refused at the door rather than silently selecting
+// nothing — and on a case-insensitive filesystem that claim was the only thing
+// holding.
 func prefixDenied(rel string) bool {
 	for _, p := range denyPrefixes {
-		if rel == p || strings.HasPrefix(rel, p+"/") {
+		if strings.EqualFold(rel, p) || strings.HasPrefix(strings.ToLower(rel), strings.ToLower(p)+"/") {
 			return true
 		}
 	}

@@ -30,21 +30,43 @@ const (
 	posDetection   = "detection"
 )
 
+// evalScope is the preset the eval assembles under. It selects EVERY material
+// kind at every assembling position, deliberately: three of the read-block's
+// eleven carriers (main.go, fence.go, go.mod) are shipped-tree files, and
+// fence.go is the sole corpus behind the body-redaction row, so a preset that
+// dropped source would turn a live assertion into an undeclared gap without
+// failing anything. The eval asserts a firewall, and a firewall is asserted
+// over the whole corpus or not at all.
+const evalScope = "everything"
+
+// assemblingPositions is everyPosition minus comparative, which no longer
+// assembles: its object is the widening reading's pre-admission output, which
+// has no channel, so it refuses (itd-199). everyPosition stays as it is —
+// comparative is still a position with a definition and a regime, and the
+// tables that enumerate positions must keep naming it.
+var assemblingPositions = []string{posWidening, posEntailment, posDetection}
+
 // everyPosition is the closed set, in charter order.
 var everyPosition = []string{posWidening, posEntailment, posComparative, posDetection}
 
-// fullyAsserted are the positions every assertion runs at: all four.
+// fullyAsserted are the positions every bundle assertion runs at.
 //
-// The comparative position is included even though a comparative reading's
-// in-cycle candidate set arrives by a channel this eval makes no claim about.
-// The two are separable, and conflating them cost the eval a whole position:
-// the artefact asserted here is the bundle `reading assemble --position
-// comparative` wrote, and an assertion over those bytes claims nothing about
-// any other channel. Leaving comparative out left six of the ten sentinel
-// classes unasserted there, and left the oracle's own drafts-at-comparative
-// exclusion a row that could never fire — so an assembler admitting the
-// candidate set, or the local ledger tier, at that one position was green.
-var fullyAsserted = everyPosition
+// It was all four until itd-199, and the reason comparative was in it is worth
+// keeping: leaving that position out had once left six of the ten sentinel
+// classes unasserted there and left the oracle's drafts-at-comparative
+// exclusion a row that could never fire, so an assembler admitting the
+// candidate set or the local ledger tier at that one position was green.
+//
+// Comparative is out now for a different reason, and the gap that argument
+// warns about is closed a different way rather than reopened. The position no
+// longer assembles at all: it refuses, because its object is the widening
+// reading's pre-admission output and no channel supplies it. There is no
+// bundle to assert over, and a bundle that is never written cannot leak. What
+// replaces the assertion is TestComparativeRefusesToAssemble, which holds the
+// refusal itself and holds that NO artefact is produced — a strictly stronger
+// property than "the artefact contains no sentinel", and one that fails loudly
+// if the position ever starts assembling again without this eval being told.
+var fullyAsserted = assemblingPositions
 
 // sentinelPrefix is the shape every planted token takes, so a leak names the
 // warm location class that leaked rather than reading as ordinary prose.
