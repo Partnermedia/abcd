@@ -2339,3 +2339,169 @@ func TestIsAbsentValueIsASpellingTestNotANullTest(t *testing.T) {
 		}
 	}
 }
+
+// provenanceStores adds the two reading families to the schema fixture's store
+// map, so a reading pointer has something to resolve against.
+func provenanceStores() map[string]string {
+	stores := schemaStores()
+	stores["rdi"] = "work/issues/readings"
+	stores["rdg"] = "rec/readings"
+	return stores
+}
+
+// provenanceConfig arms record_provenance ALONE, so a finding in these tests can
+// only come from the rule under test.
+func provenanceConfig() Config {
+	return Config{
+		Roots: []string{"rec"},
+		Rules: map[string]RuleConfig{
+			ruleRecordProvenance: {Enabled: true, Severity: severityBlocker, RecordStores: provenanceStores()},
+		},
+	}
+}
+
+// TestRecordProvenanceSilentOnUnstampedRecord is the rule's most important case,
+// because it is the state of every record in the corpus: population is
+// forward-only, an absent stamp is never backfilled, and sparseness is
+// information. A rule that reported an unstamped record would be a wall of
+// blockers over records nobody is going to change.
+func TestRecordProvenanceSilentOnUnstampedRecord(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/intents/drafts/itd-1-unstamped.md", "---\nid: itd-1\nkind: null\nspec_id: null\n---\n# draft\n")
+	writeFile(t, root, "work/issues/open/iss-1-unstamped.md", "---\nid: iss-1\nslug: unstamped\n---\nbody\n")
+	fs, err := Lint(provenanceConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleRecordProvenance); n != 0 {
+		t.Fatalf("an unstamped record is not a finding, got %d: %+v", n, fs)
+	}
+}
+
+// TestRecordProvenanceLoneKey: every write path stamps both keys together, so
+// one without the other is a state no command produces.
+func TestRecordProvenanceLoneKey(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/intents/drafts/itd-1-half.md",
+		"---\nid: itd-1\nkind: null\nspec_id: null\norigin: researcher-authored\n---\n# draft\n")
+	writeFile(t, root, "work/issues/open/iss-1-half.md",
+		"---\nid: iss-1\nslug: half\nproduction_mode: hand-written\n---\nbody\n")
+	fs, err := Lint(provenanceConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleRecordProvenance); n != 2 {
+		t.Fatalf("expected one finding per half-stamped record, got %d: %+v", n, fs)
+	}
+	if !findingWith(fs, filepath.Join("rec/intents/drafts", "itd-1-half.md"), ruleRecordProvenance, "production_mode") {
+		t.Errorf("expected the missing half named: %+v", fs)
+	}
+	if !findingWith(fs, filepath.Join("work/issues/open", "iss-1-half.md"), ruleRecordProvenance, "origin") {
+		t.Errorf("expected the missing half named: %+v", fs)
+	}
+}
+
+// TestRecordProvenanceOutOfVocabulary: a value outside its closed set could not
+// have been written by a command, which validates before it writes.
+func TestRecordProvenanceOutOfVocabulary(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/intents/drafts/itd-1-bad-origin.md",
+		"---\nid: itd-1\nkind: null\nspec_id: null\norigin: invented-by-hand\nproduction_mode: hand-written\n---\n# draft\n")
+	writeFile(t, root, "rec/intents/drafts/itd-2-bad-mode.md",
+		"---\nid: itd-2\nkind: null\nspec_id: null\norigin: researcher-authored\nproduction_mode: typed\n---\n# draft\n")
+	fs, err := Lint(provenanceConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleRecordProvenance); n != 2 {
+		t.Fatalf("expected one finding per out-of-vocabulary value, got %d: %+v", n, fs)
+	}
+	if !findingWith(fs, filepath.Join("rec/intents/drafts", "itd-1-bad-origin.md"), ruleRecordProvenance, "invented-by-hand") {
+		t.Errorf("expected the refused origin quoted: %+v", fs)
+	}
+	if !findingWith(fs, filepath.Join("rec/intents/drafts", "itd-2-bad-mode.md"), ruleRecordProvenance, "typed") {
+		t.Errorf("expected the refused production mode quoted: %+v", fs)
+	}
+}
+
+// TestRecordProvenanceExtractedWithoutPromotedFrom: promote writes the back-edge
+// and the origin in one act, so the origin without the back-edge is a record no
+// promote could have produced.
+func TestRecordProvenanceExtractedWithoutPromotedFrom(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "rec/intents/drafts/itd-1-orphan.md",
+		"---\nid: itd-1\nkind: null\nspec_id: null\norigin: extracted-from-record\nproduction_mode: hand-written\n---\n# draft\n")
+	writeFile(t, root, "rec/intents/drafts/itd-2-promoted.md",
+		"---\nid: itd-2\nkind: null\nspec_id: null\npromoted_from: iss-1\norigin: extracted-from-record\nproduction_mode: hand-written\n---\n# draft\n")
+	fs, err := Lint(provenanceConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleRecordProvenance); n != 1 {
+		t.Fatalf("expected exactly the back-edge-less record to be reported, got %d: %+v", n, fs)
+	}
+	if !findingWith(fs, filepath.Join("rec/intents/drafts", "itd-1-orphan.md"), ruleRecordProvenance, "promoted_from") {
+		t.Errorf("expected the missing back-edge named: %+v", fs)
+	}
+}
+
+// TestRecordProvenanceReportsUnresolvableReading proves the fourth check against
+// a FIXTURE reading record. No command in this repository mints
+// contributed-by-reading — the reading-ingest verb that carries the run and item
+// identifiers does not exist yet — so the check ships armed with no production
+// input, which is a sequencing fact rather than a discovery.
+func TestRecordProvenanceReportsUnresolvableReading(t *testing.T) {
+	root := t.TempDir()
+	// The fixture reading item: run rdg-3 holds item rdi-17.
+	writeFile(t, root, "work/issues/readings/rdg-3/rdi-17.md", "---\nid: rdi-17\npattern: a thing the instrument returned\n---\nbody\n")
+	// Resolves: the pointer names the run the item actually sits in.
+	writeFile(t, root, "rec/intents/drafts/itd-1-resolves.md",
+		"---\nid: itd-1\nkind: null\nspec_id: null\norigin: contributed-by-reading rdg-3/rdi-17\nproduction_mode: hand-written\n---\n# draft\n")
+	// Dangling item.
+	writeFile(t, root, "rec/intents/drafts/itd-2-dangling.md",
+		"---\nid: itd-2\nkind: null\nspec_id: null\norigin: contributed-by-reading rdg-3/rdi-99\nproduction_mode: hand-written\n---\n# draft\n")
+	// The item exists, but in a different run: the pair is what resolves, not
+	// either id alone.
+	writeFile(t, root, "rec/intents/drafts/itd-3-wrong-run.md",
+		"---\nid: itd-3\nkind: null\nspec_id: null\norigin: contributed-by-reading rdg-4/rdi-17\nproduction_mode: hand-written\n---\n# draft\n")
+	fs, err := Lint(provenanceConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleRecordProvenance); n != 2 {
+		t.Fatalf("expected the two unresolvable pointers, got %d: %+v", n, fs)
+	}
+	if !findingWith(fs, filepath.Join("rec/intents/drafts", "itd-2-dangling.md"), ruleRecordProvenance, "rdi-99") {
+		t.Errorf("expected the dangling item named: %+v", fs)
+	}
+	if !findingWith(fs, filepath.Join("rec/intents/drafts", "itd-3-wrong-run.md"), ruleRecordProvenance, "rdg-4") {
+		t.Errorf("expected the wrong run named: %+v", fs)
+	}
+}
+
+// TestRecordProvenanceIsArmedInThisRepo is the wiring evidence for the gate: a
+// rule the repository's own record-lint configuration does not name runs
+// nowhere, and a unit test over a fixture would go on passing while the corpus
+// went unchecked.
+//
+// It is armed as a blocker from the start rather than staged, because
+// forward-only population means it is silent on every record already committed:
+// there is no wall of findings to work through, and nothing to backfill.
+func TestRecordProvenanceIsArmedInThisRepo(t *testing.T) {
+	cfg, err := LoadConfig(filepath.Join("..", "..", "..", ".abcd", "record-lint.json"))
+	if err != nil {
+		t.Fatalf("loading the repo's record-lint config: %v", err)
+	}
+	rc, ok := cfg.Rules[ruleRecordProvenance]
+	if !ok || !rc.Enabled {
+		t.Fatalf("%s is not armed in .abcd/record-lint.json: %+v", ruleRecordProvenance, rc)
+	}
+	if rc.Severity != severityBlocker {
+		t.Errorf("%s severity = %q, want %q", ruleRecordProvenance, rc.Severity, severityBlocker)
+	}
+	// The stores come from record_schema's declaration, so the rule cannot drift
+	// from the corpus the record gate walks.
+	if len(rc.RecordStores) == 0 && len(cfg.Rules[ruleRecordSchema].RecordStores) == 0 {
+		t.Error("the rule has no stores to walk from either its own config or record_schema's")
+	}
+}

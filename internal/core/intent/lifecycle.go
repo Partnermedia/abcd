@@ -98,7 +98,12 @@ func parseIntent(relPath, content, bucket string) (Intent, error) {
 // create spec, set kind while still a draft, move to planned, then write
 // spec_id — is chosen so that (kind=standalone, spec_id=null) is the only
 // transient frontmatter, and that shape is valid in BOTH drafts and planned.
-func Plan(repoRoot, intentID string) (PlanResult, error) {
+//
+// productionMode is the disclosure the MINTED SPEC carries (itd-178); it is
+// validated by the spec store before the id is minted, and an empty value takes
+// the vocabulary's default. It has no bearing on the intent record, whose own
+// stamp was written when the draft was created and is never rewritten.
+func Plan(repoRoot, intentID, productionMode string) (PlanResult, error) {
 	if !recordid.ValidIntentID(intentID) {
 		return PlanResult{}, fmt.Errorf("intent: id %q must match ^itd-[0-9]+$", intentID)
 	}
@@ -175,7 +180,7 @@ func Plan(repoRoot, intentID string) (PlanResult, error) {
 
 	var mintWarning string
 	if !ok {
-		sp, mintWarning, err = spec.Create(repoRoot, intentID, it.Slug)
+		sp, mintWarning, err = spec.Create(repoRoot, intentID, it.Slug, productionMode)
 		if err != nil {
 			return PlanResult{}, err
 		}

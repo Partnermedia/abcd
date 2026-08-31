@@ -266,6 +266,10 @@
         "srp": ".abcd/work/issues/surprises"
       }
     },
+    "record_provenance": {
+      "enabled": true,
+      "severity": "blocker"
+    },
     "agent_contract": {
       "enabled": true,
       "severity": "blocker",

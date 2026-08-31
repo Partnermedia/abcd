@@ -17,7 +17,7 @@ func TestCreateFromTextMintsPastACommittedBranch(t *testing.T) {
 	r.Commit("base")
 
 	// Branch A (main): mint itd-1 and commit it.
-	itA, _, err := CreateFromText(r.Root(), "some seed text alpha", "")
+	itA, _, err := CreateFromText(r.Root(), "some seed text alpha", "", "")
 	if err != nil {
 		t.Fatalf("branch A CreateFromText: %v", err)
 	}
@@ -30,7 +30,7 @@ func TestCreateFromTextMintsPastACommittedBranch(t *testing.T) {
 	// intent, so a tree-only mint would hand out itd-1 again.
 	r.Git("checkout", "-b", "branch-b", "HEAD~1")
 
-	itB, _, err := CreateFromText(r.Root(), "some seed text beta", "")
+	itB, _, err := CreateFromText(r.Root(), "some seed text beta", "", "")
 	if err != nil {
 		t.Fatalf("branch B CreateFromText: %v", err)
 	}

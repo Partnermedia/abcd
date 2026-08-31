@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/intentdriven/abcd/internal/core/provenance"
 )
 
 const (
@@ -515,7 +517,7 @@ func TestReadyClaimChecksNotApplicableInTerminalBuckets(t *testing.T) {
 // and the gate must not report it as one.
 func TestReadyScaffoldPromptIsNotAClaim(t *testing.T) {
 	root := t.TempDir()
-	seeded := seedDraft("itd-10", DraftOptions{Slug: "alpha", Title: "alpha", SeedBody: "why it matters"})
+	seeded := seedDraft("itd-10", DraftOptions{Slug: "alpha", Title: "alpha", SeedBody: "why it matters"}, researcherStamp(t))
 	// Plan the criteria only, so the two claim sections stay as seeded.
 	seeded = strings.Replace(seeded,
 		"> _Required (the itd-1 discipline)", "- **Given** x, **when** y, **then** z.\n\n> _was: ", 1)
@@ -640,4 +642,15 @@ func TestReadyNamesADuplicateHiddenBehindANullity(t *testing.T) {
 	if c.OK || !strings.Contains(c.Detail, "more than one") {
 		t.Fatalf("scope_conditions = %+v, want fail naming the duplicated heading", c)
 	}
+}
+
+// researcherStamp is the default disclosure pair a seeded draft carries, built
+// through the one constructor rather than assembled by hand.
+func researcherStamp(t *testing.T) provenance.Stamp {
+	t.Helper()
+	s, err := provenance.NewStamp(provenance.KindResearcherAuthored, "")
+	if err != nil {
+		t.Fatalf("NewStamp: %v", err)
+	}
+	return s
 }
