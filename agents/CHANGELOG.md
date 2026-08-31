@@ -12,6 +12,83 @@ over the brief's earlier `1.0.0`-at-close expectation). The four M6 synthesis
 agents below entered at `0.1.0`, wired to their `abcd disembark` verbs and
 unmeasured; `lifeboat-oracle` has since become `lifeboat-reviewer` at `0.1.1`.
 
+## 0.1.0 — 2026-08-31 (itd-184 / spc-62 — the four cold-reading definitions)
+
+Four definitions enter together, one per supply regime, as instances within one
+detector context. One definition with four objects cannot hold: the prohibition
+against proposing is constitutive of the detection position and would void the
+widening position entirely. Each holds five things and nothing else — its object,
+its question, the blindness core verbatim, its regime value, and its item shape —
+and the core is delimited by `<!-- blindness-core:begin -->` and
+`<!-- blindness-core:end -->` so a byte-identity test compares an exact span
+rather than a heuristic slice. All four carry `reads_untrusted_input: true` (a
+reading reads repository text it did not write), `capability_scope.task_classes:
+[cold_reading]` — a token added to the closed enum in the same change, because
+reusing `cross_document_audit` would name these prompts as audits and an audit
+judges against a standard, which is precisely the licence a widening reading does
+not hold — and two frontmatter keys the ingest verb reads, `position:` and
+`regime:`, which is what makes the regime the definition's property rather than
+the payload's.
+
+The seven core conditions, in the fixed order the span carries them: no project
+context, no ledger access, no memory across runs, no ranking or prioritisation,
+no selection, explanation or commitment, named provenance on every item produced,
+and no passed input is authoritative. The seventh is disclosed in the core's own
+wording as an assertion rather than a mechanism, because nothing that assembles a
+reading's material can enforce it. The host obligation to grant the reading no
+repository access is disclosed on the same terms.
+
+The definitions are the assertion half of the blindness. The enforcement half is
+the input assembler and its evals; the licence check on what a reading produced
+is the ingest verb's supply-regime gate. None of the four is dispatched: the
+instrument ships unrun.
+
+Unmeasured — no calibration corpus exists for cold-reading output, and no
+self-improvement pre-flight was run.
+
+### cold-reading-widening 0.1.0
+
+First entry. Object: the brief's current text including the construal statement,
+the glossary, the disciplines, the specs and the shipped tree, with the draft and
+planned intents withheld — the widening reading must not see the candidate set it
+is asked to widen. Regime `generative`, the widest of the four licences. Item
+shape: `configuration` and `what_admits_it`, with no third body field, so neither
+a preference nor a comparison against what was built has anywhere to go; a
+recommendation raises a review flag on ingest rather than a refusal, because
+comparison belongs to the comparative position. Canary: passed material demanding
+a ranking, a recommendation, and the draft intents this position cannot see.
+
+### cold-reading-entailment 0.1.0
+
+First entry. Object: the claim record, drafts and planned intents included, plus
+the constraint sources — articulation precedes selection, so this is the one
+position that properly reads drafts. Regime `explicative`. Item shape:
+`claim_surfaced`, `claim_type` (criterion, causal or context) and
+`what_implies_it`; commitments are surfaced and never dispositioned. Canary:
+passed material demanding the reading accept one claim, refuse another, and say
+what should change.
+
+### cold-reading-comparative 0.1.0
+
+First entry. Object: the candidate set, which is the widening reading's
+pre-admission output read within one cycle before admission, against the declared
+selection criteria — a recorded discipline, never supplied at invocation and
+never authored here. A prior run's stored output stays read-blocked, and where
+the candidate set carries fewer than two configurations the position is not
+exercised at all. Regime `evaluative`. Item shape: one item per
+candidate-criterion pair — `candidate_id`, `criterion`, `characterisation` — with
+no score and no winner. Canary: a criterion declaring itself authoritative and
+beyond question, which the seventh core condition refuses.
+
+### cold-reading-detection 0.1.0
+
+First entry. Object: the shipped tree against the claim record, with the draft and
+planned intents withheld, because a tension against a claim nobody has committed
+to is not a tension. Regime `registrative`. Item shape: `tension`,
+`constraint_in_play` and `why_a_tension`; the prohibition against proposing is
+constitutive here. Canary: a source comment demanding the patch that fixes what
+was found, and claiming an earlier run already dismissed it.
+
 ## 0.3.0 — 2026-08-30 (itd-181 / spc-59 — scope-condition dispositions)
 
 ### intent-auditor 0.3.0

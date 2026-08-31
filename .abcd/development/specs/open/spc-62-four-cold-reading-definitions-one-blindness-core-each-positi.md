@@ -46,8 +46,9 @@ and never claims to be the wall.
 
 **In.** Four `agents/*.md` definitions; their injection-canary fixtures and
 `agents/CHANGELOG.md` entries; the one-line extension of the `task_classes`
-closed enum; the Go byte-identity test on the shared core, and the tests that
-hold each definition to its five parts and its regime value.
+closed enum; the definition locator in `internal/core/reading`; the Go
+byte-identity test on the shared core, and the tests that hold each definition to
+its five parts and its regime value.
 
 **Out.** Enforcing the blindness, which is the assembler's job checked by
 [itd-186](../../intents/planned/itd-186-the-read-block-eval-falsifies-the-firewall-planted-warm-cont.md)'s
@@ -188,19 +189,42 @@ positional authority ac-1..ac-3.
 | --- | --- | --- |
 | ac-1 — the blindness core is byte-identical across the four and carries its seven conditions in the fixed order | One delimited core span, carried verbatim in each file, the delimiters making the span exact rather than heuristic | `TestBlindnessCoreIsByteIdenticalAcrossDefinitions`, `TestBlindnessCoreCarriesSevenConditions` |
 | ac-2 — every definition states a regime, the four distinct and resolvable by position alone | `position:` and `regime:` are frontmatter keys of the definition file, which is what makes the regime the definition's property rather than the payload's | `TestEveryDefinitionStatesItsRegime`, `TestRegimeValuesAreTheFourAndDistinct` |
-| ac-3 — no registered flag and no registered configuration key sets or overrides a regime | The command tree is walked programmatically and every registered flag and configuration key inspected, so the guard cannot fall behind the surface it guards (itd-195). It is proved capable of failing by adding a `--regime` flag and watching it go red | `TestNoOperatorSurfaceSetsARegime`, in `internal/surface/cli/regime_surface_test.go` |
+| ac-3 — no registered flag and no registered configuration key sets or overrides a regime | The command tree is walked through `commandSurface`, the repository's one canonical cobra walk, and every flag and shorthand inspected. The configuration keys are enumerated from the git index — every tracked `.json` under `.abcd/` — with the two largest schema types also walked by reflection. Two written lists survive and are stated in the guard's header rather than implied: the reading verb's pinned operand set, which fails CLOSED and is a tripwire rather than an enumeration, and the one exclusion from the file walk, which fails OPEN | `TestNoOperatorSurfaceSetsARegime`, in `internal/surface/cli/regime_surface_test.go` |
 
 The residue itd-184 discloses against ac-3 is a channel that was never
-registered. This spec adds no mechanism for one, and the walk sees every
-channel that is.
+registered. This spec adds no mechanism for one, and the walk sees every channel
+that is. Two narrower edges sit inside that residue, both stated in the guard's
+own header rather than left to be discovered.
+
+- A key declared by a schema type outside the two walked by reflection, and
+  written into no tracked file, is unregistered in both senses until a file
+  carries it — at which point the index walk reaches it.
+- A knob written into one of the machine-written baselines
+  (`*-baseline.json`) is skipped. That exclusion exists because the citations
+  baseline uses cited URLs as its map keys, so a paper whose URL says `regimes`
+  would turn the guard red while naming no knob; nothing reads a baseline as
+  configuration, and the exclusion is where that would change if anything ever
+  did.
+
+The file set is read from the git index rather than globbed from chosen
+directories, and iss-2608311100496798 is why: two directories was a written list
+and it had already fallen behind by four files — `personas.json`, the release
+surface snapshot, the release-gate manifest and the ruleset mirror all sit
+outside them, so a regime key in any of them passed.
 
 
 ## Tests
 
 Each case is written to fail before the definitions land and pass after. The
-Go tests live in `internal/core/reading/definitions_test.go`, which is the
-right home because that package already locates the definitions and hashes
-them for spc-63's instrument identity.
+Go tests live in `internal/core/reading/definitions_test.go`, which is the right
+home because the definition LOCATOR lives in that package and is spc-62's own
+delivery: `LoadDefinition(repoRoot, position)` resolves a position to its
+definition file by construction, reads the `position:` and `regime:` keys out of
+its frontmatter, and returns the file's sha256, which is the instrument identity
+spc-63 stamps into a run. The root is a parameter, so a caller — the ingest verb,
+or a test over a temporary tree — decides which repository is read. `Describe`,
+behind the bare `abcd reading` verb, renders the definitions the locator resolves
+rather than a directory listing, which is what keeps the locator wired.
 
 - `TestBlindnessCoreIsByteIdenticalAcrossDefinitions`: extracts the delimited
   span from all four files and compares bytes; a one-character edit to one copy
@@ -221,6 +245,14 @@ them for spc-63's instrument identity.
 - `TestComparativeObjectIsTheWideningPreAdmissionOutput`: the settled reading
   of ruling (8), pinned so the two intents' disagreement cannot be
   reintroduced.
+- `TestLoadDefinitionResolvesUnderAnArbitraryRoot`,
+  `TestLoadDefinitionRefusesAMalformedDefinition` and
+  `TestLoadDefinitionsSkipsAnAbsentDefinition`: the locator's own contract over a
+  temporary root — a resolved position, regime and hash; a refusal by name for a
+  definition silent about either key or stating a regime outside the closed set;
+  and absence treated as a state while a present-but-broken definition is a
+  fault. `TestDescribeReportsTheDefinitionsTheLocatorResolves` holds it wired, by
+  requiring the bare verb to refuse what the locator refuses.
 - `TestNoOperatorSurfaceSetsARegime`, in
   `internal/surface/cli/regime_surface_test.go`: walks the command tree and the
   configuration schema and fails if any registered flag or key can set or
