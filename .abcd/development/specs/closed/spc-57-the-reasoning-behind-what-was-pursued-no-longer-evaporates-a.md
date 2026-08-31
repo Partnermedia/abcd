@@ -8,7 +8,7 @@ intent: itd-179
 
 ## Summary
 
-spc-57 delivers [itd-179](../../intents/planned/itd-179-the-reasoning-behind-what-was-pursued-no-longer-evaporates-a.md):
+spc-57 delivers [itd-179](../../intents/shipped/itd-179-the-reasoning-behind-what-was-pursued-no-longer-evaporates-a.md):
 a grounds argument on the readiness gate and on capture's triage routes, with a
 three-value vocabulary (`pursued`, `deferred`, `declined`) and a refusal when it
 is absent. Grounds are recorded today only for deliberate non-action, where a
