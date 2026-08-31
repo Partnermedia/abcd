@@ -244,7 +244,7 @@ by a registry. The numbering below is the positional authority ac-1..ac-13.
 | ac-9 — a registered disposition signature refuses, naming item and signature | `RG-EXPL-DISPOSITION`, shipped in `enforce` mode | `TestExplicativeProseDispositionRefused`, `TestEverySignatureShipsEnforced` |
 | ac-10 — a list-level refusal writes a refusal record and no items | The refusal path writes `refusal.json` carrying run metadata and the named reason; the stage is never taken | `TestListLevelRefusalWritesRefusalRecordOnly` |
 | ac-11 — an empty or absent `pattern` refuses the item at every regime | Provenance is one envelope field, checked before the body, at all four regimes without exception | `TestEmptyPatternNamedRefusesItemAtEveryRegime` (all four positions, three forms each) |
-| ac-12 — a self-declared regime disagreeing with the definition refuses the run | The regime's source of truth is the definition, resolved through the run's position; the payload's claim is compared, never trusted | `TestRegimeComesFromTheDefinitionNotThePayload`, `TestSelfDeclaredRegimeMismatchRefusesRun` |
+| ac-12 — a self-declared regime disagreeing with the definition refuses the run | The regime's source of truth is the definition, resolved through the run's position; the payload's claim is compared, never trusted | `TestSelfDeclaredRegimeMismatchRefusesRun`, `TestRegimeComesFromTheDefinitionNotThePayload`, and `TestADriftedDefinitionRefusesTheRunRatherThanChangingTheLicence` for the adversarial half the criterion does not state — the DEFINITION lying rather than the payload |
 | ac-13 — item ids are minted by the verb, and a supplied id is an unknown field | `recordid.Minter.Mint("rdi")` through `capture.IngestReading` on acceptance; the payload schema carries no item identifier at all | `TestItemIDsAreMintedByTheVerb` |
 
 ac-5 and ac-9 are the two criteria bounded by the signature registry rather
@@ -277,8 +277,11 @@ Each case is written to fail before the change and pass after, in
   `TestUnknownFieldRefusedAtEveryLevel`,
   `TestWrongPositionBodyIsUndecodable`,
   `TestNoDurableWriteBeforeValidation`,
+  `TestMissingBodyFieldRefusesTheItem`,
+  `TestARefusalNeverEchoesRawPayloadBytes`,
   `TestPatternFieldIsTheRecordEnvelopeField`.
 - `ingest_regime_test.go`: `TestRegimeComesFromTheDefinitionNotThePayload`,
+  `TestADriftedDefinitionRefusesTheRunRatherThanChangingTheLicence`,
   `TestSelfDeclaredRegimeMismatchRefusesRun`,
   `TestEvaluativeRankScoreRecommendedRefused`,
   `TestEvaluativeDocumentOrderIsNeverRefused`,
@@ -312,15 +315,28 @@ Each case is written to fail before the change and pass after, in
   The no-operator-surface guard on the regime is spc-62's
   `TestNoOperatorSurfaceSetsARegime`, in its own file.
 
-Four further cases hold properties this spec states in prose and would
+Three further cases were added because a MUTATION run found their guards
+vacuous — each was neutralised in a copy of the tree and every test stayed
+green. `TestMissingBodyFieldRefusesTheItem` covers an item partial at its own
+position, which the foreign-body case never reached because the unknown-key
+check fires first. `TestARefusalNeverEchoesRawPayloadBytes` binds the
+sanitiser and the length cap on every payload value that reaches a message or
+the durable refusal record. And `TestOrphanSweepLeavesACommittedRunAlone`
+binds the rollback's commit-marker guard.
+
+Six further cases hold properties this spec states in prose and would
 otherwise only assert there. `TestPatternFieldIsTheRecordEnvelopeField` holds
 the payload key to the record's own envelope field.
 `TestReservedNamesNeverCollideWithABodyField` keeps a reserved name from being
 a body field, which would refuse every legal output at that position.
 `TestOrphanSweepLeavesACommittedRunAlone` holds the rollback off a run that
-committed. `TestRunIDNeverBuildsAPathBeforeItIsChecked` is the trust boundary:
-the run id is the one payload value a path is built from, and a traversal id is
-refused before any file is opened.
+committed. `TestRunIDNeverBuildsAPathBeforeItIsChecked` is the trust boundary at the
+input end: the run id is the one payload value a path is built from, and a
+traversal id is refused before any file is opened.
+`TestARefusalNeverEchoesRawPayloadBytes` is the trust boundary at the OUTPUT
+end: a refusal quotes model-produced text to a terminal and writes it into a
+durable record, so an escape sequence must not rewrite the message that reports
+it and an oversized field must not drown it.
 
 ## Out of scope
 

@@ -160,7 +160,7 @@ func checkInstrument(out Output, def Definition, m Manifest) error {
 	}
 	if out.Instrument.AssemblerVersion != m.AssemblerVersion {
 		return fmt.Errorf("the instrument claims assembler_version %s and the manifest of run %s "+
-			"carries %s", echo(out.Instrument.AssemblerVersion), m.RunID, m.AssemblerVersion)
+			"carries %s", echo(out.Instrument.AssemblerVersion), echo(m.RunID), echo(m.AssemblerVersion))
 	}
 	return nil
 }
