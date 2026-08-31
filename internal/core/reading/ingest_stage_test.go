@@ -419,3 +419,91 @@ func TestTheLedgerLockIsHeldWhileTheSweepUnlinks(t *testing.T) {
 		t.Errorf("the ledger lock was not released after the sweep: %v", err)
 	}
 }
+
+// TestAPayloadRefusedBeforeItValidatesRollsBackNothing is the sweep's safety
+// rule: the rollback is a DESTRUCTIVE act in the committed tier, so it rides
+// with the commit and never with a refusal.
+//
+// The failure this closes was durable and silent. With an orphaned stage
+// present and its record already in the ledger, an ingest whose payload was
+// refused at the `_type` check deleted that committed record and reported the
+// `_type` error alone — an operator saw a validation error and had no way to
+// learn that a record had been destroyed while it was being reported. A run
+// that is being refused for a reason of its own has no business unlinking
+// somebody else's records on the way out.
+func TestAPayloadRefusedBeforeItValidatesRollsBackNothing(t *testing.T) {
+	orphanRecord := ".abcd/work/issues/readings/rdg-2608310000000031/rdi-2608310000000032.md"
+	for _, tc := range []struct {
+		name   string
+		break_ func(doc map[string]any)
+	}{
+		{"a wrong _type", func(doc map[string]any) { doc["_type"] = "abcd.reading.output/99" }},
+		{"a run id that resolves to nothing", func(doc map[string]any) { doc["run_id"] = "rdg-2608310000009999" }},
+		{"a regime the definition does not state", func(doc map[string]any) { doc["regime"] = RegimeEvaluative }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newIngestFixture(t, "detection")
+			orphan := "rdg-2608310000000031"
+			f.write(IngestStageDir+"/"+orphan+"/"+stageFileName,
+				[]byte(`{"_type":"`+StageType+`","run_id":"`+orphan+`","records":["rdi-2608310000000032"]}`))
+			f.write(orphanRecord, []byte("---\nid: rdi-2608310000000032\n---\n"))
+
+			doc := f.payload(1)
+			tc.break_(doc)
+			res, err := f.ingest(doc)
+			if err == nil {
+				t.Fatal("the broken payload was accepted")
+			}
+			if !f.exists(orphanRecord) {
+				t.Error("a refused run deleted a committed reading record on its way out")
+			}
+			if len(res.RolledBack) != 0 || len(res.ClearedStages) != 0 {
+				t.Errorf("a refused run swept: cleared %v, rolled back %v", res.ClearedStages, res.RolledBack)
+			}
+		})
+	}
+}
+
+// TestASweepThatFailsPartWayReportsWhatItAlreadyRemoved is the other half of
+// "whatever the sweep did is reported on every exit path". The sweep walks the
+// orphans in name order, so a fault on a later one leaves earlier deletes
+// already committed — and returning a bare error there loses the only record
+// that they happened.
+func TestASweepThatFailsPartWayReportsWhatItAlreadyRemoved(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("the denial this rests on is a directory permission, which does not bind root")
+	}
+	f := newIngestFixture(t, "detection")
+	swept, stuck := "rdg-2608310000000041", "rdg-2608310000000042"
+	for _, run := range []string{swept, stuck} {
+		f.write(IngestStageDir+"/"+run+"/"+stageFileName,
+			[]byte(`{"_type":"`+StageType+`","run_id":"`+run+`","records":[]}`))
+	}
+	f.write(".abcd/work/issues/readings/"+swept+"/rdi-2608310000000043.md",
+		[]byte("---\nid: rdi-2608310000000043\n---\n"))
+	f.write(".abcd/work/issues/readings/"+stuck+"/rdi-2608310000000044.md",
+		[]byte("---\nid: rdi-2608310000000044\n---\n"))
+
+	// The later orphan's directory refuses an unlink, so the sweep fails after
+	// it has already removed the earlier one's record.
+	stuckDir := filepath.Join(f.root, filepath.FromSlash(".abcd/work/issues/readings/"+stuck))
+	if err := os.Chmod(stuckDir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(stuckDir, 0o755) })
+
+	res, err := f.ingest(f.payload(1))
+	if err == nil {
+		t.Fatal("the sweep reported no fault, so this case proves nothing")
+	}
+	found := false
+	for _, id := range res.RolledBack {
+		if id == "rdi-2608310000000043" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("the sweep removed rdi-2608310000000043 and then failed, reporting %v; a delete in the "+
+			"committed tier is reported whatever happens next", res.RolledBack)
+	}
+}

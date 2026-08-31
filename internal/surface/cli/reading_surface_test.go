@@ -465,21 +465,13 @@ func TestIngestPayloadFlagNamesItsContent(t *testing.T) {
 	}
 }
 
-// TestIngestExecutesEndToEnd is the other half of the wiring claim: the verb is
-// registered AND it runs. A surface test that only walked the command tree would
-// pass against a sub-command whose RunE was never reached.
-func TestIngestExecutesEndToEnd(t *testing.T) {
-	// The source checkout is resolved BEFORE the working directory moves: the
-	// shipped definition is read from this repository, and repoRootFromTest walks
-	// up from the working directory, which is about to be a temporary tree with a
-	// go.mod of its own.
-	srcRoot := repoRootFromTest(t)
-	repo := readingRepo(t)
-	t.Chdir(repo)
-
-	// One assembled run, through the sibling verb, so the ingest resolves a run
-	// this repository actually parked.
-	out := runCLI(t, "reading", "assemble", "--scope", "everything", "--position", "detection", "--target", "HEAD", "--json")
+// parkedRunForIngest assembles one run in repo and installs the position's
+// SHIPPED definition beside it, returning the two references an ingest payload
+// has to cite. Three ingest cases need the same world; building it once keeps
+// the fixture from drifting into three versions of itself.
+func parkedRunForIngest(t *testing.T, srcRoot, repo string, pos reading.Position) (runID, manifestHash string, def reading.Definition) {
+	t.Helper()
+	out := runCLI(t, "reading", "assemble", "--scope", "everything", "--position", string(pos), "--target", "HEAD", "--json")
 	var assembled struct {
 		RunID        string `json:"run_id"`
 		ManifestHash string `json:"manifest_hash"`
@@ -487,10 +479,9 @@ func TestIngestExecutesEndToEnd(t *testing.T) {
 	if err := json.Unmarshal(out, &assembled); err != nil {
 		t.Fatalf("decode the assemble render: %v\n%s", err, out)
 	}
-
-	def, err := reading.LoadDefinition(srcRoot, "detection")
+	def, err := reading.LoadDefinition(srcRoot, pos)
 	if err != nil {
-		t.Fatalf("load the shipped detection definition: %v", err)
+		t.Fatalf("load the shipped %s definition: %v", pos, err)
 	}
 	// The definition the run reads under has to be present in the repository the
 	// verb is pointed at, so the fixture takes the shipped one verbatim.
@@ -505,11 +496,17 @@ func TestIngestExecutesEndToEnd(t *testing.T) {
 	if err := os.WriteFile(defPath, defRaw, 0o644); err != nil {
 		t.Fatal(err)
 	}
+	return assembled.RunID, assembled.ManifestHash, def
+}
 
+// detectionPayloadFile writes one legal detection payload, with a caller-chosen
+// regime claim, and returns the path the verb reads.
+func detectionPayloadFile(t *testing.T, runID, manifestHash, regime string, def reading.Definition) string {
+	t.Helper()
 	payload := map[string]any{
-		"_type": "abcd.reading.output/1", "run_id": assembled.RunID,
-		"position": "detection", "regime": def.Regime,
-		"manifest_sha256": assembled.ManifestHash,
+		"_type": "abcd.reading.output/1", "run_id": runID,
+		"position": "detection", "regime": regime,
+		"manifest_sha256": manifestHash,
 		"instrument": map[string]any{
 			"model": "a-model", "definition_sha256": def.SHA256,
 			"assembler_version": reading.AssemblerVersion(),
@@ -528,6 +525,25 @@ func TestIngestExecutesEndToEnd(t *testing.T) {
 	if err := os.WriteFile(outPath, raw, 0o644); err != nil {
 		t.Fatal(err)
 	}
+	return outPath
+}
+
+// TestIngestExecutesEndToEnd is the other half of the wiring claim: the verb is
+// registered AND it runs. A surface test that only walked the command tree would
+// pass against a sub-command whose RunE was never reached.
+func TestIngestExecutesEndToEnd(t *testing.T) {
+	// The source checkout is resolved BEFORE the working directory moves: the
+	// shipped definition is read from this repository, and repoRootFromTest walks
+	// up from the working directory, which is about to be a temporary tree with a
+	// go.mod of its own.
+	srcRoot := repoRootFromTest(t)
+	repo := readingRepo(t)
+	t.Chdir(repo)
+
+	// One assembled run, through the sibling verb, so the ingest resolves a run
+	// this repository actually parked.
+	runID, manifestHash, def := parkedRunForIngest(t, srcRoot, repo, "detection")
+	outPath := detectionPayloadFile(t, runID, manifestHash, def.Regime, def)
 
 	raw2 := runCLI(t, "reading", "ingest", "--reading-json", outPath, "--json")
 	var res reading.IngestResult
@@ -557,54 +573,10 @@ func TestIngestRendersARefusalRecord(t *testing.T) {
 	repo := readingRepo(t)
 	t.Chdir(repo)
 
-	out := runCLI(t, "reading", "assemble", "--scope", "everything", "--position", "detection", "--target", "HEAD", "--json")
-	var assembled struct {
-		RunID        string `json:"run_id"`
-		ManifestHash string `json:"manifest_hash"`
-	}
-	if err := json.Unmarshal(out, &assembled); err != nil {
-		t.Fatalf("decode the assemble render: %v\n%s", err, out)
-	}
-	def, err := reading.LoadDefinition(srcRoot, "detection")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defRaw, err := os.ReadFile(filepath.Join(srcRoot, filepath.FromSlash(def.Path)))
-	if err != nil {
-		t.Fatal(err)
-	}
-	defPath := filepath.Join(repo, filepath.FromSlash(def.Path))
-	if err := os.MkdirAll(filepath.Dir(defPath), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(defPath, defRaw, 0o644); err != nil {
-		t.Fatal(err)
-	}
-
+	runID, manifestHash, def := parkedRunForIngest(t, srcRoot, repo, "detection")
 	// A regime the definition does not state: a list-level refusal, after the
 	// run's identity is proven, so it records.
-	payload := map[string]any{
-		"_type": "abcd.reading.output/1", "run_id": assembled.RunID,
-		"position": "detection", "regime": "generative",
-		"manifest_sha256": assembled.ManifestHash,
-		"instrument": map[string]any{
-			"model": "a-model", "definition_sha256": def.SHA256,
-			"assembler_version": reading.AssemblerVersion(),
-		},
-		"items": []any{map[string]any{
-			"pattern": "the pattern this reading read under",
-			"tension": "the record says one thing", "constraint_in_play": "a stated constraint",
-			"why_a_tension": "the two cannot both hold",
-		}},
-	}
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		t.Fatal(err)
-	}
-	outPath := filepath.Join(t.TempDir(), "output.json")
-	if err := os.WriteFile(outPath, raw, 0o644); err != nil {
-		t.Fatal(err)
-	}
+	outPath := detectionPayloadFile(t, runID, manifestHash, "generative", def)
 
 	rendered, err := runCLIErr(t, "reading", "ingest", "--reading-json", outPath, "--json")
 	if err == nil {
@@ -824,5 +796,55 @@ func assertAssembleExamplesRun(t *testing.T, where, text string) {
 			t.Errorf("%s ships a `reading assemble` invocation with no --scope, so it exits 2:\n%s",
 				where, invocation)
 		}
+	}
+}
+
+// TestIngestRendersWhatTheSweepDidOnAnErrorExit: the orphan sweep DELETES
+// records from the committed ledger, and a delete in the committed tier is
+// reported however the invocation ends. Rendering only when a refusal record
+// exists made `rolled_back_records` and `cleared_stages` invisible on every
+// other error path — an operator was told a write had failed and never told
+// that records had left the ledger during it.
+func TestIngestRendersWhatTheSweepDidOnAnErrorExit(t *testing.T) {
+	srcRoot := repoRootFromTest(t)
+	repo := readingRepo(t)
+	t.Chdir(repo)
+
+	runID, manifestHash, def := parkedRunForIngest(t, srcRoot, repo, "detection")
+	outPath := detectionPayloadFile(t, runID, manifestHash, def.Regime, def)
+
+	write := func(rel, body string) {
+		abs := filepath.Join(repo, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(abs, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// An orphan the sweep rolls back, and a stage path for THIS run that is a
+	// regular file — so the staged write fails after the sweep has already
+	// unlinked a committed record.
+	orphan := "rdg-2608310000000051"
+	write(reading.IngestStageDir+"/"+orphan+"/stage.json",
+		`{"_type":"abcd.reading.ingest-stage/1","run_id":"`+orphan+`","records":[]}`)
+	write(".abcd/work/issues/readings/"+orphan+"/rdi-2608310000000052.md",
+		"---\nid: rdi-2608310000000052\n---\n")
+	write(reading.IngestStageDir+"/"+runID, "not a directory\n")
+
+	rendered, err := runCLIErr(t, "reading", "ingest", "--reading-json", outPath, "--json")
+	if err == nil {
+		t.Fatalf("the staged write did not fail, so this case proves nothing:\n%s", rendered)
+	}
+	var res reading.IngestResult
+	if jsonErr := json.Unmarshal(rendered, &res); jsonErr != nil {
+		t.Fatalf("an error exit rendered no JSON result, so the sweep's deletes were never reported: %v\n%s",
+			jsonErr, rendered)
+	}
+	if len(res.RolledBack) != 1 || res.RolledBack[0] != "rdi-2608310000000052" {
+		t.Errorf("the render reports rolled_back_records %v, want the record the sweep unlinked", res.RolledBack)
+	}
+	if len(res.ClearedStages) != 1 || res.ClearedStages[0] != orphan {
+		t.Errorf("the render reports cleared_stages %v, want %s", res.ClearedStages, orphan)
 	}
 }
