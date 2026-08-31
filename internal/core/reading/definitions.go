@@ -74,9 +74,19 @@ func LoadDefinition(repoRoot string, p Position) (Definition, error) {
 		return Definition{}, fmt.Errorf("reading: the %s definition at %s: %w", pos, rel, err)
 	}
 
-	fields := frontmatter.Fields(strings.Split(string(raw), "\n"))
-	stated := frontmatter.Unquote(strings.TrimSpace(fields["position"].Value))
-	regime := frontmatter.Unquote(strings.TrimSpace(fields["regime"].Value))
+	lines := strings.Split(string(raw), "\n")
+	// A duplicated key is refused rather than resolved: Fields keeps the first
+	// occurrence, so two `regime:` lines would silently pick one, and which one
+	// is not a question a definition should leave open.
+	for _, dup := range frontmatter.Duplicates(lines) {
+		if dup.Key == "position" || dup.Key == "regime" {
+			return Definition{}, fmt.Errorf("reading: %s states %q more than once; "+
+				"a definition states its position and its regime exactly once", rel, dup.Key)
+		}
+	}
+	fields := frontmatter.Fields(lines)
+	stated := scalar(fields["position"].Value)
+	regime := scalar(fields["regime"].Value)
 
 	if stated == "" {
 		return Definition{}, fmt.Errorf("reading: %s states no 'position' in its frontmatter; "+
@@ -118,6 +128,25 @@ func LoadDefinitions(repoRoot string) ([]Definition, error) {
 		out = append(out, def)
 	}
 	return out, nil
+}
+
+// scalar reads a frontmatter value the way the record's own readers do: whether
+// the value is double-quoted at all is the caller's question, and the shared
+// decoder is handed the INNER text once the pair has been stripped. Handing it
+// the raw value keeps the quote characters, and `position: "detection"` then
+// refuses itself with a message reading detection against detection.
+//
+// This is the THIRD copy of the strip-then-decode idiom — capture's reader and
+// record-lint's schema gate hold the other two — and it belongs in
+// internal/core/frontmatter beside Unquote rather than in any of the three.
+// Consolidating it is captured; this call site cannot wait for that, because
+// without it the locator refuses well-formed definitions.
+func scalar(value string) string {
+	v := strings.TrimSpace(value)
+	if len(v) >= 2 && strings.HasPrefix(v, `"`) && strings.HasSuffix(v, `"`) {
+		return frontmatter.Unquote(v[1 : len(v)-1])
+	}
+	return v
 }
 
 // knownRegime reports whether token is one of the four supply regimes. The

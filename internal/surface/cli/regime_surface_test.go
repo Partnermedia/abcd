@@ -9,19 +9,32 @@ package cli
 // construction (internal/core/reading) — and the whole point of putting it there
 // is that an operator cannot choose the licence a reading reads under.
 //
-// The enumeration is PROGRAMMATIC (itd-195). The command tree is walked through
-// commandSurface, the repository's one canonical cobra walk — the same one the
-// release compatibility gate reads — rather than through a second walk written
-// here, and the configuration schemas are walked by reflection over their json
-// tags. A hand-written list of flag names would be a prose claim about how the
-// surface behaves, and it would fall behind the surface the day someone added a
-// command.
+// The enumeration is PROGRAMMATIC (itd-195), on both halves.
+//
+// The command tree is walked through commandSurface, the repository's one
+// canonical cobra walk — the same one the release compatibility gate reads —
+// rather than through a second walk written here.
+//
+// The configuration side walks every key of every committed configuration file,
+// found by DIRECTORY rather than by a list of schemas: a configuration file
+// added tomorrow is walked tomorrow, without anyone remembering to name it here.
+// The two largest schema types are additionally walked by reflection over their
+// json tags, which reaches a key the schema declares that no committed file
+// happens to carry. A hand-written list of either kind would be a prose claim
+// about how the surface behaves, and it would fall behind the surface the day
+// someone added a command or a config.
 //
 // Disclosed residue, as itd-184 states it: what the walk cannot see is a channel
 // that was never registered — an environment variable read ad hoc, say. Nothing
-// here adds a mechanism for one, and the walk sees every channel that is.
+// here adds a mechanism for one, and the walk sees every channel that is. The
+// one narrower edge: a key declared by a schema type OUTSIDE the two walked here
+// and written into no committed configuration file is unregistered in both
+// senses until a file carries it, at which point the file walk reaches it.
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -29,6 +42,7 @@ import (
 
 	"github.com/intentdriven/abcd/internal/core/lint"
 	"github.com/intentdriven/abcd/internal/core/rules"
+	"github.com/intentdriven/abcd/internal/fsutil"
 )
 
 // regimeToken is the thing no operator surface may carry. It is matched
@@ -49,11 +63,69 @@ var readingOperands = map[string][]string{
 	"abcd reading assemble": {"dry-run", "out", "position", "target"},
 }
 
-// configKey is one configuration key as reflection found it, with the path
-// through the schema that reaches it.
+// configFileGlobs are the DIRECTORIES abcd's committed configuration lives in.
+// They are directories, not a list of schemas: everything matching is walked, so
+// a configuration file added later is covered without an edit here.
+var configFileGlobs = []string{
+	".abcd/*.json",
+	".abcd/config/*.json",
+}
+
+// configKey is one configuration key as the walk found it, with the path through
+// the file or schema that reaches it.
 type configKey struct {
 	schema string
 	path   string
+}
+
+// walkConfigFiles returns every key of every committed configuration file, keys
+// nested inside objects and arrays included. This is the enumeration of the
+// registered configuration surface: a key an operator can actually write.
+func walkConfigFiles(t *testing.T, repoRoot string) []configKey {
+	t.Helper()
+	var out []configKey
+	var files int
+	var walk func(file string, v any, prefix string)
+	walk = func(file string, v any, prefix string) {
+		switch node := v.(type) {
+		case map[string]any:
+			for k, child := range node {
+				key := k
+				if prefix != "" {
+					key = prefix + "." + k
+				}
+				out = append(out, configKey{schema: file, path: key})
+				walk(file, child, key)
+			}
+		case []any:
+			for _, child := range node {
+				walk(file, child, prefix)
+			}
+		}
+	}
+	for _, glob := range configFileGlobs {
+		matches, err := filepath.Glob(filepath.Join(repoRoot, filepath.FromSlash(glob)))
+		if err != nil {
+			t.Fatalf("glob %s: %v", glob, err)
+		}
+		for _, path := range matches {
+			raw, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("read %s: %v", path, err)
+			}
+			var doc any
+			if err := json.Unmarshal(raw, &doc); err != nil {
+				t.Fatalf("decode %s: %v", path, err)
+			}
+			files++
+			walk(filepath.ToSlash(fsutil.RepoRel(repoRoot, path)), doc, "")
+		}
+	}
+	if files < 8 {
+		t.Fatalf("the configuration-file walk found %d files under %v; the repository carries more, "+
+			"so the walk is broken", files, configFileGlobs)
+	}
+	return out
 }
 
 // walkConfigKeys returns every json key reachable in a configuration schema,
@@ -152,16 +224,16 @@ func TestNoOperatorSurfaceSetsARegime(t *testing.T) {
 		}
 	}
 
-	var keys []configKey
-	keys = append(keys, walkConfigKeys("record-lint config", reflect.TypeOf(lint.Config{}))...)
-	keys = append(keys, walkConfigKeys("rules config", reflect.TypeOf(rules.RuleSet{}))...)
-	if len(keys) < 20 {
-		t.Fatalf("the configuration walk found %d keys; the schemas are larger than that, so the walk is broken",
-			len(keys))
+	keys := walkConfigFiles(t, repoRootFromTest(t))
+	keys = append(keys, walkConfigKeys("record-lint schema", reflect.TypeOf(lint.Config{}))...)
+	keys = append(keys, walkConfigKeys("rules schema", reflect.TypeOf(rules.RuleSet{}))...)
+	if len(keys) < 100 {
+		t.Fatalf("the configuration walk found %d keys; the committed configuration is larger than that, "+
+			"so the walk is broken", len(keys))
 	}
 	for _, k := range keys {
 		if strings.Contains(strings.ToLower(k.path), regimeToken) {
-			t.Errorf("the %s carries the key %q: a configuration file is an operator surface too, and the "+
+			t.Errorf("%s carries the key %q: a configuration file is an operator surface too, and the "+
 				"regime is not settable from one", k.schema, k.path)
 		}
 	}

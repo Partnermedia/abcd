@@ -115,6 +115,10 @@ var whitespaceRe = regexp.MustCompile(`\s+`)
 // flatten collapses every whitespace run to one space.
 func flatten(s string) string { return whitespaceRe.ReplaceAllString(s, " ") }
 
+// blockquoteRe matches a markdown blockquote line, which is how each definition
+// carries its question.
+var blockquoteRe = regexp.MustCompile(`(?m)^> \S`)
+
 // statedSources reads the source list out of a definition's object section.
 func statedSources(t *testing.T, p Position, object string) []string {
 	t.Helper()
@@ -256,11 +260,12 @@ func TestDefinitionHoldsItsFiveParts(t *testing.T) {
 		itemShape := section(t, p, text, "Item shape")
 		coreSpan(t, p, text)
 
-		if strings.TrimSpace(question) == "" {
-			t.Errorf("the %s definition's question is empty", p)
-		}
-		if !strings.Contains(question, ">") {
-			t.Errorf("the %s definition does not quote its question", p)
+		// The question is QUOTED, as a blockquote line. A bare ">" test cannot
+		// fail here: the section runs to the next `## `, which is the core's own
+		// heading inside the begin marker, so the section always ends in "-->".
+		// The anchor is a line that starts a blockquote.
+		if !blockquoteRe.MatchString(question) {
+			t.Errorf("the %s definition does not quote its question as a blockquote:\n%s", p, question)
 		}
 		if want := issueschema.ReadingRegime(string(p)); !strings.Contains(regime, "`"+want+"`") {
 			t.Errorf("the %s definition's regime section does not name `%s`", p, want)
@@ -385,6 +390,11 @@ func TestColdReadingDefinitionsSatisfyTheAgentContract(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load %s: %v", LintConfigPath, err)
 	}
+	// Proof of life: a disabled rule reports nothing, and a test that reads
+	// nothing from a rule that ran nowhere passes for the wrong reason.
+	if rule, ok := cfg.Rules["agent_contract"]; !ok || !rule.Enabled {
+		t.Fatalf("%s does not enable the agent_contract rule, so this case asserts nothing", LintConfigPath)
+	}
 	findings, err := lint.Lint(cfg, root)
 	if err != nil {
 		t.Fatalf("lint: %v", err)
@@ -428,6 +438,20 @@ func TestLoadDefinitionResolvesUnderAnArbitraryRoot(t *testing.T) {
 	if def.Position != PositionDetection || def.Regime != "registrative" {
 		t.Errorf("resolved %+v", def)
 	}
+
+	// A double-quoted scalar is legal YAML and is the shape the record's other
+	// writers emit. The value read out of it is the inner text: handing the raw
+	// value to the shared decoder keeps the quotes, and the definition then
+	// refuses itself with a message reading detection against detection.
+	writeDefinition(t, root, PositionDetection, "position: \"detection\"\nregime: \"registrative\"\n")
+	quoted, err := LoadDefinition(root, PositionDetection)
+	if err != nil {
+		t.Fatalf("LoadDefinition over a double-quoted frontmatter: %v", err)
+	}
+	if quoted.Position != PositionDetection || quoted.Regime != "registrative" {
+		t.Errorf("a double-quoted frontmatter resolved to %+v", quoted)
+	}
+	writeDefinition(t, root, PositionDetection, "position: detection\nregime: registrative\n")
 	if def.Path != "agents/cold-reading-detection.md" {
 		t.Errorf("path %q", def.Path)
 	}
@@ -455,6 +479,10 @@ func TestLoadDefinitionRefusesAMalformedDefinition(t *testing.T) {
 		{"no position", "regime: registrative\n", "position"},
 		{"position disagrees with the filename", "position: widening\nregime: registrative\n", "widening"},
 		{"regime outside the closed set", "position: detection\nregime: advisory\n", "advisory"},
+		// Fields keeps the first occurrence, so a duplicated key would resolve
+		// silently to one of two answers.
+		{"regime stated twice", "position: detection\nregime: registrative\nregime: generative\n", "more than once"},
+		{"position stated twice", "position: detection\nposition: widening\nregime: registrative\n", "more than once"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

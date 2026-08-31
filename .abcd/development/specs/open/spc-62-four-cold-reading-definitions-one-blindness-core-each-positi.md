@@ -189,11 +189,15 @@ positional authority ac-1..ac-3.
 | --- | --- | --- |
 | ac-1 — the blindness core is byte-identical across the four and carries its seven conditions in the fixed order | One delimited core span, carried verbatim in each file, the delimiters making the span exact rather than heuristic | `TestBlindnessCoreIsByteIdenticalAcrossDefinitions`, `TestBlindnessCoreCarriesSevenConditions` |
 | ac-2 — every definition states a regime, the four distinct and resolvable by position alone | `position:` and `regime:` are frontmatter keys of the definition file, which is what makes the regime the definition's property rather than the payload's | `TestEveryDefinitionStatesItsRegime`, `TestRegimeValuesAreTheFourAndDistinct` |
-| ac-3 — no registered flag and no registered configuration key sets or overrides a regime | The command tree is walked programmatically and every registered flag and configuration key inspected, so the guard cannot fall behind the surface it guards (itd-195). It is proved capable of failing by adding a `--regime` flag and watching it go red | `TestNoOperatorSurfaceSetsARegime`, in `internal/surface/cli/regime_surface_test.go` |
+| ac-3 — no registered flag and no registered configuration key sets or overrides a regime | The command tree is walked through `commandSurface`, the repository's one canonical cobra walk, and every flag and shorthand inspected; the reading verb's operand set is additionally pinned closed, so an operand that would set a regime under another name fails too. The configuration keys are enumerated from the committed configuration files, found by directory rather than by a list of schemas, with the two largest schema types also walked by reflection. Nothing is a written list, so the guard cannot fall behind the surface it guards (itd-195) | `TestNoOperatorSurfaceSetsARegime`, in `internal/surface/cli/regime_surface_test.go` |
 
 The residue itd-184 discloses against ac-3 is a channel that was never
 registered. This spec adds no mechanism for one, and the walk sees every
-channel that is.
+channel that is. One narrower edge sits inside that residue and is stated in the
+guard's own header: a key declared by a schema type outside the two walked by
+reflection, and written into no committed configuration file, is unregistered in
+both senses until a file carries it — at which point the configuration-file walk
+reaches it.
 
 
 ## Tests
