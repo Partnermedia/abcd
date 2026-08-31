@@ -2,7 +2,7 @@
 schema_version: 1
 id: "iss-2608301908270888"
 slug: "an-unclosed-comment-or-fence-in-an-issue-body-still-locks-th"
-severity: "major"
+severity: "minor"
 category: "bug"
 source: "user-observation"
 found_during: "itd-179-fix-delta-ruthless"
@@ -48,3 +48,32 @@ refuses an unclosed `<!--` in GROUNDS text, so the write side is inconsistent
 with itself: it guards the operand and not the body it appends into. And
 `Capture` validates nothing about a body it will later require to be parseable
 -- the check belongs where the text enters, not where it is next appended to.
+
+**RULED 2026-08-31: severity lowered to minor; the hand edit is accepted as the
+repair path.** Three reasons, and the first is the one that matters.
+
+The guard is CORRECT. `ParseSection` masks the body so a heading inside a fence
+or comment is not mistaken for the real section, and the append verifies by
+re-parsing. When an unclosed opener shadows the appended bullet, writing it
+anyway would produce a record whose grounds no reader can see. Refusing is the
+right answer; the defect was never the refusal.
+
+The exit exists. These are committed markdown files in a git repository, the
+refusal names the construct and the body line, and closing the comment is an
+ordinary edit. The original framing — "the record can never leave open/" — is
+true of the TOOL and not of the operator, and that overstatement was the
+orchestrator's.
+
+The exposure is latent and measured: 31 committed records carry a fence, 4 carry
+a comment opener, and none is currently locked.
+
+Rejected: validating bodies at capture time, which would close it at entry but
+contradicts an adopted principle — "capture in particular must stay
+frictionless" — and the moment recording a finding costs more than fixing one,
+findings stop being recorded. Also rejected for now: a repair verb, which is the
+honest answer if abcd's operator genuinely never opens git, but that is a
+general "edit a record body" capability the design has withheld and it wants its
+own intent rather than a fix bolted onto a shipped one.
+
+Stays OPEN at minor: the tool still stops mid-workflow and hands the operator a
+text editor, which is a real cost even if it is not a lockout.

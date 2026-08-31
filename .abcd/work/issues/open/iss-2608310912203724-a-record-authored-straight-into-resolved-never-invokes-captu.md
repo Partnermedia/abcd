@@ -35,3 +35,30 @@ requires a terminal record to carry grounds. This record is about why arming
 that gate would be a bigger change than it looks: it would refuse the majority
 of the existing corpus, and the population it would refuse was created by the
 ordinary working practice of this repo.
+
+**RULED 2026-08-31: a forward-only gate.** A terminal-folder record must carry a
+grounds entry if it was created after the gate is armed; the existing corpus is
+exempt.
+
+The precedent is this cycle's own: the intent-side grounds gate was promoted
+forward-only and left 36 intents NOT READY without refusing any of them. The
+same shape applies here, and for the same reason — the population that would be
+refused was produced by the ordinary working practice of this repository, so
+refusing it retroactively punishes the practice rather than changing it.
+
+**The cutover is the ARMING COMMIT, not a date.** A date written in prose is
+exactly the fact itd-195 says not to state: it cannot fail, and it decays the
+moment anyone misremembers when the gate landed. Whoever arms the gate records
+the commit it was armed at, and the gate compares against that.
+
+Rejected, with reasons kept: narrowing the claim and adding no gate at all,
+which is honest but leaves roughly three-quarters of new terminal records
+escaping an obligation the intent's press release implies is universal; and
+forcing the verb to be the only door, which would make the obligation genuinely
+universal but needs 689 records migrated and fights how this repo is worked
+daily — too large a change for what this finding establishes.
+
+Needs a record home before it is built. It is a capability change on itd-179's
+surface, so it is either that intent's follow-up or a new one; that routing is a
+decomposition hand-run nobody has done.
+
