@@ -86,7 +86,8 @@ const (
 	SignatureFlag SignatureMode = "flag"
 )
 
-// Signature is one named detector over an item's body text.
+// Signature is one named detector over an item's text — its body values and
+// the envelope pattern it was read under.
 type Signature struct {
 	// ID is the name a refusal cites, so a reader can find the rule that fired.
 	ID string
@@ -363,7 +364,7 @@ func checkItem(ordinal int, fields map[string]string, def Definition,
 		if s.Regime != def.Regime || s.Mode != SignatureEnforce {
 			continue
 		}
-		if s.Pattern.MatchString(bodyText(fields, bodyFields)) {
+		if s.Pattern.MatchString(signatureText(fields, bodyFields)) {
 			return &ItemRefusal{Ordinal: ordinal, Rule: s.ID,
 				Detail: fmt.Sprintf("item %d matches the registered signature %s: %s",
 					ordinal, s.ID, s.Licence)}
@@ -390,7 +391,7 @@ func checkItem(ordinal int, fields map[string]string, def Definition,
 func itemReviewFlags(ordinal int, fields map[string]string, def Definition, bodyFields []string) []ReviewFlag {
 	generative := def.Regime == RegimeGenerative
 	var out []ReviewFlag
-	text := bodyText(fields, bodyFields)
+	text := signatureText(fields, bodyFields)
 	for _, s := range Signatures {
 		if !generative && (s.Regime != def.Regime || s.Mode != SignatureFlag) {
 			continue
@@ -467,12 +468,21 @@ func recordBytes(fields map[string]string, bodyFields []string) int {
 	return n
 }
 
-// bodyText is what a signature reads: the item's body values, joined and folded.
-// The pattern is not among them — it names the reading's own basis, not a
-// finding — and no key name is either, because a detector over key names would
-// be the reserved-name table written twice.
-func bodyText(fields map[string]string, bodyFields []string) string {
-	parts := make([]string, 0, len(bodyFields))
+// signatureText is what a signature reads: every text value the item carries,
+// joined and folded. No key NAME is among them, because a detector over key
+// names would be the reserved-name table written twice.
+//
+// The envelope's pattern is included, and excluding it was a hole. The argument
+// for leaving it out was that it names the reading's own basis rather than a
+// finding — but the field is untrusted text the reading chose, it is the one
+// field every item at every regime must carry, and it lands in a committed
+// record. An item whose pattern read "the fix is to rewrite the charter" was
+// therefore accepted at exit 0 with the registry's exact phrasing, no byte
+// substituted, in the one field no detector read (iss-2608311517547712). A
+// channel that is always open is not narrowed by what its field is FOR.
+func signatureText(fields map[string]string, bodyFields []string) string {
+	parts := make([]string, 0, len(bodyFields)+1)
+	parts = append(parts, fields[PatternField])
 	for _, f := range bodyFields {
 		parts = append(parts, fields[f])
 	}

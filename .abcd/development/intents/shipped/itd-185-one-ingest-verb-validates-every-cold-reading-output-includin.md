@@ -163,8 +163,9 @@ completeness this gate does not have.
 **Under-catching** is the direction this intent has always disclosed: a fix
 proposal or a disposition **phrased** outside the registry's signatures raises
 nothing. Inside it sits a narrower class. The detectors read a folded copy of
-the body, so an invisible or compatibility-equivalent rune cannot decide whether
-a signature fires: every Unicode space folds to ASCII, every invisible rune is
+every text value the item carries — its body and the envelope pattern alike — so
+an invisible or compatibility-equivalent rune cannot decide whether a signature
+fires: every Unicode space folds to ASCII, every invisible rune is
 dropped, and NFKC folds the compatibility forms. A script-**confusable**
 substitution is not folded — a Cyrillic that is not the Latin one, and no
 normalisation equates them — so a signature's own phrasing written in a

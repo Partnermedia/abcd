@@ -569,3 +569,69 @@ func TestTheRegimeGateIsNotEvadedByInvisibleRunes(t *testing.T) {
 		}
 	})
 }
+
+// TestTheSignaturesReadTheProvenanceFieldToo closes a channel that was open at
+// every regime.
+//
+// The detectors read the item's body, and `pattern` is an ENVELOPE field, so an
+// item whose pattern carried the registry's own phrasing landed unremarked: a
+// registrative pattern proposing a fix, an explicative one carrying a
+// disposition, an evaluative one recommending a candidate. No byte was
+// substituted and no phrasing was novel — the detector simply did not read that
+// field, and it is the field every item at every regime must carry, so the
+// channel was always open.
+//
+// By itd-185's own test that is a defect in the gate rather than the residue:
+// the residue covers phrasing OUTSIDE the registry, and this was the registry's
+// exact phrasing moved one field along.
+func TestTheSignaturesReadTheProvenanceFieldToo(t *testing.T) {
+	for _, tc := range []struct{ name, position, pattern, signature string }{
+		{"a registrative pattern proposing a fix", "detection",
+			"P-1. The fix is to rewrite the charter.", "RG-REG-FIXPROPOSAL"},
+		{"an explicative pattern carrying a disposition", "entailment",
+			"P-2. This claim is already accepted by the maintainer.", "RG-EXPL-DISPOSITION"},
+		{"an evaluative pattern recommending a candidate", "comparative",
+			"P-3. We recommend the second candidate.", "RG-EVAL-RECOMMENDATION"},
+	} {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			f := newIngestFixture(t, Position(tc.position))
+			doc := f.payload(2)
+			doc["items"].([]any)[1].(map[string]any)[PatternField] = tc.pattern
+
+			res := f.mustIngest(doc)
+			if fl := f.flagOf(res, 2); fl.SignatureID != tc.signature {
+				t.Errorf("the flag cites signature %q, want %s", fl.SignatureID, tc.signature)
+			}
+			// And it is durable, so the channel is closed in the record and not
+			// only in the render.
+			run := f.readRunRecord(f.runID)
+			if len(run.ReviewFlags) != 1 || run.ReviewFlags[0].SignatureID != tc.signature {
+				t.Errorf("the run record carries review flags %v", run.ReviewFlags)
+			}
+		})
+	}
+
+	// The generative position runs the whole registry, and its pattern is read
+	// under the same rule.
+	t.Run("a generative pattern is read too", func(t *testing.T) {
+		f := newIngestFixture(t, PositionWidening)
+		doc := f.payload(1)
+		doc["items"].([]any)[0].(map[string]any)[PatternField] = "P-4. We recommend this configuration."
+
+		res := f.mustIngest(doc)
+		if fl := f.flagOf(res, 1); fl.SignatureID != "RG-EVAL-RECOMMENDATION" {
+			t.Errorf("the flag cites signature %q", fl.SignatureID)
+		}
+	})
+
+	// An ordinary pattern still raises nothing: a channel closed by flagging
+	// every provenance value would be a channel traded for noise.
+	t.Run("an ordinary pattern raises nothing", func(t *testing.T) {
+		f := newIngestFixture(t, "detection")
+		res := f.mustIngest(f.payload(1))
+		if len(res.ReviewFlags) != 0 {
+			t.Errorf("an ordinary pattern was flagged: %v", res.ReviewFlags)
+		}
+	})
+}

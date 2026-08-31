@@ -207,8 +207,8 @@ stated:
 
 Prose that ranks, settles or proposes without the field is watched too, by a
 registry of named signatures (`RG-EVAL-ORDERING`, `RG-EVAL-RECOMMENDATION`,
-`RG-REG-FIXPROPOSAL`, `RG-EXPL-DISPOSITION`). All four are **observed, not
-enforcing**: a hit raises a review flag on the run record naming the item and
+`RG-REG-FIXPROPOSAL`, `RG-EXPL-DISPOSITION`) reading every text value the item
+carries, `pattern` included. All four are **observed, not enforcing**: a hit raises a review flag on the run record naming the item and
 the signature id, and the item lands. They cannot tell a reading that proposes
 from one reporting that the document proposes, so an enforcing registry refused
 a reading for quoting its own material. Report `review_flags` and read them; the
