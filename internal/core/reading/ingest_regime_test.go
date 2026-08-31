@@ -9,6 +9,7 @@ package reading
 // everything establishes nothing about the rule it names.
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -62,9 +63,14 @@ func TestRegimeComesFromTheDefinitionNotThePayload(t *testing.T) {
 // (iss-2608311145258479); this case holds the ingest path to it, so the fix
 // cannot be undone in the locator without a reading-side test going red.
 //
-// No refusal record is written, and that is deliberate: a run's durable record
-// states the regime it read under, and a run whose definition does not resolve
-// has none the verb could honestly write down.
+// The refusal IS recorded. The run's identity is proven before the definition is
+// resolved — it names a parked run and cites that run's manifest by content hash
+// — and from that point every list-level refusal leaves a record, which is what
+// ac-10 and the plugin page both say. The earlier reading, that a run whose
+// definition does not resolve has no regime the verb could honestly write down,
+// argued for writing nothing at all; the honest form is a record whose `regime`
+// is EMPTY and whose reason says why, because that is a fact an operator can
+// find, and a refusal nobody recorded is not (iss-2608311518250688).
 func TestADriftedDefinitionRefusesTheRunRatherThanChangingTheLicence(t *testing.T) {
 	f := newIngestFixture(t, "detection")
 	f.mustIngest(f.payload(1))
@@ -89,11 +95,27 @@ func TestADriftedDefinitionRefusesTheRunRatherThanChangingTheLicence(t *testing.
 			t.Errorf("the refusal does not name %q: %v", want, err)
 		}
 	}
-	if res.RefusalPath != "" {
-		t.Errorf("a run with no resolvable regime wrote a refusal record at %s, which would have to "+
-			"state a regime the verb could not resolve", res.RefusalPath)
+	if res.RefusalPath == "" {
+		t.Fatal("a run refused after its identity was proven left no refusal record; ac-10 and the " +
+			"plugin page both say the event is durable from that point on")
 	}
-	f.nothingDurable("rdg-2608310000000007")
+	rec := f.readRefusalRecord("rdg-2608310000000007")
+	if rec.RunID != "rdg-2608310000000007" || rec.Position != "detection" {
+		t.Errorf("the refusal record carries the wrong run metadata: %+v", rec)
+	}
+	if rec.ManifestSHA256 == "" || rec.TargetCommit == "" {
+		t.Errorf("the refusal record does not carry the run's manifest reference: %+v", rec)
+	}
+	// The regime is the definition's, and the definition did not resolve, so
+	// there is none to state. An empty field is the honest value; a substituted
+	// one would be the verb asserting a licence it refused to read.
+	if rec.Regime != "" {
+		t.Errorf("the refusal record states regime %q for a run whose definition did not resolve", rec.Regime)
+	}
+	if !strings.Contains(rec.Reason, RegimeEvaluative) || !strings.Contains(rec.Reason, "refused rather than resolved") {
+		t.Errorf("the refusal record does not carry the named reason: %q", rec.Reason)
+	}
+	f.nothingDurableInTheLedger("rdg-2608310000000007")
 }
 
 // TestSelfDeclaredRegimeMismatchRefusesRun is ac-12: a self-declared regime that
@@ -632,6 +654,112 @@ func TestTheSignaturesReadTheProvenanceFieldToo(t *testing.T) {
 		res := f.mustIngest(f.payload(1))
 		if len(res.ReviewFlags) != 0 {
 			t.Errorf("an ordinary pattern was flagged: %v", res.ReviewFlags)
+		}
+	})
+}
+
+// TestTheElisionEntryNamesNoItemInAnyDurableRecord.
+//
+// A bounded refusal list ends in an entry that is not an item: "and N more
+// item(s) refused". It carries no ordinal, and the zero value of an ordinal is
+// 0 — so both durable records asserted an item 0 that does not exist. The
+// terminal renderer had the branch that suppresses it and neither record writer
+// did, which is the shape a claim takes when it lives in one surface instead of
+// in the value.
+func TestTheElisionEntryNamesNoItemInAnyDurableRecord(t *testing.T) {
+	t.Run("the run record", func(t *testing.T) {
+		f := newIngestFixture(t, "detection")
+		// More refusals than the cap, and survivors, so the run lands and its
+		// commit marker carries the bounded list.
+		doc := f.payload(maxReportedRefusals + 5)
+		items := doc["items"].([]any)
+		for i := 0; i < maxReportedRefusals+3; i++ {
+			items[i].(map[string]any)[PatternField] = ""
+		}
+		res := f.mustIngest(doc)
+		if res.RefusedCount != maxReportedRefusals+3 {
+			t.Fatalf("the run refused %d item(s), want %d", res.RefusedCount, maxReportedRefusals+3)
+		}
+		run := f.readRunRecord(f.runID)
+		last := run.RefusedItems[len(run.RefusedItems)-1]
+		if last.Rule != "refusals-elided" {
+			t.Fatalf("the bounded list does not end in the elision entry: %+v", last)
+		}
+		if last.Ordinal != 0 {
+			t.Fatalf("the elision entry carries ordinal %d", last.Ordinal)
+		}
+		raw, err := os.ReadFile(filepath.Join(f.root, filepath.FromSlash(
+			ReadingsRecordDir+"/"+f.runID+"/"+RunFileName)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var doc2 struct {
+			RefusedItems []map[string]any `json:"refused_items"`
+		}
+		if err := json.Unmarshal(raw, &doc2); err != nil {
+			t.Fatal(err)
+		}
+		entry := doc2.RefusedItems[len(doc2.RefusedItems)-1]
+		if _, named := entry["ordinal"]; named {
+			t.Errorf("the run record's elision entry states an ordinal: %v; there is no item 0, and a "+
+				"reader sent looking for one finds nothing", entry)
+		}
+	})
+
+	t.Run("the refusal record", func(t *testing.T) {
+		f := newIngestFixture(t, "detection")
+		// Every item refused, so the run is refused at list level and the reason
+		// carries the bounded list into refusal.json.
+		doc := f.payload(maxReportedRefusals + 5)
+		for _, it := range doc["items"].([]any) {
+			it.(map[string]any)[PatternField] = ""
+		}
+		if _, err := f.ingest(doc); err == nil {
+			t.Fatal("a run in which every item was refused was accepted")
+		}
+		rec := f.readRefusalRecord(f.runID)
+		if !strings.Contains(rec.Reason, "more item(s) refused") {
+			t.Fatalf("the reason does not carry the elision entry: %q", rec.Reason)
+		}
+		if strings.Contains(rec.Reason, "item 0") {
+			t.Errorf("the refusal record names an item 0: %q", rec.Reason)
+		}
+	})
+}
+
+// TestAPatternThatRendersAsNothingIsRefused.
+//
+// U+2800 BRAILLE PATTERN BLANK renders as nothing in every common font, but it
+// is a graphic character: not Cf, not Other_Default_Ignorable_Code_Point, not a
+// Variation_Selector, and unicode.IsSpace is false for it. So it cleared the
+// blankness test, and a record asserted a provenance that renders blank — the
+// failure the U+200B fix closed, one category further out.
+func TestAPatternThatRendersAsNothingIsRefused(t *testing.T) {
+	for _, p := range Positions() {
+		p := p
+		t.Run(string(p), func(t *testing.T) {
+			f := newIngestFixture(t, p)
+			doc := f.payload(2)
+			doc["items"].([]any)[1].(map[string]any)[PatternField] = "⠀⠀"
+
+			r := f.refusedItem(doc, 2, 2)
+			if r.Rule != "named-provenance" {
+				t.Errorf("the refusal cites rule %q, want named-provenance", r.Rule)
+			}
+			if r.Field != PatternField {
+				t.Errorf("the refusal names field %q", r.Field)
+			}
+		})
+	}
+
+	// A braille pattern with dots is ordinary text and still lands: the fold
+	// closes the blank, not the block.
+	t.Run("a braille pattern with dots lands", func(t *testing.T) {
+		f := newIngestFixture(t, "detection")
+		doc := f.payload(1)
+		doc["items"].([]any)[0].(map[string]any)[PatternField] = "⠁⠃"
+		if res := f.mustIngest(doc); len(res.Records) != 1 {
+			t.Errorf("a braille pattern carrying dots was refused: %v", res.RefusedItems)
 		}
 	})
 }

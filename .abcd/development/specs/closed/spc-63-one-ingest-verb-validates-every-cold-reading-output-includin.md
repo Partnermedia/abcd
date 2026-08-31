@@ -174,7 +174,9 @@ four regimes and the record then asserted a provenance it does not carry.
 `foldForMatching` closes three classes and the stored text is untouched: every
 Unicode space folds to ASCII; every invisible rune is dropped, across all three
 categories that hold one — `Cf`, `Other_Default_Ignorable_Code_Point` (U+034F is
-a MARK, so guarding `Cf` alone left it open) and `Variation_Selector`; and NFKC
+a MARK, so guarding `Cf` alone left it open) and `Variation_Selector`; U+2800
+BRAILLE PATTERN BLANK folds to a space, being the one rune found that renders as
+nothing and is a GRAPHIC character, so no category above reports it; and NFKC
 folds the compatibility forms (the `fi` ligature, the fullwidth letters). Both
 the signature registry and the blankness rules read through it.
 

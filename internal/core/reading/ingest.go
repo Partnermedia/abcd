@@ -157,7 +157,11 @@ type Output struct {
 // text: a refusal names the ordinal, the rule and the offending field, which is
 // everything a reader needs and nothing a redactor would have to clean.
 type ItemRefusal struct {
-	Ordinal int    `json:"ordinal"`
+	// Ordinal is 1-based, and it is omitted rather than rendered as 0. The
+	// bounded list's elision entry is not an item, so it names none, and a
+	// record asserting "item 0" sends a reader looking for something that does
+	// not exist.
+	Ordinal int    `json:"ordinal,omitempty"`
 	Rule    string `json:"rule"`
 	Field   string `json:"field,omitempty"`
 	Detail  string `json:"detail"`
@@ -431,9 +435,16 @@ func ingestUnderLock(root *os.Root, repoRoot string, req IngestRequest, res *Ing
 		return err
 	}
 
+	// A definition that does not resolve refuses the run, and the refusal is
+	// RECORDED like every other one from this point on: the identity is proven
+	// above, so the run happened. The record states no regime, because the
+	// regime is the definition's and this definition did not resolve — an empty
+	// field is the honest value, and a substituted one would be the verb
+	// asserting a licence it refused to read. Returning bare instead left a
+	// refused run with nothing durable to find it by (iss-2608311518250688).
 	def, err := LoadDefinition(repoRoot, pos)
 	if err != nil {
-		return err
+		return refuse(root, res, out, manifest, Definition{Position: pos}, err)
 	}
 	res.Regime = def.Regime
 

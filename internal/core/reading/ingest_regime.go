@@ -489,6 +489,10 @@ func signatureText(fields map[string]string, bodyFields []string) string {
 	return foldForMatching(strings.Join(parts, "\n"))
 }
 
+// brailleBlank is U+2800 BRAILLE PATTERN BLANK: a graphic character that renders
+// as nothing, which no Unicode category the fold consults reports.
+const brailleBlank = '\u2800'
+
 // foldForMatching normalises text so an INVISIBLE or compatibility-equivalent
 // rune cannot decide whether a check fires. What is stored is untouched.
 //
@@ -509,6 +513,14 @@ func signatureText(fields map[string]string, bodyFields []string) string {
 //     rather than folding is what catches a rune placed INSIDE a keyword:
 //     folding one to a space would split the word in two and the signature would
 //     still not match. Guarding Cf alone was the same defect one category over.
+//   - U+2800 BRAILLE PATTERN BLANK folds to a space. It is the one rune found
+//     that renders as nothing and is caught by none of the categories above: it
+//     is a graphic character, so it is not Cf, not default-ignorable, not a
+//     variation selector, and unicode.IsSpace is false for it. Without this a
+//     pattern of one U+2800 satisfied the provenance rule and the record then
+//     asserted a provenance that renders blank — the U+200B failure one category
+//     further out. Only the blank folds; a braille pattern carrying dots is
+//     ordinary text.
 //   - NFKC folds the compatibility forms. The fi LIGATURE and the fullwidth
 //     letters are the registry's own phrasing written in code points that render
 //     the same, which is the defect side of this intent's own test — "the
@@ -526,7 +538,7 @@ func foldForMatching(text string) string {
 			unicode.Is(unicode.Other_Default_Ignorable_Code_Point, r),
 			unicode.Is(unicode.Variation_Selector, r):
 			return -1
-		case unicode.IsSpace(r):
+		case unicode.IsSpace(r), r == brailleBlank:
 			return ' '
 		}
 		return r
@@ -580,10 +592,20 @@ func sortedKeys(m map[string]json.RawMessage) []string {
 	return out
 }
 
-// renderRefusals renders the refusal list for a list-level message.
+// renderRefusals renders the refusal list for a list-level message — which is
+// the reason a refusal RECORD carries, so this is a durable surface and not only
+// a terminal one.
+//
+// The elision entry names no item, so it is not rendered as one. There is no
+// item 0, and the terminal renderer already suppressed it; a record writer that
+// did not was the same claim held in one surface instead of in the value.
 func renderRefusals(refusals []ItemRefusal) string {
 	parts := make([]string, 0, len(refusals))
 	for _, r := range refusals {
+		if r.Ordinal == 0 {
+			parts = append(parts, fmt.Sprintf("(%s): %s", r.Rule, r.Detail))
+			continue
+		}
 		parts = append(parts, fmt.Sprintf("item %d (%s): %s", r.Ordinal, r.Rule, r.Detail))
 	}
 	return strings.Join(parts, "; ")

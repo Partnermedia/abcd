@@ -166,7 +166,9 @@ nothing. Inside it sits a narrower class. The detectors read a folded copy of
 every text value the item carries — its body and the envelope pattern alike — so
 an invisible or compatibility-equivalent rune cannot decide whether a signature
 fires: every Unicode space folds to ASCII, every invisible rune is
-dropped, and NFKC folds the compatibility forms. A script-**confusable**
+dropped, U+2800 BRAILLE PATTERN BLANK folds to a space — it renders as nothing
+and is caught by no Unicode category the fold consults — and NFKC folds the
+compatibility forms. A script-**confusable**
 substitution is not folded — a Cyrillic that is not the Latin one, and no
 normalisation equates them — so a signature's own phrasing written in a
 confusable script raises nothing. Closing that needs a confusables table, which
