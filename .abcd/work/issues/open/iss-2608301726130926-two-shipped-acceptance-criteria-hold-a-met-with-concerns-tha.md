@@ -46,3 +46,27 @@ ways and record which:
 Do not close it by deciding the criteria are fine. The rule does not leave that
 open.
 
+**WIDENED 2026-08-31 by the itd-189 fidelity audit.** This record was filed
+naming two criteria. It is at least five, across three intents.
+
+itd-189 shipped with all three of its criteria at MET_WITH_CONCERNS, and the
+reason is the same one: `capture.IngestReading` mints a reading item and has no
+caller outside its own package, so the admission and surprise schemas are armed
+over a corpus the shipped product cannot populate
+(iss-2608310912206941). Every one of its Given clauses presupposes an artefact
+only itd-185 can produce.
+
+So the Phase-4 check is now:
+
+- itd-178 `ac-2` — MWC, flips to NOT_MET
+- itd-180 `ac-1` — MWC, flips to NOT_MET
+- itd-189 `ac-1`, `ac-2`, `ac-3` — MWC, all three rest on itd-185
+
+If itd-185 lands, all five stand as issued. If it does not, five criteria across
+three shipped intents need re-issuing as NOT_MET, and three of them are the
+whole of one intent's acceptance.
+
+That changes what this record is for. It was a reminder; it is now the single
+place recording that one unstarted intent carries the acceptance of three
+shipped ones.
+
