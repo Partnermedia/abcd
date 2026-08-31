@@ -115,9 +115,13 @@ sits in.
 
 ### Wiring
 
-Go test files in package `evals` with `//go:build smoke`. `make smoke` runs
-`go test -tags smoke ./evals/...`, and CI's `smoke` job, a required status check
-on the protected branch, runs `make smoke`; neither needs an edit. The same
+Go test files in package `evals` with `//go:build smoke || coldreading`, so the
+same files run in the smoke harness and in the cold-reading lane. `make smoke`
+runs `go test -tags smoke ./evals/...`; `make evals-cold-reading` runs
+`go test -tags coldreading ./evals/...`, and the `cold-reading-evals` CI job runs
+that target. The target and the job were landed by spc-64, and selection is by
+build tag rather than by test name, so this spec's tests joined both lanes with
+no Makefile and no workflow edit of their own. The same
 caveat spc-64 records applies: on a pull request confined to `docs/`,
 `.abcd/development/`, `.abcd/work/`, and the root prose files, the diff
 classifier stands the `smoke` job down, and the merge-queue entry, which runs
