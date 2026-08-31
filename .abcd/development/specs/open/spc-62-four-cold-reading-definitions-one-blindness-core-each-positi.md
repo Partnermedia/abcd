@@ -46,8 +46,9 @@ and never claims to be the wall.
 
 **In.** Four `agents/*.md` definitions; their injection-canary fixtures and
 `agents/CHANGELOG.md` entries; the one-line extension of the `task_classes`
-closed enum; the Go byte-identity test on the shared core, and the tests that
-hold each definition to its five parts and its regime value.
+closed enum; the definition locator in `internal/core/reading`; the Go
+byte-identity test on the shared core, and the tests that hold each definition to
+its five parts and its regime value.
 
 **Out.** Enforcing the blindness, which is the assembler's job checked by
 [itd-186](../../intents/planned/itd-186-the-read-block-eval-falsifies-the-firewall-planted-warm-cont.md)'s
@@ -198,9 +199,15 @@ channel that is.
 ## Tests
 
 Each case is written to fail before the definitions land and pass after. The
-Go tests live in `internal/core/reading/definitions_test.go`, which is the
-right home because that package already locates the definitions and hashes
-them for spc-63's instrument identity.
+Go tests live in `internal/core/reading/definitions_test.go`, which is the right
+home because the definition LOCATOR lives in that package and is spc-62's own
+delivery: `LoadDefinition(repoRoot, position)` resolves a position to its
+definition file by construction, reads the `position:` and `regime:` keys out of
+its frontmatter, and returns the file's sha256, which is the instrument identity
+spc-63 stamps into a run. The root is a parameter, so a caller — the ingest verb,
+or a test over a temporary tree — decides which repository is read. `Describe`,
+behind the bare `abcd reading` verb, renders the definitions the locator resolves
+rather than a directory listing, which is what keeps the locator wired.
 
 - `TestBlindnessCoreIsByteIdenticalAcrossDefinitions`: extracts the delimited
   span from all four files and compares bytes; a one-character edit to one copy
@@ -221,6 +228,14 @@ them for spc-63's instrument identity.
 - `TestComparativeObjectIsTheWideningPreAdmissionOutput`: the settled reading
   of ruling (8), pinned so the two intents' disagreement cannot be
   reintroduced.
+- `TestLoadDefinitionResolvesUnderAnArbitraryRoot`,
+  `TestLoadDefinitionRefusesAMalformedDefinition` and
+  `TestLoadDefinitionsSkipsAnAbsentDefinition`: the locator's own contract over a
+  temporary root — a resolved position, regime and hash; a refusal by name for a
+  definition silent about either key or stating a regime outside the closed set;
+  and absence treated as a state while a present-but-broken definition is a
+  fault. `TestDescribeReportsTheDefinitionsTheLocatorResolves` holds it wired, by
+  requiring the bare verb to refuse what the locator refuses.
 - `TestNoOperatorSurfaceSetsARegime`, in
   `internal/surface/cli/regime_surface_test.go`: walks the command tree and the
   configuration schema and fails if any registered flag or key can set or
