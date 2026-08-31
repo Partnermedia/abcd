@@ -48,16 +48,17 @@ func Describe(repoRoot string) (Status, error) {
 		return s, nil
 	}
 
-	defs, err := os.ReadDir(filepath.Join(repoRoot, DefinitionsDir))
-	if err != nil && !os.IsNotExist(err) {
-		return Status{}, fmt.Errorf("reading: listing %s: %w", DefinitionsDir, err)
+	// Resolved, not listed. The render reports the definitions the ingest verb
+	// would actually resolve: a file the locator refuses — silent about its
+	// position or its regime — is a fault reported here rather than an
+	// instrument reported present, and a `cold-reading-*.md` naming no position
+	// is not an instrument at all, because the position set is closed.
+	defs, err := LoadDefinitions(repoRoot)
+	if err != nil {
+		return Status{}, err
 	}
-	for _, e := range defs {
-		name := e.Name()
-		if e.IsDir() || !strings.HasPrefix(name, definitionPrefix) || !strings.HasSuffix(name, ".md") {
-			continue
-		}
-		s.Definitions = append(s.Definitions, strings.TrimSuffix(name, ".md"))
+	for _, d := range defs {
+		s.Definitions = append(s.Definitions, definitionPrefix+string(d.Position))
 	}
 	sort.Strings(s.Definitions)
 
