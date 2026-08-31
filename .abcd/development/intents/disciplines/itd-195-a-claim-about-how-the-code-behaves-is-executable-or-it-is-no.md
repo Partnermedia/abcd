@@ -82,6 +82,13 @@ are instances of it.
 
 ## Staging
 
+**Adopted 2026-08-31 as a STUB.** The rule stands and the two adjacent
+principles now point at it as instances. Nothing else is worked through: the
+sweep is unstarted, the gate is prose rather than a detector, and the
+relationship between this record and its two special cases is asserted rather
+than reconciled. Deliberate — the cold-reading experiment has the floor, and
+this waits for it.
+
 The rule binds new work immediately. The existing corpus does not conform and is
 not assumed to: a sweep of the whole codebase for prose that states how other
 components behave is the work this intent carries, and it has not been done. Two
