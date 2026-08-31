@@ -302,11 +302,23 @@ type carrier struct {
 	// empty text for every projected item would satisfy a path check exactly while
 	// every absence assertion over those items asserted nothing at all.
 	//
-	// A PROJECTED carrier declares one marker per projected field it is pinning,
-	// because a single marker pins only the field it was drawn from: with every
-	// marker inside `## Press Release`, narrowing the projection to that one field
-	// drops four of the five contracted fields and every marker still arrives.
+	// A marker pins ONLY the field it was drawn from, so a projected carrier draws
+	// one from each field it pins, and the set of them is drawn from DISTINCT
+	// fields. Every marker taken from the same section is the mistake that made
+	// this floor land short twice: with all of them inside `## Press Release`,
+	// narrowing the projection to that one field drops four of the five contracted
+	// fields and every marker still arrives.
 	Markers []string
+	// Fields are the projected fields the manifest must record for this path.
+	//
+	// It exists because one of the five contracted fields cannot be pinned by a
+	// marker AT ALL, and no number of markers could have found that. `spec_id`
+	// projects to the bare string `spc-1`, which also travels inside the whole
+	// spec file, so bytes.Contains is satisfied whether or not the projection
+	// emitted it. The manifest's `field` column names what was projected, which is
+	// the only place that distinction is visible — so the two checks are not
+	// belt-and-braces, they reach different halves of the contract.
+	Fields []string
 	// Classes are the sentinel classes the file carries, so a missing carrier
 	// names the assertions it silently disarmed. It may be empty for a carrier
 	// whose job is to pin an include row rather than a plant.
@@ -353,13 +365,21 @@ var carriers = []carrier{
 		Why:     "a spec admitted whole, carrying the origin key and two excluded headings",
 	},
 	{
+		// The only fixture record carrying all five contracted fields, so it is the
+		// one that can pin the whole projection: four markers from four distinct
+		// sections, and spec_id off the manifest because no marker can reach it.
 		Path: ".abcd/development/intents/shipped/itd-1-a-shipped-intent.md",
 		Markers: []string{
 			"The promise, as it was made.",
+			"- Given a fixture state, when the assembly runs, then the read-block holds.",
+			"- Holds while the record is one repository.",
 			"A positive include table over a hand-transcribed exclusion floor.",
 		},
+		Fields: []string{
+			"Press Release", "Acceptance Criteria", "Scope Conditions", "Mechanism", "spec_id",
+		},
 		Classes: []string{"WARM-FIELD", "UNPROJECTED-SECTION"},
-		Why:     "a shipped intent projected to its claim record, pinned at two of the five contracted fields",
+		Why:     "a shipped intent projected to its claim record, pinned at all five contracted fields",
 	},
 	{
 		Path:      ".abcd/development/intents/drafts/itd-2-a-draft-intent.md",
@@ -368,6 +388,7 @@ var carriers = []carrier{
 			"The draft's press release, which the entailment reading reads.",
 			"The draft's mechanism claim, which the entailment reading reads.",
 		},
+		Fields:  []string{"Press Release", "Mechanism"},
 		Classes: []string{"DRAFT-ORIGIN", "UNPROJECTED-SECTION"},
 		Why:     "the candidate set the entailment reading reads, carrying the origin key",
 	},
@@ -378,6 +399,7 @@ var carriers = []carrier{
 			"A planned promise the entailment reading reads.",
 			"The planned mechanism claim, which the entailment reading reads.",
 		},
+		Fields:  []string{"Press Release", "Mechanism", "spec_id"},
 		Classes: []string{"UNPROJECTED-SECTION"},
 		Why:     "the planned half of the candidate set, projected the same way",
 	},
@@ -385,6 +407,12 @@ var carriers = []carrier{
 		Path:    "main.go",
 		Markers: []string{"func main() {}"},
 		Why:     "the shipped tree's source, which carries no plant; the carrier is what makes its row falsifiable",
+	},
+	{
+		Path:    "fence.go",
+		Markers: []string{"This block opens a fence at the left margin and never closes it."},
+		Why: "a source file carrying an unterminated fence at the left margin; it is what " +
+			"makes the body redaction's markdown-only scope falsifiable",
 	},
 	{
 		Path:    "go.mod",

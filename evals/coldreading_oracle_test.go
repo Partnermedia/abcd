@@ -293,8 +293,16 @@ func requireCarriers(t *testing.T, a assembled) {
 			"bundle asserts nothing", a.Position)
 	}
 	seen := make(map[string]bool, len(a.ManifestItems))
+	projected := map[string]map[string]bool{}
 	for _, it := range a.ManifestItems {
 		seen[it.Path] = true
+		if it.Field == "" {
+			continue
+		}
+		if projected[it.Path] == nil {
+			projected[it.Path] = map[string]bool{}
+		}
+		projected[it.Path][it.Field] = true
 	}
 	for _, c := range carriers {
 		if !c.reachesAt(a.Position) {
@@ -309,6 +317,14 @@ func requireCarriers(t *testing.T, a assembled) {
 		// Then the bytes. The manifest names what an assembly SAYS it passed; only
 		// the bundle says what it actually passed, and an absence assertion over an
 		// item whose text is empty is an absence assertion over nothing.
+		for _, field := range c.Fields {
+			if projected[c.Path][field] {
+				continue
+			}
+			t.Fatalf("the assembly at %s carries %s but the manifest records no %q field for it, "+
+				"so that field of the projection contract is unpinned; %s",
+				a.Position, c.Path, field, c.stake())
+		}
 		for _, marker := range c.Markers {
 			if bytes.Contains(a.BundleRaw, []byte(marker)) {
 				continue
@@ -341,13 +357,13 @@ func requireOracleTables(t *testing.T) {
 		want int
 	}{
 		{"sentinelClasses", len(sentinelClasses), 14},
-		{"carriers", len(carriers), 10},
+		{"carriers", len(carriers), 11},
 		{"holes", len(holes), 2},
 		{"excludedKeys", len(excludedKeys), 2},
 		{"excludedHeadings", len(excludedHeadings), 4},
 		{"excludedFamilies", len(excludedFamilies), 15},
 		{"admittedRecordPaths", len(admittedRecordPaths), 8},
-		{"coverage", len(coverage), 46},
+		{"coverage", len(coverage), 50},
 	} {
 		if tbl.got != tbl.want {
 			t.Fatalf("the %s table holds %d row(s), and this eval is written against %d; "+
