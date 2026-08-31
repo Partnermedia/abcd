@@ -7,7 +7,7 @@ intent: itd-189
 
 ## Summary
 
-spc-67 delivers [itd-189](../../intents/planned/itd-189-what-the-widening-reading-proposes-is-admitted-or-declined-o.md)'s
+spc-67 delivers [itd-189](../../intents/shipped/itd-189-what-the-widening-reading-proposes-is-admitted-or-declined-o.md)'s
 record shapes for the widening reading's step 2: every admission into the
 candidate set carries recorded grounds, every declined proposal carries a
 disposition, and a surprise is its own entry rather than a field on either.

@@ -64,7 +64,7 @@ which belong to
 [itd-180](../../intents/shipped/itd-180-a-cold-reading-s-findings-land-as-reading-records-and-the-re.md)
 and spc-58 (this verb validates against them and writes them, it does not
 define them); admission, which is
-[itd-189](../../intents/planned/itd-189-what-the-widening-reading-proposes-is-admitted-or-declined-o.md)'s.
+[itd-189](../../intents/shipped/itd-189-what-the-widening-reading-proposes-is-admitted-or-declined-o.md)'s.
 
 ## Approach
 
