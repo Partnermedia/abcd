@@ -967,3 +967,27 @@ func TestCapturePromoteReadingItemNeedsNoGrounds(t *testing.T) {
 		t.Fatalf("promoting a dispositioned reading item without --grounds must mint a draft:\n%s", out)
 	}
 }
+
+// TestCapturePromoteReadingItemRefusesGrounds is the other half of the exemption
+// above: the reading route does not merely stop REQUIRING the flag, it refuses a
+// value handed to it. Nothing on this route writes grounds, so accepting one
+// would report success over a conjecture that reached no record.
+func TestCapturePromoteReadingItemRefusesGrounds(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+	const run, item = "rdg-2608300000000001", "rdi-2608300000000002"
+	writeReadingFixture(t, repo, run, item)
+	runCLI(t, "capture", "disposition", item,
+		"--state", "accepted", "--grounds", "the tension is real and worth acting on")
+
+	_, err := runCLIErr(t, "capture", "promote", item, "--grounds", cliGrounds)
+	if exitCodeOf(err) != 2 {
+		t.Fatalf("exit = %d (%v), want 2", exitCodeOf(err), err)
+	}
+	if !strings.Contains(err.Error(), "disposition") {
+		t.Fatalf("the refusal must say where the conjecture belongs, got %q", err.Error())
+	}
+	if entries, _ := os.ReadDir(filepath.Join(repo, cliDrafts)); len(entries) != 0 {
+		t.Fatalf("a refused promote minted %d draft(s), want 0", len(entries))
+	}
+}
