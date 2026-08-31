@@ -38,6 +38,19 @@ source on every row, and `TestOracleImportsNothingFromTheAssembler` parses every
 Go file here to check that nothing imports the assembler's package. An eval that
 read the assembler's own include table could only ever confirm the table.
 
+The heading half of the field-absence assertion reads **every spelling a heading
+arrives in** — ATX, setext underline, raw HTML tag or heading role, and the
+emphasis and code marks a title can carry — not ATX alone. An ATX-only scan
+would report an item carrying a setext-underlined `Audit Notes` as clean, which
+is the assertion satisfied completely by the leak it exists to catch. That the
+assembler currently REFUSES those forms rather than emitting them is a property
+of the assembler, not of this oracle: an oracle that can only see what the thing
+under test currently emits agrees with it by construction.
+`TestFieldAbsenceSeesEveryHeadingForm` feeds the assertion the item the
+assembler would have to emit, and its negative rows — prose naming the heading,
+a frontmatter close, a thematic break, a table divider — hold the widened scan
+to reporting headings rather than everything.
+
 `testdata/cold-reading/baseline/` holds every plant in its canonical home;
 `holed/` is the negative control, holding the replacement content for the two
 files a relocated plant lands in; `refused/` holds the shapes the exclusion
