@@ -523,6 +523,73 @@ func TestIntentPlanStampOnlyJSONNamesTheLinkedSpec(t *testing.T) {
 	}
 }
 
+// TestIntentProductionModeFlag proves the closed-choice flag reaches the intent
+// draft, defaults when unstated, and is refused out of vocabulary with nothing
+// written.
+func TestIntentProductionModeFlag(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+
+	out := runCLI(t, "intent", "a draft the operator dictated to a scribe", "--production-mode", "scribe-transcribed", "--json")
+	var r struct {
+		Path string `json:"path"`
+	}
+	if err := json.Unmarshal(out, &r); err != nil {
+		t.Fatalf("intent --json: %v\n%s", err, out)
+	}
+	data, err := os.ReadFile(filepath.Join(repo, r.Path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(data)
+	if !strings.Contains(body, "\nproduction_mode: scribe-transcribed\n") {
+		t.Errorf("draft missing the declared production mode:\n%s", body)
+	}
+	if !strings.Contains(body, "\norigin: researcher-authored\n") {
+		t.Errorf("draft missing the derived origin:\n%s", body)
+	}
+
+	out = runCLI(t, "intent", "a draft with no declared production mode", "--json")
+	if err := json.Unmarshal(out, &r); err != nil {
+		t.Fatalf("intent --json: %v\n%s", err, out)
+	}
+	data, err = os.ReadFile(filepath.Join(repo, r.Path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "\nproduction_mode: hand-written\n") {
+		t.Errorf("draft missing the defaulted production mode:\n%s", data)
+	}
+}
+
+// TestProductionModeFlagRefusesFreeText is itd-178's own criterion, read as a
+// gate on the FLAG: neither key may be supplied as free text by the operator.
+// A closed-choice flag validated against the vocabulary before anything is
+// written is not free text — and this proves the refusal, on every verb that
+// carries the flag, rather than assuming it.
+func TestProductionModeFlagRefusesFreeText(t *testing.T) {
+	for _, argv := range [][]string{
+		{"intent", "a draft with a hand-typed mode", "--production-mode", "typed by me on a Tuesday"},
+		{"capture", "a finding with a hand-typed mode", "--production-mode", "typed by me on a Tuesday"},
+	} {
+		repo := t.TempDir()
+		t.Chdir(repo)
+		out, err := runCLIErr(t, argv...)
+		if err == nil {
+			t.Errorf("%v: free text was accepted as a production mode:\n%s", argv[0], out)
+			continue
+		}
+		if !strings.Contains(err.Error(), "hand-written") {
+			t.Errorf("%v: the refusal must name the closed set, got: %v", argv[0], err)
+		}
+		// Nothing was written: the vocabulary is checked before any record is
+		// minted, not after.
+		if n := ledgerIssueCount(t, repo); n != 0 {
+			t.Errorf("%v: a refused command wrote %d record(s)", argv[0], n)
+		}
+	}
+}
+
 // TestIntentReadyGroundsFlagRecordsThenReports: `--grounds` is wired as two
 // calls — RecordGrounds, then the unchanged read-only Ready. The write is the
 // flag's whole effect; the report is unchanged by it, and the exit code is the

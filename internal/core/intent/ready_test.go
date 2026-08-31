@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/intentdriven/abcd/internal/core/provenance"
 )
 
 const (
@@ -308,10 +310,6 @@ func plannedWithClaims(mechanism, conditions string) string {
 		mechanism + conditions + "## Acceptance Criteria\n\n- ok\n" + groundsSection
 }
 
-// groundsSection is the recorded-grounds section a green fixture carries, so a
-// test about the claim checks is not incidentally a test about the grounds one.
-const groundsSection = "\n## Grounds\n\n- pursued: we expect the recorded conjecture to outlive the session that had it\n"
-
 // readyWithClaims runs the gate over a planned record carrying the given claim
 // sections, against a written spec, so only the claim checks can fail.
 func readyWithClaims(t *testing.T, mechanism, conditions string) ReadyResult {
@@ -519,7 +517,7 @@ func TestReadyClaimChecksNotApplicableInTerminalBuckets(t *testing.T) {
 // and the gate must not report it as one.
 func TestReadyScaffoldPromptIsNotAClaim(t *testing.T) {
 	root := t.TempDir()
-	seeded := seedDraft("itd-10", DraftOptions{Slug: "alpha", Title: "alpha", SeedBody: "why it matters"})
+	seeded := seedDraft("itd-10", DraftOptions{Slug: "alpha", Title: "alpha", SeedBody: "why it matters"}, researcherStamp(t))
 	// Plan the criteria only, so the two claim sections stay as seeded.
 	seeded = strings.Replace(seeded,
 		"> _Required (the itd-1 discipline)", "- **Given** x, **when** y, **then** z.\n\n> _was: ", 1)
@@ -645,6 +643,21 @@ func TestReadyNamesADuplicateHiddenBehindANullity(t *testing.T) {
 		t.Fatalf("scope_conditions = %+v, want fail naming the duplicated heading", c)
 	}
 }
+
+// researcherStamp is the default disclosure pair a seeded draft carries, built
+// through the one constructor rather than assembled by hand.
+func researcherStamp(t *testing.T) provenance.Stamp {
+	t.Helper()
+	s, err := provenance.NewStamp(provenance.KindResearcherAuthored, "")
+	if err != nil {
+		t.Fatalf("NewStamp: %v", err)
+	}
+	return s
+}
+
+// groundsSection is the recorded-grounds section a green fixture carries, so a
+// test about the claim checks is not incidentally a test about the grounds one.
+const groundsSection = "\n## Grounds\n\n- pursued: we expect the recorded conjecture to outlive the session that had it\n"
 
 // TestReadyGroundsAbsentFails: with the recording path landed and the planned/
 // bucket populated, the check refuses. The remedy names the flag and the closed

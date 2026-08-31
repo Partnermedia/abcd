@@ -840,3 +840,181 @@ func TestCaptureBlankLapsedAtIsNotWritten(t *testing.T) {
 		})
 	}
 }
+
+// TestTransitionRestampsProductionMode proves a mutation that ADDS TEXT may
+// restamp the production mode: a resolution note is new text with its own mode,
+// so the key is not a fact frozen at mint. It is restamped only when the caller
+// declares one — an absent flag leaves the record's existing value alone rather
+// than overwriting it with a default.
+func TestTransitionRestampsProductionMode(t *testing.T) {
+	repo, ir := ledger(t)
+	res, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir, Text: "b", Severity: SeverityMinor,
+		Category: "bug", Source: "user-observation", FoundDuring: "t", Slug: "note",
+		ProductionMode: "dictated-and-formatted",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Resolve(ResolveRequest{
+		RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "fixed", Impact: "fix",
+		Grounds:        testGrounds,
+		ProductionMode: "scribe-transcribed",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	fm := readLedgerFrontmatter(t, ir, res.ID)
+	if fm["production_mode"] != "scribe-transcribed" {
+		t.Errorf("production_mode = %v, want the restamped scribe-transcribed", fm["production_mode"])
+	}
+
+	// A transition that declares no mode leaves the stamp alone.
+	res2, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir, Text: "c", Severity: SeverityMinor,
+		Category: "bug", Source: "user-observation", FoundDuring: "t", Slug: "other",
+		ProductionMode: "dictated-and-formatted",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Wontfix(WontfixRequest{RepoRoot: repo, IssuesRoot: ir, ID: res2.ID, Reason: "no"}); err != nil {
+		t.Fatal(err)
+	}
+	fm = readLedgerFrontmatter(t, ir, res2.ID)
+	if fm["production_mode"] != "dictated-and-formatted" {
+		t.Errorf("an undeclared mode overwrote the stamp: %v", fm["production_mode"])
+	}
+
+	// An out-of-vocabulary mode is refused and the issue does not move.
+	if _, err := Resolve(ResolveRequest{
+		RepoRoot: repo, IssuesRoot: ir, ID: res2.ID, Resolution: "x", Impact: "fix",
+		Grounds:        testGrounds,
+		ProductionMode: "typed",
+	}); err == nil {
+		t.Error("an out-of-vocabulary production mode must be refused")
+	}
+}
+
+// TestTransitionLeavesOriginAlone proves the asymmetry the design rests on: a
+// record's arrival path is a fact about how it came to exist, and resolving it
+// does not change where it came from. Only production_mode is a running claim
+// about the text; origin is stamped at mint and never rewritten.
+func TestTransitionLeavesOriginAlone(t *testing.T) {
+	repo, ir := ledger(t)
+	res, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir, Text: "b", Severity: SeverityMinor,
+		Category: "bug", Source: "user-observation", FoundDuring: "t", Slug: "note",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Resolve(ResolveRequest{
+		RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "fixed", Impact: "fix",
+		Grounds:        testGrounds,
+		ProductionMode: "scribe-transcribed",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	fm := readLedgerFrontmatter(t, ir, res.ID)
+	if fm["origin"] != "researcher-authored" {
+		t.Errorf("origin = %v after a transition, want it unmoved at researcher-authored", fm["origin"])
+	}
+}
+
+// TestTransitionRefusesRestampOnUnstampedRecord is the case the restamp test
+// above did not cover: EVERY record already in the ledger predates disclosure
+// and carries neither key. Restamping one appended a lone production_mode with
+// no origin — a state no write path produces, which the branch's own
+// record_provenance blocker then reported against a record the command had just
+// written. The refusal comes before any write, and an unstamped record stays
+// resolvable when no mode is declared.
+func TestTransitionRefusesRestampOnUnstampedRecord(t *testing.T) {
+	repo, ir := ledger(t)
+	res, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir, Text: "b", Severity: SeverityMinor,
+		Category: "bug", Source: "user-observation", FoundDuring: "t", Slug: "note",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unstamp(t, ir, res.ID)
+	before := readRaw(t, ir, res.ID)
+
+	_, err = Resolve(ResolveRequest{
+		RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "fixed", Impact: "fix",
+		Grounds:        testGrounds,
+		ProductionMode: "scribe-transcribed",
+	})
+	if err == nil {
+		t.Fatal("a restamp on a record that predates disclosure must be refused")
+	}
+	if !strings.Contains(err.Error(), "predates disclosure") {
+		t.Errorf("the refusal must say why, got: %v", err)
+	}
+	if _, status, ferr := findIssue(ir, res.ID); ferr != nil || status != StateOpen {
+		t.Fatalf("a refused restamp must not move the issue: status=%s err=%v", status, ferr)
+	}
+	if after := readRaw(t, ir, res.ID); after != before {
+		t.Errorf("a refused restamp rewrote the record:\n%s", after)
+	}
+
+	// Wontfix refuses on the same terms.
+	if _, err := Wontfix(WontfixRequest{
+		RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Reason: "no", ProductionMode: "hand-written",
+	}); err == nil || !strings.Contains(err.Error(), "predates disclosure") {
+		t.Errorf("wontfix must refuse the same restamp, got: %v", err)
+	}
+
+	// An unstamped record is still resolvable — the refusal is about the restamp,
+	// never about the transition, and forward-only population must not strand a
+	// record nobody can close.
+	if _, err := Resolve(ResolveRequest{
+		RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "fixed", Impact: "fix",
+		Grounds: testGrounds,
+	}); err != nil {
+		t.Fatalf("an unstamped record must still resolve when no mode is declared: %v", err)
+	}
+	fm := readLedgerFrontmatter(t, ir, res.ID)
+	if _, present := fm["production_mode"]; present {
+		t.Errorf("a transition that declared no mode stamped one: %v", fm["production_mode"])
+	}
+}
+
+// unstamp rewrites a ledger record without the two disclosure keys, producing
+// the shape of every record committed before they existed.
+func unstamp(t *testing.T, issuesRoot, id string) {
+	t.Helper()
+	src, _, err := findIssue(issuesRoot, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var kept []string
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, "origin:") || strings.HasPrefix(line, "production_mode:") {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	if err := os.WriteFile(src, []byte(strings.Join(kept, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// readRaw returns a ledger record's bytes, so a refusal can be proved to have
+// left them alone.
+func readRaw(t *testing.T, issuesRoot, id string) string {
+	t.Helper()
+	src, _, err := findIssue(issuesRoot, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}

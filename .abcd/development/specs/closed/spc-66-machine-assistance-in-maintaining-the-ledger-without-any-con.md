@@ -17,7 +17,7 @@ The delivery is an agent definition plus a written protocol, both durable
 record. There is no ingest verb this cycle, by the intent's own scoping, so the
 scribe's output is not a new contract: it emits the reading-record and
 disposition shapes
-[spc-58](../open/spc-58-a-cold-reading-s-findings-land-as-reading-records-and-the-re.md)
+[spc-58](spc-58-a-cold-reading-s-findings-land-as-reading-records-and-the-re.md)
 already declares. The validation path for those shapes is spc-58's own, and it
 arrives with spc-58: until its reading and disposition stores land, `record_schema`
 has no schema for either shape and refuses their directory as an undeclared

@@ -155,6 +155,17 @@ irreversible; guessing downward costs nothing.**
   uncommitted peer work is untouchable. (Mechanical presence detection is
   seeded as iss-2608220750029993; until it ships, this convention is the
   gate.)
+- **A verifier works on a copy.** An agent that mutates code to see whether a
+  test catches the mutation, or patches or instruments a tree to probe it, does
+  that on a scratch copy (`git -C <wt> archive HEAD | tar -x -C <scratch>`),
+  never on a live worktree, and proves `git status --porcelain` empty before
+  reporting. The hazard is the window, not the intent: while a mutation is
+  applied, a gate reports on code nobody wrote and a merge can take it into a
+  branch, and the restore step is itself fallible. It also breaks the rule
+  above from the other end — a peer seeing the modification cannot tell a
+  mutation from real work. Correspondingly, a merge, commit, push or gate run
+  proves the tree clean **immediately before the act**, never inheriting an
+  emptiness check from earlier in the sequence (itd-193).
 - **Isolation protects the tree, not the sequential record ids.** Intents and
   specs still mint `max+1` under a lock that is advisory and scoped to one
   checkout, so it cannot see a sibling worktree: Two current checkouts

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/intentdriven/abcd/internal/core/changelog"
+	"github.com/intentdriven/abcd/internal/core/provenance"
 	"github.com/intentdriven/abcd/internal/core/recordid"
 )
 
@@ -37,7 +38,7 @@ const maxSlugLen = 60
 // null and whose spec_id is null) and passes Validate; a human expands it, then
 // `abcd intent plan` schedules it. This is the quoted-text create path itd-46
 // delivers — the create half of what spc-6 AC3 (promote) needs.
-func CreateFromText(repoRoot, text, impact string) (Intent, string, error) {
+func CreateFromText(repoRoot, text, impact, productionMode string) (Intent, string, error) {
 	trimmed := strings.TrimSpace(text)
 	if trimmed == "" {
 		return Intent{}, "", fmt.Errorf("intent: refusing to create from empty text")
@@ -62,24 +63,42 @@ func CreateFromText(repoRoot, text, impact string) (Intent, string, error) {
 		Title:    titleLine(redacted),
 		SeedBody: redacted,
 		Impact:   impact,
+		// A quoted-text create is a person at a keyboard, so the arrival path is
+		// the default; the production mode is the operator's declared one, or the
+		// repo's default resolved by the surface.
+		ProductionMode: productionMode,
 	})
 }
 
 // DraftOptions parameterises CreateDraft: the explicit slug and title, the Why
 // This Matters seed body, an optional impact judgement, and — on the promote
 // path (spc-24) — the iss-N the draft graduated from, written as the
-// promoted_from back-edge.
+// promoted_from back-edge (an iss-N, or the rdi-N of a dispositioned reading
+// item).
 type DraftOptions struct {
 	Slug         string
 	Title        string
 	SeedBody     string
 	Impact       string
 	PromotedFrom string
+	// Origin is the draft's arrival path (itd-178). It is DERIVED from which
+	// command ran, never carried as free text: the empty value means the default
+	// (a verb a person invoked), and capture.Promote — the one shipped path that
+	// derives a record from another record — passes extracted-from-record.
+	Origin provenance.Kind
+	// ProductionMode is how the seed text was produced. Empty takes
+	// provenance.DefaultMode, so a draft written through a command carries the key
+	// whatever the caller says.
+	ProductionMode string
 }
 
-// promotedFromRe constrains the promote back-edge to an issue id before it is
-// written into frontmatter.
-var promotedFromRe = regexp.MustCompile(`^iss-[0-9]+$`)
+// promotedFromRe constrains the promote back-edge to a captured id before it is
+// written into frontmatter. Two families graduate into an intent: an issue
+// somebody noticed (iss-N) and a reading item an instrument returned and a
+// researcher dispositioned (rdi-N). Both are one act — an observation earning an
+// admission — so both write the same back edge, and the forward stamp on the
+// source record is what closes the join.
+var promotedFromRe = regexp.MustCompile(`^(iss|rdi)-[0-9]+$`)
 
 // CreateDraft is the one canonical draft-mint primitive: both the quoted-text
 // create (CreateFromText) and the capture-promote path (capture.Promote, which
@@ -98,7 +117,7 @@ func CreateDraft(repoRoot string, opts DraftOptions) (Intent, string, error) {
 		return Intent{}, "", fmt.Errorf("intent: refusing to create a draft with an empty seed body")
 	}
 	if opts.PromotedFrom != "" && !promotedFromRe.MatchString(opts.PromotedFrom) {
-		return Intent{}, "", fmt.Errorf("intent: promoted_from %q must match ^iss-[0-9]+$", opts.PromotedFrom)
+		return Intent{}, "", fmt.Errorf("intent: promoted_from %q must match ^(iss|rdi)-[0-9]+$", opts.PromotedFrom)
 	}
 	// impact is optional on a draft (intent_impact_valid gates the move into
 	// shipped/, not the seed), but when set it must be a legal, non-internal
@@ -113,6 +132,19 @@ func CreateDraft(repoRoot string, opts DraftOptions) (Intent, string, error) {
 		if imp == changelog.ImpactInternal {
 			return Intent{}, "", fmt.Errorf("intent: impact must not be internal on an intent — a press-release-first intent is user-facing by definition; declare one of additive|breaking|fix, or record the work as an issue instead")
 		}
+	}
+
+	// The disclosure pair is validated HERE, at the one canonical draft-mint
+	// primitive, so every caller stamps both keys and none of them can mint a
+	// value outside the vocabulary. An unset origin means the default arrival
+	// path; an unset mode means provenance.DefaultMode.
+	kind := opts.Origin
+	if kind == "" {
+		kind = provenance.KindResearcherAuthored
+	}
+	stamp, err := provenance.NewStamp(kind, opts.ProductionMode)
+	if err != nil {
+		return Intent{}, "", fmt.Errorf("intent: %w", err)
 	}
 
 	// Boundary redaction (gh-486): CreateDraft is the ONE canonical draft-mint
@@ -153,7 +185,7 @@ func CreateDraft(repoRoot string, opts DraftOptions) (Intent, string, error) {
 		if _, statErr := os.Lstat(abs); statErr == nil {
 			return fmt.Errorf("intent: refusing to overwrite existing %s", rel)
 		}
-		content := seedDraft(id, opts)
+		content := seedDraft(id, opts, stamp)
 		if err := writeIntentFile(abs, rel, content); err != nil {
 			return err
 		}
@@ -247,11 +279,12 @@ func nextIntentID(repoRoot string) (id, mintWarning string, err error) {
 // seedDraft renders the canonical draft skeleton: the full draft frontmatter set
 // (id, slug, spec_id: null, kind: null, suggested_kind: null,
 // reclassification_history: [], builds_on: [], severity: minor, plus the
-// promoted_from back-edge when the draft graduated from an issue) and an honest,
+// promoted_from back-edge when the draft graduated from an issue, plus the
+// origin/production_mode disclosure pair) and an honest,
 // minimal body carrying the seed text under Why This Matters, with the itd-1
 // discipline's Acceptance Criteria section left as a placeholder for the human to
 // fill before planning.
-func seedDraft(id string, opts DraftOptions) string {
+func seedDraft(id string, opts DraftOptions, stamp provenance.Stamp) string {
 	var b strings.Builder
 	b.WriteString("---\n")
 	b.WriteString("id: " + id + "\n")
@@ -275,6 +308,11 @@ func seedDraft(id string, opts DraftOptions) string {
 	if opts.Impact != "" {
 		b.WriteString("impact: " + opts.Impact + "\n")
 	}
+	// The disclosure pair (itd-178), bare like every other machine-read scalar in
+	// this block. Both are written together — a lone key is a state no write path
+	// produces, which is what makes the lint able to see a hand edit.
+	b.WriteString(provenance.KeyOrigin + ": " + stamp.OriginValue() + "\n")
+	b.WriteString(provenance.KeyProductionMode + ": " + stamp.ModeValue() + "\n")
 	b.WriteString("---\n\n")
 	b.WriteString("# " + opts.Title + "\n\n")
 	b.WriteString("## Press Release\n\n")

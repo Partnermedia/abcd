@@ -57,7 +57,7 @@ documented protocol is the gate.
 ## Create a draft
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT}/abcd" intent "<text>" [--impact <additive|breaking|fix>] --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" intent "<text>" [--impact <additive|breaking|fix>] [--production-mode <hand-written|dictated-and-formatted|scribe-transcribed>] --json
 ```
 
 Files `drafts/itd-N-<slug>.md` seeded from the text. Report the new `id` and
@@ -74,6 +74,32 @@ no field. When you do set it, the value is validated (one of `additive`,
 `breaking`, `fix` — never `internal`, since an intent is user-facing by
 definition) and stamped onto the draft, where it travels unchanged through
 planning to `shipped/`, which the `intent_impact_valid` gate requires.
+
+## Disclosure: where a record came from and how its text was produced
+
+Intent, spec and issue records carry two frontmatter keys, written by the
+commands that mint them, and no flag carries either as free text. Records of
+other families carry neither.
+
+`origin` is **derived from which command ran** and has no flag at all. A draft
+filed from quoted text is `researcher-authored`; a draft `abcd capture promote`
+mints is `extracted-from-record`. It is stamped at mint and never rewritten.
+
+`production_mode` is the closed choice `--production-mode` carries:
+`hand-written`, `dictated-and-formatted`, or `scribe-transcribed`. Any other
+value is refused and nothing is written. An absent flag takes the repo's
+declared default from `.abcd/config/identity.json`, falling back to
+`hand-written`. `abcd intent plan` takes the same flag, which stamps the **spec**
+it mints; the intent's own stamp was written when its draft was created and is
+never rewritten.
+
+Neither key touches authorship: they are disclosure at field granularity, on the
+same footing as the `Assisted-by:` trailer at commit granularity. Population is
+forward-only, so a record written before the keys existed carries neither, and
+nothing backfills it. The `record_provenance` record-lint rule reports a
+record carrying the pair in a shape no write path produces — but a hand edit
+that types a legal value in a legal combination is byte-identical to a command's
+write, so it catches implausible hand edits, not all of them.
 
 ## THE RULE: no implementation without a planned, specced intent
 
@@ -256,7 +282,7 @@ gate that will refuse the move mechanically is a recorded seed until built.
 10. Only after the human explicitly confirms the criteria are theirs, run:
 
    ```bash
-   "${CLAUDE_PLUGIN_ROOT}/abcd" intent plan <itd-N> --json
+   "${CLAUDE_PLUGIN_ROOT}/abcd" intent plan <itd-N> [--production-mode <mode>] --json
    ```
 
    This invocation IS the maintainer's sign-off act — never run it unattended
@@ -305,6 +331,14 @@ it (the one-sided-link remedy `ready` reports). Report the linked pair.
 
 Ingest is fail-closed: report the returned status (`ingested`, `dead_letter`,
 or `noop`) and, for `dead_letter`, the reason.
+
+The verdict also disposes the intent's scope conditions, keyed to the `cond-…`
+identity each one carries: every condition receives exactly one of `survived`,
+`narrowed`, `falsified` or `untested`, and a `narrowed` condition states what it
+now holds under. Coverage is exact in both directions — a conditionless intent
+takes an empty block, a conditioned one a full one — so a partial or invented
+disposition quarantines the whole payload rather than applying half of it.
+Report the returned split alongside the acceptance rollup.
 
 **Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
 provisions the binary into the plugin root, so this is the rung that fires for a

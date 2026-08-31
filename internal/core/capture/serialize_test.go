@@ -1,6 +1,7 @@
 package capture
 
 import (
+	"os"
 	"reflect"
 	"testing"
 
@@ -226,4 +227,101 @@ func TestLapsedAtRoundTrips(t *testing.T) {
 	if iss.LapsedAt != lapsedAt {
 		t.Fatalf("lapsed_at round-tripped as %q, want %q", iss.LapsedAt, lapsedAt)
 	}
+}
+
+// TestCaptureReaderAcceptsProvenanceKeys pins the issue schema against the two
+// disclosure keys, proved THROUGH the reader rather than asserted about the
+// allow-list map. Without them in issueschema.Known the reader refuses every
+// stamped record as carrying an unknown property and skips it — the record sits
+// in the ledger, invisible to every capture surface, which is exactly how an
+// earlier flag shipped unable to execute (spc-56).
+func TestCaptureReaderAcceptsProvenanceKeys(t *testing.T) {
+	text, err := buildIssueText([]kv{
+		{"schema_version", 1},
+		{"id", "iss-1"},
+		{"slug", "x"},
+		{"severity", "minor"},
+		{"category", "observation"},
+		{"source", "user-observation"},
+		{"found_during", "review"},
+		{"origin", rawScalar("researcher-authored")},
+		{"production_mode", rawScalar("hand-written")},
+	}, "a stamped record\n")
+	if err != nil {
+		t.Fatalf("buildIssueText: %v", err)
+	}
+	fm, _, err := parseFrontmatterAndBody(text)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if err := validateStrict(fm); err != nil {
+		t.Fatalf("a stamped record was refused by the ledger reader: %v", err)
+	}
+}
+
+// TestCommitCaptureStampsProvenance proves a captured issue carries both
+// disclosure keys, written by the command rather than typed: the arrival path is
+// derived from which verb ran, and the production mode is a closed choice
+// defaulted when the caller declares none.
+func TestCommitCaptureStampsProvenance(t *testing.T) {
+	repo, ir := ledger(t)
+	res, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir, Text: "a finding", Severity: SeverityMinor,
+		Category: "bug", Source: "user-observation", FoundDuring: "t", Slug: "note",
+		ProductionMode: "dictated-and-formatted",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fm := readLedgerFrontmatter(t, ir, res.ID)
+	if fm["origin"] != "researcher-authored" {
+		t.Errorf("origin = %v, want researcher-authored", fm["origin"])
+	}
+	if fm["production_mode"] != "dictated-and-formatted" {
+		t.Errorf("production_mode = %v, want dictated-and-formatted", fm["production_mode"])
+	}
+
+	// An unset mode takes the default; both keys are present either way.
+	res2, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir, Text: "another finding", Severity: SeverityMinor,
+		Category: "bug", Source: "user-observation", FoundDuring: "t", Slug: "other",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fm = readLedgerFrontmatter(t, ir, res2.ID)
+	if fm["origin"] != "researcher-authored" || fm["production_mode"] != "hand-written" {
+		t.Errorf("defaulted stamp = %v/%v, want researcher-authored/hand-written", fm["origin"], fm["production_mode"])
+	}
+
+	// An out-of-vocabulary mode is refused before anything is reserved.
+	if _, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir, Text: "a third finding", Severity: SeverityMinor,
+		Category: "bug", Source: "user-observation", FoundDuring: "t", Slug: "third",
+		ProductionMode: "typed",
+	}); err == nil {
+		t.Error("an out-of-vocabulary production mode must be refused")
+	}
+}
+
+// readLedgerFrontmatter reads a committed ledger record back through the
+// ledger's OWN reader, so a key the reader refuses cannot pass as written.
+func readLedgerFrontmatter(t *testing.T, issuesRoot, id string) map[string]any {
+	t.Helper()
+	src, _, err := findIssue(issuesRoot, id)
+	if err != nil {
+		t.Fatalf("findIssue %s: %v", id, err)
+	}
+	data, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatalf("reading %s: %v", src, err)
+	}
+	fm, _, err := parseFrontmatterAndBody(string(data))
+	if err != nil {
+		t.Fatalf("parsing %s: %v", src, err)
+	}
+	if err := validateStrict(fm); err != nil {
+		t.Fatalf("the ledger reader refused the record it just wrote: %v", err)
+	}
+	return fm
 }

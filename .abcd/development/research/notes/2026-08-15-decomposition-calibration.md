@@ -1229,3 +1229,88 @@ Per hand-run, append:
   criteria govern selection rather than delivery, so the discipline family is
   the nearest home rather than an exact fit, filed there in preference to
   minting a record family for one record. Feeds the open question on the enum.
+
+### 2026-08-30 — the exclusion floor (itd-194, hand-run at filing)
+
+- **Proposal:** the cold-reading exclusion floor leaks, on ten records, and
+  itd-183 shipped over the residue under a facilitator ruling that the floor be
+  carried as its own intent.
+- **Initial routing:** four parts. (1) The capability: the include table
+  refuses what the floor cannot parse, so admission and comprehension describe
+  one set (intent, itd-194), `builds_on` itd-183. (2) The trust rule: an
+  exclusion control asserts only what it can prove, so a manifest may not claim
+  a refusal the floor did not perform (ADR + brief invariant). (3) The stance:
+  a control that declines to run must say so rather than report a clean pass.
+  (4) The plumbing: the include table's narrowing is a scope decision it makes
+  and the floor inherits unstated, which belongs in the brief.
+- **Confirmed routing:** confirmed by the orchestrator under the facilitator's
+  standing authorisation, decision (20) of 2026-08-28, no per-run human
+  confirmation. The design fork underneath part (1) was NOT absorbed into the
+  ceremony: iss-2608301450065320 states the remedy is a design question and
+  declines to pick, so it was put to the facilitator, who ruled on 2026-08-30
+  for narrowing admission rather than widening the floor's parse.
+- **Verdict:** SPLIT, into (1) and (2); (3) files nowhere and (4) rides with
+  the ADR.
+- **Notes:** part (3) is the calibration's own result this run. The stance is
+  already held by the `loud-staging` principle, whose letter covers a stage that
+  no-ops or degrades saying so, and the floor declining to scan while the
+  manifest reports exclusion is that principle's exact shape. Routing it to a
+  new principle would have been a third copy of a rule the repository already
+  states once, so the hand-run cites `loud-staging` instead of minting against
+  it. That is the first time this table has retired a part by finding its home
+  already occupied, and it is the outcome the one-canonical-primitive rule
+  predicts should be common.
+
+### 2026-08-30 — the review-round cost calibration (hand-run at recording)
+
+- **Proposal:** the maximal review discipline run in cycle 1 was an experiment
+  to measure verification overhead; the evidence is in, and what it says should
+  bind the remainder of this phase and future phases in abcd and abcd-managed
+  repos.
+- **Initial routing:** three parts. (1) The stance — review effort scales with
+  what CHANGED, not only with what is being crossed (principle). (2) The
+  evidence — per-intent commits, rounds and diff sizes, the token accounting,
+  and the delta-versus-full-diff waste (dated research note). (3) Any tooling
+  that would scope a review to the delta mechanically (a future capability,
+  not filed).
+- **Confirmed routing:** confirmed by the orchestrator under the facilitator's
+  standing authorisation, decision (20) of 2026-08-28. The facilitator set the
+  frame explicitly: run it all-in first to see the overhead, then state what
+  should be done with the evidence in hand.
+- **Verdict:** SPLIT into (1) and (2), with (3) recorded as a future rung
+  inside the note rather than filed.
+- **Notes:** part (1) did NOT mint a principle. `adversarial-review-scales-
+  with-blast-radius` already holds the stance for record crossings and simply
+  said nothing about build rounds, so the run EXTENDED it with a build-round
+  half rather than adding a near-synonym beside it. That is the second
+  consecutive hand-run to close a part by finding the home already occupied
+  (the previous one retired a stance into `loud-staging`), which is now enough
+  of a pattern to say the table's most common non-trivial outcome is
+  consolidation rather than minting.
+
+### 2026-08-31 — a claim about behaviour is executable (itd-195, hand-run at filing)
+
+- **Proposal:** prose stating how another part of the codebase behaves is backed
+  by something that runs, or it is not written; and the existing corpus is swept
+  for the shape.
+- **Initial routing:** three parts. (1) The rule every change inherits, with a
+  gate (discipline record, itd-195). (2) The codebase-wide sweep, which is the
+  rule's own staging work rather than a separate capability. (3) The stance —
+  checked against the principles shelf first, per the last two runs.
+- **Confirmed routing:** confirmed by the orchestrator under the facilitator's
+  standing authorisation; the facilitator asked for the filing directly
+  ("record it as a future intent ... this probably becomes a discipline"), so
+  the routing question put to them was the SHAPE, not whether to file.
+- **Verdict:** FILE-AS-IS as a discipline, with the sweep carried inside it.
+- **Notes:** part (3) is the interesting one and it did NOT close the way the
+  last two did. The shelf holds two near neighbours and neither is the home.
+  `enforcement-claims-are-facts` forbids describing a gate that does not run —
+  a claim about EXISTENCE, judged true or false when written. This rule is about
+  a claim STAYING true, which that one cannot reach, because a comment can be
+  exactly right the day it is written and false six months later.
+  `guards-prove-themselves` is the same instinct scoped to refusal paths. So the
+  new record is the GENERAL form and the two adopted principles are its special
+  cases; it is filed beside them with that relationship stated, and if adopted
+  they should say they are instances of it. Three consecutive hand-runs have now
+  turned on "is the home already occupied" — twice yes, once no — which is
+  becoming the table's most load-bearing question rather than an afterthought.

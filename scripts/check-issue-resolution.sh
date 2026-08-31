@@ -65,6 +65,21 @@ fi
 cd "$toplevel"
 
 ISSUES_DIR=".abcd/work/issues"
+# STATUS_DIRS is the ledger's status-directory list. The shell cannot import Go,
+# so this is the second and LAST spelling of internal/core/issueschema's
+# StatusDirs, pinned to it by TestIssueResolutionGateScopesToStatusDirs.
+#
+# The scan is scoped to these three rather than to the ledger root because the
+# root holds sibling record families — readings/<run-id>/,
+# dispositions/<item-id>/, admissions/<run-id>/ and surprises/ — whose files are
+# not issue records, and the list of them grows. RS001 already
+# matched only the terminal folders; RS002 and RS003 did not, and would read a
+# `commit:`-shaped line out of one of those records as a resolution stamp.
+STATUS_DIRS=(open resolved wontfix)
+STATUS_PATHSPECS=()
+for status_dir in "${STATUS_DIRS[@]}"; do
+	STATUS_PATHSPECS+=("$ISSUES_DIR/$status_dir")
+done
 TRAILER_RE='^Resolves:[[:space:]]+(iss-[0-9]+)[[:space:]]*$'
 
 violations=0
@@ -88,7 +103,7 @@ usage() {
 # is deliberately absent, so RS001 refuses a trailer that merely deletes.
 ids_entering_closed() {
 	local base="$1" head="$2"
-	git diff --name-status --find-renames "$base".."$head" -- "$ISSUES_DIR" |
+	git diff --name-status --find-renames "$base".."$head" -- "${STATUS_PATHSPECS[@]}" |
 		while IFS=$'\t' read -r status path dest; do
 			case "$status" in
 			R*)
@@ -171,7 +186,7 @@ check_commits() {
 	# exit alone, never to a git failure.
 	local diffout changed
 	local rc=0
-	diffout="$(git diff --name-only "$base".."$head" -- "$ISSUES_DIR" 2>&1)" || rc=$?
+	diffout="$(git diff --name-only "$base".."$head" -- "${STATUS_PATHSPECS[@]}" 2>&1)" || rc=$?
 	if [ "$rc" -ne 0 ]; then
 		echo "check-issue-resolution: git diff failed for $base..$head (exit $rc) — refusing rather than reporting a vacuous pass:" >&2
 		echo "$diffout" >&2
@@ -206,7 +221,7 @@ check_ledger() {
 	# pass, and it stays loud so it cannot be mistaken for a verdict.
 	local listing files
 	local rc=0
-	listing="$(git ls-tree -r --name-only "$ref" -- "$ISSUES_DIR" 2>&1)" || rc=$?
+	listing="$(git ls-tree -r --name-only "$ref" -- "${STATUS_PATHSPECS[@]}" 2>&1)" || rc=$?
 	if [ "$rc" -ne 0 ]; then
 		echo "check-issue-resolution: git ls-tree failed at $ref (exit $rc) — refusing rather than reporting a vacuous pass:" >&2
 		echo "$listing" >&2

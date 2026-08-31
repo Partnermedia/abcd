@@ -9,7 +9,7 @@ intent: itd-184
 ## Bundle
 
 itd-184,
-[itd-183](../../intents/planned/itd-183-the-cold-reading-sees-exactly-what-the-assembler-passes-posi.md)
+[itd-183](../../intents/shipped/itd-183-the-cold-reading-sees-exactly-what-the-assembler-passes-posi.md)
 and
 [itd-185](../../intents/planned/itd-185-one-ingest-verb-validates-every-cold-reading-output-includin.md)
 are one design under one bundle kind, and the ceremony cannot give them one
@@ -17,13 +17,13 @@ spec: a spec's `intent:` is a single id, captured as iss-2608300108376943.
 
 | Spec | Component it owns |
 | --- | --- |
-| [spc-61](spc-61-the-cold-reading-sees-exactly-what-the-assembler-passes-posi.md) | The input assembler, the include table, the pathless bundle, the manifest, and the bundle's shared decisions |
+| [spc-61](../closed/spc-61-the-cold-reading-sees-exactly-what-the-assembler-passes-posi.md) | The input assembler, the include table, the pathless bundle, the manifest, and the bundle's shared decisions |
 | spc-62 (this record) | The four reading definitions under `agents/` and the blindness-core byte-identity test |
 | [spc-63](spc-63-one-ingest-verb-validates-every-cold-reading-output-includin.md) | The output contract, the supply-regime gate, and the ingest sub-verb |
 
 The package name, the verb tree, the run-identifier form and the artefact
 layout are the bundle's shared decisions, stated once in
-[spc-61 § The package, the verb tree and the artefact layout](spc-61-the-cold-reading-sees-exactly-what-the-assembler-passes-posi.md#the-package-the-verb-tree-and-the-artefact-layout-shared-bundle-decisions).
+[spc-61 § The package, the verb tree and the artefact layout](../closed/spc-61-the-cold-reading-sees-exactly-what-the-assembler-passes-posi.md#the-package-the-verb-tree-and-the-artefact-layout-shared-bundle-decisions).
 This spec uses them and does not restate them.
 
 ## Summary
@@ -55,7 +55,7 @@ and
 [itd-187](../../intents/planned/itd-187-amnesia-is-a-repository-property-proven-by-an-eval-the-same.md)'s
 evals; validating what a reading produced against its regime, which is
 spc-63's gate; the reading-record schema, which is
-[itd-180](../../intents/planned/itd-180-a-cold-reading-s-findings-land-as-reading-records-and-the-re.md)
+[itd-180](../../intents/shipped/itd-180-a-cold-reading-s-findings-land-as-reading-records-and-the-re.md)
 and spc-58's.
 
 ## Approach
