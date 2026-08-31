@@ -280,6 +280,16 @@ func renderReadingStatus(w io.Writer, s reading.Status) {
 	} else {
 		fmt.Fprintf(w, "  staged runs:    %s\n", strings.Join(s.StagedRuns, ", "))
 	}
+	// Printed only when there is one. An orphan is an abnormal state — an ingest
+	// that reached the ledger and never reached its commit marker, whose reading
+	// records are sitting in the committed ledger for a run that never happened
+	// — so it earns a line, and a "none" every other run would train a reader
+	// past it.
+	if len(s.OrphanedIngests) > 0 {
+		fmt.Fprintf(w, "  interrupted:    %s; their reading records are in the ledger for a run with no "+
+			"commit marker, and the next ingest that validates sweeps them\n",
+			strings.Join(s.OrphanedIngests, ", "))
+	}
 }
 
 // renderAssembleResult writes one assembly's text render.
@@ -422,6 +432,12 @@ func renderIngestResult(w io.Writer, res reading.IngestResult) {
 	}
 	if res.RefusalPath != "" {
 		fmt.Fprintf(w, "  refused:       the run; recorded at %s\n", res.RefusalPath)
+	}
+	// Neither marker means the run did not finish: the records above may have
+	// reached the ledger, and without this the header's record count reads as an
+	// outcome for a run that never committed.
+	if res.RunRecordPath == "" && res.RefusalPath == "" {
+		fmt.Fprintln(w, "  committed:     no; the run has no commit marker, so it never happened")
 	}
 	if res.RefusedCount > 0 {
 		fmt.Fprintf(w, "  refused items: %d\n", res.RefusedCount)

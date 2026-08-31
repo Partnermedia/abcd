@@ -507,3 +507,87 @@ func TestASweepThatFailsPartWayReportsWhatItAlreadyRemoved(t *testing.T) {
 			"committed tier is reported whatever happens next", res.RolledBack)
 	}
 }
+
+// TestARefusalRollsBackTheRunsOwnCrashedAttempt is ac-10 on the path holding
+// the sweep back to the commit opened up.
+//
+// The general sweep is deferred because it destroys OTHER runs' records and a
+// run on its way to a refusal has no business doing that. This run's own
+// records are a different case: a previous ingest of this id may have died
+// between the ledger write and its commit marker, refuseARerun has already
+// proven the id has no outcome, and ac-10's words are that a refused run leaves
+// a refusal record and NO reading records. Without this a refusal.json landed
+// beside the earlier attempt's records, asserting a refusal for a run the
+// ledger still carried findings for.
+func TestARefusalRollsBackTheRunsOwnCrashedAttempt(t *testing.T) {
+	f := newIngestFixture(t, "detection")
+
+	// A crashed attempt at this run: its records in the ledger, its stage
+	// standing, and no commit marker.
+	withFault(t, faultAfterLedger)
+	if _, err := f.ingest(f.payload(2)); err == nil {
+		t.Fatal("the injected fault did not stop the first attempt")
+	}
+	ingestFault = nil
+	if got := f.ledgerRecords(f.runID); len(got) != 2 {
+		t.Fatalf("the crashed attempt left %v in the ledger, want its 2 records", got)
+	}
+
+	// The same run again, refused at list level.
+	doc := f.payload(1)
+	doc["regime"] = RegimeEvaluative
+	res, err := f.ingest(doc)
+	if err == nil {
+		t.Fatal("a regime mismatch was accepted")
+	}
+	if res.RefusalPath == "" {
+		t.Fatal("the refusal wrote no record")
+	}
+	f.nothingDurableInTheLedger(f.runID)
+	if len(res.RolledBack) != 2 {
+		t.Errorf("the refusal rolled back %v; it removed the earlier attempt's 2 records from the "+
+			"committed ledger and has to say so", res.RolledBack)
+	}
+}
+
+// TestTheBareRenderNamesAnOrphanedIngestStage.
+//
+// The sweep is held back to the commit path, so an orphan can now outlive the
+// invocation that found it — and nothing named one. `staged_runs` reads the
+// ASSEMBLY parking area, which is a different directory and lists committed
+// runs alongside uncommitted ones, so an operator had no way to see that a
+// crashed ingest had left reading records in the ledger for a run that never
+// happened.
+func TestTheBareRenderNamesAnOrphanedIngestStage(t *testing.T) {
+	f := newIngestFixture(t, "detection")
+	status, err := Describe(f.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(status.OrphanedIngests) != 0 {
+		t.Errorf("a repository with no orphan reports %v", status.OrphanedIngests)
+	}
+
+	withFault(t, faultAfterLedger)
+	if _, err := f.ingest(f.payload(1)); err == nil {
+		t.Fatal("the injected fault did not stop the ingest")
+	}
+	ingestFault = nil
+
+	status, err = Describe(f.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(status.OrphanedIngests) != 1 || status.OrphanedIngests[0] != f.runID {
+		t.Fatalf("the render reports orphaned ingests %v, want [%s]", status.OrphanedIngests, f.runID)
+	}
+	// And it clears once a later ingest sweeps it.
+	f.mustIngest(f.nextRun(f.payload(1)))
+	status, err = Describe(f.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(status.OrphanedIngests) != 0 {
+		t.Errorf("the swept orphan is still reported: %v", status.OrphanedIngests)
+	}
+}

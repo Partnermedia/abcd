@@ -239,7 +239,10 @@ The only durable thing a run writes before its payload validates is its own
 1b. Sweep any orphaned stage, rolling its reading records out of the committed
    ledger. This rides with the COMMIT and not with a refusal: the rollback is a
    destructive act in the committed tier, and a run on its way to a refusal must
-   not perform one (iss-2608311517509690).
+   not destroy another run's records (iss-2608311517509690). A refusal does roll
+   back its OWN run's earlier crashed attempt, because a refused run leaves no
+   reading records. An orphan of another run therefore outlives an invocation
+   that does not validate, and the bare verb reports it as `orphaned_ingests`.
 2. Stage a write-aside marker into
    `.abcd/.work.local/scratch/reading-ingest/<run-id>/stage.json`.
 3. Write the reading records into the reading-record family (spc-58's

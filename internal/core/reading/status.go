@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/intentdriven/abcd/internal/core/recordid"
 )
 
 // DefinitionsDir is where the four reading definitions live. The assembler never
@@ -19,8 +21,8 @@ const DefinitionsDir = "agents"
 const definitionPrefix = "cold-reading-"
 
 // Status is the read-only render behind the bare verb: what this assembler is,
-// what it would admit, which definitions are present, and which runs are staged
-// in the local tier without having been ingested.
+// what it would admit, which definitions are present, which runs an assembly
+// has parked in the local tier, and which ingests were interrupted.
 type Status struct {
 	AssemblerVersion string     `json:"assembler_version"`
 	SchemaVersion    int        `json:"schema_version"`
@@ -29,7 +31,20 @@ type Status struct {
 	IncludeRows      int        `json:"include_rows"`
 	ExclusionRows    int        `json:"exclusion_rows"`
 	Definitions      []string   `json:"definitions"`
-	StagedRuns       []string   `json:"staged_runs"`
+	// StagedRuns is what an ASSEMBLY parked. It is not filtered by whether the
+	// run was ingested: nothing removes an assembly's directory afterwards, so a
+	// committed run and an unread one appear alike (iss captured separately).
+	StagedRuns []string `json:"staged_runs"`
+	// OrphanedIngests names the runs whose ingest reached the ledger and never
+	// reached its commit marker.
+	//
+	// It is reported because the ingest verb's sweep rides with the COMMIT: an
+	// orphan therefore survives until the next invocation that validates, and
+	// until then its reading records sit in the committed ledger for a run that
+	// never happened. That is a state an operator has to be able to see, and no
+	// other surface shows it — StagedRuns reads the assembly parking area, which
+	// is a different directory.
+	OrphanedIngests []string `json:"orphaned_ingests"`
 }
 
 // Describe reports the assembler's state over a repository. It writes nothing.
@@ -43,6 +58,7 @@ func Describe(repoRoot string) (Status, error) {
 		ExclusionRows:    len(Exclusions),
 		Definitions:      []string{},
 		StagedRuns:       []string{},
+		OrphanedIngests:  []string{},
 	}
 	if repoRoot == "" {
 		return s, nil
@@ -72,5 +88,19 @@ func Describe(repoRoot string) (Status, error) {
 		}
 	}
 	sort.Strings(s.StagedRuns)
+
+	// A stage directory named by a run id IS the orphan marker: the ingest verb
+	// clears its own stage once the commit marker is down, so anything left here
+	// is an ingest that did not finish.
+	stages, err := os.ReadDir(filepath.Join(repoRoot, filepath.FromSlash(IngestStageDir)))
+	if err != nil && !os.IsNotExist(err) {
+		return Status{}, fmt.Errorf("reading: listing the ingest stage: %w", err)
+	}
+	for _, e := range stages {
+		if e.IsDir() && recordid.ValidReadingRunID(e.Name()) {
+			s.OrphanedIngests = append(s.OrphanedIngests, e.Name())
+		}
+	}
+	sort.Strings(s.OrphanedIngests)
 	return s, nil
 }
