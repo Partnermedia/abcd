@@ -907,3 +907,31 @@ func TestTheTextRenderSaysWhenTheRegimeDidNotResolve(t *testing.T) {
 		t.Errorf("the render dropped a resolved regime:\n%s", buf.String())
 	}
 }
+
+// TestTheStatusRenderPrintsAnOrphanedIngest: the line is conditional, so
+// without this the branch that reports an abnormal state would never run. An
+// orphan means reading records are sitting in the committed ledger for a run
+// that never happened, which is the one thing on this render an operator has to
+// act on.
+func TestTheStatusRenderPrintsAnOrphanedIngest(t *testing.T) {
+	base := reading.Status{
+		AssemblerVersion: reading.AssemblerVersion(), SchemaVersion: 1,
+		Positions: reading.Positions(), Definitions: []string{"cold-reading-detection"},
+	}
+	var quiet bytes.Buffer
+	renderReadingStatus(&quiet, base)
+	if strings.Contains(quiet.String(), "interrupted") {
+		t.Errorf("a repository with no orphan prints an interrupted line:\n%s", quiet.String())
+	}
+
+	var loud bytes.Buffer
+	base.OrphanedIngests = []string{"rdg-2608310000000081"}
+	renderReadingStatus(&loud, base)
+	out := loud.String()
+	if !strings.Contains(out, "rdg-2608310000000081") {
+		t.Errorf("the render does not name the orphaned ingest:\n%s", out)
+	}
+	if !strings.Contains(out, "commit marker") {
+		t.Errorf("the render does not say what an orphan means:\n%s", out)
+	}
+}
