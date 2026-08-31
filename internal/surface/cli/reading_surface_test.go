@@ -369,12 +369,12 @@ func TestIngestRequiresOutputJSON(t *testing.T) {
 
 	// The flag is registered and reaches the core: a path that resolves to
 	// nothing is a refusal from the verb, not a cobra "unknown flag".
-	out, err := runCLIErr(t, "reading", "ingest", "--output-json", "absent.json")
+	out, err := runCLIErr(t, "reading", "ingest", "--reading-json", "absent.json")
 	if err == nil {
 		t.Fatalf("an absent output was accepted:\n%s", out)
 	}
 	if strings.Contains(err.Error()+string(out), "unknown flag") {
-		t.Fatalf("--output-json is not registered on the verb: %v\n%s", err, out)
+		t.Fatalf("--reading-json is not registered on the verb: %v\n%s", err, out)
 	}
 	if !strings.Contains(err.Error()+string(out), "reading ingest") {
 		t.Errorf("the refusal does not name the verb: %v\n%s", err, out)
@@ -400,8 +400,8 @@ func TestIngestReachesBothPlanes(t *testing.T) {
 				continue
 			}
 			found = true
-			if sub.Flags().Lookup("output-json") == nil {
-				t.Error("`reading ingest` registers no --output-json flag")
+			if sub.Flags().Lookup("reading-json") == nil {
+				t.Error("`reading ingest` registers no --reading-json flag")
 			}
 		}
 	}
@@ -414,10 +414,37 @@ func TestIngestReachesBothPlanes(t *testing.T) {
 		t.Fatalf("read the plugin surface: %v", err)
 	}
 	body := string(raw)
-	for _, want := range []string{"reading ingest", "--output-json", "refusal.json", "pattern"} {
+	for _, want := range []string{"reading ingest", "--reading-json", "refusal.json", "pattern"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("commands/reading.md does not mention %q", want)
 		}
+	}
+}
+
+// TestIngestPayloadFlagNamesItsContent: the payload flag is named for what the
+// JSON CONTAINS, the idiom its four siblings follow (--review-json,
+// --verdict-json twice, --changelog-json), not for the role the flag plays.
+// Role is the ambiguous axis on this verb: the global --json means the opposite
+// direction of travel -- how abcd renders its own result, against a path to
+// what a reader returned -- and the verb's own example puts both on one line.
+func TestIngestPayloadFlagNamesItsContent(t *testing.T) {
+	// Registered and reaching the core: a path that resolves to nothing is a
+	// refusal from the verb, not a cobra "unknown flag".
+	out, err := runCLIErr(t, "reading", "ingest", "--reading-json", "absent.json")
+	if err == nil {
+		t.Fatalf("an absent payload was accepted:\n%s", out)
+	}
+	if strings.Contains(err.Error()+string(out), "unknown flag") {
+		t.Fatalf("--reading-json is not registered on the verb: %v\n%s", err, out)
+	}
+	// The role-named spelling is gone rather than aliased. An alias would keep
+	// the collision the rename exists to remove, and the verb has no users.
+	out, err = runCLIErr(t, "reading", "ingest", "--output-json", "absent.json")
+	if err == nil {
+		t.Fatalf("--output-json was accepted:\n%s", out)
+	}
+	if !strings.Contains(err.Error()+string(out), "unknown flag") {
+		t.Errorf("--output-json is still registered: %v\n%s", err, out)
 	}
 }
 
@@ -485,7 +512,7 @@ func TestIngestExecutesEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	raw2 := runCLI(t, "reading", "ingest", "--output-json", outPath, "--json")
+	raw2 := runCLI(t, "reading", "ingest", "--reading-json", outPath, "--json")
 	var res reading.IngestResult
 	if err := json.Unmarshal(raw2, &res); err != nil {
 		t.Fatalf("decode the ingest render: %v\n%s", err, raw2)
@@ -562,7 +589,7 @@ func TestIngestRendersARefusalRecord(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rendered, err := runCLIErr(t, "reading", "ingest", "--output-json", outPath, "--json")
+	rendered, err := runCLIErr(t, "reading", "ingest", "--reading-json", outPath, "--json")
 	if err == nil {
 		t.Fatalf("a regime mismatch exited 0:\n%s", rendered)
 	}

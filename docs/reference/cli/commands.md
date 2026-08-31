@@ -818,7 +818,7 @@ abcd reading assemble --position widening --target HEAD --dry-run
 
 Validate one reading's returned output and write its records
 
-**Usage:** `abcd reading ingest --output-json <path> [flags]`
+**Usage:** `abcd reading ingest --reading-json <path> [flags]`
 
 Validate the JSON a cold reading returned and write its reading records.
 
@@ -835,13 +835,13 @@ and an orphaned stage is named and cleared by the next invocation.
 **Flags:**
 
 ```
-      --output-json string   path to the JSON the cold reading returned
+      --reading-json string   path to the JSON the cold reading returned
 ```
 
 **Example:**
 
 ```
-abcd reading ingest --output-json ./reading-output.json --json
+abcd reading ingest --reading-json ./reading-output.json --json
 ```
 
 ### `abcd rules`
