@@ -38,11 +38,25 @@ source on every row, and `TestOracleImportsNothingFromTheAssembler` parses every
 Go file here to check that nothing imports the assembler's package. An eval that
 read the assembler's own include table could only ever confirm the table.
 
+The heading half of the field-absence assertion reads **every spelling a heading
+arrives in** — ATX, setext underline, raw HTML tag or heading role, and the
+emphasis and code marks a title can carry — not ATX alone. An ATX-only scan
+would report an item carrying a setext-underlined `Audit Notes` as clean, which
+is the assertion satisfied completely by the leak it exists to catch. That the
+assembler currently REFUSES those forms rather than emitting them is a property
+of the assembler, not of this oracle: an oracle that can only see what the thing
+under test currently emits agrees with it by construction.
+`TestFieldAbsenceSeesEveryHeadingForm` feeds the assertion the item the
+assembler would have to emit, and its negative rows — prose naming the heading,
+a frontmatter close, a thematic break, a table divider — hold the widened scan
+to reporting headings rather than everything.
+
 `testdata/cold-reading/baseline/` holds every plant in its canonical home;
 `holed/` is the negative control, holding the replacement content for the two
-files a relocated plant lands in; `home/` is the fixture HOME carrying the
-planted transcript store, keyed on the fixture's root-commit sha at
-materialisation.
+files a relocated plant lands in; `refused/` holds the shapes the exclusion
+floor cannot redact and must therefore refuse, one variant directory each;
+`home/` is the fixture HOME carrying the planted transcript store, keyed on the
+fixture's root-commit sha at materialisation.
 
 ### What keeps it from passing vacuously
 
@@ -68,11 +82,22 @@ floor, and each excluded heading, which needs a home on a record type that
 travels whole (on a projected type the projection keeps the heading out whatever
 the floor says, so its exclusion cannot be falsified there).
 
+The exclusion floor's **fail-closed half** needs a corpus of its own, because a
+leak cannot reach it: removing a refusal admits nothing new against material with
+nothing to refuse, so the whole redaction verifier could be deleted with this
+lane green. `refused/` is that corpus — a file the include table admits whole,
+carrying an excluded heading in a form the section scan does not report, so the
+redactor has no span to delete. `TestTheAssemblerRefusesAnUnredactableShape`
+requires the run to be refused and the refusal to name the heading; when the
+guard goes, the same binary exits 0 and the test reads the leaked token back out
+of the bundle.
+
 `coldreading_coverage_test.go` is the matrix: one row per rule, the mutation that
 removes it, and the plants that die. A rule no mutation can falsify carries its
 reason in `Gap` rather than being quietly omitted, and
-`TestEveryAssemblerRuleHasAFalsifier` fails if a row names a plant that has gone,
-if a plant is named by no row, or if the number of declared gaps changes.
+`TestEveryAssemblerRuleHasAFalsifier` fails if a row names a plant or a refusal
+that has gone, if either is named by no row, or if the number of declared gaps
+changes.
 
 ## The amnesia eval
 
@@ -90,6 +115,19 @@ an absolute path or a temporary-directory name embedded in the output fails on
 the first run. A run-to-run comparison in one directory cannot see that leak, and
 it is both a determinism failure and a breach of the rule that no absolute local
 path enters an artefact.
+
+The artefacts are also held to a **path detector**, not a list of two names.
+Both trees are created under one temporary parent, so that parent is an absolute
+local path both runs carry identically — the byte comparison agrees about it and
+reports nothing, which is the same blindness the two-path design exists to close,
+one level up. The detector runs two mechanisms: every ancestor of the fixture's
+root and HOME up to the process temporary directory, and a shape match for any
+other absolute path, which is what reaches the machine's own directories that no
+list could enumerate. `TestTheAbsolutePathGuardSeesMoreThanTheTwoRoots` falsifies
+each half separately, and its negative rows — repo-relative item paths, a URL —
+hold the detector to reporting paths rather than every slash. Failure messages
+name a leaked path by its last two components alone: a guard against absolute
+paths in artefacts must not put one in a CI log itself.
 
 The manifest is not therefore unasserted. Two weaker properties hold on it: no
 key and no scalar in it is timestamp-shaped, and its item paths agree with the
