@@ -180,3 +180,8 @@ it is not.
 ## Grounds
 
 - pursued: This conjecture is pursued now because the failure it catches is silent everywhere else: a reading that quietly proposes, ranks, or arrives already dispositioned passes every structural test while violating the one property its position is defined by, and the read-block eval covers only what a reading saw, never what it was licensed to produce. Building the gate later would mean trusting outputs produced before anything checked them.
+
+## Audit Notes
+
+<!-- abcd-review: OWED receipt=rcp-fe3450ca55ff -->
+Fidelity review OWED (receipt rcp-fe3450ca55ff).

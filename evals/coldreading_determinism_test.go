@@ -376,8 +376,11 @@ var (
 // run identifier mints from a clock, so the manifest is not literally free of
 // encoded time, and saying so is worth more than a scan that quietly skipped it.
 // It is exempt from the PACKED-DIGIT rule alone — a run identifier that grew an
-// ISO date or a clock time still fails — and its own shape is asserted, so the
-// exemption cannot widen into a free-text field.
+// ISO date or a clock time still fails. The exemption is keyed on the NAME at
+// any depth, while the shape assertion reads the top-level field only, so a
+// nested key spelled run_id would be exempt and unchecked. The Manifest struct
+// is closed and declares no such field, which is what makes that unreachable
+// rather than merely unobserved.
 const runIDKey = "run_id"
 
 // timestampFinding is one timestamp-shaped key or scalar in a manifest.

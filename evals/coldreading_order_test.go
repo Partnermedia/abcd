@@ -13,10 +13,11 @@ package evals
 // only confirm it.
 //
 // An oracle needs something to catch. `testdata/cold-reading/order/` is that:
-// five records whose names sort one way by byte, another by case-folded
-// comparison and a third by numeric suffix, materialised in a creation order
-// that is none of the three. TestFixtureOrderIsAdversarial asserts those
-// disagreements hold, so the order oracle cannot pass by coincidence.
+// six records whose names sort one way by byte, another by case-folded
+// comparison, a third by numeric suffix and a fourth by path component,
+// materialised in a creation order that is none of the four.
+// TestFixtureOrderIsAdversarial asserts those disagreements hold, so the order
+// oracle cannot pass by coincidence.
 
 import (
 	"bytes"
@@ -167,7 +168,7 @@ func materialiseOrderPair(t *testing.T) (fixture, fixture) {
 
 // TestFixtureOrderIsAdversarial is the anti-coincidence guard under the order
 // oracle: the corpus on disk is the corpus declared, and its names genuinely
-// separate the three comparators an assembler might plausibly have used.
+// separate the four comparators an assembler might plausibly have used.
 //
 // Without it the oracle can pass because the corpus happens to sort the same way
 // under every comparator, which is a green for a check that checked nothing.
