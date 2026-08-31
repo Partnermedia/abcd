@@ -85,7 +85,7 @@ converge on one id.
 
 ## `ingest` checks what the reading was licensed to produce
 
-`ingest --output-json <path>` validates the JSON a reading returned and writes
+`ingest --reading-json <path>` validates the JSON a reading returned and writes
 its reading records. It is the output-contract idiom the repository already
 carries — an agent emits JSON, a deterministic verb validates it, the verb
 writes the record — and it adds a check no structural schema performs: what the

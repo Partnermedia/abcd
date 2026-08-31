@@ -1095,7 +1095,7 @@
       "hidden": false,
       "flags": [
         {
-          "name": "output-json",
+          "name": "reading-json",
           "shorthand": "",
           "type": "string",
           "required": false,
