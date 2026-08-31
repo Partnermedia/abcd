@@ -261,7 +261,9 @@
         "iss": ".abcd/work/issues",
         "rdi": ".abcd/work/issues/readings",
         "dsp": ".abcd/work/issues/dispositions",
-        "rdg": ".abcd/development/readings"
+        "rdg": ".abcd/development/readings",
+        "adm": ".abcd/work/issues/admissions",
+        "srp": ".abcd/work/issues/surprises"
       }
     },
     "record_provenance": {

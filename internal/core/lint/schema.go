@@ -84,6 +84,22 @@ var (
 	dispositionFileNumRe = recordid.FilenameNumRe(issueschema.DispositionFamily)
 	readingRunBucketRe   = regexp.MustCompile(`^` + issueschema.ReadingRunFamily + `-[0-9]+$`)
 	dispositionBucketRe  = regexp.MustCompile(`^` + issueschema.ReadingItemFamily + `-[0-9]+$`)
+	// The step-2 families' filename grammars. An admission is bucketed by the
+	// same minted run directory a reading is (readingRunBucketRe above); a
+	// surprise store is FLAT, because a surprise is keyed by the `occasioned_by`
+	// it carries rather than by a directory.
+	admissionFileNumRe = recordid.FilenameNumRe(issueschema.AdmissionFamily)
+	surpriseFileNumRe  = recordid.FilenameNumRe(issueschema.SurpriseFamily)
+	// A YAML block-scalar header and nothing else: `|`, `>`, with the chomping and
+	// indentation indicators the spelling allows (`|-`, `>+`, `|2-`). A key
+	// carrying one holds its value on the lines BELOW it, so the same-line scanner
+	// reports the header as the value — which is why a rule asking "is this
+	// property empty?" has to look at the block rather than at the byte.
+	// The trailing comment YAML permits after the header is part of the header,
+	// not of the value: `grounds: | # nothing` over an empty block is the empty
+	// string exactly as a bare `grounds: |` is, and a pattern that read only the
+	// bare spellings left the reported defect passing under four legal ones.
+	blockScalarIndicatorRe = regexp.MustCompile(`^[|>][0-9+-]*(?:\s+#.*)?$`)
 	// The cross-reference frontmatter fields whose targets must resolve. They are
 	// the record's machine-readable claims that another record exists and is a
 	// live input — as distinct from prose, where naming a released or retired id
@@ -147,6 +163,144 @@ type recordStore struct {
 	// frontmatter other rules already judge (intent_lifecycle, spec_id_unique)
 	// must not be re-judged against the issue's shape.
 	requiredFields []string
+	// knownFields is the store's additionalProperties:false allow-list. A nil
+	// knownFields means the store declares no closed schema here and every key is
+	// left to the rules that know it — the intent and spec stores carry fields
+	// their own rules judge, and refusing them against a list this rule invented
+	// would be a blocker over a schema nobody declared.
+	knownFields map[string]bool
+	// joins are the frontmatter properties that key this record to another
+	// record, and whose targets must therefore be in the corpus. They are
+	// distinct from recordRefFields, which is the fixed cross-reference
+	// vocabulary every store shares: a join is the ONE value that makes a record
+	// a record about something else, and each store spells its own.
+	joins []recordJoin
+	// readerFailsClosed declares that the store's reader VALIDATES a record before
+	// it reads it, and skips one that fails — so a malformed committed record is
+	// invisible to every surface of its family while it still sits in the store.
+	// Two readers do this: capture's validateStrict for the issue ledger, and the
+	// record dispatcher for the ADR store, which confirms the frontmatter id before
+	// it will render the record.
+	//
+	// It is declared rather than assumed because the findings STATE that
+	// consequence, and a rule may not state a consequence it has not established.
+	// ONE declaration stands behind the two legs that read the record's PROPERTIES
+	// — the missing required property (checkRecordRequiredFields) and the key
+	// outside a closed schema (checkRecordUnknownFields) — rather than one leg
+	// consulting it while the one beside it assumes, which is how the first fix
+	// closed one spelling and left two (iss-2608301519254418).
+	//
+	// It does NOT stand behind the duplicated top-level key. The malformations
+	// differ and so do the readers' answers: capture's parse refuses a duplicate
+	// outright, while the ADR dispatcher reads with frontmatter.Fields, the lenient
+	// scanner, and renders the record on its first value — so one declaration across
+	// all three legs made the ADR store claim a refusal nobody performs
+	// (iss-2608301656200729). That leg reads readerRefusesDuplicateKey instead.
+	//
+	// The two stores this cycle added have no such reader: the only reader of
+	// admission records honours one carrying nothing but its run and its proposal
+	// (reading_outstanding_test.go), and no reader of surprise records exists at
+	// all — so a message telling their authors the record is skipped and invisible
+	// sends them to look for a refusal nobody performs (iss-2608301411010342).
+	// Where it is false each leg states what the malformation IS, which is true of
+	// every store, and stops there.
+	readerFailsClosed bool
+	// readerRefusesDuplicateKey declares that the store's reader refuses a record
+	// carrying a top-level key twice, and skips it. It is separate from
+	// readerFailsClosed because the two answers come apart: capture's
+	// parseFrontmatterBlock refuses a duplicate key by name, and the ADR dispatcher
+	// — which DOES validate the id before it renders — reads the frontmatter with
+	// the lenient scanner and so never sees the second line at all. An ADR carrying
+	// `status` twice renders, with the first value and a nil error
+	// (iss-2608301656200729).
+	//
+	// Where it is false the leg still reports the duplicate, on the account that is
+	// true of every store: this rule's own scanner keeps the first value, so a
+	// second line can silence a blocker armed on the value the first hides. That
+	// clause is scoped to THIS rule's scanner rather than to "every record surface"
+	// because the surfaces do not answer alike (iss-2608301813253101).
+	//
+	// What each store's readers make of a duplicated key is established by
+	// EXERCISING them, in TestDuplicateTopLevelKeyReaderByReader. It is a test
+	// rather than a list here because the list here was written four times and
+	// overtaken four times: prose about another component's behaviour cannot fail,
+	// so it goes stale silently and is believed BECAUSE it is specific. The last
+	// one gave each store a single answer, and rdi and dsp each had a second reader
+	// that contradicted the answer it was given (iss-2608301901264848). Read the
+	// table for what a reader does; a wrong row there is a red gate.
+	readerRefusesDuplicateKey bool
+	// bucketField is the frontmatter property that must name the bucket the
+	// record sits in, for a store that states its bucket twice. An admission is
+	// filed under the run whose candidate set it joins AND carries that run as a
+	// field, so a disagreement is the record contradicting itself about which set
+	// it joined. Empty means the store makes no such double claim.
+	bucketField string
+}
+
+// recordJoin is one keying field a store declares, with what the join is FOR —
+// so a dangling target tells the reader what broke, not merely which key did.
+type recordJoin struct {
+	field string
+	why   string
+	// sameBucketAs names the FAMILY this join's value is a handle of, and whose
+	// targets must sit in the same bucket as the record that joins them. Empty
+	// means the join carries neither obligation: its value may be prose.
+	//
+	// Naming the family is what makes the SPELLING judgeable. A join whose value
+	// may be prose can only be read leniently, and reading this one leniently left
+	// six spellings of the proposal green while the reader that matches the value
+	// as a string admitted nothing: three that parsed and resolved (upper-cased,
+	// mixed-cased, zero-padded), and three that parsed as no handle at all and
+	// took the silence prose is owed (a space inside the quotes on either side,
+	// and bare prose) (iss-2608301519255871).
+	//
+	// An admission is meaningful only against the run whose proposals it admits,
+	// and the outstanding report keys the admitted set on the PAIR — the run the
+	// record is filed under, and the proposal it names (admittedProposals) — so an
+	// admission filed under one run naming an item that belongs to another is keyed
+	// on a pair nothing ever queries. It admits nothing, the proposal it names goes
+	// on being reported as unadmitted, and no line says an answer was written
+	// (iss-2608301327013320).
+	//
+	// That consequence is what the walk establishes, and it is the whole of what
+	// the message may say. It does NOT rest on ids colliding across buckets: this
+	// rule's own duplicate-ordinal leg refuses a cross-run reading collision
+	// outright, and mintUnusedItemID probes every run under the ledger lock and
+	// redraws on a hit, so a rule asserting the collision would be contradicting
+	// itself twice over (iss-2608301519253368).
+	//
+	// It names a family rather than being a bare flag because the pair is a
+	// PROPERTY OF THE FAMILY, and the message says so. The outstanding report walks
+	// reading items and keys them by the run they sit in; it never names an issue at
+	// all, and no reader keys an issue on its status directory. So a target outside
+	// the declared family is left to the silence it had: its value is wrong for some
+	// other reason, and inventing a consequence the operator then goes looking for
+	// is the confident false statement this rule must not make
+	// (iss-2608301411017768).
+	//
+	// checkRecordBucketField does NOT cover this and never did. That check enforces
+	// FIELD == DIRECTORY; this is DIRECTORY == THE TARGET'S OWN BUCKET, and a
+	// record satisfies the first while failing the second.
+	sameBucketAs string
+	// targetPosition is the reading POSITION the join's target must hold, where
+	// what reads the join is scoped to one position. Empty means the join carries
+	// no such obligation.
+	//
+	// The admission's is `widening`, and it is the THIRD coordinate of the pair the
+	// run axis and the spelling axis already close. ReadReadingOutstanding consults
+	// the admissions tree only inside `if position == issueschema.PositionWidening`,
+	// so an admission naming an item at `detection`, `entailment` or `comparative`
+	// resolves, matches its bucket, spells correctly, draws nothing — and is never
+	// queried (iss-2608301649339636). AdmissionRequired's own doc already says
+	// `proposal` names the WIDENING item admitted; this is the leg that enforces it.
+	//
+	// It is asked only where the target's FILENAME is a bare handle, for the padding
+	// leg's reason: what reads the family never opens a file whose name is not one,
+	// so nothing about what the report does with such a target is available to
+	// claim. That test needs the target's family, so this obligation is carried by a
+	// join that ALSO declares sameBucketAs; declared alone it would be inert, which
+	// TestEveryJoinTargetPositionIsADeclaredPosition refuses.
+	targetPosition string
 }
 
 // bucketed reports whether the store holds its records in lifecycle
@@ -187,7 +341,7 @@ var recordStores = []recordStore{
 	// whose loaders (intent.Load) fail closed on a missing id: the id is a required
 	// property, and its absence must be a finding, not silent invisibility.
 	{prefix: "adr", noun: "ADR", nodeType: "adr", buckets: nil, fileNumRe: adrFileNumRe, fileFamily: "", filename: "<NNNN>-<slug>.md",
-		requiredFields: []string{"id"}},
+		requiredFields: []string{"id"}, readerFailsClosed: true},
 	{prefix: "itd", noun: "intent", nodeType: "intent", buckets: intentBucketNames, fileNumRe: intentFileNumRe, fileFamily: "itd", filename: "itd-<N>-<slug>.md"},
 	{prefix: "spc", noun: "spec", nodeType: "spec", buckets: specBucketNames, fileNumRe: specFileNumRe, fileFamily: "spc", filename: "spc-<N>-<slug>.md"},
 	// The issue store's required properties come from the schema's ONE definition
@@ -196,7 +350,8 @@ var recordStores = []recordStore{
 	// the drift would show up as a silently unread record, which is the defect
 	// this invariant exists to catch.
 	{prefix: "iss", noun: "issue", nodeType: "issue", buckets: issueStatusDirs, fileNumRe: issueFileNumRe, fileFamily: "iss", filename: "iss-<N>-<slug>.md",
-		requiredFields: issueschema.Required},
+		requiredFields: issueschema.Required, knownFields: issueschema.Known, readerFailsClosed: true,
+		readerRefusesDuplicateKey: true},
 	// The three reading families (spc-58). Each buckets by GRAMMAR because its
 	// buckets are minted: a reading item and a run record live under the run that
 	// produced them, and a disposition lives under the item it answers.
@@ -217,6 +372,40 @@ var recordStores = []recordStore{
 		fileNumRe: readingRunFileNumRe, fileFamily: "rdg", filename: "rdg-<N>.md"},
 	{prefix: "dsp", noun: "disposition", nodeType: "disposition", bucketRe: dispositionBucketRe,
 		fileNumRe: dispositionFileNumRe, fileFamily: "dsp", filename: "dsp-<N>.md"},
+	// The two step-2 families (spc-67). Unlike the three above they DO declare
+	// their schemas, and that is the whole of this cycle's enforcement: no verb
+	// writes an admission or a surprise yet, so wiring the shapes to the gate that
+	// reads committed records is what keeps a schema no code reads from being dead
+	// scaffolding. A hand-written admission with a blank `grounds` is a blocker
+	// finding from the day this lands; what is hand-run is WHO writes the file.
+	//
+	// Both lists come from core/issueschema's ONE declaration rather than from a
+	// literal here, for the reason the issue store's does: a hand-copied set
+	// drifts the moment one side gains a field.
+	//
+	// Both declare a JOIN, and the admission declares its bucket twice. The
+	// admission's `proposal` used to be the one keying field the rule left
+	// unresolved while it resolved the surprise's `occasioned_by` — the same
+	// defect (a join naming nothing joins nothing) asked in one store and not the
+	// other, which is exactly how two answers to one question start.
+	{prefix: "adm", noun: "admission", nodeType: "admission", bucketRe: readingRunBucketRe,
+		fileNumRe: admissionFileNumRe, fileFamily: "adm", filename: "adm-<N>.md",
+		requiredFields: issueschema.AdmissionRequired, knownFields: issueschema.AdmissionKnown,
+		bucketField: "run",
+		joins: []recordJoin{{
+			field: "proposal",
+			why: "an admission is keyed to the proposal it admits, and one naming no record admits nothing in particular — " +
+				"the candidate set it claims to have joined cannot be reconstructed from it",
+			sameBucketAs:   issueschema.ReadingItemFamily,
+			targetPosition: issueschema.PositionWidening,
+		}}},
+	{prefix: "srp", noun: "surprise", nodeType: "surprise",
+		fileNumRe: surpriseFileNumRe, fileFamily: "srp", filename: "srp-<N>.md",
+		requiredFields: issueschema.SurpriseRequired, knownFields: issueschema.SurpriseKnown,
+		joins: []recordJoin{{
+			field: "occasioned_by",
+			why:   "a surprise is keyed to whatever occasioned it, and a join naming nothing joins nothing",
+		}}},
 }
 
 // storeByPrefix returns the code-side store for a prefix.
@@ -271,6 +460,22 @@ type schemaRecord struct {
 // handle renders the record's prose handle (adr-12, itd-47).
 func (r schemaRecord) handle() string {
 	return r.store.prefix + "-" + strconv.Itoa(r.num)
+}
+
+// valueEmpty reports whether the record carries no value for field — the
+// question isAbsentValue answers for a same-line value, widened by the one
+// spelling whose value is not on the key's own line at all.
+//
+// `grounds: |` puts the value on the indented lines below, so the same-line
+// scanner reads the indicator itself: a non-empty byte that is not a value. A
+// block holding text is a value; a block holding nothing is the empty string,
+// which is the same absence every other spelling is and must be refused on the
+// same terms rather than passing on the strength of a `|`.
+func (r schemaRecord) valueEmpty(field string, f fmField) bool {
+	if blockScalarIndicatorRe.MatchString(strings.TrimSpace(f.value)) {
+		return strings.TrimSpace(r.blocks[field]) == ""
+	}
+	return isAbsentValue(f.value)
 }
 
 // recordRef is one handle read out of a cross-reference field.
@@ -353,10 +558,22 @@ func checkRecordSchema(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 	}
 
 	for _, r := range records {
-		out = append(out, checkRecordFilename(r, cfg.Severity)...)
-		out = append(out, checkRecordFilenameSlug(r, cfg.Severity)...)
-		out = append(out, checkRecordRequiredFields(r, cfg.Severity)...)
-		out = append(out, checkIssueRecordShape(r, cfg.Severity)...)
+		// judged names the properties a leg that judges CONTENT has already reported
+		// for this record. What a reader does with a BLANK required property is a
+		// property of the field, not of the store — capture refuses a blank severity
+		// and reads a blank found_during — so the required-fields leg, which can only
+		// speak store-wide, must leave the consequence to the leg that established it
+		// (iss-2608301308369559). The content legs therefore run FIRST and mark what
+		// they spoke about, so nobody has to keep a second list of which fields those
+		// are, and a leg added later is covered by having said something.
+		judged := map[string]bool{}
+		out = append(out, checkRecordFilename(r, cfg.Severity, judged)...)
+		out = append(out, checkRecordFilenameSlug(r, cfg.Severity, judged)...)
+		out = append(out, checkIssueRecordShape(r, cfg.Severity, judged)...)
+		out = append(out, checkRecordRequiredFields(r, cfg.Severity, judged)...)
+		out = append(out, checkRecordUnknownFields(r, cfg.Severity)...)
+		out = append(out, checkRecordJoins(r, index, retired, cfg)...)
+		out = append(out, checkRecordBucketField(r, cfg.Severity)...)
 
 		// Cross-references: a named record must be in the corpus, or declared
 		// retired by the record that replaced it.
@@ -435,13 +652,18 @@ func checkRecordSchema(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 // ids — and the rules that key on the filename and the rules that key on the
 // field then lint two different records. An absent id is a different (and larger)
 // schema question than this rule's, so only a present one is compared.
-func checkRecordFilename(r schemaRecord, severity string) []Finding {
+func checkRecordFilename(r schemaRecord, severity string, judged map[string]bool) []Finding {
 	f := r.fields["id"]
-	if isAbsentValue(f.value) {
+	// Absence here means NOT WRITTEN, which is why it is isNull and not
+	// isAbsentValue: an EMPTY id is a value that disagrees with the filename, and
+	// the delegation below only reaches a store that declares a required set. The
+	// intent, spec and three reading stores declare none, so reading `id: ""` as
+	// absence would send the delegation nowhere and leave it green in every rule.
+	if isNull(strings.TrimSpace(f.value)) {
 		return nil
 	}
 	want := r.handle()
-	got := strings.Trim(strings.TrimSpace(f.value), `"'`)
+	got := issueScalar(f.value)
 	// Compared as a PARSED handle, not as a string: `adr-0012` and `adr-12` are one
 	// id written two ways (the rest of the rule already compares numerically), and
 	// a string comparison would report the record's own zero-padded spelling as a
@@ -456,11 +678,22 @@ func checkRecordFilename(r schemaRecord, severity string) []Finding {
 	if line == 0 {
 		line = 1
 	}
+	mark(judged, "id")
 	return []Finding{{
 		File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: severity,
 		Message: "filename claims id '" + want + "' but frontmatter declares '" + got +
 			"'; a " + r.noun() + " filename is " + r.store.filename,
 	}}
+}
+
+// mark records that a leg of this rule has reported on field for the record
+// being checked, so the required-fields leg does not add a second and weaker
+// finding about the same value. It tolerates a nil set, so a leg stays callable
+// without one.
+func mark(judged map[string]bool, field string) {
+	if judged != nil {
+		judged[field] = true
+	}
 }
 
 // checkRecordFilenameSlug asserts that a record's frontmatter slug agrees with
@@ -500,16 +733,19 @@ func checkRecordFilename(r schemaRecord, severity string) []Finding {
 // so the ledger at least reports the name it cannot read. Tightening this rule's
 // filename grammar to match belongs on that record, because it changes what the
 // gate refuses across all four stores.
-func checkRecordFilenameSlug(r schemaRecord, severity string) []Finding {
+func checkRecordFilenameSlug(r schemaRecord, severity string, judged map[string]bool) []Finding {
 	f := r.fields["slug"]
-	if isAbsentValue(f.value) {
+	// isNull, not isAbsentValue, for checkRecordFilename's reason: an empty slug
+	// is a value that disagrees, and the stores that would otherwise catch it
+	// declare no required set to delegate to.
+	if isNull(strings.TrimSpace(f.value)) {
 		return nil
 	}
 	_, fnSlug, ok := recordid.SplitRecordFilename(r.store.fileFamily, filepath.Base(r.rel))
 	if !ok {
 		return nil
 	}
-	got := strings.Trim(strings.TrimSpace(f.value), `"'`)
+	got := issueScalar(f.value)
 	if fnSlug == got {
 		return nil
 	}
@@ -517,6 +753,7 @@ func checkRecordFilenameSlug(r schemaRecord, severity string) []Finding {
 	if line == 0 {
 		line = 1
 	}
+	mark(judged, "slug")
 	return []Finding{{
 		File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: severity,
 		Message: "filename carries slug '" + fnSlug + "' but frontmatter declares '" + got +
@@ -537,32 +774,405 @@ func checkRecordFilenameSlug(r schemaRecord, severity string) []Finding {
 // surface — while sitting in the ledger, counted by nothing, reported by nothing.
 // A record nobody can read is not a lax record, it is a lost one.
 //
-// A property present but empty (`schema_version:`) counts as missing for the same
-// reason: the reader cannot make a value out of it either.
-func checkRecordRequiredFields(r schemaRecord, severity string) []Finding {
+// A property present but EMPTY is a finding too, on different grounds, and the
+// two say so differently. An OMITTED property is refused by the reader's
+// required-property check WHERE THERE IS ONE, so that message's account of the
+// consequence — skipped, invisible to every surface — is made only by a store
+// that declares readerFailsClosed. It holds for every field of such a store: the
+// reader's own required-property loop asks nothing about which property it is.
+//
+// A BLANK one has no such store-wide account, and this leg must not invent one.
+// The reader's required-property loop type-checks without judging content, but
+// the checks either side of it DO judge: capture refuses `severity: ""` on its
+// enum, `slug: ""` on its grammar, `id: ""` on its pattern and `schema_version:
+// ""` on its version, and reads a found_during written as a bare single-quote
+// pair, an empty flow mapping or an explicit null tag as a value, because its
+// decoder leaves all three intact. Thirty-nine of the forty-two
+// required-issue-field × blank-spelling combinations (six spellings: the three
+// quoted ones, the indented block, the empty flow mapping and the null tag) are
+// refusals and three are acceptances, so a single
+// sentence about "what the reader does with a blank" is a confident false
+// statement in whichever set it does not match — first claiming a refusal that
+// never happens, then, once that was fixed, an acceptance that never happens
+// (iss-2608301308369559). So this leg states only what a blank IS, which is true
+// of all forty-two; the consequence is stated by the leg that judges the field,
+// and where such a leg has already spoken (judged) this one stays silent rather
+// than adding a second, weaker finding on the same line.
+//
+// "Empty" is judged on the value the YAML scalar carries rather than on its bytes
+// — see isAbsentValue for the quoted spellings, and blockScalarIndicatorRe for the
+// one shape whose value is not on the key's own line at all.
+func checkRecordRequiredFields(r schemaRecord, severity string, judged map[string]bool) []Finding {
 	var out []Finding
 	for _, field := range r.store.requiredFields {
 		f, present := r.fields[field]
-		if present && !isAbsentValue(f.value) {
+		if present && !r.valueEmpty(field, f) {
+			continue
+		}
+		if present && judged[field] {
 			continue
 		}
 		line := f.line
 		if line == 0 {
 			line = 1
 		}
-		out = append(out, Finding{
-			File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: severity,
-			Message: "frontmatter is missing required property '" + field + "'; the " + r.store.noun +
+		msg := "frontmatter is missing required property '" + field + "'; the schema declares it required " +
+			"because the record has to state it, and a record that omits it never states it"
+		if r.store.readerFailsClosed {
+			msg = "frontmatter is missing required property '" + field + "'; the " + r.store.noun +
 				" reader validates before it reads, so a record without it is skipped — invisible to every " +
-				r.store.noun + " surface while it still sits in the store",
+				r.store.noun + " surface while it still sits in the store"
+		}
+		if present {
+			msg = "required property '" + field + "' carries no value once its YAML scalar is read; " +
+				"the schema declares it required because the record has to state it, and a blank states nothing"
+		}
+		out = append(out, Finding{
+			File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: severity, Message: msg,
 		})
 	}
 	return out
 }
 
+// checkRecordUnknownFields asserts that a record carries no frontmatter property
+// outside its store's allow-list, for every store that declares one.
+//
+// It is the other half of checkRecordRequiredFields: a key outside the allow-list
+// is a key the schema does not declare, so no surface of that family reads it and
+// whatever it carries is carried nowhere. The check is store-declared rather than
+// hard-coded to the issue ledger because the question is identical wherever a
+// schema is closed, and asking it twice in two places is how the two answers start
+// to differ.
+//
+// It fails the same way too WHERE THE STORE'S READER FAILS CLOSED: a closed schema
+// is what such a reader validates against before it reads, so the record is skipped
+// — invisible to every surface of its own family while it still sits in the store.
+// That second account is gated on readerFailsClosed for the reason the
+// missing-property account is: the admission reader COUNTS a record carrying an
+// unknown key, and no reader of surprise records exists at all
+// (iss-2608301519254418).
+func checkRecordUnknownFields(r schemaRecord, severity string) []Finding {
+	if r.store.knownFields == nil {
+		return nil
+	}
+	var out []Finding
+	for key, f := range r.fields {
+		if r.store.knownFields[key] {
+			continue
+		}
+		line := f.line
+		if line == 0 {
+			line = 1
+		}
+		msg := "unknown frontmatter property '" + key + "'; the " + r.store.noun +
+			" schema is closed, so a key outside it is one the schema does not declare and no " +
+			r.store.noun + " surface reads — whatever it states, the record states nowhere"
+		if r.store.readerFailsClosed {
+			msg = "unknown frontmatter property '" + key + "'; the " + r.store.noun +
+				" schema is closed, so a key outside it makes this a record the reader refuses and skips — invisible to every " +
+				r.store.noun + " surface while it still sits in the store"
+		}
+		out = append(out, Finding{
+			File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: severity, Message: msg,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Message < out[j].Message })
+	return out
+}
+
+// checkRecordJoins asserts that every KEYING field a store declares resolves,
+// where it names a record at all.
+//
+// A join is the whole of what makes a record a record about something else: a
+// surprise entry is a separate record rather than a field on the thing that
+// occasioned it, and an admission is an answer to one proposal rather than a note
+// in a drawer. In both cases the only thing tying it back is this value, and a
+// join naming a record the corpus does not hold joins nothing.
+//
+// The check is STORE-DECLARED rather than written per family, because the
+// question is identical wherever a record is keyed to another. Asking it in one
+// store and not the next is how the admission's `proposal` came to be the one
+// keying field nothing resolved while the surprise's `occasioned_by` was
+// (iss-2608300935215868).
+//
+// Resolution asks four questions, because a join can fail in four ways.
+//
+// The first is SPELLING, and it is asked only of a join that declares a family
+// (sameBucketAs): such a join's value is a handle of that family by declaration,
+// so it is judged as a STRING, because what reads the family matches it as one —
+// the outstanding report keys the admitted set on the value as written
+// (admittedProposals), while the questions below parse it as a handle and resolve
+// its ordinal as a number. Six spellings fell between the two readings and were
+// green. `RDI-2`, `Rdi-2` and `rdi-02` parsed, resolved and matched their bucket,
+// so the gate approved them; a space inside the quotes on either side, and bare
+// prose, parsed as no handle at all and took the silence prose is owed. Every one
+// of them admitted nothing (iss-2608301519255871).
+//
+// It is asked in two places, because the two halves need different evidence. What
+// the VALUE alone settles — the family's own prefix, lower case, nothing around
+// it — is asked here. Whether its PADDING is the padding that admits is a fact
+// about the target's FILE, so it is asked once the target is resolved, below.
+//
+// The second is PRESENCE: a target that is not in the corpus joins nothing.
+//
+// The fourth is the POSITION, where the join declares one: what reads such a join
+// consults it only for a target at that position, so a target at any other is
+// never queried and the record counts for nothing — the third coordinate of the
+// pair the run and spelling axes already close (iss-2608301649339636).
+//
+// The third is the BUCKET. A target that is in the corpus but in ANOTHER BUCKET
+// joins something nobody will ever look for: what reads that family keys what it
+// finds on the PAIR — the bucket the record is filed under, and the target it
+// names — so a record reaching across buckets is keyed on a pair no reader
+// queries. It is declared per join AND per target family (sameBucketAs), because
+// that pair-keying is a property of the family and the message names it.
+//
+// Prose is legitimate and stays silent WHERE THE JOIN DECLARES NO FAMILY. A
+// surprise is keyed to whatever occasioned it — a detection, an admission, or a
+// consequence that has no id — so only a value that is a record handle of a store
+// this scan reads is resolved. A handle a record declares it PRUNED is resolved
+// too, on the same terms the cross-reference loop resolves it, so one rule gives
+// one answer about it.
+func checkRecordJoins(r schemaRecord, index map[recordRef]schemaRecord, retired map[recordRef]bool, cfg RuleConfig) []Finding {
+	var out []Finding
+	for _, join := range r.store.joins {
+		f := r.fields[join.field]
+		// Absence is decided on the RAW value, because isAbsentValue strips the
+		// value itself: handing it an already-stripped scalar strips twice, and a
+		// value that is two apostrophes inside double quotes then reads as absent
+		// here while checkRecordRequiredFields — which strips once — reads it as
+		// present. Every leg stood down on it and an admission that admits nothing
+		// drew no finding at all (iss-2608301656192369).
+		if isAbsentValue(f.value) {
+			continue
+		}
+		value := issueScalar(f.value)
+		line := f.line
+		if line == 0 {
+			line = 1
+		}
+		// The spelling, where the join declares the family its value belongs to.
+		// Asked before anything is resolved, because every later question reads the
+		// value as a parsed handle while the reader of the family reads it as a
+		// string: a value the two read differently is one the gate approves and no
+		// reader can act on.
+		if join.sameBucketAs != "" && !spellsHandleOf(join.sameBucketAs, value) {
+			noun := joinFamilyNoun(join.sameBucketAs)
+			out = append(out, Finding{
+				File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: cfg.Severity,
+				Message: join.field + " declares '" + value + "', which is not a " + noun + " handle (want " +
+					join.sameBucketAs + "-<N>, lower case with nothing around it); what reads this " +
+					r.noun() + " matches the value as written against the name the " + noun +
+					"'s own file carries, so a value that is not one of those names admits nothing",
+			})
+			continue
+		}
+		m := anyHandleFullRe.FindStringSubmatch(value)
+		if m == nil {
+			continue
+		}
+		prefix := strings.ToLower(m[1])
+		// A family this scan does not read supports no verdict either way: the
+		// record might be perfectly present in a store nobody configured, and
+		// reporting it missing would be a confident false statement.
+		if _, known := storeByPrefix(prefix); !known || cfg.RecordStores[prefix] == "" {
+			continue
+		}
+		num, err := strconv.Atoi(m[2])
+		if err != nil {
+			continue
+		}
+		ref := recordRef{prefix, num}
+		target, ok := index[ref]
+		if !ok {
+			// A handle a record declares it PRUNED resolves to that declaration rather
+			// than to a file, exactly as the cross-reference loop in checkRecordSchema
+			// reads it. Without this the one rule gives two answers about one pruned
+			// handle — accepting it in related_adrs and blocking on it in a join
+			// (iss-2608301327012166).
+			if retired[ref] {
+				continue
+			}
+			out = append(out, Finding{
+				File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: cfg.Severity,
+				Message: join.field + " names '" + ref.String() +
+					"', which is not a record in the corpus; " + join.why,
+			})
+			continue
+		}
+		// The PADDING half of the spelling question, which only the resolved target
+		// can answer. What reads the family keys the record on its FILENAME — the
+		// outstanding report captures the item name out of `rdi-<N>.md` and never
+		// opens the item's own id property — while this rule's filename ↔ id leg
+		// compares those two numerically, so a zero-padded FILE is legitimate. Which
+		// spelling admits is therefore decided by the file, not by the join, and it
+		// is read off the file.
+		//
+		// A target whose filename is not itself a bare handle is left in the silence
+		// it had: the reader of the family does not read such a file at all, so no
+		// spelling of this join admits it and none is more right than another. That
+		// divergence between this rule's filename grammar and the report's is
+		// iss-2608300929274006's to close.
+		stemIsHandle := false
+		if join.sameBucketAs != "" {
+			stem := strings.TrimSuffix(filepath.Base(target.rel), ".md")
+			stemIsHandle = spellsHandleOf(join.sameBucketAs, stem)
+			if stemIsHandle && value != stem {
+				out = append(out, Finding{
+					File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: cfg.Severity,
+					Message: join.field + " declares '" + value + "' while the " + target.noun() +
+						" it names is filed as '" + filepath.Base(target.rel) + "'; what reads this " + r.noun() +
+						" matches the value as written against the name that file carries, so this spelling admits " +
+						"nothing and the " + target.noun() + " it names goes on being reported as unanswered",
+				})
+				continue
+			}
+		}
+		// The POSITION obligation, where the join declares one. It is the third
+		// coordinate of the pair, beside the run the record is filed under and the
+		// spelling of the value: what reads this join consults it only for a target at
+		// the declared position, so a target at any other is never queried and the
+		// record counts for nothing. It is asked only where the target's filename is a
+		// bare handle, for the padding leg's reason one block above — what reads the
+		// family never opens such a file, so its position decides nothing.
+		if join.targetPosition != "" && stemIsHandle {
+			posField := target.fields["position"]
+			if pos := issueScalar(posField.value); pos != join.targetPosition {
+				declares := "declares position '" + pos + "'"
+				if isAbsentValue(posField.value) {
+					declares = "declares no position"
+				}
+				out = append(out, Finding{
+					File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: cfg.Severity,
+					Message: join.field + " names '" + ref.String() + "', which " + declares +
+						"; what reads this " + r.noun() + " consults it only for a " + target.noun() +
+						" at position '" + join.targetPosition + "', so this " + r.noun() +
+						" is keyed on a pair nothing ever queries: it counts for nothing, and no line reports " +
+						"that an answer was written for the " + target.noun() + " it names",
+				})
+				continue
+			}
+		}
+		// The bucket obligation, where the join declares one. The target is of the
+		// declared family by construction: the spelling leg above refused every value
+		// that is not a handle of it, and the index is keyed on the parsed handle.
+		// Neither bucket can be empty here either: both sides are then records of a
+		// bucketed store, and a record sitting outside every bucket is reported by
+		// the walk and never enters the index at all — so it reaches this leg as a
+		// target that is not in the corpus, above.
+		if join.sameBucketAs == "" || target.bucket == r.bucket {
+			continue
+		}
+		msg := join.field + " names '" + ref.String() + "', which is filed under '" + target.bucket +
+			"' while this " + r.noun() + " is filed under '" + r.bucket +
+			"'; what reads that family keys it on the pair — the bucket it is filed under and the " +
+			target.noun() + " it names — so this " + r.noun() +
+			" is keyed on a pair nothing ever queries and counts for nothing"
+		// The tail names a REPORT LINE, so it is appended only where the target's
+		// filename is a bare handle — the same test the padding leg makes one block
+		// above, and for the same reason: what reads the family never opens a file
+		// whose name is not one, and emits nothing at all about that target. The
+		// leading clause is true of every cross-bucket target, so the finding stands
+		// either way; sending the operator to find a line that does not exist is what
+		// does not (iss-2608301656193936).
+		if stemIsHandle {
+			msg += ", and the " + target.noun() +
+				" it names goes on being reported as unanswered with no sign that an answer was written"
+		}
+		out = append(out, Finding{
+			File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: cfg.Severity, Message: msg,
+		})
+	}
+	return out
+}
+
+// spellsHandleOf reports whether value is VERBATIM one family's handle: the
+// family's own prefix, one hyphen, and digits, with nothing around it. It is
+// deliberately narrower than anyHandleFullRe, which is case-insensitive because
+// it exists to RESOLVE a handle to a record. This asks the other question — is
+// this a name the family's own reader could match — and the two answers differed
+// on six values (iss-2608301519255871).
+//
+// It says nothing about PADDING, which is not a property of the value: `rdi-02`
+// and `rdi-2` are one id written two ways, and which of them the reader matches
+// is decided by the file the target sits in. That comparison needs the resolved
+// target and is made against its filename.
+func spellsHandleOf(family, value string) bool {
+	rest, ok := strings.CutPrefix(value, family+"-")
+	if !ok || rest == "" {
+		return false
+	}
+	for i := 0; i < len(rest); i++ {
+		if rest[i] < '0' || rest[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// joinFamilyNoun renders the record kind a join's declared family holds, for the
+// message that names it. Every declared family is one of recordStores' own
+// prefixes, which TestEveryJoinFamilyNamesADeclaredStore pins.
+func joinFamilyNoun(family string) string {
+	s, _ := storeByPrefix(family)
+	return s.noun
+}
+
+// checkRecordBucketField asserts that a record whose store states its bucket
+// TWICE says the same thing both times.
+//
+// An admission is filed under the run whose candidate set it joins and carries
+// that run as a frontmatter property, so a disagreement is the record
+// contradicting itself about which set it joined. The outstanding report keys the
+// admitted set on the (run, proposal) pair and can honour neither claim, so the
+// admission silently admits nothing — and a record that quietly stops counting is
+// the shape this whole rule exists to make loud.
+//
+// It is scoped to the stores that DECLARE a bucketField, and that scope is the
+// whole of it: bucketField is declared by the bucketed admission store alone, so
+// a record reaching this check always has a bucket. A second test for an empty
+// one would be a branch no fixture can enter, which is how a guard comes to look
+// tested (iss-2608301519254240).
+//
+// The disposition store
+// makes the same double claim (`item` beside its item-keyed directory) and is not
+// declared here, because that store declares no frontmatter schema at all this
+// cycle; adding one field of it would be a schema half-stated in a second place.
+func checkRecordBucketField(r schemaRecord, severity string) []Finding {
+	if r.store.bucketField == "" {
+		return nil
+	}
+	f, present := r.fields[r.store.bucketField]
+	if !present {
+		return nil // absence is checkRecordRequiredFields' business, not this one's
+	}
+	// Absence on the RAW value, one strip, for checkRecordJoins' reason: stripping
+	// before the absence test strips twice and parts this leg from the required
+	// leg beside it (iss-2608301656192369).
+	if isAbsentValue(f.value) {
+		return nil
+	}
+	got := issueScalar(f.value)
+	if got == r.bucket {
+		return nil
+	}
+	line := f.line
+	if line == 0 {
+		line = 1
+	}
+	return []Finding{{
+		File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: severity,
+		Message: r.store.bucketField + " declares '" + got + "' but the " + r.store.noun + " is filed under '" + r.bucket +
+			"'; the directory and the field are one value written twice, and a record that contradicts " +
+			"itself about which one it belongs to counts under neither",
+	}}
+}
+
 // checkIssueRecordShape mirrors capture's validateStrict shape checks for the
-// ISSUE store: the additionalProperties:false unknown-key check, enum membership
-// (severity/category/source), and the kebab-slug check. Each reads the ONE shared
+// ISSUE store: enum membership (severity/category/source) and the kebab-slug
+// check. The third of them, the additionalProperties:false unknown-key check, is
+// checkRecordUnknownFields, which asks the same question for every store that
+// declares a closed schema rather than for this one alone. Each reads the ONE shared
 // schema data in core/issueschema — the same allow-list and value sets capture
 // validates against — so a record capture would REFUSE (and therefore skip,
 // making it invisible to every capture surface) is not lint-green
@@ -577,28 +1187,23 @@ func checkRecordRequiredFields(r schemaRecord, severity string) []Finding {
 //
 // An ABSENT required value is the required-fields check's business, not this
 // one's, so each value check skips a missing/null value rather than double-report.
-func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
+func checkIssueRecordShape(r schemaRecord, severity string, judged map[string]bool) []Finding {
 	if r.store.prefix != "iss" {
 		return nil
 	}
 	var out []Finding
-	add := func(line int, msg string) {
+	add := func(field string, line int, msg string) {
 		if line == 0 {
 			line = 1
 		}
+		mark(judged, field)
 		out = append(out, Finding{
 			File: r.rel, Line: line, RuleID: ruleRecordSchema, Severity: severity, Message: msg,
 		})
 	}
 
-	// Unknown property: capture's reader refuses any key outside the allow-list and
-	// skips the whole record.
-	for key, f := range r.fields {
-		if issueschema.Known[key] {
-			continue
-		}
-		add(f.line, "unknown frontmatter property '"+key+"'; capture's reader refuses a key outside the issue schema and skips the record, so it is invisible to every capture surface while it still sits in the ledger")
-	}
+	// Unknown property: checkRecordUnknownFields asks that question for every
+	// store that declares a closed schema, this one included.
 
 	// Enum membership: a present but out-of-enum value is refused by capture.
 	enums := []struct {
@@ -609,22 +1214,32 @@ func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
 		{"category", issueschema.Categories},
 		{"source", issueschema.Sources},
 	}
+	//
+	// A BLANK is judged here rather than deferred, and that is why the skip is
+	// isNull on the trimmed raw value and not isAbsentValue: `severity: ""` is a
+	// value capture puts to the enum and refuses, so it belongs to the leg that can
+	// say so. Standing down on it left the required-fields leg as the only voice,
+	// and that leg can only speak store-wide — so it told the author of a blank
+	// severity that their record was being read and rendered as answered, about a
+	// record capture refuses and skips (iss-2608301308369559). isNull draws the
+	// line at NOT WRITTEN, the same distinction checkRecordFilename already draws.
 	for _, e := range enums {
 		f, present := r.fields[e.field]
-		if !present || isAbsentValue(f.value) {
+		if !present || isNull(strings.TrimSpace(f.value)) {
 			continue
 		}
 		v := issueScalar(f.value)
 		if !inSet(v, e.set) {
-			add(f.line, "invalid "+e.field+" '"+v+"'; capture refuses a value outside {"+strings.Join(e.set, ", ")+"} and skips the record")
+			add(e.field, f.line, "invalid "+e.field+" '"+v+"'; capture refuses a value outside {"+strings.Join(e.set, ", ")+"} and skips the record")
 		}
 	}
 
-	// Kebab-slug: the slug becomes a filename, and capture refuses any other shape.
-	if f, present := r.fields["slug"]; present && !isAbsentValue(f.value) {
+	// Kebab-slug: the slug becomes a filename, and capture refuses any other shape
+	// — a blank one included, for the reason the enums above are judged blank.
+	if f, present := r.fields["slug"]; present && !isNull(strings.TrimSpace(f.value)) {
 		v := issueScalar(f.value)
 		if !issueschema.SlugRe.MatchString(v) {
-			add(f.line, "invalid slug '"+v+"'; a slug is kebab-case (lower-case alphanumerics joined by single hyphens) and capture refuses any other shape")
+			add("slug", f.line, "invalid slug '"+v+"'; a slug is kebab-case (lower-case alphanumerics joined by single hyphens) and capture refuses any other shape")
 		}
 	}
 
@@ -634,7 +1249,8 @@ func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
 	// refuses exactly the record the reader refuses (and therefore skips, making it
 	// invisible to every capture surface while it still sits in the ledger).
 	// Absence is tested with the frontmatter NULL set alone, not isAbsentValue,
-	// which also reads an empty inline list as absent. lapsed_at is a scalar
+	// which also reads an empty flow collection and an explicit null tag as absent.
+	// lapsed_at is a scalar
 	// property: capture's reader parses `lapsed_at: []` as a list, refuses the
 	// record ("lapsed_at" must be a string) and SKIPS it, so reading the list as
 	// absence would leave that record lint-green on every category but lapse —
@@ -670,7 +1286,7 @@ func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
 	}
 	if f, present := r.fields["category"]; present && !isAbsentValue(f.value) &&
 		issueschema.LapsedAtRequired(issueScalar(f.value)) && lapsedAt == "" {
-		add(f.line, "lapse record carries no 'lapsed_at'; capture refuses a lapse entry with no instant at which the discipline gave way and skips the record")
+		add("lapsed_at", f.line, "lapse record carries no 'lapsed_at'; capture refuses a lapse entry with no instant at which the discipline gave way and skips the record")
 	}
 	switch {
 	case fromBlock:
@@ -683,18 +1299,50 @@ func checkIssueRecordShape(r schemaRecord, severity string) []Finding {
 		// joined block to ValidLapsedAt would pass exactly the spelling that reads
 		// like an instant and is not one, which is the gap the look-ahead exists to
 		// close (iss-2608300244489638).
-		add(lapseField.line, "lapsed_at is spelled as an indented block; capture reads a block-spelled value as a mapping rather than a string, refuses the record and skips it — a lapse time is an RFC 3339 instant on the key's own line")
+		add("lapsed_at", lapseField.line, "lapsed_at is spelled as an indented block; capture reads a block-spelled value as a mapping rather than a string, refuses the record and skips it — a lapse time is an RFC 3339 instant on the key's own line")
 	case lapsedAt != "" && !issueschema.ValidLapsedAt(lapsedAt):
-		add(lapseField.line, "lapsed_at '"+lapsedAt+"' is not an RFC 3339 instant (want 2026-08-28T00:00:00Z); capture refuses the record and skips it")
+		add("lapsed_at", lapseField.line, "lapsed_at '"+lapsedAt+"' is not an RFC 3339 instant (want 2026-08-28T00:00:00Z); capture refuses the record and skips it")
 	}
 	return out
 }
 
-// issueScalar strips the surrounding whitespace and quotes off a frontmatter
-// value so a quoted enum (`severity: "minor"`) compares as capture's parser reads
-// it — unquoted.
+// issueScalar reads one frontmatter value as the record's readers read it: the
+// surrounding whitespace and quotes stripped, so a quoted enum
+// (`severity: "minor"`) compares unquoted.
+//
+// It is the package's ONE scalar reader. On WHITESPACE it matches capture's parse
+// path deliberately: that path trims the raw value before decoding and then strips
+// the quotes WITHOUT trimming again, so padding inside the quotes survives. This
+// does the same. Trimming it away here would call `severity: "  minor  "` clean while
+// capture's enum lookup refuses the record and skips it — lint-green and
+// invisible to every ledger surface, which is the one silence this rule exists to
+// break. Whether padding is a value is the FIELD's question, and the two fields
+// that answer "no" — emptiness in isAbsentValue, and the lapse instant — trim at
+// their own call site rather than moving the trim in here for everyone.
+//
+// Three spellings of this function used to exist — here, in isAbsentValue, and in
+// the outstanding report — and they did not agree: the gate called
+// `run: " rdg-1 "` a contradiction while the report called it a match, so one
+// record got two answers and the more permissive one was the report's.
+//
+// Exactly ONE surrounding quote pair is stripped, never every quote character at
+// either end: a value that is itself two apostrophes inside double quotes is a
+// value, and eating it down to nothing puts a missing-property blocker on a
+// property the record plainly carries.
+//
+// On QUOTING the parity is incomplete, and that is a KNOWN GAP rather than a
+// claim: this strips a single-quote pair, capture's decodeScalar unquotes only
+// double quotes, so `severity: 'minor'` is green here and refused there. The
+// divergence is pre-existing and cuts across every shape check that reads a
+// scalar, which is why it is recorded as iss-2608300205044566 — naming this
+// function as the one place to fix it — rather than closed from inside a change
+// about required fields.
 func issueScalar(value string) string {
-	return strings.Trim(strings.TrimSpace(value), `"'`)
+	v := strings.TrimSpace(value)
+	if len(v) >= 2 && (v[0] == '"' || v[0] == '\'') && v[len(v)-1] == v[0] {
+		v = v[1 : len(v)-1]
+	}
+	return v
 }
 
 // inSet reports membership in a small value list.
@@ -786,19 +1434,52 @@ func scanRecordStores(repoRoot string, cfg RuleConfig) ([]schemaRecord, []Findin
 					return err
 				}
 				lines := strings.Split(string(content), "\n")
-				// A duplicated top-level key is malformed to every record consumer:
-				// the strict ledger parser refuses the file (dropping it out of the
-				// corpus its surfaces read), while the lenient scanner keeps only the
-				// first value — so a second line can hide the value a blocker is armed
-				// to reject. The lenient read below is what the rest of this rule
-				// needs; the duplicate is reported alongside it so the gate refuses
-				// what its consumers refuse (GitHub #357).
+				// A duplicated top-level key is malformed to every record consumer, but the
+				// consumers do not agree on WHAT it makes of the record, so the message may
+				// not name one answer for all of them: this rule's own scanner keeps the
+				// first value — so a second line can hide the value a blocker is armed to
+				// reject — while a store whose reader fails closed has the file refused
+				// outright, and the disposition reader keeps NEITHER value and calls the
+				// record illegible (TestDuplicateTopLevelKeyReaderByReader establishes what
+				// each reader does, by running it). The lenient read below is what the rest
+				// of this rule needs; the duplicate is reported alongside it so the gate
+				// refuses what its consumers refuse (GitHub #357).
+				//
+				// The refusal half is gated on readerRefusesDuplicateKey rather than on
+				// readerFailsClosed, because the two come apart on this malformation
+				// alone: the admission reader COUNTS a record carrying a duplicated key,
+				// no reader of surprise records exists, and the ADR dispatcher — which
+				// does validate the id — reads the frontmatter with the lenient scanner
+				// and never sees the second line, so naming a refusal on any of the three
+				// sends the author looking for one nobody performs (iss-2608301519254418,
+				// iss-2608301656200729). The silenced-blocker half is true of every store,
+				// because it is this rule's own scanner that does the silencing.
+				//
+				// The refusal names the LEDGER reader, not every surface. It once said the
+				// file was "skipped by every issue surface", and the release cut reads a
+				// resolved record with the lenient scanner and folds its impact into the
+				// changelog — so an author told the record was invisible everywhere found it
+				// in the generated section (iss-2608301901260678). Both halves are rows in
+				// TestDuplicateTopLevelKeyReaderByReader.
+				//
+				// The RESOLVED qualifier is load-bearing and the correction ran the same way
+				// round: the cut walks .abcd/work/issues/resolved and the shipped intents,
+				// while this leg fires on every bucket the store declares, so a bare "the
+				// release cut reads this record" is false of an open or wontfix issue and
+				// would send its author to look in a generated section that cannot hold it —
+				// the same defect, inverted, as the clause it replaced.
 				for _, dup := range frontmatterDuplicates(lines) {
+					msg := "frontmatter has a duplicate top-level key '" + dup.Key +
+						"'; this rule's own scanner keeps only the first value, " +
+						"so a second line can silence a blocker armed on the value the first hides"
+					if store.readerRefusesDuplicateKey {
+						msg = "frontmatter has a duplicate top-level key '" + dup.Key +
+							"'; the " + store.noun + " ledger reader refuses a duplicated key, so capture skips the file — " +
+							"but the release cut still reads a resolved record, on its first value, as this rule's own " +
+							"scanner reads it here: a second line can silence a blocker armed on the value the first hides"
+					}
 					out = append(out, Finding{
-						File: rel, Line: dup.Line, RuleID: ruleRecordSchema, Severity: cfg.Severity,
-						Message: "frontmatter has a duplicate top-level key '" + dup.Key +
-							"'; the record reader refuses a duplicated key, so the file is skipped by every " +
-							store.noun + " surface while the lenient scanner keeps only the first value — a second line can silence a blocker armed on the value the first hides",
+						File: rel, Line: dup.Line, RuleID: ruleRecordSchema, Severity: cfg.Severity, Message: msg,
 					})
 				}
 				fields := frontmatterFields(lines)
@@ -918,21 +1599,88 @@ func undeclaredSubdirMessage(store recordStore, bucket, name string) string {
 		"' is undeclared; records inside it are read by no rule"
 }
 
+// explicitNullTag is YAML's tag shorthand for a null. It is judged HERE rather
+// than in the shared isNull, which is the YAML 1.2 core schema's null set exactly
+// and is read by capture's own normalisation: a tag is not a member of that set,
+// and widening the shared predicate would change what capture DECODES as well as
+// what this rule reports. The comparison is exact for isNull's own reason — YAML
+// folds no case here either.
+const explicitNullTag = "!!null"
+
+// isEmptyFlowCollection reports whether v is a flow collection holding nothing:
+// `[]`, `[ ]`, `{}` or `{ }`. BOTH collections are asked from the one place,
+// because one of them having been asked and the other not is exactly what let
+// `grounds: {}` through a gate that refused `grounds: []` (iss-2608301649337965).
+//
+// A collection that HOLDS something is a value — the wrong shape for a scalar
+// field, which is a different question — so only an empty interior answers yes.
+func isEmptyFlowCollection(v string, open, close byte) bool {
+	if len(v) < 2 || v[0] != open || v[len(v)-1] != close {
+		return false
+	}
+	return strings.TrimSpace(v[1:len(v)-1]) == ""
+}
+
 // isAbsentValue reports whether a frontmatter value says "nothing here". It is
-// isNull widened by the empty flow sequence, which is this record's house
-// spelling for an empty list (`related_rfcs: []`) and therefore an absence, not a
-// malformed value. It is local rather than folded into the shared isNull because
-// isNull also judges SCALAR fields (kind, impact, slug), where a list literal is a
-// wrong value rather than an unset one, and should keep saying so.
+// isNull widened by the two empty flow collections and by YAML's explicit null
+// tag. The empty flow sequence is this record's house spelling for an empty list
+// (`related_rfcs: []`) and therefore an absence, not a malformed value; the empty
+// flow MAPPING and `!!null` state nothing in the same way, and a predicate that
+// caught one collection and not the other left `grounds: {}` green on a gate
+// armed for exactly that blank (iss-2608301649337965). It is local rather than
+// folded into the shared isNull because isNull also judges SCALAR fields (kind,
+// impact, slug), where a collection literal is a wrong value rather than an unset
+// one, and should keep saying so.
+//
+// Absence is decided on the value the YAML SCALAR carries, never on its raw
+// bytes: `grounds: ""` is five bytes and no value, and a reader that validates
+// before it reads makes nothing out of it either — so the record is skipped and
+// invisible to every surface of its family while the gate armed to catch exactly
+// that stayed green (iss-2608300935218982). The quotes are stripped with the
+// rule's own issueScalar and the result trimmed AFTER, because a quoted
+// all-whitespace value still carries its padding once the quotes are gone (the
+// lesson lapsed_at already learned in iss-2608300212513349).
+//
+// What it does NOT decide is not a closed list, and three of its gaps are
+// recorded rather than hidden. A trailing comment defeats every test here at
+// once, because the shared same-line scanner strips no comments and each test
+// anchors on the last byte — a scanner question, and iss-2608301744268001's to
+// close. The supersession leg's silence on an empty collection is not shared by
+// record.describeADR, which renders `[]` and `{}` as a successor link
+// (iss-2608301744300631). And every test above is a SPELLING test rather than a
+// null test: `!!null null` and `!<tag:yaml.org,2002:null>` are the same YAML node
+// as the `!!null` this accepts and read as PRESENT here, as do a `!!str`-tagged
+// empty string, a bare `&anchor` and `!!seq []` — measured against this
+// predicate, and pinned by
+// TestIsAbsentValueIsASpellingTestNotANullTest so the enumeration above cannot
+// quietly grow a claim it does not carry. Chasing them one literal at a time
+// leaves the next one open, so the altitude is iss-2608301808198621's to rule on
+// rather than this predicate's to widen.
+//
+// It takes the RAW frontmatter value, never one issueScalar has already read:
+// stripping twice empties a value that is two apostrophes inside double quotes,
+// so the legs that pre-stripped read it as absent while the leg that did not read
+// it as present — and every leg stood down on one admission
+// (iss-2608301656192369).
+//
+// This is deliberately the ONE place the rule decides emptiness, so the fix is
+// store-wide rather than scoped to the store the defect was reported against: the
+// pre-existing issue ledger carried the identical gap (a committed
+// `found_during: ""` was lint-green), and a per-store answer would leave the same
+// bug behind a narrower mouth in three other stores.
 func isAbsentValue(value string) bool {
 	v := strings.TrimSpace(value)
-	if isNull(v) {
+	if isNull(v) || v == explicitNullTag {
 		return true
 	}
-	if strings.HasPrefix(v, "[") && strings.HasSuffix(v, "]") {
-		return strings.TrimSpace(v[1:len(v)-1]) == ""
+	if isEmptyFlowCollection(v, '[', ']') || isEmptyFlowCollection(v, '{', '}') {
+		return true
 	}
-	return false
+	// Trimmed HERE rather than inside issueScalar: emptiness is a question a value
+	// of nothing but padding answers the same way whatever a reader does with it,
+	// while moving the trim into the shared reader would hide a PADDED value that
+	// capture refuses and skips (see issueScalar).
+	return strings.TrimSpace(issueScalar(v)) == ""
 }
 
 // recordRefsOf reads the handles of every cross-reference field once per record.
@@ -1027,22 +1775,70 @@ func frontmatterBlockAt(lines []string, line int) []string {
 // value at all. It is held on the record for the same reason refs is: a rule that
 // re-read the lines would be a second parse of one spelling, and a rule that
 // skipped the look-ahead would read a value that is plainly in the file as absent.
+//
+// A key carrying a block-scalar HEADER (`grounds: |`) is read on the same terms,
+// because its value is on those lines too — the header is not the value, it is
+// the announcement of one, and a rule that took the byte for a value would let an
+// empty block pass as present.
 func frontmatterBlocksOf(lines []string, fields map[string]fmField) map[string]string {
 	var blocks map[string]string
-	for key, f := range fields {
-		if strings.TrimSpace(f.value) != "" {
-			continue
-		}
-		block := frontmatterBlockAt(lines, f.line)
-		if len(block) == 0 {
-			continue
+	put := func(key, value string) {
+		if value == "" {
+			return
 		}
 		if blocks == nil {
 			blocks = map[string]string{}
 		}
-		blocks[key] = strings.Join(block, ", ")
+		blocks[key] = value
+	}
+	for key, f := range fields {
+		v := strings.TrimSpace(f.value)
+		switch {
+		case blockScalarIndicatorRe.MatchString(v):
+			put(key, blockScalarAt(lines, f.line))
+		case v == "":
+			put(key, strings.Join(frontmatterBlockAt(lines, f.line), ", "))
+		}
 	}
 	return blocks
+}
+
+// blockScalarAt returns the lines that continue a key carrying a block-scalar
+// HEADER (`grounds: |`), joined, or the empty string when the block holds
+// nothing.
+//
+// It is a second walker rather than a reuse of frontmatterBlockAt, and the
+// difference is one line of it: that walker skips blank and `#`-led lines,
+// because in a block SEQUENCE a `#` line is a comment interrupting the list.
+// Inside a literal block scalar a `#` is CONTENT, so reading a scalar with the
+// sequence walker makes a legal record's whole value vanish and reports a
+// required property missing that the file plainly carries — a confident false
+// statement from the rule whose design argument is that it never makes one.
+//
+// line is the key's 1-based source line, so the scan starts at the line after it
+// and ends at the first unindented non-blank line: the next key at column 0, the
+// closing delimiter, or the end of the file.
+func blockScalarAt(lines []string, line int) string {
+	var block []string
+	for i := line; i >= 1 && i < len(lines); i++ {
+		l := strings.TrimRight(lines[i], " \t\r")
+		if strings.TrimSpace(l) == "" {
+			// A blank line is inside the block, not the end of it — YAML keeps it as
+			// content. It holds nothing on its own, so it never makes an otherwise
+			// empty block look full.
+			block = append(block, "")
+			continue
+		}
+		if l[0] != ' ' && l[0] != '\t' {
+			break
+		}
+		block = append(block, l)
+	}
+	joined := strings.Join(block, "\n")
+	if strings.TrimSpace(joined) == "" {
+		return ""
+	}
+	return joined
 }
 
 // recordRefsIn reads every record handle out of a frontmatter value, tolerating
