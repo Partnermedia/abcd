@@ -183,14 +183,38 @@ run with a new run id, never an amendment.
 
 ## Acceptance criteria mapping
 
+The criteria were split on 2026-08-31, before this spec was built, so that no
+criterion conjoins a structural half a gate holds with a semantic half bounded
+by a registry. The numbering below is the positional authority ac-1..ac-13.
+
 | itd-185 criterion | How spc-63 satisfies it | Test |
 | --- | --- | --- |
-| Given a reading output, when it is ingested, then the verb validates before any durable record is written, and rejects malformed output without partial writes | Validation is step 1 of four; staging is local-tier; the durable move happens only after the whole payload validates | `TestMalformedPayloadWritesNothing`, `TestNoDurableWriteBeforeValidation` |
-| Given a run, when its metadata is read, then the manifest reference resolves to the manifest for that run | `manifest_sha256` is checked against the parked manifest's own content hash before promotion | `TestManifestReferenceMustResolve`, `TestManifestHashMismatchRefusesRun` |
-| Given a `registrative` output containing a proposed resolution, when it is ingested, then ingest refuses and names the item | `registrative` reserved names plus `RG-REG-FIXPROPOSAL` | `TestRegistrativeResolutionFieldRefused`, `TestRegistrativeProseFixProposalRefused` |
-| Given an `evaluative` output carrying a rank or score field or a recommended marker, when it is ingested, then ingest refuses and names the field, and document order alone is never refused | `evaluative` reserved names plus `RG-EVAL-ORDERING`; arrangement order is never inspected | `TestEvaluativeRankScoreRecommendedRefused`, `TestEvaluativeDocumentOrderIsNeverRefused` |
-| Given a run refused at list level, when the refusal completes, then a refusal record exists carrying run metadata and the named reason, and no reading records exist for that run | Refusal path writes `refusal.json` and no items; nothing was ever moved out of the stage | `TestListLevelRefusalWritesRefusalRecordOnly` |
-| Given an `explicative` output in which a surfaced claim carries a disposition, when it is ingested, then ingest refuses | `disposition` is a reserved name on the explicative body, and `RG-EXPL-DISPOSITION` covers the prose form | `TestExplicativeDispositionRefused` |
+| ac-1 — malformed output refused, nothing durable anywhere | Validation is step 1 of four; staging is local-tier; the durable move happens only after the whole payload validates | `TestMalformedPayloadWritesNothing`, `TestNoDurableWriteBeforeValidation`, `TestUnknownFieldRefusedAtEveryLevel` |
+| ac-2 — a fault between staging and the commit marker leaves no half-run, and the orphan is named and cleared | Run metadata is written last as the commit marker; an orphaned stage found on a later invocation is reported by name and cleared | `TestRunMetadataLandsLast`, `TestOrphanedStageIsReportedAndCleared` |
+| ac-3 — the manifest reference resolves, and a mismatch refuses the run | `manifest_sha256` is checked against the parked manifest's own content hash before promotion | `TestManifestReferenceMustResolve`, `TestManifestHashMismatchRefusesRun` |
+| ac-4 — a registrative reserved name refuses, naming ordinal, field and licence | The `registrative` reserved-name table: `resolution`, `fix`, `remedy` | `TestRegistrativeResolutionFieldRefused` |
+| ac-5 — a registered fix-proposal signature refuses, naming item and signature | `RG-REG-FIXPROPOSAL`, shipped in `enforce` mode with no configuration seam | `TestRegistrativeProseFixProposalRefused`, `TestEverySignatureShipsEnforced` |
+| ac-6 — an evaluative reserved name refuses, naming the field | The `evaluative` reserved-name table: `rank`, `score`, `recommended`, `order` | `TestEvaluativeRankScoreRecommendedRefused` |
+| ac-7 — arrangement order alone is accepted | Arrangement order is never inspected: items arrive in document order by mandate | `TestEvaluativeDocumentOrderIsNeverRefused` |
+| ac-8 — an explicative disposition-bearing field refuses, naming the field | `disposition` and `status` are reserved on the explicative body, and strict decoding refuses any field outside that body schema, so the violation is impossible to express rather than merely caught | `TestExplicativeDispositionRefused`, `TestWrongPositionBodyIsUndecodable` |
+| ac-9 — a registered disposition signature refuses, naming item and signature | `RG-EXPL-DISPOSITION`, shipped in `enforce` mode | `TestExplicativeProseDispositionRefused`, `TestEverySignatureShipsEnforced` |
+| ac-10 — a list-level refusal writes a refusal record and no items | The refusal path writes `refusal.json` carrying run metadata and the named reason; nothing is ever moved out of the stage | `TestListLevelRefusalWritesRefusalRecordOnly` |
+| ac-11 — an empty or absent `pattern_named` refuses the item at every regime | Provenance is one envelope field, checked before the body, at all four regimes without exception | `TestEmptyPatternNamedRefusesItemAtEveryRegime` |
+| ac-12 — a self-declared regime disagreeing with the definition refuses the run | The regime's source of truth is the definition, resolved through the run's position; the payload's claim is compared, never trusted | `TestRegimeComesFromTheDefinitionNotThePayload`, `TestSelfDeclaredRegimeMismatchRefusesRun` |
+| ac-13 — item ids are minted by the verb, and a supplied id is an unknown field | `recordid.Minter.Mint("rdi")` on acceptance; the payload schema carries no item identifier at all | `TestItemIDsAreMintedByTheVerb` |
+
+ac-5 and ac-9 are the two criteria bounded by the signature registry rather
+than by the schema, and itd-185 discloses that residue. Their structural
+halves, ac-4, ac-6 and ac-8, are unbounded in the other direction: the field is
+present or it is not.
+
+Two behaviours this spec delivers carry no criterion of their own, and are
+recorded here rather than left to be discovered at the audit: item-level
+refusal granularity, which lands the surviving items when one item is refused
+(`TestItemLevelViolationLandsTheRest`), and the generative position's
+review-flag path, which raises a flag on the run record instead of refusing
+(`TestGenerativeHasNoRegimeRefusalButFlagsRecommendation`).
+
 
 ## Tests
 
@@ -208,6 +232,7 @@ Each case is written to fail before the change and pass after, in
   `TestRegistrativeResolutionFieldRefused`,
   `TestRegistrativeProseFixProposalRefused`,
   `TestExplicativeDispositionRefused`,
+  `TestExplicativeProseDispositionRefused`,
   `TestGenerativeHasNoRegimeRefusalButFlagsRecommendation`,
   `TestEverySignatureShipsEnforced` (a property over the registry).
 - `ingest_provenance_test.go`: `TestEmptyPatternNamedRefusesItemAtEveryRegime`.
@@ -221,8 +246,9 @@ Each case is written to fail before the change and pass after, in
   `TestItemIDsAreMintedByTheVerb` (injected clock and entropy; a
   payload-supplied id is an unknown field).
 - `internal/surface/cli/reading_surface_test.go`:
-  `TestIngestRequiresOutputJSON`, `TestNoRegimeFlagExists`,
-  `TestIngestReachesBothPlanes`.
+  `TestIngestRequiresOutputJSON`, `TestIngestReachesBothPlanes`. The
+  no-operator-surface guard on the regime is spc-62's
+  `TestNoOperatorSurfaceSetsARegime`, in its own file.
 
 ## Out of scope
 

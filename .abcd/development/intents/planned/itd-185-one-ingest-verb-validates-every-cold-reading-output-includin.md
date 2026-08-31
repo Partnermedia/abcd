@@ -108,21 +108,57 @@ None stated.
 
 ## Acceptance Criteria
 
-- **Given** a reading output, **when** it is ingested, **then** the verb
-  validates it before any durable record is written, and rejects malformed
-  output without partial writes.
+- **Given** a malformed reading output, **when** it is ingested, **then** ingest
+  refuses and names the offending field, and no durable record exists for that
+  run in the reading-record family, in the readings tree, or in the stage.
+- **Given** a fault injected after the reading records are staged and before the
+  run-metadata commit marker is written, **when** ingest runs, **then** no
+  reading records and no run metadata are durable for that run, and the next
+  invocation names the orphaned stage and clears it.
 - **Given** a run, **when** its metadata is read, **then** the manifest
-  reference resolves to the manifest for that run.
-- **Given** a `registrative` output containing a proposed resolution,
-  **when** it is ingested, **then** ingest refuses and names the item.
-- **Given** an `evaluative` output carrying a rank or score field or a
-  recommended marker, **when** it is ingested, **then** ingest refuses and
-  names the field — document order alone is never refused.
-- **Given** a run refused at list level, **when** the refusal completes,
-  **then** a refusal record exists carrying the run metadata and the named
-  reason, and no reading records exist for that run.
+  reference resolves to that run's manifest — the stored hash equalling the
+  content hash of the manifest itself — and a reference that resolves to
+  nothing, or to a manifest whose hash disagrees, refuses the run.
+- **Given** a `registrative` output whose item carries a reserved name
+  (`resolution`, `fix`, `remedy`), **when** it is ingested, **then** ingest
+  refuses and names the item's ordinal, the field, and the licence breached.
+- **Given** a `registrative` output whose item body matches a registered
+  fix-proposal signature, **when** it is ingested, **then** ingest refuses and
+  names the item and the signature id.
+- **Given** an `evaluative` output carrying a `rank`, `score`, `order` or
+  `recommended` field, **when** it is ingested, **then** ingest refuses and
+  names the field.
+- **Given** an `evaluative` output whose items are merely arranged in an order
+  and carry no reserved field, **when** it is ingested, **then** ingest accepts
+  it: arrangement order is never inspected and never refused.
 - **Given** an `explicative` output in which a surfaced claim carries a
-  disposition, **when** it is ingested, **then** ingest refuses.
+  disposition-bearing field — `disposition`, `status`, or any field outside the
+  explicative body schema — **when** it is ingested, **then** ingest refuses and
+  names the field.
+- **Given** an `explicative` output whose claim body matches a registered
+  disposition signature, **when** it is ingested, **then** ingest refuses and
+  names the item and the signature id.
+- **Given** a run refused at list level, **when** the refusal completes, **then**
+  a refusal record exists carrying the run metadata and the named reason, and no
+  reading records exist for that run.
+- **Given** an item at any of the four regimes whose `pattern_named` envelope
+  field is empty or absent, **when** it is ingested, **then** ingest refuses that
+  item, without exception at any regime.
+- **Given** an output whose self-declared regime disagrees with the regime stated
+  by the definition its position resolves to, **when** it is ingested, **then**
+  ingest refuses the run at list level.
+- **Given** an accepted output, **when** its reading records are read, **then**
+  every item carries an identifier the verb minted, and a payload supplying its
+  own item identifier is refused as an unknown field.
+
+**Disclosed residue (ac-5 and ac-9).** The two semantic criteria are enforced
+over the signature registry, not over the space of things a sentence can do: a
+fix proposal or a disposition phrased outside the registry's signatures is not
+caught. The registry sits in the calibration band, and whether the signatures
+lint cleanly in practice is this intent's recorded open question. Their
+structural halves — ac-4, ac-6 and ac-8 — carry no such residue, because a field
+is present or it is not.
+
 
 ## Grounds
 

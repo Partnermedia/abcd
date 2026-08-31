@@ -164,12 +164,23 @@ regardless.
 
 ## Acceptance criteria mapping
 
+The criteria were split and sharpened on 2026-08-31, before this spec was
+built. The numbering below is the positional authority ac-1..ac-6.
+
 | itd-186 criterion | How spc-64 satisfies it | Pinned by |
 |---|---|---|
-| Given the fixture state, when the eval runs, then it passes only if the output contains no planted warm content and no field on the exclusion list | Assertions 1 to 3 run over the baseline fixture at every asserted position | `TestReadBlockBaselineIsClean` |
-| Given a ledger path moved to a new location holding a plant, when the eval runs, then it fails loudly | The content oracle names no path, so a relocated plant is caught wherever it lands; the `holed/` variant relocates two plants into included material | `TestReadBlockCatchesAHoledFirewall` |
-| Given a warm field introduced on a record type already on the include list, when the eval runs, then it fails | The `origin` and production-mode plants sit on included record types, and the Audit Notes plant sits inside an included file; each is a real leak path if the key filter or the projection is absent | `TestReadBlockCatchesWarmFieldsOnIncludedTypes` |
-| Given a repository state containing manifests and reading records from prior runs, when the eval runs, then none of them appears in the output | The exhaust plants, asserted at every position including comparative | `TestPriorRunExhaustNeverReaches` |
+| ac-1 — the baseline passes only if no planted warm content and no excluded field reaches the output | Assertions 1 to 3 run over the baseline fixture at every asserted position | `TestReadBlockBaselineIsClean` |
+| ac-2 — a relocated plant fails with a non-zero exit and a message naming the class token and the position | The content oracle names no path, so a relocated plant is caught wherever it lands; the `holed/` variant relocates two plants into included material and the failure message carries the class token and position | `TestReadBlockCatchesAHoledFirewall` |
+| ac-3 — a warm field on an already-included record type fails | The `origin` and production-mode plants sit on included record types, and the Audit Notes plant sits inside an included file; each is a real leak path if the key filter or the projection is absent | `TestReadBlockCatchesWarmFieldsOnIncludedTypes` |
+| ac-4 — no prior-run manifest or reading record reaches the output | The exhaust plants, asserted at every position including comparative | `TestPriorRunExhaustNeverReaches` |
+| ac-5 — no file under `evals/` imports the assembler's package or its include list | `go/parser` over every Go file in `evals/`, so the independence claim is checked rather than asserted in a comment | `TestOracleImportsNothingFromTheAssembler` |
+| ac-6 — every declared sentinel class is planted its declared number of times | The anti-vacuity guard: an absence assertion cannot see a corpus that lost a plant, so the corpus is asserted separately from the absence | `TestEverySentinelIsPlanted` |
+
+ac-5 and ac-6 were added when the criteria were split: the press release claims
+oracle independence and the spec makes it structural, but no criterion measured
+it, and an absence eval with no anti-vacuity guard is the failure mode this
+workstream has already found five times.
+
 
 ## Tests
 

@@ -102,10 +102,23 @@ None stated.
 
 ## Acceptance Criteria
 
-- **Given** the four definitions, **when** they are diffed, **then** the
-  blindness core is byte-identical across all four.
-- **Given** any definition, **when** it is inspected, **then** its regime
-  value is stated in the definition and not derivable from operator input.
+- **Given** the four definitions, **when** the delimited blindness-core span is
+  extracted from each and compared, **then** the span is byte-identical across
+  all four and carries the seven conditions in the fixed order.
+- **Given** any definition, **when** its frontmatter is parsed, **then** it
+  states a `regime` value drawn from the four, and the four definitions' values
+  are distinct and resolvable from the position alone.
+- **Given** the CLI command tree and the configuration schema, **when** every
+  registered flag and every registered configuration key is enumerated
+  programmatically and searched, **then** none of them sets or overrides a
+  run's regime.
+
+**Disclosed residue (ac-3).** The enumeration is programmatic over the
+registered surfaces rather than a written list, per itd-195, so it cannot fall
+behind the command tree it guards. What it cannot see is a channel that was
+never registered — an environment variable read ad hoc, say — and that remains
+outside the check.
+
 
 ## Grounds
 
