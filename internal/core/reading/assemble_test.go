@@ -310,15 +310,29 @@ func treeSnapshot(t *testing.T, root string) string {
 	t.Helper()
 	var lines []string
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
 		rel, rerr := filepath.Rel(root, path)
 		if rerr != nil {
 			return rerr
 		}
-		if strings.HasPrefix(rel, ".git"+string(filepath.Separator)) || rel == ".git" {
-			return nil
+		// .git is skipped WHOLESALE, and before the error is examined. The
+		// snapshot is about the worktree, and git's background maintenance
+		// creates and removes lock files under .git/objects while the walk
+		// runs — so a path enumerated a moment earlier is gone by the lstat,
+		// and the old order surfaced that as a walk error before reaching the
+		// skip. Returning SkipDir means the walk never descends there at all,
+		// which removes the race rather than tolerating it
+		// (iss-2609010818066790).
+		if rel == ".git" {
+			return filepath.SkipDir
+		}
+		if err != nil {
+			// Anything else that vanished mid-walk is equally not a snapshot
+			// concern: it cannot be an artefact a dry run wrote, because a dry
+			// run writes nothing.
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
 		}
 		if info.IsDir() {
 			return nil
