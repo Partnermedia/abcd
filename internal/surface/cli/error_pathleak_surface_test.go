@@ -99,7 +99,8 @@ func TestJSONSuccessEnvelopeNoAbsolutePathLeak(t *testing.T) {
 			name: "resolve success path",
 			args: func(t *testing.T) []string {
 				id := prepCapture(t, "to resolve")
-				return []string{"capture", "resolve", id, "handled", "--impact", "fix", "--json"}
+				return []string{"capture", "resolve", id, "handled", "--impact", "fix",
+					"--grounds", "pursued: we expect the recorded reasoning to outlive the session", "--json"}
 			},
 		},
 		{

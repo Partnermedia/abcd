@@ -167,6 +167,10 @@ are commitments, not options.
   this verb's core must merely be portable to it).
 - In-process attestation verification (deferred per the Decisions above).
 
+## Scope Conditions
+
+None stated.
+
 ## Acceptance Criteria
 
 > _Confirmed by the maintainer at the 2026-08-20 planning interview: all

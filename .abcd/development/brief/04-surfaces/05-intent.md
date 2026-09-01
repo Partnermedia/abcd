@@ -193,11 +193,11 @@ Later phase — intent-auditor (shape-classification role) scans the corpus
 | Subcommand | Purpose | File movement |
 |---|---|---|
 | `/abcd:intent` (no args) | Read-only status: bucket counts (drafts / planned / shipped / disciplines / superseded), open/closed spec counts, the itd↔spc links, a ledger-routing hint (`abcd capture "…"` for an observation, `abcd intent "…"` for a user-facing change), and an ideate-routing line (a big, unproven idea? `abcd ideate` runs the optional admission gauntlet and records the verdict either way) | — |
-| `/abcd:intent "<free-text>"` | **Canonical create** (spc-30 (predecessor store)/itd-46): a leading quoted seed is the canonical create entry. Seeds a draft skeleton from the text — placeholder Press Release and Acceptance Criteria sections for the human to expand — and assigns `itd-N`; writes `suggested_kind: null`. An optional `--impact <additive\|breaking\|fix>` flag stamps the draft's product impact at create time. A leading quote always creates — never falls through to bare render | writes to `drafts/itd-N-<slug>.md` (no spec created) |
+| `/abcd:intent "<free-text>"` | **Canonical create** (spc-30 (predecessor store)/itd-46): a leading quoted seed is the canonical create entry. Seeds a draft skeleton from the text — placeholder Press Release and Acceptance Criteria sections for the human to expand — and assigns `itd-N`; writes `suggested_kind: null`. An optional `--impact <additive\|breaking\|fix>` flag stamps the draft's product impact at create time, and an optional `--production-mode <hand-written\|dictated-and-formatted\|scribe-transcribed>` flag stamps how its text was produced (itd-178); the draft's `origin` carries no flag and is derived from the verb that ran. A leading quote always creates — never falls through to bare render | writes to `drafts/itd-N-<slug>.md` (no spec created) |
 | `/abcd:intent new <text>` | Deprecated alias for the quoted-text create (`abcd intent "<text>"`); files a draft from the text | writes to `drafts/itd-N-<slug>.md` (no spec created) |
 | `/abcd:intent grill <itd-N>` | Socratic adversarial interview that stress-tests an intent for vagueness, missing acceptance, hidden assumptions before planning. Glossary-aware once `terminology/` exists. `--brief-section <id>` flag for stress-testing a brief section instead. (per itd-27, `intents/planned/` — a later phase; no `grill` sub-verb ships yet) | (stays in current state) |
-| `/abcd:intent plan <itd-N>` | Plans a draft: mints its native spec, injects the bidirectional link (intent `spec_id` ↔ spec `intent`), and moves the file `drafts/` → `planned/`. Single intent ID. | `drafts/` → `planned/` |
-| `/abcd:intent ready <itd-N>` | **Implement-readiness gate** (read-only): reports whether an intent is ready to implement — planned, with acceptance criteria and a written spec body. Exit 0 ready / 1 not ready / 2 fault. | (no move) |
+| `/abcd:intent plan <itd-N>` | Plans a draft: mints its native spec, injects the bidirectional link (intent `spec_id` ↔ spec `intent`), stamps an identity onto every unmarked scope condition, and moves the file `drafts/` → `planned/`. `--production-mode` stamps the MINTED SPEC's disclosure pair; the intent's own stamp was written at create time and is never rewritten. On an intent already in `planned/` it does the identity step alone (no spec, no move), and refuses when nothing is unmarked. Single intent ID. | `drafts/` → `planned/` (stamp step: no move) |
+| `/abcd:intent ready <itd-N>` | **Implement-readiness gate** (read-only): reports whether an intent is ready to implement — planned, with acceptance criteria, both claim sections recorded (mechanism prompted-and-nullable, scope conditions mandatory and each identified), and a written spec body. Exit 0 ready / 1 not ready / 2 fault. | (no move) |
 | `/abcd:intent audit <itd-N>` | **Role 1 — single-document fidelity.** Compares the intent's press release + acceptance criteria against delivered reality (code, configs, docs, tests). Per-criterion verdicts (`MET` / `MET_WITH_CONCERNS` / `NOT_MET` / `INCONCLUSIVE`) appended to the intent's `## Audit Notes`. Aligns with the spec store's `plan-review` / `impl-review` / `completion-review` vocabulary — same operation shape (adversarial second opinion), different opponent (press release vs engineering spec). spc-12 (predecessor store) ships this **manual** verb; spc-28 (predecessor store) ships the on-close hook (move `planned → shipped` + queue a review), but auto-running the reviewer off that queue is still deferred (no spec currently owns it; spc-6 (predecessor store) disowned auto-firing). | (stays) |
 | `/abcd:intent audit ingest --verdict-json <path>` | Ingests a host-delegated intent-fidelity verdict JSON, validated fail-closed against the schema and the parked review request, and writes its per-criterion verdict into the shipped intent's `## Audit Notes` (or quarantines a bad payload). | (no move; updates `## Audit Notes`) |
 | `/abcd:intent consistency [<itd-N>]` | **Role 2 — cross-document fidelity.** Surfaces five judgement categories (terminology drift, premise contradictions, scope leakage, sequencing impossibilities, naming conflicts) across briefs + intents. **Bare** scans the whole corpus; **with `<itd-N>`** narrows to one intent's relationship with the rest. Findings land in `.abcd/.work.local/logs/audit/consistency-<ts>/report.{json,md}`. The judgement half + on-demand verb are the predecessor's spc-29 (a later phase); mechanical-half categories and pre-commit hook are deferred follow-ups. | (stays) |
@@ -220,13 +220,20 @@ slug: <kebab-case>
 # NOTE: no `status:` field. Lifecycle state is encoded by directory location only
 #   (drafts/ | planned/ | shipped/ | disciplines/ | superseded/) — uniform across all kinds.
 #   Per the 2026-05-08 directive: "directory IS the state, no cached mirror."
-# The eight keys below are the canonical seed skeleton the quoted-text create writes:
+# The ten keys below are the canonical seed skeleton the quoted-text create writes:
 spec_id: null            # or spc-N (set by /abcd:intent plan)
 kind: null               # set by /abcd:intent plan: "standalone" | "bundle-member"
 suggested_kind: null     # advisory, written by a capture-time classifier; can be ignored
 reclassification_history: []   # appended to by /abcd:intent reclassify (kind changes only)
 builds_on: []            # itd-N ids this intent builds on
 severity: minor          # seeded capture-grain severity of the draft
+origin: researcher-authored   # arrival path (itd-178), DERIVED from which command ran and carried by no flag:
+                              #   researcher-authored | extracted-from-record (capture promote) |
+                              #   contributed-by-reading <rdg-N>/<rdi-N> (the reading-ingest verb only).
+                              #   Stamped at mint and never rewritten.
+production_mode: hand-written # how the text was produced: hand-written | dictated-and-formatted |
+                              #   scribe-transcribed. Closed choice carried by --production-mode; an absent
+                              #   flag takes the repo's declared default from .abcd/config/identity.json.
 # Added later, not part of the seed skeleton:
 #   bundle: <id>                  — for kind: bundle-member, the bundle ID
 #   impact: additive|breaking|fix — the compatibility judgement the derived version is computed from. Never "internal" (a press-release-first intent is user-facing by definition), and required before the intent may move to shipped/. Optionally stamped at create time via the `--impact` flag, otherwise added later
@@ -245,10 +252,15 @@ severity: minor          # seeded capture-grain severity of the draft
 ## What's In Scope
 ## What's Out of Scope
 
-## Mechanism                # Optional (adr-51): why the authors expect this to work —
-                            #   a falsifiable "we expect X because Y", not the outcome restated
-## Scope Conditions         # Optional (adr-51): the population/platform/scale/assumptions the
-                            #   claim holds under; reuse outside them is a visible re-decision
+## Mechanism                # Prompted, nullable (claim-recording-gradient discipline, per adr-51):
+                            #   a falsifiable "we expect X because Y", not the outcome restated.
+                            #   A blank section passes the readiness gate with the nullity recorded —
+                            #   an absent field and a recorded nullity are never collapsed
+## Scope Conditions         # Required at the readiness gate (claim-recording-gradient discipline):
+                            #   the population/platform/scale/assumptions the claim holds under, each
+                            #   condition carrying a persistent identity that survives edits to its
+                            #   text — or the explicit nullity "none stated". An absent section (no
+                            #   conditions AND no nullity) exits the gate non-zero, naming the field
 
 ## Acceptance Criteria      # Required (per the itd-1 discipline); Given-When-Then bullets
 
@@ -256,9 +268,13 @@ severity: minor          # seeded capture-grain severity of the draft
 ## Audit Notes               # populated by `/abcd:intent audit` (manual Role 1 run)
 ```
 
-The two optional sections are unenforced by design — whether either becomes
-required is a deferred discipline question
-([adr-51](../../decisions/adrs/0051-intents-declare-mechanism-and-scope-conditions.md)).
+The two sections follow the claim recording gradient — criteria mandatory
+(itd-1), mechanism prompted-and-nullable, scope conditions mandatory with an
+explicit nullity — enforced by the claim-recording-gradient discipline, the
+staged gate [adr-51](../../decisions/adrs/0051-intents-declare-mechanism-and-scope-conditions.md)
+anticipated ("its own record on the itd-84/itd-1 pattern"). The distinction
+the gate preserves: an absent field is a claim not carried; a recorded
+nullity is a claim considered and declined. They are never collapsed.
 
 Discipline-kind intents use a different template — see § 1 "Discipline format" above.
 

@@ -11,7 +11,7 @@ VERSION ?=
 LDFLAGS := -s -w$(if $(VERSION), -X github.com/intentdriven/abcd/internal/core.Version=$(VERSION),)
 
 .PHONY: build test vet clean preflight lint-reviews lint-issues lint-decisions record-lint docs-lint site-render smoke \
-	check-attribution scaffold-sync scaffold-sync-check
+	evals-cold-reading check-attribution scaffold-sync scaffold-sync-check
 
 # Cross-compile every supported target to bin/abcd-<goos>-<arch>.
 # Pass VERSION=vX.Y.Z to stamp the version (release builds); omit for a dev build.
@@ -27,12 +27,35 @@ build:
 test:
 	go test ./...
 
-# Self-discovering smoke harness (evals/): build the binary, walk the Cobra tree,
-# run every command's --help + the read-only verbs. Behind the `smoke` build tag so
-# it stays out of the unit-test lane; run explicitly here, in CI's smoke job, and in
-# the release verify gate.
+# Every eval in evals/: the self-discovering smoke harness (build the binary, walk
+# the Cobra tree, run every command's --help + the read-only verbs) and the
+# cold-reading evals below. Behind the `smoke` build tag so they stay out of the
+# unit-test lane; run explicitly here, in CI's smoke job, and in the release
+# verify gate.
 smoke:
 	go test -tags smoke ./evals/...
+
+# The cold-reading evals alone (evals/coldreading_*_test.go): the read-block eval
+# that falsifies the assembler's blindfold by planting sentinel warm content in a
+# fixture repository state and asserting its absence from what the assembler
+# passes.
+#
+# It has its own target, and CI its own always-run job, because the diff
+# classifier stands the `smoke` job down on a change confined to docs/,
+# .abcd/development/, .abcd/work/ and the root prose files — and those are
+# precisely the paths these evals read. A record-only change is the diff MOST
+# able to introduce warm content into material the assembler includes, so
+# standing the eval down there is anti-correlated with the risk, and a stood-down
+# job still reports its check context green. Same reasoning `.github/workflows/ci.yml`
+# already documents for the ubuntu unit lane, which never stands down because its
+# tests read the live tree under the allowlist.
+#
+# The selection is a BUILD TAG, not a list of test names: every file carrying
+# `//go:build smoke || coldreading` runs here and under `make smoke` both, so a
+# second cold-reading eval joins the lane by carrying that constraint, with no
+# edit to this target or to the workflow.
+evals-cold-reading:
+	go test -tags coldreading ./evals/...
 
 vet:
 	go vet ./...

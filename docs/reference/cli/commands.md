@@ -162,13 +162,33 @@ Capture issues to the ledger; bare invocation is read-only status
 **Flags:**
 
 ```
-      --blocked-by string     comma-separated iss-ids this issue is blocked by
-      --category string       issue category (default observation)
-      --found-at string       optional repo-relative path or conceptual location
-      --found-during string   session/command context (default manual-capture)
-      --severity string       severity: nitpick | minor | major | critical (default minor)
-      --slug string           override the slug derived from the text
-      --source string         surfacing channel (default user-observation)
+      --blocked-by string        comma-separated iss-ids this issue is blocked by
+      --category string          issue category (default observation)
+      --found-at string          optional repo-relative path or conceptual location
+      --found-during string      session/command context (default manual-capture)
+      --lapsed-at string         RFC 3339 instant a discipline gave way (the lapse, not the write-up)
+      --production-mode string   how this record's text was produced: hand-written|dictated-and-formatted|scribe-transcribed (default: the repo's declared mode, else hand-written)
+      --severity string          severity: nitpick | minor | major | critical (default minor)
+      --slug string              override the slug derived from the text
+      --source string            surfacing channel (default user-observation)
+```
+
+#### `abcd capture disposition`
+
+Answer one reading item (a separate record, keyed to the item)
+
+**Usage:** `abcd capture disposition <rdi-N> --state <accepted|rejected|declined|held> [--grounds <text>] [--exit-condition <text>] [--supersedes <dsp-N>] [--recurs <rdi-N,...>] [flags]`
+
+**Flags:**
+
+```
+      --exit-condition string        what would end a held disposition (required on held; a hold exits only through a superseding disposition that cites it)
+      --grounds string               disposition_grounds: why this answer (free text; required on every state except held)
+      --hold-frame-location string   RESERVED (dormant): the frame element a hold sits at; a populated value is refused until activation is ruled
+      --hold-moscow string           RESERVED (dormant): must | should | could | wont; a populated value is refused until activation is ruled
+      --recurs string                comma-separated prior rdi-ids this item recurs from — the recorded form of a warm recognition, never a mechanical join
+      --state string                 the answer: accepted | rejected | declined | held (availability varies by the item's position)
+      --supersedes string            the standing dsp-N this answer replaces; required once an item already carries one
 ```
 
 #### `abcd capture list`
@@ -188,37 +208,48 @@ List issues by state (one of --open/--resolved/--wontfix/--all required)
 
 #### `abcd capture promote`
 
-Graduate an issue into an intent draft (mints + stamps promoted_to)
+Graduate an issue or a dispositioned reading item into an intent draft (mints + stamps promoted_to)
 
-**Usage:** `abcd capture promote <iss-N> [flags]`
+**Usage:** `abcd capture promote <iss-N> --grounds "<token>: <text>" | promote <rdi-N> [flags]`
 
 **Flags:**
 
 ```
-      --intent string   stamp-only mode: link this existing itd-N instead of minting a draft
+      --grounds string           REQUIRED — the conjecture being acted on, not the route taken: "<pursued|deferred|declined>: <what is expected, and what would show it wrong>"
+      --intent string            stamp-only mode: link this existing itd-N instead of minting a draft
+      --production-mode string   how this record's text was produced: hand-written|dictated-and-formatted|scribe-transcribed (default: the repo's declared mode, else hand-written)
 ```
 
 #### `abcd capture resolve`
 
 Mark an open issue resolved (open/ -> resolved/), optionally naming what fixed it
 
-**Usage:** `abcd capture resolve <iss-N> <note> --impact <additive|breaking|fix|internal> [--intent itd-N] [--spec spc-N] [--commit sha] [--shipped-in vX.Y.Z] [flags]`
+**Usage:** `abcd capture resolve <iss-N> <note> --impact <additive|breaking|fix|internal> --grounds "<token>: <text>" [--intent itd-N] [--spec spc-N] [--commit sha] [--shipped-in vX.Y.Z] [flags]`
 
 **Flags:**
 
 ```
-      --commit string       resolved_by provenance: the fixing commit sha (7-64 hex chars, shape-checked only)
-      --impact string       product impact: additive|breaking|fix|internal (required)
-      --intent string       resolved_by provenance: the itd-N that fixed it (must exist)
-      --shipped-in string   MIGRATION USE: the release that already carried this work (vX.Y.Z), leaving the record out of the current cut; unnecessary in a repo abcd managed from the start
-      --spec string         resolved_by provenance: the spc-N that fixed it (must exist)
+      --commit string            resolved_by provenance: the fixing commit sha (7-64 hex chars, shape-checked only)
+      --grounds string           REQUIRED — the conjecture being acted on, not the route taken: "<pursued|deferred|declined>: <what is expected, and what would show it wrong>"
+      --impact string            product impact: additive|breaking|fix|internal (required)
+      --intent string            resolved_by provenance: the itd-N that fixed it (must exist)
+      --production-mode string   restamp how this record's text was produced: hand-written|dictated-and-formatted|scribe-transcribed (default: leave the record's existing stamp alone; refused on a record that predates disclosure)
+      --shipped-in string        MIGRATION USE: the release that already carried this work (vX.Y.Z), leaving the record out of the current cut; unnecessary in a repo abcd managed from the start
+      --spec string              resolved_by provenance: the spc-N that fixed it (must exist)
 ```
 
 #### `abcd capture wontfix`
 
 Record an explicit non-action decision (open/ -> wontfix/)
 
-**Usage:** `abcd capture wontfix <iss-N> <reason>`
+**Usage:** `abcd capture wontfix <iss-N> <reason> [--grounds "declined: <text>"] [flags]`
+
+**Flags:**
+
+```
+      --grounds string           override the recorded grounds text (the token stays declined — a wontfix IS that non-action)
+      --production-mode string   restamp how this record's text was produced: hand-written|dictated-and-formatted|scribe-transcribed (default: leave the record's existing stamp alone; refused on a record that predates disclosure)
+```
 
 ### `abcd changelog`
 
@@ -590,7 +621,8 @@ Intent lifecycle; bare invocation is read-only status, quoted text files a draft
 **Flags:**
 
 ```
-      --impact string   stamp the draft's product impact: additive|breaking|fix (optional)
+      --impact string            stamp the draft's product impact: additive|breaking|fix (optional)
+      --production-mode string   how this record's text was produced: hand-written|dictated-and-formatted|scribe-transcribed (default: the repo's declared mode, else hand-written)
 ```
 
 #### `abcd intent audit`
@@ -625,15 +657,27 @@ Deprecated alias for `abcd intent "<text>"` (files a draft from the text)
 
 #### `abcd intent plan`
 
-Plan a draft intent: mint its spec, link both sides, move drafts -> planned
+Plan a draft intent (mint its spec, link both sides, move drafts -> planned); on an already-planned intent, stamp its unmarked scope conditions
 
-**Usage:** `abcd intent plan <itd-N>`
+**Usage:** `abcd intent plan <itd-N> [flags]`
+
+**Flags:**
+
+```
+      --production-mode string   how this record's text was produced: hand-written|dictated-and-formatted|scribe-transcribed (default: the repo's declared mode, else hand-written)
+```
 
 #### `abcd intent ready`
 
-Report whether an intent is ready to implement (planned + AC + written spec); exit 1 when not
+Report whether an intent is ready to implement (planned + AC + claims + written spec + recorded grounds); exit 1 when not
 
-**Usage:** `abcd intent ready <itd-N>`
+**Usage:** `abcd intent ready <itd-N> [--grounds "<pursued|deferred|declined>: <conjecture>"] [flags]`
+
+**Flags:**
+
+```
+      --grounds string   record the conjecture behind this gate decision: "<pursued|deferred|declined>: <what is expected, and what would show it wrong>"
+```
 
 ### `abcd launch`
 
@@ -722,6 +766,87 @@ Distil an external source into cited memory pages
 Curator health-check over the whole memory store
 
 **Usage:** `abcd memory lint`
+
+### `abcd reading`
+
+Cold-reading input assembler: what a reading sees, and the manifest proving it
+
+**Usage:** `abcd reading`
+
+Assemble the input a cold reading is handed.
+
+Blindness is a property of the input, not a promise the reader makes: a positive include
+table names what may travel, fields are projected out of records rather than files copied
+whole, and a hashed manifest records what was passed so a reader can judge contamination
+rather than accept a disclosure on trust.
+
+Bare `abcd reading` renders the assembler's state and writes nothing.
+
+#### `abcd reading assemble`
+
+Assemble one reading's input and its manifest
+
+**Usage:** `abcd reading assemble --position <position> --target <HEAD|sha> [flags]`
+
+Walk the repository under the include table at one reading position and write two
+artefacts: the assembled input, which carries no repository path, and the manifest,
+which maps every passed item back to its path, its field and its hash.
+
+The invocation carries no free text. --position takes one of four closed tokens;
+--target takes HEAD or a hexadecimal commit sha of 7 to 40 digits, because a branch
+or a tag moves and the manifest's re-runnability rests on a reference that cannot.
+
+**Flags:**
+
+```
+      --dry-run           write nothing; with --out the two artefacts still land in that directory
+      --out string        an empty or absent directory the assembled input and the manifest are written to
+                          (default: the local-tier run directory)
+      --position string   the reading position: widening, entailment, comparative, detection
+                          (comparative does not assemble: its object is the widening reading's
+                          pre-admission output, which no channel supplies, so it refuses)
+      --scope string      what the reading is about: a record id (itd-N, spc-N), a material kind,
+                          or a committed preset. No repository path is accepted here; a preset is where one may be named
+      --target string     the commit the assembly describes: HEAD, or a hexadecimal sha of 7 to 40 digits
+```
+
+**Example:**
+
+```
+abcd reading assemble --position widening --target HEAD --dry-run
+  abcd reading assemble --position entailment --target HEAD \
+    --out .abcd/.work.local/scratch/reading-runs/manual --json
+```
+
+#### `abcd reading ingest`
+
+Validate one reading's returned output and write its records
+
+**Usage:** `abcd reading ingest --reading-json <path> [flags]`
+
+Validate the JSON a cold reading returned and write its reading records.
+
+The verb checks what the reading was LICENSED to produce, not only what it saw: the
+supply regime is read from the position's definition and compared with the output's own
+claim, each regime's reserved names are refused with the licence stated, and a registry
+of named signatures catches prose that ranks, settles or proposes without the field.
+
+Item identifiers are minted here. The payload carries none, so a supplied one is refused
+as an unknown field. Nothing durable is written until the whole payload validates, and
+the run metadata is written last as the commit marker: a run without one never happened,
+and an orphaned stage is named and cleared by the next invocation.
+
+**Flags:**
+
+```
+      --reading-json string   path to the JSON the cold reading returned
+```
+
+**Example:**
+
+```
+abcd reading ingest --reading-json ./reading-output.json --json
+```
 
 ### `abcd rules`
 

@@ -10,6 +10,10 @@ import (
 )
 
 // write writes a file under repo, creating parents.
+// recordGrounds is the recorded-grounds section a READY fixture carries: the
+// readiness gate refuses a planned record that names no conjecture.
+const recordGrounds = "\n## Grounds\n\n- pursued: we expect the recorded conjecture to outlive the session that had it\n"
+
 func write(t *testing.T, repo, rel, content string) {
 	t.Helper()
 	abs := filepath.Join(repo, rel)
@@ -82,7 +86,7 @@ func TestDescribeIssueNextMoves(t *testing.T) {
 	assertZeroWrites(t, repo, before)
 
 	// Promote it: the next move becomes the intent pointer.
-	pr, err := capture.Promote(capture.PromoteRequest{RepoRoot: repo, ID: res.ID})
+	pr, err := capture.Promote(capture.PromoteRequest{Grounds: "pursued: we expect the ledger to keep the reasoning the session would otherwise lose", RepoRoot: repo, ID: res.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,6 +113,7 @@ func TestDescribeResolvedIssueShowsTrail(t *testing.T) {
 	}
 	write(t, repo, ".abcd/development/intents/shipped/itd-9-fixer.md", "---\nid: itd-9\n---\n\n# F\n")
 	if _, err := capture.Resolve(capture.ResolveRequest{
+		Grounds:  "pursued: we expect the ledger to keep the reasoning the session would otherwise lose",
 		RepoRoot: repo, ID: res.ID, Resolution: "done", Impact: "fix",
 		ByIntent: "itd-9", ByCommit: "abc1234",
 	}); err != nil {
@@ -156,7 +161,7 @@ func TestDescribeIntentLifecycleMoves(t *testing.T) {
 
 	// planned/ with a stub spec body → write the spec body.
 	intentFixture(t, repo, "planned", "itd-2", "planned-stub",
-		"---\nid: itd-2\nslug: planned-stub\nspec_id: spc-1\nkind: standalone\n---\n\n# P\n\n## Acceptance Criteria\n\n- **Given** x, **then** y.\n")
+		"---\nid: itd-2\nslug: planned-stub\nspec_id: spc-1\nkind: standalone\n---\n\n# P\n\n## Scope Conditions\n\nNone stated.\n\n## Acceptance Criteria\n\n- **Given** x, **then** y.\n")
 	write(t, repo, ".abcd/development/specs/open/spc-1-planned-stub.md",
 		"---\nid: spc-1\nslug: planned-stub\nintent: itd-2\n---\n# planned-stub\n\n_Draft: describe what shipping itd-2 means._\n")
 	d, err = Describe(repo, "itd-2")
@@ -170,7 +175,7 @@ func TestDescribeIntentLifecycleMoves(t *testing.T) {
 
 	// planned/ and ready → implement + spec close.
 	intentFixture(t, repo, "planned", "itd-3", "planned-ready",
-		"---\nid: itd-3\nslug: planned-ready\nspec_id: spc-2\nkind: standalone\n---\n\n# R\n\n## Acceptance Criteria\n\n- **Given** x, **then** y.\n")
+		"---\nid: itd-3\nslug: planned-ready\nspec_id: spc-2\nkind: standalone\n---\n\n# R\n\n## Scope Conditions\n\nNone stated.\n\n## Acceptance Criteria\n\n- **Given** x, **then** y.\n"+recordGrounds)
 	write(t, repo, ".abcd/development/specs/open/spc-2-planned-ready.md",
 		"---\nid: spc-2\nslug: planned-ready\nintent: itd-3\n---\n# planned-ready\n\nA real body: build the thing against these words.\n")
 	d, err = Describe(repo, "itd-3")
@@ -208,7 +213,7 @@ func TestDescribeIntentLifecycleMoves(t *testing.T) {
 func TestDescribeSpecMoves(t *testing.T) {
 	repo := t.TempDir()
 	intentFixture(t, repo, "planned", "itd-6", "for-spec",
-		"---\nid: itd-6\nslug: for-spec\nspec_id: spc-4\nkind: standalone\n---\n\n# S\n\n## Acceptance Criteria\n\n- **Given** x, **then** y.\n")
+		"---\nid: itd-6\nslug: for-spec\nspec_id: spc-4\nkind: standalone\n---\n\n# S\n\n## Scope Conditions\n\nNone stated.\n\n## Acceptance Criteria\n\n- **Given** x, **then** y.\n"+recordGrounds)
 	write(t, repo, ".abcd/development/specs/open/spc-4-for-spec.md",
 		"---\nid: spc-4\nslug: for-spec\nintent: itd-6\n---\n# for-spec\n\nWritten body, ready to build.\n")
 	d, err := Describe(repo, "spc-4")
@@ -396,5 +401,36 @@ func TestDescribeADRRefusesHostileLeaves(t *testing.T) {
 	}
 	if _, err := Describe(repo, "adr-4"); err == nil {
 		t.Fatalf("an oversized adr must not resolve")
+	}
+}
+
+// The evidence record_schema's duplicate-key message rests on: what the ADR
+// dispatcher does with a record carrying one top-level key twice.
+//
+// It renders it. readRecordHead reads with frontmatter.Fields, the lenient
+// scanner, which keeps the first value and reports no error — so describeADR
+// confirms the id and returns the record with the FIRST status. The dispatcher
+// does validate the id before it renders, which is why readerFailsClosed is true
+// of this store; it does not validate the frontmatter's shape, which is why
+// readerRefusesDuplicateKey is not, and why the gate's duplicate-key finding must
+// not tell an ADR's author their file is skipped by every ADR surface
+// (iss-2608301656200729).
+//
+// The pin cuts both ways. If a strict-parsing ADR reader lands, this test goes
+// red and points at the message that has to change with it.
+func TestADRReaderRendersARecordWithADuplicateKey(t *testing.T) {
+	repo := t.TempDir()
+	write(t, repo, ".abcd/development/decisions/adrs/0009-a-decision.md",
+		"---\nid: adr-9\nstatus: accepted\nstatus: draft\n---\n\n# A decision\n")
+
+	d, err := Describe(repo, "adr-9")
+	if err != nil {
+		t.Fatalf("the ADR dispatcher renders a duplicated key rather than refusing it: %v", err)
+	}
+	if d.ID != "adr-9" || d.Path == "" {
+		t.Fatalf("the record is rendered, not skipped: %+v", d)
+	}
+	if d.Status != "accepted" {
+		t.Errorf("the lenient scanner keeps the FIRST value, so status = %q, want %q", d.Status, "accepted")
 	}
 }

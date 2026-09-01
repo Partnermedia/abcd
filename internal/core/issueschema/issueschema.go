@@ -12,7 +12,27 @@
 // capture back would be an import cycle in test.
 package issueschema
 
-import "regexp"
+import (
+	"regexp"
+	"strings"
+	"time"
+)
+
+// StatusDirs is the issue ledger's status-directory list, in the order a
+// surface renders them. The directory a record sits in IS its status — there is
+// no status field — so this list is simultaneously the set of folders the writer
+// provisions, the set the readers scan, and the set the deterministic gates scope
+// their pathspecs to. Those three had four spellings between them (lint's own
+// list, two literals in capture's allocator, and the shell gate's pathspec), and
+// the day a SIBLING family joined the ledger tree was the day the fourth spelling
+// became a silent divergence: a record can only land somewhere every side agrees
+// to look.
+//
+// It lives here for the same reason the property allow-list does — the one leaf
+// both core/capture and core/lint already read the ledger's schema from. The
+// shell gate cannot import Go and therefore holds the second and last spelling,
+// pinned to this value by a test.
+var StatusDirs = []string{"open", "resolved", "wontfix"}
 
 // Required is every property the issue schema marks required, in the order a
 // record writes them. A record missing one is not a lax record: the ledger reader
@@ -38,7 +58,14 @@ var RequiredStrings = Required[1:]
 var Known = map[string]bool{
 	"schema_version": true, "id": true, "slug": true, "severity": true,
 	"category": true, "source": true, "found_during": true, "found_at": true,
-	"details": true, "suggested_fix": true, "related_intents": true,
+	// lapsed_at is the instant a recorded discipline gave way, RFC 3339 in UTC —
+	// the lapse, not the write-up (spc-60). found_at cannot carry it (that
+	// property is a LOCATION), and the timestamp-numeric record id is write-up
+	// time by construction, which is the value the criterion distinguishes itself
+	// from. Optional for every category and required for one; LapsedAtRequired
+	// below is the single copy of which.
+	"lapsed_at": true,
+	"details":   true, "suggested_fix": true, "related_intents": true,
 	"promoted_to": true, "related_specs": true, "related_issues": true,
 	"synthesis_clusters": true, "wontfix_reason": true, "resolution": true,
 	"resolved_by": true, "blocked_by": true,
@@ -49,17 +76,37 @@ var Known = map[string]bool{
 	// one is refused, which is exactly how the first draft of this feature shipped
 	// a flag that could never execute.
 	"shipped_in": true,
+	// origin and production_mode are the disclosure pair (itd-178): where an
+	// item came from, and how its text was produced. Both are optional here —
+	// population is forward-only, and an existing record carries neither — but
+	// both must be KNOWN properties, or the reader drops every stamped record as
+	// malformed and it goes invisible to every capture surface. The VALUES are
+	// not judged here: the record_provenance lint rule is the gate on them, and a
+	// mistyped disclosure key must not hide the finding the record carries. The
+	// vocabulary itself lives in core/provenance, which reads this package for
+	// the reading families' spelling — so the keys are literals here, pinned to
+	// provenance's own constants by a test there.
+	"origin": true, "production_mode": true,
 	// impact is the product judgement the derived version and the generated
 	// changelog are computed from (spc-10). It is optional here — an open issue
 	// has not been judged yet, and the record-lint blocker issue_impact_valid is
 	// what gates the move into resolved/ — but it must be a KNOWN property, or
 	// the reader drops every judged record as malformed.
 	"impact": true,
-	// created/updated are no longer written, but legacy ledgers still carry
-	// them. Tolerate (accept, then drop) them on read so an existing committed
-	// ledger is not rejected as an unknown property; the reader ignores their
-	// values entirely.
-	"created": true, "updated": true,
+	// grounds/created/updated are no longer written, but a ledger written by an
+	// older abcd still carries them. Tolerate (accept, then drop) them on read so
+	// an existing committed ledger is not rejected as an unknown property; the
+	// reader ignores their values entirely.
+	//
+	// grounds moved to the record BODY, as the append-only `## Grounds` section
+	// core/grounds holds for both record families: a frontmatter scalar is SET,
+	// and setting is what let a resolve destroy the conjecture the promote before
+	// it recorded (iss-2608301657354776). Tolerating rather than refusing is
+	// deliberate — refusing makes the reader SKIP the record, which hides it from
+	// every capture surface while it still sits in the ledger. The gate that
+	// notices a misplaced key is the record lint's `record_schema`,
+	// which blocks a frontmatter `grounds:` and names the section, leaving the record readable meanwhile.
+	"grounds": true, "created": true, "updated": true,
 }
 
 // The closed enum value sets from issue.schema.json. capture validates a record's
@@ -73,6 +120,9 @@ var (
 	Categories = []string{
 		"bug", "documentation", "drift", "inconsistency", "tech-debt", "security",
 		"ux", "process", "architectural-insight", "future-work-seed", "observation",
+		// lapse is the ledger's lapse log — a recording step skipped, disclosed
+		// as a value in this list rather than a separate enum or store.
+		"lapse",
 	}
 	// Sources is the surfacing channel enum.
 	Sources = []string{
@@ -86,3 +136,27 @@ var (
 // single hyphens). A slug becomes a filename, so both the ledger writer and the
 // record-lint gate hold it to exactly this shape.
 var SlugRe = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)
+
+// CategoryLapse is the one category whose records must state WHEN the discipline
+// gave way. It is spelled once here because two gates ask the question — the
+// ledger reader (core/capture) and the committed-ledger gate (core/lint) — and a
+// second copy would let one of them go on accepting what the other refuses.
+const CategoryLapse = "lapse"
+
+// LapsedAtRequired reports whether a category obliges a lapsed_at value. The
+// property is optional for every category and required for exactly this one: a
+// lapse entry with no lapse time is retrospective reconstruction wearing the
+// evidence's clothes, which is the thing the lapse log exists to detect.
+func LapsedAtRequired(category string) bool {
+	return category == CategoryLapse
+}
+
+// ValidLapsedAt reports whether a non-empty lapsed_at value is well formed: an
+// RFC 3339 instant. A bare date names a day rather than a moment and free text
+// names nothing a reader can order, so neither can carry the claim the property
+// makes. The offset is not constrained to Z — RFC 3339 fixes the instant either
+// way — while the convention the record pages state is UTC.
+func ValidLapsedAt(v string) bool {
+	_, err := time.Parse(time.RFC3339, strings.TrimSpace(v))
+	return err == nil
+}

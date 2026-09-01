@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "presets": {
+    "everything": {
+      "positions": {
+        "widening": {"kinds": ["brief-section", "glossary-term", "intent-projection", "discipline", "spec", "source", "test", "doc", "config"], "records": [], "paths": []},
+        "entailment": {"kinds": ["brief-section", "glossary-term", "intent-projection", "discipline", "spec", "source", "test", "doc", "config"], "records": [], "paths": []},
+        "detection": {"kinds": ["brief-section", "glossary-term", "intent-projection", "discipline", "spec", "source", "test", "doc", "config"], "records": [], "paths": []}
+      }
+    }
+  }
+}

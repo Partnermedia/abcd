@@ -91,6 +91,10 @@ downloaded artefact.
 - The missed-transcript recovery sweep (iss-2608210934566224) and the
   statusline surface (iss-2608210934566225) — held in the ledger as seeds.
 
+## Scope Conditions
+
+None stated.
+
 ## Acceptance Criteria
 
 - Given a provisioned install with a cached release artefact, When the

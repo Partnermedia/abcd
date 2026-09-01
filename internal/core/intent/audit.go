@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/intentdriven/abcd/internal/core/mdrecord"
 	"github.com/intentdriven/abcd/internal/core/recordid"
 	"github.com/intentdriven/abcd/internal/core/spec"
 	"github.com/intentdriven/abcd/internal/fsutil"
@@ -56,16 +57,28 @@ var verdictEnum = map[string]bool{
 	"MET": true, "MET_WITH_CONCERNS": true, "NOT_MET": true, "INCONCLUSIVE": true,
 }
 
+// dispositionUntested is the disposition vocabulary's word for the absence of a
+// judgement — the value the quarantine path records, and the only one exempt
+// from the cited-evidence rule.
+const dispositionUntested = "untested"
+
+// dispositionNarrowed is the one disposition that requires a stated narrowing —
+// and the only one permitted to carry one.
+const dispositionNarrowed = "narrowed"
+
+// dispositionEnum is the closed set of scope-condition dispositions (spc-59).
+// It is deliberately disjoint from verdictEnum: a condition is not a criterion,
+// and an acceptance verdict is not a judgement about an ex-ante assumption.
+var dispositionEnum = map[string]bool{
+	"survived": true, dispositionNarrowed: true, "falsified": true, dispositionUntested: true,
+}
+
 var (
 	// rcpIDRe constrains a receipt id so it can never build a path that escapes
 	// the reviews dir (path-traversal defence). 12 lowercase hex chars.
 	rcpIDRe = regexp.MustCompile(`^rcp-[0-9a-f]{12}$`)
 	// auditHeadingRe matches the `## Audit Notes` heading (any heading depth).
 	auditHeadingRe = regexp.MustCompile(`^#{1,6}\s+Audit Notes\s*$`)
-	// bulletRe matches a TOP-LEVEL markdown list item. Acceptance-Criteria bullets
-	// are numbered positionally ac-1..ac-K, so only column-0 bullets count — an
-	// indented sub-bullet is detail of its parent, not a separate criterion.
-	bulletRe = regexp.MustCompile(`^[-*]\s+\S`)
 	// markerRe matches a parked review marker line inside the Audit Notes.
 	markerRe = regexp.MustCompile(`<!-- abcd-review: (OWED|INGESTED|DEAD_LETTER) receipt=(rcp-[0-9a-f]+) -->`)
 	// auditPlaceholderRe matches an intent template's Audit Notes placeholder,
@@ -78,12 +91,6 @@ var (
 	auditPlaceholderRe = regexp.MustCompile(`^\s*[_<]Empty\b.*[_>]\s*$`)
 	// criterionIDRe validates a criterion id shape before it is positionally bounded.
 	criterionIDRe = regexp.MustCompile(`^ac-([0-9]+)$`)
-	// linkRefDefRe matches a markdown link-reference definition (`[label]: dest`),
-	// up to three leading spaces per CommonMark. A shipped intent can park such a
-	// definition at the tail of its Audit Notes section (itd-114's `[iss-80]:` ref);
-	// a new review block must be inserted ABOVE the trailing run of them rather than
-	// appended below it (iss-2608210737265820).
-	linkRefDefRe = regexp.MustCompile(`^ {0,3}\[[^\]]+\]:\s+\S`)
 )
 
 // ---------------------------------------------------------------------------
@@ -99,6 +106,7 @@ type verdict struct {
 	Criteria          []verdictCriterion `json:"criteria"`
 	AcceptanceRollup  map[string]int     `json:"acceptance_rollup"`
 	GapAudit          verdictGapAudit    `json:"gap_audit"`
+	ScopeConditions   []verdictCondition `json:"scope_conditions"`
 }
 
 type verdictVerifier struct {
@@ -126,6 +134,18 @@ type verdictCriterion struct {
 	CriterionID string            `json:"criterion_id"`
 	Verdict     string            `json:"verdict"`
 	Rationale   string            `json:"rationale"`
+	Evidence    []verdictEvidence `json:"evidence"`
+}
+
+// verdictCondition is one scope-condition disposition, keyed to the identity
+// spc-55 minted for the condition rather than to its wording — so a reworded
+// condition keeps its judgement and a narrowing is stated rather than implied by
+// edited prose.
+type verdictCondition struct {
+	ConditionID string            `json:"condition_id"`
+	Disposition string            `json:"disposition"`
+	Rationale   string            `json:"rationale"`
+	Narrowing   string            `json:"narrowing"`
 	Evidence    []verdictEvidence `json:"evidence"`
 }
 
@@ -162,6 +182,11 @@ type IngestVerdictResult struct {
 	MetWithConcern int    `json:"met_with_concerns"`
 	NotMet         int    `json:"not_met"`
 	Inconclusive   int    `json:"inconclusive"`
+	Conditions     int    `json:"conditions"`
+	Survived       int    `json:"survived"`
+	Narrowed       int    `json:"narrowed"`
+	Falsified      int    `json:"falsified"`
+	Untested       int    `json:"untested"`
 	DeadLetterPath string `json:"dead_letter_path,omitempty"`
 	Reason         string `json:"reason,omitempty"`
 }
@@ -230,8 +255,8 @@ func emitAuditForIntent(repoRoot string, it Intent) (AuditEmitResult, error) {
 	res := AuditEmitResult{ReceiptID: rcp, IntentID: it.ID}
 	block := owedBlock(rcp)
 	updated := upsertReviewBlock(content, rcp, block)
-	if err := fsutil.WriteFileAtomic(abs, []byte(updated), 0o644); err != nil {
-		return AuditEmitResult{}, fmt.Errorf("intent: writing OWED stub to %s: %w", it.Path, err)
+	if err := writeIntentFile(abs, it.Path, updated); err != nil {
+		return AuditEmitResult{}, err
 	}
 	if err := writeAuditRequest(repoRoot, it, rcp, updated); err != nil {
 		return AuditEmitResult{}, err
@@ -363,13 +388,17 @@ func IngestVerdict(repoRoot, verdictPath string) (IngestVerdictResult, error) {
 	rollup := countVerdicts(v)
 	block := ingestedBlock(rcp, v, rollup)
 	updated := upsertReviewBlock(content, rcp, block)
-	if err := fsutil.WriteFileAtomic(filepath.Join(repoRoot, it.Path), []byte(updated), 0o644); err != nil {
-		return IngestVerdictResult{}, fmt.Errorf("intent: writing verdict to %s: %w", it.Path, err)
+	if err := writeIntentFile(filepath.Join(repoRoot, it.Path), it.Path, updated); err != nil {
+		return IngestVerdictResult{}, err
 	}
+	split := countDispositions(v)
 	return IngestVerdictResult{
 		Status: "ingested", ReceiptID: rcp, IntentID: it.ID, Criteria: len(v.Criteria),
 		Met: rollup["MET"], MetWithConcern: rollup["MET_WITH_CONCERNS"],
 		NotMet: rollup["NOT_MET"], Inconclusive: rollup["INCONCLUSIVE"],
+		Conditions: len(v.ScopeConditions), Survived: split["survived"],
+		Narrowed: split[dispositionNarrowed], Falsified: split["falsified"],
+		Untested: split[dispositionUntested],
 	}, nil
 }
 
@@ -473,7 +502,88 @@ func validateVerdict(raw []byte, rcp, intentContent string) (verdict, error) {
 			}
 		}
 	}
+
+	if err := validateConditionDispositions(v, intentContent); err != nil {
+		return verdict{}, err
+	}
 	return v, nil
+}
+
+// validateConditionDispositions checks the scope-condition dispositions against
+// the identities the RECORD carries, never against the payload's own claims —
+// the conditions are read through ParseClaims (spc-55's single claim reader), so
+// no second parser can disagree with the readiness gate about what a condition
+// is.
+//
+// The two directions are separate refusals: a verdict disposing a condition the
+// intent does not record is judging something the record does not claim, and a
+// verdict disposing only some of them is the partial judgement the criteria
+// check already refuses one level down. That symmetry is what makes the staged
+// rollout safe — an intent shipped before the identity mint existed carries no
+// conditions, so the check is vacuous rather than blocking.
+func validateConditionDispositions(v verdict, intentContent string) error {
+	conds := ParseClaims(intentContent).Conditions
+	known := map[string]bool{}
+	for _, c := range conds {
+		// An unstamped condition has no identity for a disposition to attach to,
+		// so accepting the verdict would leave it permanently undisposed — which
+		// is exactly the absence itd-181 refuses. The readiness gate reports the
+		// same fault, but it only reports: it is read-only, and it refuses a
+		// shipped bucket outright — which is the only bucket the ingest ever
+		// sees. So this is the gate, not a second opinion.
+		if c.ID == "" {
+			return fmt.Errorf("scope condition %d carries no minted identity, so no disposition can be keyed to it", c.Ordinal)
+		}
+		known[c.ID] = true
+	}
+	// Two bullets sharing one identity collapse into a single entry in `known`,
+	// so the set-sized coverage check below would accept one disposition for two
+	// conditions and leave the second silently undisposed. A copy-pasted bullet
+	// keeps its invisible marker and nothing re-stamps a shipped record, so the
+	// state is reachable. DuplicateConditionIDs is the canonical detector — the
+	// same one the readiness gate reports with — never a second notion of it.
+	if dupes := DuplicateConditionIDs(conds); len(dupes) > 0 {
+		return fmt.Errorf("scope condition identity %q is carried by more than one condition, so a disposition cannot be keyed to either", dupes[0])
+	}
+	if len(known) == 0 {
+		if len(v.ScopeConditions) != 0 {
+			return fmt.Errorf("verdict disposes %d scope condition(s) but the intent records none", len(v.ScopeConditions))
+		}
+		return nil
+	}
+
+	seen := map[string]bool{}
+	for i, c := range v.ScopeConditions {
+		if !known[c.ConditionID] {
+			return fmt.Errorf("scope_conditions[%d] id %q is not an identity the intent carries", i, c.ConditionID)
+		}
+		if seen[c.ConditionID] {
+			return fmt.Errorf("scope condition %q is disposed more than once", c.ConditionID)
+		}
+		seen[c.ConditionID] = true
+		if !dispositionEnum[c.Disposition] {
+			return fmt.Errorf("scope condition %q has out-of-enum disposition %q", c.ConditionID, c.Disposition)
+		}
+		// `narrowing` is required on `narrowed` and empty everywhere else — the
+		// rule the definition publishes, gated in both directions. A narrowing
+		// carried by a `survived` condition renders a stated narrowing into the
+		// record while the split reports no narrowed condition at all.
+		if c.Disposition == dispositionNarrowed && strings.TrimSpace(c.Narrowing) == "" {
+			return fmt.Errorf("scope condition %q is narrowed but states no narrowing", c.ConditionID)
+		}
+		if c.Disposition != dispositionNarrowed && strings.TrimSpace(c.Narrowing) != "" {
+			return fmt.Errorf("scope condition %q is %s but states a narrowing; only a narrowed condition carries one", c.ConditionID, c.Disposition)
+		}
+		// `untested` is by definition the absence of evidence; every other
+		// disposition is a claim about delivered reality and must cite one.
+		if c.Disposition != dispositionUntested && !hasCitedEvidence(c.Evidence) {
+			return fmt.Errorf("scope condition %q cites no evidence ref", c.ConditionID)
+		}
+	}
+	if len(seen) != len(known) {
+		return fmt.Errorf("verdict disposes %d of %d scope conditions (every condition must be disposed exactly once)", len(seen), len(known))
+	}
+	return nil
 }
 
 // deadLetter quarantines a bad-but-resolvable verdict: it retains the raw payload
@@ -491,13 +601,18 @@ func deadLetter(repoRoot string, it Intent, content, rcp string, raw []byte, rea
 	if err := fsutil.WriteFileAtomic(filepath.Join(dir, rcp+".deadletter.json"), raw, 0o644); err != nil {
 		return IngestVerdictResult{}, fmt.Errorf("intent: retaining dead-letter payload %s: %w", dlRel, err)
 	}
-	block := deadLetterBlock(rcp, reason, dlRel)
+	untested := untestedDispositions(content)
+	block := deadLetterBlock(rcp, reason, dlRel, untested)
 	updated := upsertReviewBlock(content, rcp, block)
-	if err := fsutil.WriteFileAtomic(filepath.Join(repoRoot, it.Path), []byte(updated), 0o644); err != nil {
-		return IngestVerdictResult{}, fmt.Errorf("intent: writing dead-letter marker to %s: %w", it.Path, err)
+	if err := writeIntentFile(filepath.Join(repoRoot, it.Path), it.Path, updated); err != nil {
+		return IngestVerdictResult{}, err
 	}
+	// The counts exist so a surface reports the split WITHOUT re-reading the
+	// record, so they must agree with what was just written there: the quarantine
+	// records every condition untested, and says so here too.
 	return IngestVerdictResult{
 		Status: "dead_letter", ReceiptID: rcp, IntentID: it.ID,
+		Conditions: len(untested), Untested: len(untested),
 		DeadLetterPath: dlRel, Reason: reason,
 	}, nil
 }
@@ -565,7 +680,7 @@ func upsertReviewBlock(content, rcp, newBlock string) string {
 		end := len(lines)
 		for j := start + 1; j < len(lines); j++ {
 			t := strings.TrimRight(lines[j], "\r")
-			if markerRe.MatchString(t) || headingRe.MatchString(t) {
+			if markerRe.MatchString(t) || mdrecord.IsHeading(t) {
 				end = j
 				break
 			}
@@ -597,7 +712,7 @@ func appendToAuditNotes(content, block string) string {
 	// Find the end of the Audit Notes section (next heading or EOF).
 	end := len(lines)
 	for j := head + 1; j < len(lines); j++ {
-		if headingRe.MatchString(strings.TrimRight(lines[j], "\r")) {
+		if mdrecord.IsHeading(strings.TrimRight(lines[j], "\r")) {
 			end = j
 			break
 		}
@@ -621,7 +736,7 @@ func appendToAuditNotes(content, block string) string {
 	// definition parked at the end of the Audit Notes belongs below the review
 	// prose, and appending the block after it detaches the block from the section
 	// it documents (iss-2608210737265820).
-	trailingRefs := peelTrailingLinkRefs(&section)
+	trailingRefs := mdrecord.PeelTrailingLinkRefs(&section)
 	rebuilt := make([]string, 0, len(lines)+8)
 	rebuilt = append(rebuilt, lines[:head+1]...)
 	rebuilt = append(rebuilt, "")
@@ -639,46 +754,6 @@ func appendToAuditNotes(content, block string) string {
 	return strings.Join(rebuilt, "\n")
 }
 
-// peelTrailingLinkRefs removes a trailing run of markdown link-reference
-// definitions (and any blank lines interspersed with them) from *section and
-// returns that run, so appendToAuditNotes can re-emit it BELOW the new review
-// block. The run must contain at least one real definition — a tail of pure blank
-// lines is not refs and is left to the caller's blank-trimming. Both the newly
-// exposed end of *section and the leading blanks of the returned run are trimmed,
-// so the caller reinstates exactly one separator on each side.
-func peelTrailingLinkRefs(section *[]string) []string {
-	s := *section
-	start := len(s)
-	for i := len(s) - 1; i >= 0; i-- {
-		t := strings.TrimRight(s[i], "\r")
-		if strings.TrimSpace(t) == "" || linkRefDefRe.MatchString(t) {
-			start = i
-			continue
-		}
-		break
-	}
-	hasRef := false
-	for _, ln := range s[start:] {
-		if linkRefDefRe.MatchString(strings.TrimRight(ln, "\r")) {
-			hasRef = true
-			break
-		}
-	}
-	if !hasRef {
-		return nil
-	}
-	refs := s[start:]
-	s = s[:start]
-	for len(s) > 0 && strings.TrimSpace(s[len(s)-1]) == "" {
-		s = s[:len(s)-1]
-	}
-	for len(refs) > 0 && strings.TrimSpace(refs[0]) == "" {
-		refs = refs[1:]
-	}
-	*section = s
-	return refs
-}
-
 // ---------------------------------------------------------------------------
 // Block rendering (deterministic; no timestamps)
 // ---------------------------------------------------------------------------
@@ -687,12 +762,35 @@ func owedBlock(rcp string) string {
 	return fmt.Sprintf("<!-- abcd-review: OWED receipt=%s -->\nFidelity review OWED (receipt %s).", rcp, rcp)
 }
 
-func deadLetterBlock(rcp, reason, dlRel string) string {
+// deadLetterBlock renders the quarantine block. conds are the record's own scope
+// conditions, every one of them recorded `untested`: the acceptance vocabulary
+// already says INCONCLUSIVE here, and the disposition vocabulary's word for the
+// same state is `untested`, so the quarantine stays honest in both without
+// inventing a fifth value.
+func deadLetterBlock(rcp, reason, dlRel string, conds []verdictCondition) string {
+	var b strings.Builder
 	// reason is derived from untrusted payload content (e.g. an out-of-enum token),
 	// so it is sanitised before it lands in the committed record.
-	return fmt.Sprintf("<!-- abcd-review: DEAD_LETTER receipt=%s -->\n"+
+	fmt.Fprintf(&b, "<!-- abcd-review: DEAD_LETTER receipt=%s -->\n"+
 		"Fidelity review DEAD_LETTER (receipt %s): %s. Raw payload retained at %s. "+
-		"All criteria recorded INCONCLUSIVE.", rcp, rcp, oneLine(reason), dlRel)
+		"All criteria recorded INCONCLUSIVE.\n", rcp, rcp, oneLine(reason), dlRel)
+	renderDispositions(&b, conds)
+	return strings.TrimRight(b.String(), "\n")
+}
+
+// untestedDispositions is every identified scope condition the record carries,
+// recorded `untested`. A condition with no minted identity is skipped: there is
+// nothing to key a disposition on, and the ingest refuses such a record anyway.
+func untestedDispositions(intentContent string) []verdictCondition {
+	conds := ParseClaims(intentContent).Conditions
+	out := make([]verdictCondition, 0, len(conds))
+	for _, c := range conds {
+		if c.ID == "" {
+			continue
+		}
+		out = append(out, verdictCondition{ConditionID: c.ID, Disposition: dispositionUntested})
+	}
+	return out
 }
 
 func ingestedBlock(rcp string, v verdict, rollup map[string]int) string {
@@ -728,7 +826,38 @@ func ingestedBlock(rcp string, v verdict, rollup map[string]int) string {
 	renderBucket(&b, "honoured", v.GapAudit.Honoured)
 	renderBucket(&b, "diverged", v.GapAudit.Diverged)
 	renderBucket(&b, "missing", v.GapAudit.Missing)
+	renderDispositions(&b, v.ScopeConditions)
 	return strings.TrimRight(b.String(), "\n")
+}
+
+// renderDispositions writes the scope-condition disposition block — the ONE
+// renderer both the INGESTED and the DEAD_LETTER path use, so the two can never
+// disagree about the shape of the surface. An intent that records no conditions
+// gets no block at all: a heading over nothing asserts a surface the record does
+// not carry, and its absence is what keeps the staged rollout invisible to every
+// intent shipped before the identity mint existed.
+//
+// Every field is agent-produced and lands in a committed record, so all of them
+// go through oneLine — the same neutraliser the per-criterion render uses, so no
+// payload can forge an `<!-- abcd-review: … -->` marker and spoof review state.
+func renderDispositions(b *strings.Builder, conds []verdictCondition) {
+	if len(conds) == 0 {
+		return
+	}
+	b.WriteString("\nScope-condition dispositions:\n")
+	for _, c := range conds {
+		fmt.Fprintf(b, "- %s — %s", oneLine(c.ConditionID), oneLine(c.Disposition))
+		if r := oneLine(c.Rationale); r != "" {
+			fmt.Fprintf(b, ": %s", r)
+		}
+		b.WriteString("\n")
+		if n := oneLine(c.Narrowing); n != "" {
+			fmt.Fprintf(b, "  narrowing: %s\n", n)
+		}
+		for _, e := range c.Evidence {
+			fmt.Fprintf(b, "  evidence: %s\n", renderEvidence(e))
+		}
+	}
 }
 
 func renderBucket(b *strings.Builder, name string, entries []verdictGapEntry) {
@@ -758,23 +887,17 @@ func renderEvidence(e verdictEvidence) string {
 // ---------------------------------------------------------------------------
 
 // sectionBody returns the text of the section introduced by the first heading
-// matching headRe, up to the next heading or end of file.
+// matching headRe, up to the next heading or end of file. It reads the section
+// through mdrecord.SectionLineRange, the single notion of where a section
+// starts and stops; an absent section and an empty one both read as ""
+// here, and a caller that must tell them apart asks for the bounds directly.
 func sectionBody(content string, headRe *regexp.Regexp) string {
 	lines := strings.Split(content, "\n")
-	for i, ln := range lines {
-		if !headRe.MatchString(strings.TrimRight(ln, "\r")) {
-			continue
-		}
-		var body []string
-		for _, b := range lines[i+1:] {
-			if headingRe.MatchString(strings.TrimRight(b, "\r")) {
-				break
-			}
-			body = append(body, b)
-		}
-		return strings.Join(body, "\n")
+	start, end, ok := mdrecord.SectionLineRange(lines, headRe)
+	if !ok {
+		return ""
 	}
-	return ""
+	return strings.Join(lines[start:end], "\n")
 }
 
 // countAcceptanceCriteria counts the top-level list bullets in the intent's
@@ -782,7 +905,7 @@ func sectionBody(content string, headRe *regexp.Regexp) string {
 func countAcceptanceCriteria(content string) int {
 	n := 0
 	for _, ln := range strings.Split(sectionBody(content, acHeadingRe), "\n") {
-		if bulletRe.MatchString(strings.TrimRight(ln, "\r")) {
+		if mdrecord.IsTopLevelBullet(strings.TrimRight(ln, "\r")) {
 			n++
 		}
 	}
@@ -793,6 +916,16 @@ func countVerdicts(v verdict) map[string]int {
 	m := map[string]int{"MET": 0, "MET_WITH_CONCERNS": 0, "NOT_MET": 0, "INCONCLUSIVE": 0}
 	for _, c := range v.Criteria {
 		m[c.Verdict]++
+	}
+	return m
+}
+
+// countDispositions is the per-value split of the scope-condition dispositions,
+// so a surface reports it without re-reading the record.
+func countDispositions(v verdict) map[string]int {
+	m := map[string]int{"survived": 0, dispositionNarrowed: 0, "falsified": 0, dispositionUntested: 0}
+	for _, c := range v.ScopeConditions {
+		m[c.Disposition]++
 	}
 	return m
 }

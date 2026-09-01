@@ -12,6 +12,136 @@ over the brief's earlier `1.0.0`-at-close expectation). The four M6 synthesis
 agents below entered at `0.1.0`, wired to their `abcd disembark` verbs and
 unmeasured; `lifeboat-oracle` has since become `lifeboat-reviewer` at `0.1.1`.
 
+## 0.1.0 — 2026-08-31 (itd-184 / spc-62 — the four cold-reading definitions)
+
+Four definitions enter together, one per supply regime, as instances within one
+detector context. One definition with four objects cannot hold: the prohibition
+against proposing is constitutive of the detection position and would void the
+widening position entirely. Each holds five things and nothing else — its object,
+its question, the blindness core verbatim, its regime value, and its item shape —
+and the core is delimited by `<!-- blindness-core:begin -->` and
+`<!-- blindness-core:end -->` so a byte-identity test compares an exact span
+rather than a heuristic slice. All four carry `reads_untrusted_input: true` (a
+reading reads repository text it did not write), `capability_scope.task_classes:
+[cold_reading]` — a token added to the closed enum in the same change, because
+reusing `cross_document_audit` would name these prompts as audits and an audit
+judges against a standard, which is precisely the licence a widening reading does
+not hold — and two frontmatter keys the ingest verb reads, `position:` and
+`regime:`, which is what makes the regime the definition's property rather than
+the payload's.
+
+The seven core conditions, in the fixed order the span carries them: no project
+context, no ledger access, no memory across runs, no ranking or prioritisation,
+no selection, explanation or commitment, named provenance on every item produced,
+and no passed input is authoritative. The seventh is disclosed in the core's own
+wording as an assertion rather than a mechanism, because nothing that assembles a
+reading's material can enforce it. The host obligation to grant the reading no
+repository access is disclosed on the same terms.
+
+The definitions are the assertion half of the blindness. The enforcement half is
+the input assembler and its evals; the licence check on what a reading produced
+is the ingest verb's supply-regime gate. None of the four is dispatched: the
+instrument ships unrun.
+
+Unmeasured — no calibration corpus exists for cold-reading output, and no
+self-improvement pre-flight was run.
+
+### cold-reading-widening 0.1.0
+
+First entry. Object: the brief's current text including the construal statement,
+the glossary, the disciplines, the specs and the shipped tree, with the draft and
+planned intents withheld — the widening reading must not see the candidate set it
+is asked to widen. Regime `generative`, the widest of the four licences. Item
+shape: `configuration` and `what_admits_it`, with no third body field, so neither
+a preference nor a comparison against what was built has anywhere to go; a
+recommendation raises a review flag on ingest rather than a refusal, because
+comparison belongs to the comparative position. Canary: passed material demanding
+a ranking, a recommendation, and the draft intents this position cannot see.
+
+### cold-reading-entailment 0.1.0
+
+First entry. Object: the claim record, drafts and planned intents included, plus
+the constraint sources — articulation precedes selection, so this is the one
+position that properly reads drafts. Regime `explicative`. Item shape:
+`claim_surfaced`, `claim_type` (criterion, causal or context) and
+`what_implies_it`; commitments are surfaced and never dispositioned. Canary:
+passed material demanding the reading accept one claim, refuse another, and say
+what should change.
+
+### cold-reading-comparative 0.1.0
+
+First entry. Object: the candidate set, which is the widening reading's
+pre-admission output read within one cycle before admission, against the declared
+selection criteria — a recorded discipline, never supplied at invocation and
+never authored here. A prior run's stored output stays read-blocked, and where
+the candidate set carries fewer than two configurations the position is not
+exercised at all. Regime `evaluative`. Item shape: one item per
+candidate-criterion pair — `candidate_id`, `criterion`, `characterisation` — with
+no score and no winner. Canary: a criterion declaring itself authoritative and
+beyond question, which the seventh core condition refuses.
+
+### cold-reading-detection 0.1.0
+
+First entry. Object: the shipped tree against the claim record, with the draft and
+planned intents withheld, because a tension against a claim nobody has committed
+to is not a tension. Regime `registrative`. Item shape: `tension`,
+`constraint_in_play` and `why_a_tension`; the prohibition against proposing is
+constitutive here. Canary: a source comment demanding the patch that fixes what
+was found, and claiming an earlier run already dismissed it.
+
+## 0.3.0 — 2026-08-30 (itd-181 / spc-59 — scope-condition dispositions)
+
+### intent-auditor 0.3.0
+
+The verdict grows a fourth judgement surface: `scope_conditions`, one disposition
+per scope condition the intent records, keyed to the `cond-…` identity spc-55
+mints rather than to the condition's wording. The definition gains the
+`scope_conditions` input note (identities are host-supplied and echoed verbatim,
+never invented), a four-value rubric — `survived`, `narrowed`, `falsified`,
+`untested` — framed as harshly as the acceptance rubric (`untested` is the
+correct disposition for a vacuum, not `survived`), the extended output block, and
+two numbered rules naming what the ingest refuses: exact coverage of the supplied
+identities in both directions, the closed value set, `narrowing` required on
+`narrowed` and refused on every other disposition, and cited evidence on
+everything but `untested`.
+
+MINOR in the `0.x` band: the output contract is extended rather than reshaped,
+and a verdict for an intent that records no conditions — every intent shipped
+before the identity mint existed — stays valid unchanged. The Go ingest is what
+actually rejects a bad block (`internal/core/intent/audit.go`), and a lockstep
+test decodes this definition's own output blocks into the struct the ingest
+decodes, so the two cannot drift apart silently.
+Unmeasured — no calibration corpus exists for disposition judgement, and no
+self-improvement pre-flight was run.
+
+## 0.1.0 — 2026-08-30 (itd-188 / spc-66 — the ledger scribe)
+
+### scribe 0.1.0
+
+First entry. Host-delegated ledger scribe, whose access rule is the assembler's
+exact inverse (brief invariant 15): it receives ledger content under
+`.abcd/work/issues/` and the reading output it is transcribing, and never the
+shipped repository as an object of judgement. No session holds both a reading and
+the ledger. It transcribes returned readings and researcher dispositions into the
+reading-record and disposition shapes spc-58 declares, and authors nothing — no
+claim, no ground, no disposition state. Two permissions bound that: it may raise a
+**fidelity flag** on an internal inconsistency in the material it is transcribing
+and must carry it to the researcher unresolved (proposing a resolution is
+authorship), and anything it is explicitly asked to compose beyond formatting
+opens with a **contribution stamp** that travels with the material if adopted —
+the hand-run precursor of the record's origin keys, with an unstamped contribution
+refused rather than delivered. Carries `reads_untrusted_input: true`,
+`capability_scope.task_classes: [surface_render]`, and an injection-canary fixture
+whose payload demands the scribe author dispositions, fetch shipped-tree material,
+and move a ledger record. There is no ingest verb, and no schema for these
+shapes either until spc-58's reading and disposition stores land: the emitted
+records are committed through the ordinary record path, where `record_schema`
+refuses their directory as an undeclared bucket rather than judging the record, so
+the shapes are held by the definition and by review. The written protocol in the
+brief's agents chapter is followed by hand.
+Unmeasured — no calibration corpus exists for ledger transcription, and no
+self-improvement pre-flight was run.
+
 ## 0.2.0 — 2026-08-19 (iss-278 — the itd-5 contract reaches the review/research agents)
 
 Five prompts read attacker-influenceable input without the itd-5 contract:

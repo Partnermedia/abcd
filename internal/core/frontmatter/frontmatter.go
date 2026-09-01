@@ -158,6 +158,42 @@ func Duplicates(lines []string) []Dup {
 	return dups
 }
 
+// Split separates a record file's leading frontmatter block from its BODY. The
+// two returned strings concatenate back to the input byte for byte: head runs
+// from the opening delimiter through the closing one and its line ending, and
+// body is everything after it. Nothing is trimmed, so a caller that splices an
+// edited body back onto head gets the file it read.
+//
+// It exists so a record's writer and its readers can judge the SAME bytes. A
+// writer handed the whole file looks for its section in the frontmatter too, and
+// a `# Grounds` line there is a legal YAML comment \u2014 skipped by the block parser
+// and matched by an ATX heading pattern \u2014 so the writer wrote into a
+// pseudo-section the body reader never consults, agreed with itself on the
+// read-back, and reported success about a value nothing could read
+// (iss-2608301805069999).
+//
+// A text with no opening delimiter, and a block nothing closes, are BOTH all
+// body: there is no frontmatter to hold back, and holding back prose that no
+// reader treats as frontmatter would hide it from the caller that asked for the
+// body. The block's interior is not parsed here \u2014 which lines close it is
+// IsDelimiter's rule, and an indented line is never a close, exactly as the
+// strict ledger parser reads it.
+func Split(text string) (head, body string) {
+	lines := strings.SplitAfter(text, "\n")
+	if len(lines) == 0 || !IsDelimiter(TrimBOM(lines[0])) {
+		return "", text
+	}
+	n := len(lines[0])
+	for i := 1; i < len(lines); i++ {
+		ln := lines[i]
+		if !strings.HasPrefix(ln, " ") && !strings.HasPrefix(ln, "\t") && IsDelimiter(ln) {
+			return text[:n+len(ln)], text[n+len(ln):]
+		}
+		n += len(ln)
+	}
+	return "", text
+}
+
 // utf8BOM is U+FEFF, the byte-order mark some editors prepend to a file. It is
 // not Unicode White_Space, so strings.TrimSpace leaves it in place.
 const utf8BOM = "\ufeff"
@@ -195,4 +231,39 @@ func IsNull(v string) bool {
 		return true
 	}
 	return false
+}
+
+// Unquote reverses the backslash escaping a double-quoted frontmatter scalar
+// carries — the mirror of the escaping capture's yamlScalar emits, where a
+// backslash and a double quote are each written `\`-prefixed.
+//
+// This is the ONE decoder, for the reason IsNull above is the one null
+// predicate. capture's reader and record-lint's schema gate each held a
+// byte-identical private copy of this loop (iss-2608301212424896), which is the
+// split-verdict shape in waiting: the gate exists to refuse exactly what the
+// reader refuses, and two decoders that drift make a record the reader SKIPS go
+// lint-green. Callers come here rather than re-deriving it.
+//
+// The argument is the scalar's INNER text, with the surrounding quotes already
+// removed: whether a value is double-quoted at all is the caller's question,
+// and each caller answers it differently for its own reasons.
+func Unquote(s string) string {
+	var b strings.Builder
+	esc := false
+	for _, r := range s {
+		if esc {
+			b.WriteRune(r)
+			esc = false
+			continue
+		}
+		if r == '\\' {
+			esc = true
+			continue
+		}
+		b.WriteRune(r)
+	}
+	if esc {
+		b.WriteRune('\\')
+	}
+	return b.String()
 }

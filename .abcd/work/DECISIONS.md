@@ -2196,4 +2196,225 @@ together (the script's header says why there is no escape hatch).
 - 2026-08-29 — The gitleaks adapter admits a binary under an allow-shape, not a deny-list (GHSA-fg9r-3f8g-89m6, iss-2608291807456485): absolute path, resolved OUTSIDE the repository both lexically and after symlink resolution, regular, executable — applied identically to a committed `path` and to the PATH lookup result. Refusal is `ErrConfiguredPathRefused`, as loud as not-found, and a refused configured path never falls back to PATH. PATH itself stays trusted as the operator's environment (abcd already resolves git, gh and grep from it; a hostile checkout cannot set it); what the admission rule closes is a PATH entry or config that reaches INTO the checkout. Rejected: a fixed safe search path for the fallback (would break Homebrew/asdf/custom installs for no gain against an operator-level PATH compromise) and executing with an isolated env (the env is the operator's, like PATH — gitleaks does honour GITLEAKS_CONFIG, but a checkout cannot set it; cwd is pinned to the private temp dir instead). Containment routes through `fsutil.PathWithin` with the case-folding predicate AND an `os.SameFile` ancestor walk, because a byte-exact compare admitted a case-variant or NFD respelling of the root on APFS.
 - 2026-08-29 — v0.6.9 security pass, three process decisions recorded so they are not re-litigated. (a) The four GitHub bug-hunt issues (#485–#488) were verified before any capture and found already fixed on main by the 2026-08-27 security cut; they were closed against their fixing commits rather than re-captured, because a duplicate record beside a resolved one is noise the ledger's status signal cannot carry. (b) The installer's proxy/CA-bundle lockdown keeps no environment-variable escape hatch: the lockdown is the GHSA-x4v8 fix and an env opt-out reopens the vector; the availability cost (NixOS, corporate proxies) is captured as an open record for a product decision, and only the failure message was improved. (c) Every fix branch received two independent adversarial reviews (security + code) from reviewers that did not author the change, repeated until neither returned FIX-FIRST, and the assembled multi-branch diff received the same two again before the PR; the fix PR merges with a merge commit, never squash or rebase, so every resolved_by.commit stamp stays reachable (RS003).
 - 2026-08-30 — Every release object older than v0.6.9 is deleted from the forge (v0.1.0, v0.2.0, v0.3.0, v0.4.2, v0.5.1, v0.6.7, v0.6.8; the v0.6.0–v0.6.6 tags never had one), and every tag is kept. The three v0.6.9 advisories mark `<= 0.6.8` vulnerable, and a release object is the only thing that makes a vulnerable binary downloadable by version: the installer, the bootstrap hook and `abcd update` all resolve latest, so removing old assets affects only a deliberate pin, which is the point. Tags are the immutable audit trail the release gate relies on (adr-52), and the build-provenance and receipt attestations that named those releases stay in the attestation store even though the artefacts they attest are gone; the deletion is recorded here because no earlier release removed a predecessor and the decision log carried no practice for it. Reversing it means re-cutting a release from the surviving tag, never re-uploading old assets by hand.
+- 2026-08-28 — Cold-reading workstream rulings adopted (facilitator; committed in design discussion, disclosed as a pre-tooling lapse): (1) the construal-admissibility extension of adr-50 files first — the construal as it presently stands is committed record and readable by automated readers, its revision history is not (adr-55 carries the full rules); the construal is sited as a brief section under 01-product/. (2) The reading record (type name ruled at (17)) is a distinct record type in the issue tier with a separate disposition record and its own disposition vocabulary — the five-state slate with availability by position, per (19); the existing issue states are not reused for it; status is the presence of the keyed disposition, never folder membership. (3) One closing reading run is scheduled over the same object set after dispositions, with interpretations fixed in advance: silence is weak evidence of settlement; an accepted-and-acted detection returning is a finding; a rejected-with-purpose detection returning bears on whether the purpose resolved the tension. Amnesia is proven by a repository eval, never by a case run. A clean opening run is recorded as a run with an empty item set; the cycle proceeds and no further reading is commissioned. (4) The supply-regime check is built now: a regime field on the output contract, validated at ingest; enforcement is the default, and degradation to record-and-flag happens only on observed noise, recorded. (5) Reading invocation carries no free text: position and target state only. (6) The lapse log is a value in capture's validated category list, not the source enum. (7) Elicitation: the articulation round produces one intent, the exit noting candidates; the escalation rule is adopted (a defaults question that turns out conjectural escalates to the options regime); a held working principle permits articulation to proceed with the mechanism recorded as an explicit nullity, flagged in the readiness summary. (8) From the readings design, agreed as proposed: the reading record carries a position-typed item body (one record type, four bodies — registrative, generative, explicative, evaluative); the selection criteria are a recorded discipline with the committed six-criterion slate, never supplied at invocation; the comparative reading's candidate set is the widening reading's pre-admission output, with admission following the comparative characterisation; the no-input-is-authoritative condition enters the blindness core (no document passed to a reading is the fixed side of any comparison), and the widening/entailment asymmetry over draft and planned intents is stated explicitly in the assembler's include list — both confirmed at the facilitator's review, 2026-08-28; the disposition-side recurs citation is adopted as the recorded form of warm recurrence recognition. (9) Ruled 2026-08-28 (revised the same day): the manifest is committed to the durable tier at `.abcd/development/readings/<run-id>/`, alongside the run record — a new record family; lifecycle selects the tier, and commit reference plus per-item hashes make the assembly re-runnable and diffable. (10) Adopted 2026-08-28: brief invariant 15 — reading contexts and the ledger never meet, the scribe is not a transcript consumer, and the session-transcript store is reached through one door by an enumerated allow list (custodian writes and reads; lifeboat session-hunting consult-only; session-separation metadata; opt-in memory curation); a new consumer is an invariant change, never merely a code path, and only the history core package touches the store's path, held by a boundary test. (11) Adopted 2026-08-28: the escalation-logging addition — every escalation in the elicitation interview is logged as data, which question and on what grounds. (12) Ruled 2026-08-28: run metadata's instrument identity comprises the model identity, the definition's content hash, and the assembler version. (13) Ruled 2026-08-28: kinds bind as stamped — the instrument trio as one bundle with a shared spec, the rest standalone, the two disciplines as disciplines. (14) Ratified 2026-08-28: the 2026-08-27 grill-pass resolutions, as implemented in the drafts. (15) Ruled 2026-08-28: warm transcript consultation proceeds with the redaction residue disclosed; transcript content is not quoted into committed records until the secret-scan work closes the residue. (16) Ruled 2026-08-28: the construal extension refines adr-50 — adr-50 stays accepted, the extension states the refinement, and adr-50's related_adrs gains the minted id at filing (adr-55). (17) Ruled 2026-08-28: the record type is the reading record (folder `issues/readings/<run-id>/`); "detection" stays the name of the Step-6 instrument and its registrative body. (18) Ruled 2026-08-28: pattern-named is an envelope field; the two assembler rules (no include names a directory containing a record family; a reading's object excludes what it exists to change) are adopted; the read-block eval also asserts the instrument's own prior outputs never reach a reading; where the widening reading returns fewer than two configurations, the comparative reading is not exercised and the outcome is recorded as such. (19) Ruled 2026-08-28 (R7): five disposition states with availability by position — admission is `accepted` (position lives on the envelope); declining a widening proposal is `declined`, never `rejected`; the grounds field is `disposition_grounds`, required on every state except `held`; the disposition record validates its state against the envelope's position. (20) Authorised 2026-08-28 (facilitator): the build session runs the intent → spec → ship ceremony autonomously for this workstream's filings — adoption, spec creation and approval, readiness, kind binding, shipped moves, and audit ingest — with every act logged; PR merges, reversal flags, new dependencies, and records outside the workstream remain human-gated. The autonomy is deliberate and is itself part of what the cycle observes; ownership of every act rests with the committing identity, per the provenance rules.
+- 2026-08-28 — Ledger mechanism and ledger content are distinct: the mechanism is engineering (schemas, commands, gates, evals), reviewable and reworkable; the content is the recorded reasoning, populated only by actual use and never reconstructed. A defect in the mechanism is fixed; a defect in the content is disclosed.
+- 2026-08-28 — Grounds recording extends the ADR family rather than duplicating it: the family holds decision-granularity grounds (Alternatives Considered); the ledger adds conjecture granularity as a grounds argument on the selection surfaces, one canonical primitive, no parallel store.
+- 2026-08-29 — Roles for the cold-reading cycle (facilitator): the session user is the facilitator; the co-author is the product thinker, who dictates the construal. Both are named by role only, never by name, in every record and commit. The construal is the ledger's construal for this cycle, not abcd-wide. Frame origination is reserved to the warm side: the orchestrator formats and may widen options, never recommends a construal or rules whether one fits.
+- 2026-08-30 — Cycle 1 restarts on v0.6.9 (facilitator): baseline v0.6.9-4-g976575f9; the orchestrator is Fable, research and implementation sub-agents are Opus 5 in fresh contexts; the merge target is the integration branch `experiment/cold-reading` in a worktree outside the checkout, never main — the final PR to main is the facilitator's to test and merge. Widening decision (20): the orchestrator also runs the two adversarial reviews and the dependency-ordered merges onto the integration branch autonomously; the only stops are gate weakening, a security BLOCK genuinely unresolvable, and a new Go dependency (allowed only if absolutely necessary, logged). Improvisation inside the rules is allowed and logged, never quiet.
+- 2026-08-30 — Ratified (facilitator): the not-yet-real marker is a passage-level token — a blockquote line holding exactly `**Status: NOT YET REAL.**`, a blank line, then the statement as the first paragraph — so a bold opening sentence can never be mistaken for the token. The ledger's construal passage carries it.
+- 2026-08-30 — The ledger's construal is filed (pre-tooling entry 01 resolves to this pointer): `.abcd/development/brief/01-product/06-framing.md`, section "Construal". Production mode: dictated by the product thinker, formatted by the orchestrator against docs/reference/writing-style.md with zero text operations (the one rule it meets, capital after a colon, is waived for the lowercase-by-design name), confirmed per item by the facilitator before filing. The 150-word outward-facing form is held on the local ledger side, unfiled, until a home is assigned. Ambiguity flag from the two adversarial reviews carried, not ruled: "ledger" also names the issue ledger; the section heading names whose construal it is, and a glossary term remains an open option.
+- 2026-08-30 — Confirmed (facilitator): the six-criterion selection slate (plausibility, generativity, cost, risk, learning value, practical importance) files as the selection-criteria discipline as committed 2026-08-28.
+- 2026-08-30 — Deferred (facilitator): whether `held` is available at the widening position or a deferred configuration belongs to the selection vocabulary's `deferred`; revisit point is the first widening run's dispositions, a later cycle. Non-gating: the per-position availability row stays unfilled until then.
+- 2026-08-30 — Framing section sited as `01-product/06-framing.md`, appended rather than inserted so existing chapter links hold (facilitator). The brief↔lifeboat mapping row and the `00-meta.md` regeneration are deferred to itd-143's build, carried from session 1: the filing PR carries no code beyond the lapse enum line.
+- 2026-08-30 — Deferred with revisit point at Phase 2 planning: the workstream's roadmap phase home (options presented: Phase 3; Phase 2; a new Phase 7; a split) and the [HAND] owners for the scribe-protocol rehearsal and the step-2 admission records (facilitator, product thinker, or either-first).
+- 2026-08-30 — Ruled at the checkpoint (facilitator): the workstream's roadmap phase home is a new Phase 7, the next free number; the phase document files with the Phase 1 records. This supersedes the deferral recorded above.
+- 2026-08-30 — The brief-lifeboat mapping row for the framing section lands in the Phase 1 filing after all (orchestrator's improvisation, logged for the facilitator): `TestEveryBriefSectionHasARow` refuses a brief section without a row, an armed test cannot stay red, and the construal must file first; the row is its own commit, droppable if the facilitator prefers to hold it for itd-143's build. This supersedes the deferral recorded above.
+- 2026-08-30 — Phase 1 adversarial review (ruthless-reviewer, fresh context) findings captured as iss-2608300114352100 (a first name disclosed through a homonym in the session-1 lapse record; the wording is replaced, and the pushed branch's history still carries it until the PR is squash-merged), iss-2608300114357633 (this log contradicting the branch, remedied by the two lines above), and iss-2608300114359543 (record consistency: one role name for the 2026-08-28 rulings, the ratified marker form in itd-143, the framing section statement-first, no adoption-date marker on invariant 15, the phase count, and "Phase 2 planning" reworded so it cannot read as roadmap Phase 2). All three resolved in the same change.
+- 2026-08-30 — itd-179 round-3: the grounds substance floor is measured in letter-runs (`MinTextWords = 3`) alongside the character count, not instead of it. Rejected: replacing the character floor, which would admit "a b c"; raising the word count further, which the corpus (shortest real entry, 32 words) does not need and which would start refusing terse honest reasoning.
+- 2026-08-30 — itd-179 round-3: the double-quoted frontmatter scalar decoder's canonical home is `internal/core/frontmatter` (`Unquote`), joining `IsNull` there, rather than exporting `capture.unquote`. Rejected: lint importing capture, which is an import cycle — capture's own tests import lint.
+- 2026-08-30 — itd-179 round-4: the grounds floor's unit is a WORD where the script separates words and a LETTER where it does not (`textUnits` + a named, deliberately partial `scriptioContinua` set: Han, Hiragana, Katakana, Thai, Lao, Khmer, Myanmar, Tibetan, Javanese), and `MinTextWords = 3` is unchanged. The letter test is load-bearing, not tidy: a Unicode SCRIPT table carries its script's digits, punctuation and combining marks too, so counting table members would have made twenty Thai digits — or twenty Tibetan tsheg, which are twenty dots — a twenty-unit text and reopened iss-2608301206034359 once per script. Rejected: the review-converged shape of "contains a scriptio-continua rune → skip the run count and apply the rune floor", because `supercalifragilistic 中` then clears a 20-rune floor on one word; the shipped counting refuses it at two units, though the closure is one ideograph deep (`supercalifragilistic 中中` passes, as `supercalifragilistic 中 中` already did before this change). Rejected: Hangul in the set — Korean is spaced, and counting its syllables would let two Korean words clear a three-word floor. Limit stated in the doc comment: a scriptio-continua script not named in the set still counts as one word and is still refused, and the set is where that is fixed, one script at a time.
+- 2026-08-30 — itd-179 round-4: the grounds floor's character half counts LETTERS (`MinTextLetters = 20`, `isTextLetter`) and is asked AFTER the unit half. Both halves stay, as the round-3 entry above requires — what changes is the unit each is measured in and the order they are asked in. A rune count is answered by whatever occupies a rune: `a b c` plus seventeen dots cleared twenty "characters" carrying three letters of reasoning, and a text of Hangul fillers cleared the whole floor while rendering as nothing end to end. Rejected: asking the letter count first, which makes the scriptio-continua refusal unreachable — every unit that refusal speaks for is a single letter, so a text with twenty letters has twenty units and can never be below the three-unit floor, and one with fewer would be refused for its letters instead. Rejected: filtering only the zero-width format characters, which leaves the filler class open because U+115F, U+1160, U+3164 and U+FFA0 are category Lo; `unicode.Other_Default_Ignorable_Code_Point` names exactly those four letters and nothing else. Corpus: the 25 recorded grounds texts in the tree are refused by neither the old floor nor the new one.
+- 2026-08-30 — itd-179 round-5: the ISSUE ledger's grounds become APPEND-ONLY, as a `## Grounds` body section mirroring the intent half, and the frontmatter `grounds:` scalar is retired (16 committed records migrated in the same change). A scalar is SET, so a resolve or wontfix silently destroyed the conjecture a promote recorded — on the ledger's mainline sequence, since fourteen resolved records carry `promoted_to` — and the result still reported success (iss-2608301657354776). Rejected: refusing a transition that would overwrite a non-empty grounds, as the record proposed; promote, resolve AND wontfix all REQUIRE grounds, so the refusal would make a promoted issue impossible to resolve. Rejected: last-write-wins declared as a chosen tradeoff, because `intent/grounds.go` already argues the opposite for the same data — the earlier conjecture is precisely what a later reader checks the outcome against. One-canonical-primitive: the record form (heading, section reader, append, readability check) moved to `core/grounds`, and the generic markdown-body machinery under it to a new leaf `core/mdrecord`, so both record families share ONE definition rather than holding two. Rejected: leaving the form in `core/intent` and having capture call it, which is one implementation but puts an issue-record body parser behind the intent package's door. The retired key is TOLERATED in `issueschema.Known`, not refused: a refusal makes capture SKIP the record, and a record invisible to every surface while it still sits in the ledger is worse than a value nothing reads — the record lint's `record_schema` blocks the misplacement and names the section instead.
+- 2026-08-30 — itd-179 round-5: a RELOCATION is not a BACKFILL, and the forward-only rule forbids only the second. Moving a pre-tooling `## Grounds (pursued)` section from a spec onto its intent (commit 09f7d91a, thirteen specs) put text authored at the moment of pursuit where it belongs; nothing was reconstructed, which is the whole of what "never backfilled" refuses. Three shipped intents therefore carry a `## Grounds` section — itd-177, itd-182, itd-188 — and the surface claim now says so instead of asserting the corpus carries none (iss-2608301657357989). The enforcement is unchanged and stays maximally strict: `RecordGrounds` refuses a shipped or superseded record whatever the provenance of the text, because nothing in it can tell relocated text from invented text, so the relocated state is deliberately not reachable through `abcd intent ready --grounds`. Rejected: weakening the refusal to admit a `--relocate` escape, which would make the distinction a caller's assertion rather than a reviewable fact about a commit.
+- 2026-08-30 — itd-179 round-5, correction to the round-4 letter-floor entry above: `unicode.Other_Default_Ignorable_Code_Point` does NOT "name exactly those four letters and nothing else", and the remainder is not "format characters and variation selectors". Measured over the whole code space: the table holds 3776 code points, of which exactly seven are assigned — the four Hangul filler letters (Lo) and three non-spacing marks (Mn) — and the other 3769 are unassigned; it carries zero format characters and zero variation selectors, which reach `Default_Ignorable_Code_Point` through the other contributors to that derived property. The conclusion the round-4 entry drew is unchanged and was verified exhaustively — the only LETTERS the table can exclude are those four — but the description of the rest of it was wrong, so it is corrected here rather than left to be re-derived (iss-2608301657350399).
+- 2026-08-30 — itd-179 delta close: the grounds APPEND and its read-back run over the record BODY, spliced back onto the frontmatter, rather than over the whole file. `frontmatter.Split` is the one lossless answer to where the block stops and `grounds.Body` is what both halves ask, so the writer judges the bytes the reader consults and the writer/reader disagreement is unrepresentable rather than banned one spelling at a time (iss-2608301805069999). The intent half's reader moves to the same scope, where the whole-file reading would have found an empty pseudo-section. Rejected: refusing a frontmatter `# Grounds` comment, which bans the one spelling that was reported and leaves the scope split that produced it.
+- 2026-08-30 — itd-179 delta close: body scope does NOT close consequence A, and the record says so. An unclosed opener in the BODY still masks the body, so an appended entry still cannot read back and every triage route still refuses — verified by a test that stayed red at the body-scope commit and only passed at the next one. What makes that survivable is the other two halves: the refusal names the opener's line and construct instead of the grounds operand, and promote dry-runs the append against the pre-flight bytes so a deterministic refusal mints nothing (iss-2608301803423101). Rejected: refusing every record carrying an unclosed opener, which would refuse writes that succeed — a `## Grounds` section ABOVE the opener takes the entry perfectly well. Rejected: a file-relative line number in the refusal, because the triage verbs append after setting their note field and the number would name a line the unwritten record on disk does not have; the number is body-relative and the opener's text is quoted beside it.
+- 2026-08-30 — itd-179 delta close: `mdrecord.findBacktickRun`'s superlinear shape stays, on a measurement rather than a shrug. A line of 120 distinct-length backtick runs costs ~200us and an ordinary record line ~76ns; precomputing the runs into a slice takes the bad line to ~7us and the ordinary line to ~115ns with one allocation per line, and stepping between runs with `strings.IndexByte` takes the bad line to ~243us. Both trade the case that always happens for a case no record body has. Rejected: landing the precomputed-run version, which reads as an optimisation and is a regression on this repo's workload. The two benchmarks and the numbers live in the package so the trade is not re-litigated.
+- 2026-08-30 — Correction to the itd-179 delta-close entry above, which is
+  substantively right and wrong in two words. It says "consequence A" — a label
+  that exists nowhere in the repository, the orchestrator's briefing shorthand
+  leaked into the durable record; the record it points at enumerates its
+  consequences as 1, 2, 3. And it says "the record says so", which the record
+  does not: its resolution field names the diagnosis and mint-ordering halves
+  only, so consequence 1 reads as fixed to anyone arriving fresh. The residual —
+  an unclosed comment or fence in an issue BODY still locking the record out of
+  all three triage verbs — now has its own open marker at iss-2608301908270888,
+  which is where a later session should find it rather than by following a
+  pointer to a record that does not mention it. Everything else in that entry
+  stands, including both rejected alternatives.
+- 2026-08-30 — The scribe-protocol rehearsal is owned by the facilitator and runs in this cycle, scoped to the process alone: whether the protocol works, not whether it matches the product thinker's intentions. The product thinker is unavailable, so the fidelity half cannot be exercised and is deliberately out of scope for this rehearsal rather than silently skipped; a rehearsal that tested only what one participant could judge would otherwise be reported as if it had tested both. This is the remaining half of the Phase 0 item (d) whose phase home was ruled earlier; the step-2 admission-record owner stays unnamed, and the roadmap now records why nothing is owed there before a widening reading runs.
+- 2026-08-30 — The disposition vocabulary ships four states and the fifth stays unnamed, which is spc-58's decision restated rather than a new one: the shipped enum is `accepted`, `rejected`, `declined`, `held`, the schema is data so a fifth is one line the day it is named, and naming it is a vocabulary judgement belonging to the researcher rather than to a build. `admitted` is not the missing fifth — ruling (19) already folds admission into `accepted` because position lives on the envelope, so introducing it would reverse that ruling rather than complete it. The `recurs` citation is likewise ruled out by spc-58 as never a state, and nothing meaning "already covered" exists at any position because an undispositioned item is reported as outstanding instead. The open candidate the record leaves is the selection vocabulary's `deferred`, which makes this the same question as whether `held` is available at the widening position — already deferred to the first widening run's dispositions, and settled there or not at all.
+- 2026-08-30 — The two cold-reading evals get their own always-run CI job rather than riding the `smoke` job that stands down on record-only pull requests. The stand-down is anti-correlated with the risk these evals exist to catch: they read the live record tree, and `docs/`, `.abcd/development/`, `.abcd/work/` and the root prose files are both the classifier's inert allowlist and the material the assembler includes, so the diff most able to introduce warm content is exactly the diff that skips the check. A stood-down job still reports its context green, so the current shape manufactures a green for work that did not happen, which the loud-staging principle refuses. The remedy follows the reasoning `ci.yml` already documents for the ubuntu unit lane, which never stands down precisely because its tests read the live tree: a small job with no `inert` condition running these two evals alone, the rest of the smoke harness unchanged, the workflow edit landing with itd-186/187 so it is reviewed beside the evals it serves. Ruled before the build rather than after, because spc-64 and spc-65 both promised no workflow edit would be needed and that promise is what changes.
+- 2026-08-30 — The in-place mutation hazard graduates from a session habit to the committed record as itd-193, a discipline: a verifier works on a copy, and whoever acts on a tree proves it clean immediately before the act rather than inheriting an earlier check. Occasioned by a reviewer running its mutation matrix against a live build worktree while a peer review, correctly, reported the modification as untouchable peer work it could not distinguish from real work. Routed by the four-piece table: the stance and its gate to a discipline record; the operational line to the AGENTS.md concurrent-sessions section beside the peer-work rule it complements; no capability, because the documented protocol is the MVP at this rung (script-first-mvp); no ADR, because it governs method rather than architecture. Adjacent to the one-writer-per-file principle and deliberately not folded into it: that principle governs committed records across merge windows and puts per-worktree files out of scope, while this governs the working tree inside a single window. REACH IS THIS REPOSITORY ONLY and the record says so — a rule reaches every abcd-managed repo through a bundled default domain compiled into the binary, which is a code change and its own intent; rung 2 (a recall-injected domain rule) and rung 3 (a mechanical clean-tree assertion) are named in the record and neither is claimed.
+- 2026-08-31 — Three rulings from the two fidelity audits. (1) The grounds
+  obligation gets a FORWARD-ONLY gate: a terminal-folder record must carry an
+  entry if it was created after the gate is armed, and the cutover is the ARMING
+  COMMIT rather than a date, because a date in prose is the fact itd-195 says
+  not to state. Precedent is this cycle's own forward-only intent-side gate, and
+  the reason is that the ~689 records that would otherwise be refused were made
+  by the repo's ordinary working practice. Rejected: no gate at all (honest but
+  leaves three-quarters of new records escaping a claim the press release makes
+  universal) and forcing the verb to be the only door (universal, but 689
+  migrations and a fight with daily practice). (2) The four remaining intents'
+  ACCEPTANCE CRITERIA are reviewed BEFORE building, and any criterion conjoining
+  a structural half a machine can enforce with a judged half it cannot is split
+  — the remedy itd-183's audit proposed for its own ac-5. Five criteria have now
+  been audited and none reached MET; two are unmeetable by nature, and MWC stops
+  carrying information once it is the default. (3) The grounds body-lockout is
+  lowered to minor and the hand edit accepted as the repair: the guard is
+  correct, the exit exists in a text editor, exposure is latent, and validating
+  at capture time would contradict the adopted rule that capture stays
+  frictionless.
+- 2026-08-31 — Phase 0 of the last four intents executed: the ruled criteria
+  split, applied to itd-184, itd-185, itd-186 and itd-187 before any builder
+  started, with the four specs' mapping tables rewritten in the same change so
+  intent and spec cannot drift. Splits: itd-184's regime criterion separated
+  the value stated in the definition from the absence of any operator surface
+  that sets it, the latter given its own observable and an executable
+  enumeration rather than a written list; itd-185's malformed-output criterion
+  separated refusal-with-no-partial-write from the crash window between staging
+  and the commit marker, and its registrative and explicative criteria each
+  separated the reserved-name half the schema holds absolutely from the
+  semantic half bounded by the signature registry; itd-187's second criterion
+  was replaced by three, because its Given — a nondeterminism introduced into
+  the shipped assembler — is unestablishable by any artefact, an eval being
+  forbidden to patch the code under test, and the remainder is disclosed as a
+  recorded hand-run. Every residue is stated in the record beside the criterion
+  it qualifies, so a later audit reads the bound rather than rediscovering it.
+  BEYOND THE LETTER OF THE RULING, and cheap to reverse because each sits
+  contiguously at the end of its list: three criteria added to itd-185 (named
+  provenance at every regime, the payload regime that disagrees with the
+  definition, and verb-minted item ids) and two to itd-186 (the oracle's
+  structural independence from the assembler, and the anti-vacuity guard that
+  every declared sentinel is planted). Each covers a promise already in the
+  intent's scope and already carrying a named test in its spec, and leaving a
+  load-bearing promise unmeasured is the same failure as an unmeetable
+  criterion, taken from the other side. Item-level refusal granularity in
+  itd-185 is the one such gap left unclosed, and is queued rather than added.
+  Rejected: splitting at build time (the criterion is rewritten in minutes
+  before the work and re-litigated in an audit after it) and leaving the
+  semantic halves conjoined under MET_WITH_CONCERNS (which stops carrying
+  information once it is the default outcome, and on the present trajectory it
+  is).
+- 2026-08-31 — The wave plan is re-cut, because itd-184 and itd-185 are not
+  independent: spc-63's regime gate resolves a run's position to
+  agents/cold-reading-<position>.md and reads its regime key, and recomputes
+  that file's hash for instrument identity, so itd-185 cannot be built until
+  itd-184's four definition files and their locator exist. The real graph is
+  two file-disjoint lanes — itd-184 then itd-185 over internal/core/reading and
+  agents/, itd-186 then itd-187 over evals/, the Makefile and ci.yml — so the
+  ceiling of two concurrent agents is held by running one lane in each rather
+  than by pairing the two deepest. itd-186 and itd-187 need no assembler change:
+  spc-64's four demands on spc-61's interface (dry-run, an operator-named output
+  directory, separate bundle and manifest artefacts, position and target flags,
+  non-zero exit) are all already shipped. Rejected: building itd-185 first
+  against fixture definitions, which would ship the keystone verb unwired to the
+  definitions that are its source of truth.
+- 2026-08-31 — itd-185's payload item is FLAT (`pattern` plus the position's own
+  body fields, read from `issueschema.ReadingBodyFields`), not spc-63's drafted
+  `{pattern_named, body}` with shortened names. Ground: the four shipped
+  definitions instruct the flat shape and the record schema's field names, so
+  the drafted table would have refused every output the shipped instrument can
+  produce and would have put a rename between the payload and the record for no
+  gain. Rejected: keeping the spec's table and translating at ingest.
+- 2026-08-31 — The ingest stage holds a write-aside MARKER, not the rendered
+  reading records; `capture.IngestReading` writes them against the real ledger.
+  Ground: that writer mints every item id under the ledger lock precisely so its
+  collision probe sees the tree it is about to write into, and staging into a
+  second issues root would move the probe off the real ledger. The orphan sweep
+  rolls the run back instead, bounded by the `rdi-N.md` filename grammar.
+  Rejected: staging rendered records per spc-63's first draft.
+- 2026-08-31 — The position/regime disagreement is refused in
+  `reading.LoadDefinition`, not cross-checked in the ingest verb. Ground: the
+  locator is the one thing that claims to resolve a position to its regime, and
+  a resolver returning a confidently wrong answer would hand the supply-regime
+  gate the wrong licence silently. Rejected: a cross-check inside the ingest
+  path, which would be a second table of one fact and leave the primitive broken
+  for the status render.
+- 2026-08-31 — itd-185's record-size limit is DECIDED in capture.IngestReading on
+  the assembled bytes, not estimated from the payload; reading's recordBytes stays
+  as a cheap early filter that buys item-level granularity. Ground: two attempts
+  to decide it upstream each modelled one lengthening step (the escaper) and
+  missed the next (the redactor, which exceeds 2x and scales with body length),
+  and a record past the limit is durable and permanently undispositionable.
+  Rejected: a third coefficient.
+- 2026-08-31 — itd-185's ingest containment is layered and the layers are
+  mutually redundant: writeJSONIn's contained write is currently unreachable
+  because refuseARerun probes the same path through the root first, and nothing
+  asserts that ordering. Recorded rather than fixed, because the property is
+  proved by mutating containment as a whole; a future edit that moves or drops
+  the rerun probe must re-check it. Rejected: a per-layer test, which would pin
+  an ordering the design does not promise.
+- 2026-08-31 — itd-185 folds invisible and compatibility-equivalent runes
+  (Unicode spaces, Cf + Other_Default_Ignorable_Code_Point + Variation_Selector,
+  NFKC) before signature matching and before every blankness rule, and DISCLOSES
+  the script-confusable class as open. Ground: the registry's own phrasing with a
+  byte substituted is an evasion of the gate, not the calibration residue; a
+  confusables table is a new dependency and the maintainer's call. Rejected:
+  filing the invisible-rune class under the disclosed residue.
+- 2026-08-31 — The cold-reading evals' CI job is NOT added to the branch
+  ruleset's required-check list yet, and the sequencing is the decision rather
+  than the delay. The job and its make target exist only on
+  `experiment/cold-reading`; neither is on `main`, which was checked rather than
+  assumed. A required status check blocks a pull request until that context
+  reports, and a context no workflow on the base branch produces never reports —
+  so arming `cold-reading-evals` on the active `main protection` ruleset before
+  the workflow reaches `main` would wedge every merge to `main`, including the
+  very pull request that would deliver the workflow. The order is therefore:
+  merge the workstream to `main` first, confirm the job runs and reports its
+  context on a real pull request, and only then add it to the live ruleset and
+  to the committed mirror at `.abcd/work/rulesets/main-protection.json` in one
+  change. Rejected: updating the mirror now to record the intent, because a
+  mirror asserting a required check that is not required is a false record of
+  exactly the kind this phase spent the day removing, and it would read as
+  done. Until the arming lands, itd-186's always-run lane runs on every pull
+  request and gates none of them, which is a green for work that did happen but
+  binds nothing — the weaker half of the failure spc-64 was written against.
+  Tracked at iss-2608311051046981.
+- 2026-08-31 — A capability is rehearsed end to end before it ships, at three
+  rungs, adopted as itd-196 at the documented-protocol rung on the maintainer's
+  instruction. Per intent, run what that intent delivers; per intent
+  cumulatively, rerun what the PHASE can deliver so far; at the phase's close,
+  one full run against the corpus the phase is meant to serve. Always over a
+  real repository state, always in a throwaway snapshot, and the result recorded
+  whether or not it is good news. Occasioned by the cold-reading workstream,
+  where thirteen intents, six adversarial delta reviews, five fidelity audits
+  and three review rounds on one eval all passed, and the first end-to-end run
+  found in about fifteen minutes that the artefact a reading is handed is around
+  9.8 MB, roughly 2.45 million tokens, so no reading can be given one, and that
+  three of the four positions receive a byte-identical item set although their
+  definitions state four distinct objects. Routed by the four-piece table: the
+  stance and its gate to a discipline record; no capability, because the
+  rehearsal is a hand-run over verbs that already exist and script-first-mvp puts
+  the documented protocol at this rung; no ADR, because it governs method rather
+  than architecture; no trust rule, because nothing here is a trust boundary. The
+  cumulative rung is the load-bearing one and it is the addition the maintainer
+  made: the size defect belongs to an assembler shipped in an EARLIER phase which
+  passed its own tests, review and audit, and none of the three intents rehearsed
+  at the end delivers anything that hands a reading an artefact on its own, so
+  only the question "what can this phase deliver right now" reaches a defect
+  living in the composition. A phase that carries a cumulative rehearsal is
+  runnable at every point rather than being a list of merged intents, which makes
+  the demonstration a deliverable rather than a by-product. Rejected: a single
+  rehearsal at the phase close, which is what was actually done here and which
+  found the defect one whole phase after the intent that caused it. REACH IS THIS
+  REPOSITORY ONLY; a rule reaching every abcd-managed repo is a bundled default
+  domain compiled into the binary, which is a code change and its own intent.
+- 2026-08-31 — A fact a source can settle is read, not recalled, adopted as
+  itd-197 at the documented-protocol rung on the maintainer's instruction.
+  Recall locates a source and never quotes one; the rule binds any assertion
+  about to be written into a record, a commit message or a brief, or used as the
+  grounds for a decision, and leaves conversation free to be provisional so long
+  as it says which it is. Occasioned by four errors in one session, each about a
+  document its author had read carefully hours earlier: the grounds put to the
+  maintainer for degrading the supply-regime gate cited a licence the design does
+  not give, since its condition is "degradation only on observed noise" and the
+  evidence was a constructed corpus over an instrument that has never run; a
+  captured issue asserted that no non-test file referenced the agent definitions
+  when one already declared the directory constant; a residue paragraph claimed
+  an enumeration could not fall behind while two written lists survived inside
+  it; and a synthetic battery's result was reported as measured. The pattern is
+  the finding: confidence tracked FAMILIARITY rather than accuracy, and the
+  material nobody had read that day produced no false claims because nobody felt
+  able to assert anything about it. Routed by the four-piece table: the stance
+  and its gate to a discipline record; no capability, because the remedy is to
+  open the file; no ADR, because it governs method rather than architecture; no
+  trust rule. Filed as a discipline rather than left as agent memory BECAUSE it
+  was already agent memory: a note from a previous session saying to check a
+  principle's letter before citing it was in context from the first turn and did
+  not bind, which is memory-graduates-to-record's promotion signal in its
+  stronger form, a lesson recalled and then not followed, showing the home rather
+  than the lesson to be at fault. Rejected: leaving it as a memory item, which is
+  what had already failed, and writing a detector, because whether an assertion
+  was read or recalled is not visible in the text. REACH IS THIS REPOSITORY ONLY.
 - 2026-08-31 — The abcd lab convention: experiments run in throwaway snapshots at the operator level, never inside or committed to the repo. Home: `~/.abcd/lab/<timestamp>-<source-sha7>/`, keyed by mint-time timestamp plus 7-char source-root sha — several labs may share one baseline, and the directory must exist before the first mutation; this diverges from the voyage log's root-sha keying (voyage keys one event per source state; a lab keys a session whose identity is its intention), and the divergence is stated rather than claimed as fidelity. Layout: `INTENTION.md` (question, hypothesis, measures, STOP conditions — written before any mutation), `snapshot/` (a throwaway clone mutated freely; records mint freely inside it and never promote — harvests re-file into the real corpus), `transcripts/`, `harvest/`, `amendments.md`, plus an append-only `~/.abcd/lab/index.jsonl` registry (id, source sha, status, harvest pointer). DISCARD ends the lab session, not the lab home: the snapshot's live tree is archived to `snapshot.bundle` and deleted, and every mutation session inside a snapshot ends with a commit inside the snapshot before archiving, so minted records and the snapshot's own `.abcd/` tier survive in the bundle; `INTENTION.md`, `transcripts/`, `harvest/`, and `amendments.md` survive discard, and a later lab clones its base world from an earlier lab's bundle. The real repo is touched only when a harvest files records through normal ceremony, each carrying `found_during: lab-<id>` provenance and the lab's base sha. Harness-isolation preflight re-runs per lab against that lab's own snapshot world. Hand-maintained until a lab verb exists; the verb is a capstone candidate.

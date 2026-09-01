@@ -13,6 +13,7 @@ See itd-4 for the full intent. Ledger schema lives in the Go binary (`internal/c
 
 | Verb | Bucket | Status |
 |---|---|---|
+| `disposition` | — | shipped |
 | `list` | — | shipped |
 | `promote` | — | shipped |
 | `resolve` | — | shipped |
@@ -24,12 +25,13 @@ See itd-4 for the full intent. Ledger schema lives in the Go binary (`internal/c
 | Subcommand | Purpose | File movement |
 |---|---|---|
 | `/abcd:capture` (no args) | Help + status: shows the most recent open issues and closes with a three-way routing hint — capture vs intent, plus an ideate route (a big, unproven idea? `abcd ideate` runs the optional admission gauntlet and records the verdict either way). Bare invocation owns the default status/help render — there is no implicit-default filtered list. | — |
-| `/abcd:capture "<text>"` | Fast path: appends a structured issue entry to the ledger with auto-assigned `iss-N`; provenance and taxonomy are caller-supplied flags — `--severity`, `--category`, `--source`, and `--found-during` each carry a default; `--found-at`, `--slug`, and `--blocked-by` (comma-separated `iss-N` dependency edges; blocked/priority status is derived from `blocked_by`, never stored) have none | writes `.abcd/work/issues/open/iss-N-<slug>.md` |
+| `/abcd:capture "<text>"` | Fast path: appends a structured issue entry to the ledger with auto-assigned `iss-N`; provenance and taxonomy are caller-supplied flags — `--severity`, `--category`, `--source`, and `--found-during` each carry a default; `--found-at`, `--lapsed-at` (the RFC 3339 instant a recorded discipline gave way — the lapse, never the write-up; **required with `--category lapse`**, where omitting it exits 2 and writes nothing, because the only available default is the write-up time the entry exists to distinguish itself from), `--slug`, and `--blocked-by` (comma-separated `iss-N` dependency edges; blocked/priority status is derived from `blocked_by`, never stored) have none | writes `.abcd/work/issues/open/iss-N-<slug>.md` |
 | `/abcd:capture list --open` | Query the ledger for currently-open issues (flag immediately adjacent — earned SD001 exception) | — |
 | `/abcd:capture list --resolved` | Query the ledger for resolved issues | — |
 | `/abcd:capture list --wontfix` | Query the ledger for wontfix issues | — |
 | `/abcd:capture list --all` | Query the ledger across all three states | — |
-| `/abcd:capture promote <iss-N> [--intent <itd-N>]` | Promote an issue to an intent draft, native CLI sub-verb (spc-24, itd-119): one invocation mints a draft under `intents/drafts/` — slug reused from the issue, body carrying a by-id pointer, never a copy (SSOT) — and stamps the issue's `promoted_to` with the minted `itd-N`; the draft's `promoted_from` is the reciprocal edge. Works from any status folder (promotion is orthogonal to fix-status). `--intent` is the stamp-only mode that links an existing draft — the repair path after a post-mint stamp failure, which the error names. | (issue stays; intent created in `drafts/`) |
+| `/abcd:capture promote <iss-N\|rdi-N> [--intent <itd-N>]` | Promote an issue to an intent draft, native CLI sub-verb (spc-24, itd-119): one invocation mints a draft under `intents/drafts/` — slug reused from the issue, body carrying a by-id pointer, never a copy (SSOT) — and stamps the issue's `promoted_to` with the minted `itd-N`; the draft's `promoted_from` is the reciprocal edge. Works from any status folder (promotion is orthogonal to fix-status). `--intent` is the stamp-only mode that links an existing draft — the repair path after a post-mint stamp failure, which the error names. A reading item (`rdi-N`) graduates through the same verb, and only with a standing disposition of `accepted`: an undispositioned item, and one standing as `rejected`, `declined` or `held`, are each refused before anything is minted (spc-58). | (issue stays; intent created in `drafts/`) |
+| `/abcd:capture disposition <rdi-N> --state <accepted\|rejected\|declined\|held>` | Record the researcher's answer to one reading item (itd-180, spc-58), as a record of its own keyed to the item. `--grounds` is required on every state except `held`, which requires `--exit-condition` instead; availability varies by the item's position, read off the keyed reading record. `--supersedes <dsp-N>` is required once the item already carries a standing answer — the only exit from a hold, and what makes the standing disposition the one no sibling supersedes. `--recurs` cites prior item ids. The two `--hold-*` flags are reserved and dormant: a populated value is refused until activation is ruled. | writes `.abcd/work/issues/dispositions/<rdi-N>/dsp-N.md` |
 | `/abcd:capture resolve <iss-N> "<resolution-note>" --impact <additive\|breaking\|fix\|internal>` | Mark issue resolved (`--impact` is required — resolving without it exits 1). Three optional `resolved_by` provenance flags name what fixed it: `--intent itd-N` (must exist), `--spec spc-N` (must exist), `--commit <sha>` (shape-checked hex) | `open/` → `resolved/` |
 | `/abcd:capture wontfix <iss-N> "<reason>"` | Explicit non-action decision | `open/` → `wontfix/` |
 
@@ -53,10 +55,11 @@ id: iss-N                  # unpadded, mirrors itd-N
 slug: <kebab-case>
 severity: nitpick|minor|major|critical
 impact: additive|breaking|fix|internal   # required in resolved/; drives the derived version and changelog inclusion
-category: bug|documentation|drift|inconsistency|tech-debt|security|ux|process|architectural-insight|future-work-seed|observation
+category: bug|documentation|drift|inconsistency|tech-debt|security|ux|process|architectural-insight|future-work-seed|observation|lapse
 source: plan-review|impl-review|manual-test|review-followup|agent-finding|agent-observation|user-observation|drift-detection|memory-curation
 found_during: <session-or-command-context>
 found_at: <path-or-conceptual>
+lapsed_at: <rfc3339-utc>   # required when category is lapse: the instant the discipline gave way, not the write-up
 details: "<text>"          # optional structured detail
 suggested_fix: "<text>"    # optional proposed remedy
 related_intents: [itd-N, ...]
@@ -76,6 +79,11 @@ resolved_by:               # optional structured pointer to what resolved it
 
 Enum values above mirror the issue ledger schema in `internal/core`
 exactly; the schema is the single source of truth.
+
+`lapsed_at` is transcribed from what the source states, never derived from the
+clock at write-up. Where that source names only a day, the stamp is midnight UTC
+of that day — the day is the whole of the claim, and midnight is what makes it an
+instant without inventing an hour nobody recorded.
 
 **Verify a `--commit` stamp is reachable before writing it.** The flag is
 shape-checked and nothing more: `^[0-9a-f]{7,64}$` proves the value looks
@@ -107,6 +115,8 @@ A later phase, not yet built — the migration rides the `abcd dev-sync work` su
 - **Given** an existing issue at `.abcd/work/issues/open/iss-3-foo.md`, **when** the user runs `/abcd:capture resolve iss-3 "fixed in spc-7 task 4" --impact fix` (`--impact` is required and has no default), **then** the file moves to `.abcd/work/issues/resolved/iss-3-foo.md` with the resolution recorded.
 - **Given** an existing issue in any status folder, **when** the user runs `/abcd:capture promote iss-N`, **then** one invocation files a new draft intent under `intents/drafts/` — slug reused, body a by-id pointer to the issue, `promoted_from: iss-N` in its frontmatter — and stamps the issue's `promoted_to` with the minted `itd-N`, the issue keeping its folder; an issue already promoted is refused with the existing `itd-N`, and a post-mint stamp failure names the orphan draft and the `--intent` repair.
 - **Given** a fresh `/abcd:ahoy` upgrade with an existing scratch buffer under `.abcd/.work.local/`, **when** `dev-sync` runs (a later phase, not yet built — § 3), **then** every entry in that scratch buffer is promoted to the structured ledger with provenance noting "migrated from `.abcd/.work.local/` scratch".
+- **Given** a reading item at `.abcd/work/issues/readings/<run-id>/rdi-N.md` and no disposition for it, **when** the user runs `/abcd:capture disposition rdi-N --state accepted --grounds "<why>"`, **then** a record is written at `.abcd/work/issues/dispositions/rdi-N/dsp-M.md`; a second answer to the same item is refused unless it cites the standing one with `--supersedes`, an empty `--grounds` (or a `held` with an empty `--exit-condition`) is refused, and a state the item's position does not make available is refused with the availability rule named.
+- **Given** a reading item carrying no disposition, **when** the user runs `/abcd:capture promote rdi-N`, **then** the promote is refused and no intent draft is minted — acceptance is one record and the action it licenses is a separate admission. The same refusal covers a standing `rejected`, `declined` or `held`: only `accepted` licenses an action, and the result's `issue_status` carries that standing state rather than a status folder.
 - **Given** a ledger containing 5 open issues, **when** the user runs `/abcd:capture list --open` (the flag is explicit — there is no implicit default), **then** the output lists all 5 with id, state, severity, and slug, in derived-priority order — unblocked issues first, then severity (`critical` → `nitpick`); rows blocked by an open dependency are demoted and annotated with their open blockers.
 - **Given** a ledger with a mix of open, resolved, and wontfix issues, **when** the user runs `/abcd:capture list --all`, **then** every issue across all three states is listed; the equivalent unfiltered CLI form `abcd capture list` (no flag) instead exits 2 with a "choose a filter" message.
 - **Given** an abcd-installed repo, **when** the user runs bare `/abcd:capture` (no args), **then** the output is a read-only status render — counts (`open N · resolved N · wontfix N`), up to 10 most recent open issues, and a three-way routing hint (capture vs intent, plus an ideate route) — and no `iss-*.md` file is created, moved, or field-mutated by the invocation itself.
@@ -121,6 +131,30 @@ A later phase, not yet built — the migration rides the `abcd dev-sync work` su
 - **Command flow:** delivered by the predecessor's `spc-21-abcdcapture-command-flow-text-ingest` (predecessor store).
 - **Legacy `.abcd/.work.local/` scratch migration:** design target per the predecessor's `spc-22-workissuesmd-migration-promote-legacy` (predecessor store) — a later phase, not yet built (rides the `dev-sync` surface, § 3).
 - **intent-auditor cross-check:** delivered by the predecessor's `spc-23-intent-auditor-extension` (predecessor store); the reviewer surface ships as `agents/intent-auditor.md`.
+- **Reading records and dispositions (itd-180, spc-58):** the schemas live in
+  `internal/core/issueschema`; `internal/core/capture/reading.go` is the writer
+  and the refusing gate for both families; `capture disposition` is the front
+  door for the answer, and `capture promote` refuses an undispositioned item.
+  The PRODUCER of an `rdi-N` is not here: the cold-reading ingest verb owns the
+  output contract and is the only caller of `capture.IngestReading`, so until it
+  lands the two reading sub-verbs have no item to act on. That sequencing is
+  spc-58's own — it consumes the output contract and adds no second validation
+  path — and it is the reason `IngestReading` is an exported primitive rather
+  than a verb of this surface.
+- **Step-2 admission records (itd-189, spc-67):** the admission record (`adm-N`
+  under `.abcd/work/issues/admissions/<run-id>/`) and the surprise entry
+  (`srp-N` under `.abcd/work/issues/surprises/`) ship as SCHEMAS, declared in
+  `internal/core/issueschema` beside the reading families and wired to
+  `record_schema` rather than to a verb. A declined proposal is no third record
+  type: it is the disposition in its `declined` state. This surface has no
+  sub-verb that writes either shape — the records are hand-written and the
+  command-side refusal is iteration 2 — so what is armed today is the
+  committed-tree gate: a blank `grounds`, an absent `proposal`, an
+  `occasioned_by` naming no record, and either family filed in the other's
+  store are each a blocker, and `reading_outstanding` reports a widening
+  proposal carrying neither an admission nor a decline at `info`. The
+  sequencing is the same one the reading families carry above: no reading has
+  run, so there is nothing to write yet.
 - **`promote <iss-N>` bridge:** a native engine sub-verb (spc-24, itd-119) —
   `internal/core/capture/promote.go` mints the draft under `intents/drafts/`
   and stamps the issue's `promoted_to` field itself, one invocation writing

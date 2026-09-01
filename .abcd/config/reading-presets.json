@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "presets": {
+    "cold": {
+      "positions": {
+        "widening": {
+          "kinds": ["brief-section", "glossary-term", "discipline"],
+          "records": [],
+          "paths": []
+        },
+        "entailment": {
+          "kinds": ["intent-projection", "spec"],
+          "records": [],
+          "paths": []
+        },
+        "detection": {
+          "kinds": ["brief-section", "discipline", "spec"],
+          "records": [],
+          "paths": []
+        }
+      }
+    },
+    "warm": {
+      "extends": "cold",
+      "positions": {
+        "widening": {
+          "kinds": ["doc"],
+          "records": [],
+          "paths": []
+        },
+        "entailment": {
+          "kinds": ["discipline"],
+          "records": [],
+          "paths": []
+        },
+        "detection": {
+          "kinds": ["doc", "config"],
+          "records": [],
+          "paths": ["internal/core/lint"]
+        }
+      }
+    }
+  }
+}

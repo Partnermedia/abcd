@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -44,7 +45,7 @@ func TestTransitionSerializesOnLedgerLock(t *testing.T) {
 	lockTimeout = 200 * time.Millisecond
 	defer func() { lockTimeout = orig }()
 
-	_, err = Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "x", Impact: "fix"})
+	_, err = Resolve(ResolveRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "x", Impact: "fix"})
 	if !errors.Is(err, ErrAllocatorContention) {
 		t.Fatalf("transition must serialize on the ledger lock (expect contention while held), got err=%v", err)
 	}
@@ -271,7 +272,7 @@ func TestResolveTransition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tr, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "patched in fn-9", Impact: "fix"})
+	tr, err := Resolve(ResolveRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "patched in fn-9", Impact: "fix"})
 	if err != nil {
 		t.Fatalf("Resolve: %v", err)
 	}
@@ -294,15 +295,15 @@ func TestResolveConflictAndUnknown(t *testing.T) {
 		RepoRoot: repo, IssuesRoot: ir, Text: "b", Severity: SeverityMinor,
 		Category: "bug", Source: "manual-test", Slug: "s", FoundDuring: "t",
 	})
-	if _, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "done", Impact: "fix"}); err != nil {
+	if _, err := Resolve(ResolveRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "done", Impact: "fix"}); err != nil {
 		t.Fatal(err)
 	}
 	// Already resolved -> conflict.
-	if _, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "again", Impact: "fix"}); !errors.Is(err, ErrTransitionConflict) {
+	if _, err := Resolve(ResolveRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "again", Impact: "fix"}); !errors.Is(err, ErrTransitionConflict) {
 		t.Fatalf("want ErrTransitionConflict, got %v", err)
 	}
 	// Unknown id.
-	if _, err := Wontfix(WontfixRequest{RepoRoot: repo, IssuesRoot: ir, ID: "iss-999", Reason: "nope"}); !errors.Is(err, ErrUnknownIssueID) {
+	if _, err := Wontfix(WontfixRequest{Grounds: "declined: we expect this to stay out of scope for the foreseeable cycle", RepoRoot: repo, IssuesRoot: ir, ID: "iss-999", Reason: "nope"}); !errors.Is(err, ErrUnknownIssueID) {
 		t.Fatalf("want ErrUnknownIssueID, got %v", err)
 	}
 }
@@ -327,7 +328,7 @@ func TestTransitionRemoveFailureDoesNotStrandIssueInTwoDirs(t *testing.T) {
 	removeSourceHook = func(string) error { return injected }
 	defer func() { removeSourceHook = nil }()
 
-	if _, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "x", Impact: "fix"}); !errors.Is(err, injected) {
+	if _, err := Resolve(ResolveRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "x", Impact: "fix"}); !errors.Is(err, injected) {
 		t.Fatalf("expected the injected remove failure to surface, got %v", err)
 	}
 
@@ -343,7 +344,7 @@ func TestTransitionRemoveFailureDoesNotStrandIssueInTwoDirs(t *testing.T) {
 	// A single copy must remain findable: a retry (remove now unblocked) should
 	// succeed cleanly rather than tripping ErrDuplicateIssueID.
 	removeSourceHook = nil
-	if _, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "x", Impact: "fix"}); err != nil {
+	if _, err := Resolve(ResolveRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "x", Impact: "fix"}); err != nil {
 		t.Fatalf("retry after rollback should succeed, got %v", err)
 	}
 }
@@ -354,7 +355,7 @@ func TestWontfixTransition(t *testing.T) {
 		RepoRoot: repo, IssuesRoot: ir, Text: "b", Severity: SeverityMinor,
 		Category: "process", Source: "user-observation", Slug: "meh", FoundDuring: "t",
 	})
-	if _, err := Wontfix(WontfixRequest{RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Reason: "platform constraint"}); err != nil {
+	if _, err := Wontfix(WontfixRequest{Grounds: "declined: we expect this to stay out of scope for the foreseeable cycle", RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Reason: "platform constraint"}); err != nil {
 		t.Fatalf("Wontfix: %v", err)
 	}
 	lr, _ := List(ListRequest{RepoRoot: repo, IssuesRoot: ir, State: StateWontfix})
@@ -435,7 +436,7 @@ func TestStatusCountsAndRecentOpen(t *testing.T) {
 		ids = append(ids, res.ID)
 	}
 	// Resolve the first one.
-	if _, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: ids[0], Resolution: "done", Impact: "fix"}); err != nil {
+	if _, err := Resolve(ResolveRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: ids[0], Resolution: "done", Impact: "fix"}); err != nil {
 		t.Fatal(err)
 	}
 	st, err := Status(StatusRequest{RepoRoot: repo, IssuesRoot: ir})
@@ -626,6 +627,7 @@ func TestCaptureAcceptsResolvedBlockedByTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := Resolve(ResolveRequest{
+		Grounds:  testGrounds,
 		RepoRoot: repo, IssuesRoot: ir, ID: root.ID, Resolution: "fixed", Impact: "fix",
 	}); err != nil {
 		t.Fatal(err)
@@ -691,7 +693,7 @@ func TestDerivedPriorityUnblockedFirstThenSeverity(t *testing.T) {
 
 	// Resolve the blocker: iss-2 becomes unblocked and sorts to the front by its
 	// critical severity.
-	if _, err := Resolve(ResolveRequest{RepoRoot: repo, IssuesRoot: ir, ID: "iss-1", Resolution: "fixed", Impact: "fix"}); err != nil {
+	if _, err := Resolve(ResolveRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: "iss-1", Resolution: "fixed", Impact: "fix"}); err != nil {
 		t.Fatal(err)
 	}
 	lr2, err := List(ListRequest{RepoRoot: repo, IssuesRoot: ir, State: StateOpen})
@@ -794,4 +796,225 @@ func TestMalformedRecordNameIsVisiblySkipped(t *testing.T) {
 	if !strings.Contains(lr.Skipped[0].Error, "iss-2-another_finding.md") {
 		t.Errorf("skip message %q does not name the offending filename", lr.Skipped[0].Error)
 	}
+}
+
+// TestCaptureBlankLapsedAtIsNotWritten closes a gate disagreement the writer
+// could create on its own. The reader trims lapsed_at before judging it, so a
+// whitespace-only value reads as ABSENT and — for any category but lapse, where
+// the property is optional — is accepted; the committed-ledger gate does not
+// trim, so it reads the same bytes as a present value that is no RFC 3339
+// instant and blocks. Capture would then have written a record that it goes on
+// reading happily while its own record_schema blocker says it refuses and skips
+// it: a red preflight whose message is false about the record in front of it.
+//
+// The writer is the right side to fix. Trimming here means an all-whitespace
+// value never reaches the file, so both gates see an absent property and agree.
+// Refusing it in validateStrict instead would move the disagreement the other
+// way: lint stays silent on `lapsed_at: ""`, so the reader would refuse — and
+// therefore SKIP, making the record invisible to every capture surface — a
+// record the gate calls clean.
+func TestCaptureBlankLapsedAtIsNotWritten(t *testing.T) {
+	// Spaces only: a tab or newline in a scalar is already refused by the
+	// serializer's control-char guard, so those spellings never reach the file by
+	// a different mechanism and would pin the wrong guard here.
+	for _, blank := range []string{" ", "   "} {
+		t.Run(strconv.Quote(blank), func(t *testing.T) {
+			repo, ir := ledger(t)
+			res, err := Capture(CaptureRequest{
+				RepoRoot: repo, IssuesRoot: ir,
+				Text: "a plain observation", Severity: SeverityMinor,
+				Category: "observation", Source: "user-observation",
+				Slug: "padded", FoundDuring: "manual smoke", LapsedAt: blank,
+			})
+			if err != nil {
+				t.Fatalf("capture: %v", err)
+			}
+			raw, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(res.Path)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(raw), "lapsed_at") {
+				t.Fatalf("a whitespace-only lapsed_at reached the record, where the "+
+					"committed-ledger gate blocks on it:\n%s", raw)
+			}
+		})
+	}
+}
+
+// TestTransitionRestampsProductionMode proves a mutation that ADDS TEXT may
+// restamp the production mode: a resolution note is new text with its own mode,
+// so the key is not a fact frozen at mint. It is restamped only when the caller
+// declares one — an absent flag leaves the record's existing value alone rather
+// than overwriting it with a default.
+func TestTransitionRestampsProductionMode(t *testing.T) {
+	repo, ir := ledger(t)
+	res, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir, Text: "b", Severity: SeverityMinor,
+		Category: "bug", Source: "user-observation", FoundDuring: "t", Slug: "note",
+		ProductionMode: "dictated-and-formatted",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Resolve(ResolveRequest{
+		RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "fixed", Impact: "fix",
+		Grounds:        testGrounds,
+		ProductionMode: "scribe-transcribed",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	fm := readLedgerFrontmatter(t, ir, res.ID)
+	if fm["production_mode"] != "scribe-transcribed" {
+		t.Errorf("production_mode = %v, want the restamped scribe-transcribed", fm["production_mode"])
+	}
+
+	// A transition that declares no mode leaves the stamp alone.
+	res2, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir, Text: "c", Severity: SeverityMinor,
+		Category: "bug", Source: "user-observation", FoundDuring: "t", Slug: "other",
+		ProductionMode: "dictated-and-formatted",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Wontfix(WontfixRequest{RepoRoot: repo, IssuesRoot: ir, ID: res2.ID, Reason: "no"}); err != nil {
+		t.Fatal(err)
+	}
+	fm = readLedgerFrontmatter(t, ir, res2.ID)
+	if fm["production_mode"] != "dictated-and-formatted" {
+		t.Errorf("an undeclared mode overwrote the stamp: %v", fm["production_mode"])
+	}
+
+	// An out-of-vocabulary mode is refused and the issue does not move.
+	if _, err := Resolve(ResolveRequest{
+		RepoRoot: repo, IssuesRoot: ir, ID: res2.ID, Resolution: "x", Impact: "fix",
+		Grounds:        testGrounds,
+		ProductionMode: "typed",
+	}); err == nil {
+		t.Error("an out-of-vocabulary production mode must be refused")
+	}
+}
+
+// TestTransitionLeavesOriginAlone proves the asymmetry the design rests on: a
+// record's arrival path is a fact about how it came to exist, and resolving it
+// does not change where it came from. Only production_mode is a running claim
+// about the text; origin is stamped at mint and never rewritten.
+func TestTransitionLeavesOriginAlone(t *testing.T) {
+	repo, ir := ledger(t)
+	res, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir, Text: "b", Severity: SeverityMinor,
+		Category: "bug", Source: "user-observation", FoundDuring: "t", Slug: "note",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Resolve(ResolveRequest{
+		RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "fixed", Impact: "fix",
+		Grounds:        testGrounds,
+		ProductionMode: "scribe-transcribed",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	fm := readLedgerFrontmatter(t, ir, res.ID)
+	if fm["origin"] != "researcher-authored" {
+		t.Errorf("origin = %v after a transition, want it unmoved at researcher-authored", fm["origin"])
+	}
+}
+
+// TestTransitionRefusesRestampOnUnstampedRecord is the case the restamp test
+// above did not cover: EVERY record already in the ledger predates disclosure
+// and carries neither key. Restamping one appended a lone production_mode with
+// no origin — a state no write path produces, which the branch's own
+// record_provenance blocker then reported against a record the command had just
+// written. The refusal comes before any write, and an unstamped record stays
+// resolvable when no mode is declared.
+func TestTransitionRefusesRestampOnUnstampedRecord(t *testing.T) {
+	repo, ir := ledger(t)
+	res, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir, Text: "b", Severity: SeverityMinor,
+		Category: "bug", Source: "user-observation", FoundDuring: "t", Slug: "note",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	unstamp(t, ir, res.ID)
+	before := readRaw(t, ir, res.ID)
+
+	_, err = Resolve(ResolveRequest{
+		RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "fixed", Impact: "fix",
+		Grounds:        testGrounds,
+		ProductionMode: "scribe-transcribed",
+	})
+	if err == nil {
+		t.Fatal("a restamp on a record that predates disclosure must be refused")
+	}
+	if !strings.Contains(err.Error(), "predates disclosure") {
+		t.Errorf("the refusal must say why, got: %v", err)
+	}
+	if _, status, ferr := findIssue(ir, res.ID); ferr != nil || status != StateOpen {
+		t.Fatalf("a refused restamp must not move the issue: status=%s err=%v", status, ferr)
+	}
+	if after := readRaw(t, ir, res.ID); after != before {
+		t.Errorf("a refused restamp rewrote the record:\n%s", after)
+	}
+
+	// Wontfix refuses on the same terms.
+	if _, err := Wontfix(WontfixRequest{
+		RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Reason: "no", ProductionMode: "hand-written",
+	}); err == nil || !strings.Contains(err.Error(), "predates disclosure") {
+		t.Errorf("wontfix must refuse the same restamp, got: %v", err)
+	}
+
+	// An unstamped record is still resolvable — the refusal is about the restamp,
+	// never about the transition, and forward-only population must not strand a
+	// record nobody can close.
+	if _, err := Resolve(ResolveRequest{
+		RepoRoot: repo, IssuesRoot: ir, ID: res.ID, Resolution: "fixed", Impact: "fix",
+		Grounds: testGrounds,
+	}); err != nil {
+		t.Fatalf("an unstamped record must still resolve when no mode is declared: %v", err)
+	}
+	fm := readLedgerFrontmatter(t, ir, res.ID)
+	if _, present := fm["production_mode"]; present {
+		t.Errorf("a transition that declared no mode stamped one: %v", fm["production_mode"])
+	}
+}
+
+// unstamp rewrites a ledger record without the two disclosure keys, producing
+// the shape of every record committed before they existed.
+func unstamp(t *testing.T, issuesRoot, id string) {
+	t.Helper()
+	src, _, err := findIssue(issuesRoot, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var kept []string
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.HasPrefix(line, "origin:") || strings.HasPrefix(line, "production_mode:") {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	if err := os.WriteFile(src, []byte(strings.Join(kept, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// readRaw returns a ledger record's bytes, so a refusal can be proved to have
+// left them alone.
+func readRaw(t *testing.T, issuesRoot, id string) string {
+	t.Helper()
+	src, _, err := findIssue(issuesRoot, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
 }

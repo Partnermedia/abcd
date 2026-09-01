@@ -1,10 +1,12 @@
 package intent
 
 import (
+	"encoding/binary"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/intentdriven/abcd/internal/core/frontmatter"
 	"github.com/intentdriven/abcd/internal/core/recordid"
@@ -96,7 +98,12 @@ func parseIntent(relPath, content, bucket string) (Intent, error) {
 // create spec, set kind while still a draft, move to planned, then write
 // spec_id — is chosen so that (kind=standalone, spec_id=null) is the only
 // transient frontmatter, and that shape is valid in BOTH drafts and planned.
-func Plan(repoRoot, intentID string) (PlanResult, error) {
+//
+// productionMode is the disclosure the MINTED SPEC carries (itd-178); it is
+// validated by the spec store before the id is minted, and an empty value takes
+// the vocabulary's default. It has no bearing on the intent record, whose own
+// stamp was written when the draft was created and is never rewritten.
+func Plan(repoRoot, intentID, productionMode string) (PlanResult, error) {
 	if !recordid.ValidIntentID(intentID) {
 		return PlanResult{}, fmt.Errorf("intent: id %q must match ^itd-[0-9]+$", intentID)
 	}
@@ -107,6 +114,14 @@ func Plan(repoRoot, intentID string) (PlanResult, error) {
 	it, ok := corpus.Lookup(intentID)
 	if !ok {
 		return PlanResult{}, fmt.Errorf("intent: %s not found in any bucket", intentID)
+	}
+	// A record already in planned/ takes the identity step alone. Conditions get
+	// written after planning — the elicitation is a human conversation, not a
+	// one-shot — and Plan is the only writer of a marker there is, so refusing the
+	// re-run would leave such a record permanently unable to satisfy the gate that
+	// demands the marker (iss-2608300210588874).
+	if it.Bucket == BucketPlanned {
+		return stampPlanned(repoRoot, it)
 	}
 	if it.Bucket != BucketDrafts {
 		return PlanResult{}, fmt.Errorf("intent: %s is in %s, not drafts; only a draft can be planned", intentID, it.Bucket)
@@ -140,27 +155,62 @@ func Plan(repoRoot, intentID string) (PlanResult, error) {
 		return PlanResult{}, err
 	}
 	sp, ok := store.ByIntent(intentID)
+
+	// 1a. The draft face grows the record THREE times — the identity stamp, the
+	// kind rewrite, the spec_id rewrite — and the largest of them is knowable
+	// before any of them is written. Checking per write let a record pass the kind
+	// write, MOVE to planned, and only then fail the spec_id write, leaving a
+	// half-planned record neither Plan nor Link repairs; and it left a freshly
+	// minted spec behind with nothing pointing at it (iss-2608300335369473). The
+	// check runs first, before the spec is minted, over the id that mint WOULD
+	// produce — and again below with the id it actually produced, because NextID
+	// is predicted outside the mint lock and a concurrent create can push the id
+	// to a wider number. Both run before the first write, so neither refusal
+	// leaves a half-planned record; a spec minted and then refused is reusable,
+	// since the next run finds it through ByIntent.
+	specID := sp.ID
+	if !ok {
+		if specID, _, err = spec.NextID(repoRoot); err != nil {
+			return PlanResult{}, err
+		}
+	}
+	if err := checkDraftFaceSize(content, it, specID, draftRel); err != nil {
+		return PlanResult{}, err
+	}
+
 	var mintWarning string
 	if !ok {
-		sp, mintWarning, err = spec.Create(repoRoot, intentID, it.Slug)
+		sp, mintWarning, err = spec.Create(repoRoot, intentID, it.Slug, productionMode)
 		if err != nil {
+			return PlanResult{}, err
+		}
+		// Re-judge against the id the mint actually chose, still before any write.
+		if err := checkDraftFaceSize(content, it, sp.ID, draftRel); err != nil {
 			return PlanResult{}, err
 		}
 	}
 
-	// 2. Set the binding kind (default standalone) while still in drafts. A draft
-	// with (kind=standalone, spec_id=null) stays lint-valid, so a failure here
-	// leaves a consistent record (the spec exists but the intent is unlinked).
+	// 2. Stamp an identity onto every unmarked scope-condition bullet, and set the
+	// binding kind (default standalone), while still in drafts. Plan is the
+	// write-capable verb of the lifecycle, so it is where the identities are
+	// minted: the readiness gate reports a missing marker but never writes one, a
+	// reporter that writes being a reporter whose output depends on who ran it.
+	// A draft with (kind=standalone, spec_id=null) stays lint-valid, so a failure
+	// here leaves a consistent record (the spec exists but the intent is unlinked).
+	stampedContent, conditionsStamped, err := stampScopeConditions(content, recordid.Minter{})
+	if err != nil {
+		return PlanResult{}, err
+	}
 	kind := it.Kind
 	if frontmatter.IsNull(kind) {
 		kind = KindStandalone
 	}
-	withKind, err := setFrontmatterFields(content, map[string]string{"kind": kind})
+	withKind, err := setFrontmatterFields(stampedContent, map[string]string{"kind": kind})
 	if err != nil {
 		return PlanResult{}, err
 	}
-	if err := fsutil.WriteFileAtomic(draftAbs, []byte(withKind), 0o644); err != nil {
-		return PlanResult{}, fmt.Errorf("intent: writing kind to %s: %w", draftRel, err)
+	if err := writeIntentFile(draftAbs, draftRel, withKind); err != nil {
+		return PlanResult{}, err
 	}
 
 	// 3. Move drafts/ → planned/ via the shared, trust-guarded move. The moved
@@ -179,15 +229,130 @@ func Plan(repoRoot, intentID string) (PlanResult, error) {
 	if err != nil {
 		return PlanResult{}, err
 	}
-	if err := fsutil.WriteFileAtomic(plannedAbs, []byte(withSpec), 0o644); err != nil {
-		return PlanResult{}, fmt.Errorf("intent: writing spec_id to %s: %w", plannedRel, err)
+	if err := writeIntentFile(plannedAbs, plannedRel, withSpec); err != nil {
+		return PlanResult{}, err
 	}
 
 	it.Kind = kind
 	it.SpecID = sp.ID
 	it.Bucket = BucketPlanned
 	it.Path = plannedRel
-	return PlanResult{Intent: it, Spec: sp, MintWarning: mintWarning}, nil
+	return PlanResult{Intent: it, Spec: sp, MintWarning: mintWarning, ConditionsStamped: conditionsStamped}, nil
+}
+
+// checkDraftFaceSize refuses a draft whose planned form would not fit under the
+// cap its own reader enforces, BEFORE the first write and before the bucket
+// move. It reproduces the three growth steps in order and judges the largest.
+func checkDraftFaceSize(content string, it Intent, specID, rel string) error {
+	// Every native id is the same width, so a fixed clock and an ADVANCING suffix
+	// measure exactly what the real mint will write. The entropy has to advance:
+	// a constant source hands the second bullet the id the first already used, the
+	// redraw loop exhausts, and the whole judgement is lost behind a mint error on
+	// every record with more than one condition (iss-2608300352403199). The source
+	// is per-call, so two concurrent plans never share a counter.
+	probe := recordid.Minter{
+		Now:     func() time.Time { return time.Unix(0, 0).UTC() },
+		Entropy: &probeEntropy{},
+	}
+	stamped, _, err := stampScopeConditions(content, probe)
+	if err != nil {
+		// Including a structural refusal: reporting it here, before the spec is
+		// minted, is strictly better than letting the real stamp reach it later.
+		return err
+	}
+	kind := it.Kind
+	if frontmatter.IsNull(kind) {
+		kind = KindStandalone
+	}
+	withKind, err := setFrontmatterFields(stamped, map[string]string{"kind": kind})
+	if err != nil {
+		return err
+	}
+	withSpec, err := setFrontmatterFields(withKind, map[string]string{"spec_id": specID})
+	if err != nil {
+		return err
+	}
+	largest := len(stamped)
+	for _, n := range []int{len(withKind), len(withSpec)} {
+		if n > largest {
+			largest = n
+		}
+	}
+	if largest > maxIntentFileBytes {
+		return fmt.Errorf("intent: planning %s would produce %d bytes, past the %d-byte cap its own reader enforces; refusing before any write", rel, largest, maxIntentFileBytes)
+	}
+	return nil
+}
+
+// probeSuffixSpan keeps every probe draw below the mint's rejection band, so no
+// draw is discarded and the counter advances one id per bullet. Suffixes repeat
+// after 10,000 bullets — a record that long fails the size cap many times over.
+const probeSuffixSpan = 50000
+
+// probeEntropy is the size probe's entropy: an advancing counter, never
+// crypto/rand. It exists so the probe's ids are distinct and sixteen digits
+// wide; nothing it produces is ever stored.
+type probeEntropy struct{ n uint16 }
+
+func (e *probeEntropy) Read(p []byte) (int, error) {
+	var b [2]byte
+	for i := 0; i < len(p); i += 2 {
+		e.n = (e.n + 1) % probeSuffixSpan
+		binary.BigEndian.PutUint16(b[:], e.n)
+		copy(p[i:], b[:])
+	}
+	return len(p), nil
+}
+
+// stampPlanned is Plan's idempotent second face: it mints an identity for every
+// unmarked scope-condition bullet of an already-planned record and writes it
+// back, touching nothing else — no spec, no frontmatter, no bucket move. An
+// already-marked bullet is left byte-identical, so re-running after an edit
+// stamps only what is new.
+//
+// A run with nothing to stamp is a refusal, not a quiet success: the caller
+// asked for work to be done, and a verb that exits 0 having done none of it
+// teaches its user that the command is a no-op.
+func stampPlanned(repoRoot string, it Intent) (PlanResult, error) {
+	rel := it.Path
+	abs := filepath.Join(repoRoot, rel)
+	var stampedCount int
+	// The read, the mint and the write are one critical section under the store's
+	// existing advisory lock: two sessions stamping the same record would
+	// otherwise each write the file they read, and the later write would drop the
+	// earlier one's identities (iss-2608300235388164).
+	err := withIntentMintLock(repoRoot, func() error {
+		data, err := readRepoFile(abs, rel)
+		if err != nil {
+			return err
+		}
+		stamped, n, err := stampScopeConditions(string(data), recordid.Minter{})
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return fmt.Errorf("intent: %s is already planned and carries no unmarked scope condition; nothing to stamp", it.ID)
+		}
+		if err := writeIntentFile(abs, rel, stamped); err != nil {
+			return err
+		}
+		stampedCount = n
+		return nil
+	})
+	if err != nil {
+		return PlanResult{}, err
+	}
+	res := PlanResult{Intent: it, ConditionsStamped: stampedCount, StampOnly: true}
+	// The stamp mints no spec, but the intent has one, and an empty spec object in
+	// the result reads as "this intent has no spec" to anything consuming it. The
+	// lookup is lenient: a broken link is the readiness gate's finding to report,
+	// not a reason to fail a write that already succeeded.
+	if store, lerr := spec.Load(repoRoot); lerr == nil {
+		if sp, ok := store.Lookup(it.SpecID); ok {
+			res.Spec = sp
+		}
+	}
+	return res, nil
 }
 
 // Link retroactively writes the derived spec_id link on an existing planned
@@ -235,8 +400,8 @@ func Link(repoRoot, intentID, specID string) (LinkResult, error) {
 	if err != nil {
 		return LinkResult{}, err
 	}
-	if err := fsutil.WriteFileAtomic(abs, []byte(updated), 0o644); err != nil {
-		return LinkResult{}, fmt.Errorf("intent: writing spec_id to %s: %w", rel, err)
+	if err := writeIntentFile(abs, rel, updated); err != nil {
+		return LinkResult{}, err
 	}
 
 	it.SpecID = specID
@@ -359,6 +524,28 @@ func Reconcile(repoRoot, specID string) (ReconcileResult, error) {
 		}
 	}
 	return res, nil
+}
+
+// writeIntentFile is the one way this package writes an intent record — the
+// seed, the lifecycle rewrites and the audit-block upserts all go through it,
+// so the claim is a fact rather than a description of most of them. It caps
+// the FINAL bytes before writing them, because the cap belongs at the write and
+// not at any one producer: readRepoFile refuses a record over the cap, and every
+// verb here loads the WHOLE corpus first, so one oversized record makes every
+// intent command refuse every record until a human trims the file by hand. Each
+// write is preceded by a growth step — an identity stamp, a `kind` rewrite, a
+// `spec_id` rewrite — and guarding only the first of them left the others free to
+// carry a record over the line (iss-2608300318192814).
+//
+// rel is repo-relative: an intent error never carries an absolute local path.
+func writeIntentFile(abs, rel, content string) error {
+	if len(content) > maxIntentFileBytes {
+		return fmt.Errorf("intent: writing %s would produce %d bytes, past the %d-byte cap its own reader enforces; refusing", rel, len(content), maxIntentFileBytes)
+	}
+	if err := fsutil.WriteFileAtomic(abs, []byte(content), 0o644); err != nil {
+		return fmt.Errorf("intent: writing %s: %w", rel, err)
+	}
+	return nil
 }
 
 // moveIntentToBucket moves the intent file at srcRel into dstBucket via os.Rename
