@@ -9,6 +9,10 @@ found_during: "the v0.7.0 cut, changelog ingest"
 found_at: "internal/termsafe/prose.go"
 origin: researcher-authored
 production_mode: hand-written
+resolution: "termsafe gains an opt-in KeepCodeSpans option: with it the prose cleaner walks CommonMark 6.1 code-span boundaries and leaves a closed span's content out of the raw-HTML neutralisation, while text outside a span, an unterminated opener, a backslash-escaped backtick, a pipe and a cap that cuts inside a span all fail closed. The changelog ingest opts in, so a documented invocation ships as written instead of as a shell redirect."
+impact: fix
+resolved_by:
+  commit: "5ed5e96ee3db72de763af03dddbfb20f72ee3597"
 ---
 
 The prose scrubber neutralises angle brackets inside code spans, so a documented
@@ -49,6 +53,8 @@ documenting an HTML comment or an arrow token is exposed the same way.
   redactor routes through; the v0.7.0 line was reworded to avoid the placeholder
   instead, which leaves the defect intact and recorded rather than half-fixed
   under release pressure
+
+- pursued: the corruption is the neutralisation firing where CommonMark never parses HTML, so exempting closed code spans for a field that stands alone on its line restores the placeholder without weakening the prose case; a code-span placeholder reaching a rendered changelog as live markup, or an opener outside a span surviving, would show it wrong
 
 ## Candidate remedies
 
