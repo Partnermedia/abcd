@@ -62,11 +62,32 @@ type RuleSet struct {
 	SchemaVersion int               `json:"schema_version"`
 	Disabled      bool              `json:"disabled"`
 	Domains       map[string]Domain `json:"domains"`
+	// origins records, per domain name, the layer whose override last named
+	// it (SourceRepo today; a user layer would add its own label). It is
+	// derived by Merge, never declared in rules.json, and absent means the
+	// bundled default is untouched. Unexported so the on-disk schema does not
+	// grow a field a file could forge.
+	origins map[string]string
 }
 
-// ResolvedDomain pairs a domain with its name for ordered rendering and dedup.
+// Source labels for ResolvedDomain.Source: where a domain's effective content
+// came from. A repo override that names a domain — replacing its rules,
+// changing its state, or declaring it outright — makes the domain SourceRepo,
+// conservatively: the effective behaviour is repo-chosen even when only the
+// state moved. The label set is open so a user layer (spc-23) can add its own
+// without renaming these.
+const (
+	SourceBundled = "bundled"
+	SourceRepo    = "repo"
+)
+
+// ResolvedDomain pairs a domain with its name for ordered rendering and dedup,
+// and with its Source so every consumer can say whose words these are
+// (GHSA-22f8-qf5r-gjgq): the renderer marks a repo-sourced heading, the hook
+// diagnostic labels the name, and `rules --json` carries the field.
 type ResolvedDomain struct {
-	Name string `json:"name"`
+	Name   string `json:"name"`
+	Source string `json:"source"`
 	Domain
 }
 
@@ -261,8 +282,16 @@ func checkDupValue(dec *json.Decoder, tok json.Token) error {
 // Merge overlays over onto base. Domain fields are per-field: a field set on the
 // override wins; an absent field inherits the base (so {"state":"dormant"} on a
 // default domain silences it while keeping its recall and rules). New domain
-// keys are added. The kill switch is sticky (either side can enable it).
+// keys are added. The kill switch is sticky (either side can enable it). Every
+// domain the override names is recorded as SourceRepo — the one moment the
+// origin is still known, so the renderer and the diagnostics can say so later.
 func Merge(base, over RuleSet) RuleSet {
+	return mergeFrom(base, over, SourceRepo)
+}
+
+// mergeFrom is Merge with the label the override's layer carries; a later user
+// layer merges with its own label without touching the per-field rules.
+func mergeFrom(base, over RuleSet, source string) RuleSet {
 	out := cloneRuleSet(base)
 	if over.SchemaVersion != 0 {
 		out.SchemaVersion = over.SchemaVersion
@@ -271,10 +300,24 @@ func Merge(base, over RuleSet) RuleSet {
 	if out.Domains == nil && len(over.Domains) > 0 {
 		out.Domains = make(map[string]Domain, len(over.Domains))
 	}
+	if out.origins == nil && len(over.Domains) > 0 {
+		out.origins = make(map[string]string, len(over.Domains))
+	}
 	for name, od := range over.Domains {
 		out.Domains[name] = mergeDomain(out.Domains[name], od)
+		out.origins[name] = source
 	}
 	return out
+}
+
+// resolved builds the ResolvedDomain for name, carrying its recorded origin; a
+// domain no override ever named is the bundled default.
+func (rs RuleSet) resolved(name string) ResolvedDomain {
+	src := rs.origins[name]
+	if src == "" {
+		src = SourceBundled
+	}
+	return ResolvedDomain{Name: name, Source: src, Domain: rs.Domains[name]}
 }
 
 func mergeDomain(base, over Domain) Domain {
@@ -342,14 +385,14 @@ func (rs RuleSet) Match(prompt string) []ResolvedDomain {
 	for _, name := range names {
 		d := rs.Domains[name]
 		if stars[name] {
-			out = append(out, ResolvedDomain{Name: name, Domain: d})
+			out = append(out, rs.resolved(name))
 			continue
 		}
 		if d.State == StateDormant {
 			continue
 		}
 		if idx.hit(d) {
-			out = append(out, ResolvedDomain{Name: name, Domain: d})
+			out = append(out, rs.resolved(name))
 		}
 	}
 	return out
@@ -369,8 +412,8 @@ func (rs RuleSet) Active() []ResolvedDomain {
 	sort.Strings(names)
 	var out []ResolvedDomain
 	for _, name := range names {
-		if d := rs.Domains[name]; d.State != StateDormant {
-			out = append(out, ResolvedDomain{Name: name, Domain: d})
+		if rs.Domains[name].State != StateDormant {
+			out = append(out, rs.resolved(name))
 		}
 	}
 	return out
@@ -379,11 +422,10 @@ func (rs RuleSet) Active() []ResolvedDomain {
 // Lookup returns one domain by name regardless of its state (a dormant domain is
 // still inspectable); ok is false when the name is absent.
 func (rs RuleSet) Lookup(name string) (ResolvedDomain, bool) {
-	d, ok := rs.Domains[name]
-	if !ok {
+	if _, ok := rs.Domains[name]; !ok {
 		return ResolvedDomain{}, false
 	}
-	return ResolvedDomain{Name: name, Domain: d}, true
+	return rs.resolved(name), true
 }
 
 // parseStarCommands extracts the set of *<DOMAIN> names, enforcing that the star
@@ -590,10 +632,19 @@ func Render(domains []ResolvedDomain) string {
 }
 
 // renderDomain renders one domain's block deterministically. Signature hashes
-// exactly this, so the format is the dedup unit.
+// exactly this, so the format is the dedup unit — the provenance marker
+// included, by design: a repo-sourced domain reads "## NAME (repo override)"
+// in the agent's context and in `abcd rules`, so whose words these are is
+// never invisible (GHSA-22f8-qf5r-gjgq), and the one-time signature move on
+// upgrade re-injects overridden domains once. The heading keeps its "## "
+// line start, the split key host-side parsers rely on.
 func renderDomain(d ResolvedDomain) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "## %s\n", d.Name)
+	if d.Source == SourceRepo {
+		fmt.Fprintf(&b, "## %s (repo override)\n", d.Name)
+	} else {
+		fmt.Fprintf(&b, "## %s\n", d.Name)
+	}
 	for _, r := range d.Rules {
 		body := sanitizeRuleBody(r)
 		// Defence behind Validate's loud refusal: a body that sanitises to
@@ -663,6 +714,12 @@ func Signature(d ResolvedDomain) string {
 
 func cloneRuleSet(rs RuleSet) RuleSet {
 	out := RuleSet{SchemaVersion: rs.SchemaVersion, Disabled: rs.Disabled}
+	if rs.origins != nil {
+		out.origins = make(map[string]string, len(rs.origins))
+		for name, src := range rs.origins {
+			out.origins[name] = src
+		}
+	}
 	if rs.Domains != nil {
 		out.Domains = make(map[string]Domain, len(rs.Domains))
 		for name, d := range rs.Domains {

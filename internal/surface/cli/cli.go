@@ -1114,8 +1114,11 @@ func newHookCommand() *cobra.Command {
 			if err := rules.SaveState(session, res.State); err != nil {
 				fmt.Fprintf(cmd.ErrOrStderr(), "abcd rules: state save failed (%v)\n", err)
 			}
+			// The names carry their layer ("PII (repo override)"), the same
+			// label the injected heading bears, so the out-of-band log says
+			// whose words went into the context (GHSA-22f8-qf5r-gjgq).
 			fmt.Fprintf(cmd.ErrOrStderr(), "abcd rules: turn %d, injected %d domain(s) %v, %d bytes\n",
-				res.State.Count, len(res.Injected), res.Injected, len(res.Text))
+				res.State.Count, len(res.Injected), res.Labels(), len(res.Text))
 			if res.Text != "" {
 				fmt.Fprint(cmd.OutOrStdout(), res.Text)
 			}
@@ -1422,7 +1425,17 @@ func newRulesCommand(asJSON *bool) *cobra.Command {
 	return &cobra.Command{
 		Use:   "rules [domain]",
 		Short: "Render the active rule set; a positional DOMAIN scopes to one (read-only)",
-		Args:  cobra.MaximumNArgs(1),
+		Long: `Render the rule set the modular-rules loader injects: the bundled default
+domains merged with this repo's .abcd/rules.json. Bare, it renders every active
+domain; a positional DOMAIN (case-insensitive) renders that one domain regardless
+of its state or the kill switch, so a dormant domain is still inspectable.
+
+Every domain says which layer it came from. A domain the repo override names —
+its rules replaced, its state changed, or a custom domain declared — renders as
+"## NAME (repo override)" here, in the injected block and in the hook's
+diagnostic, and carries "source": "repo" in --json; an untouched bundled domain
+renders bare and carries "source": "bundled". Read-only.`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
 			if err != nil {
