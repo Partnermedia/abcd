@@ -3807,6 +3807,13 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		code = coded.ExitCode()
 	}
 	if msg := scrubPaths(err); msg != "" {
+		// An unknown command or flag on a binary that can prove it is stale
+		// names the staleness and the way out, on a second line, from disk
+		// alone; otherwise cobra's line stands byte-for-byte
+		// (iss-2608230943088357, staleusage.go).
+		if note := staleUsageNote(root, args, msg); note != "" {
+			msg += "\nabcd: " + note
+		}
 		// Honour --json for the error surface too: a caller that asked for
 		// machine output must get a JSON envelope, never raw Go text (iss-29).
 		if asJSON, _ := root.PersistentFlags().GetBool("json"); asJSON {
