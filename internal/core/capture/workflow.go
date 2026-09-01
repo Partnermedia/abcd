@@ -624,7 +624,7 @@ func List(req ListRequest) (ListResult, error) {
 // relativiseLedgerPaths rewrites every ledger Path in place to a repo-relative
 // locator, so no --json envelope echoes an absolute developer-identity path
 // (iss-81). It covers both the structured Path field and a SkipRecord.Error
-// string that wraps an os.ReadFile/parse failure carrying the same absolute path:
+// string that wraps a guarded-read/parse failure carrying the same absolute path:
 // the skipped list rides an exit-0 success envelope, which the CLI's error-path
 // scrubber never sees, so the abs path is stripped here for the --json surface.
 func relativiseLedgerPaths(repoRoot string, issues []Issue, skipped []SkipRecord) {
@@ -765,12 +765,18 @@ func scanLedger(issuesRoot string, state State) ([]Issue, []SkipRecord) {
 			}
 			// A well-formed name always ends .md — the grammar's pattern requires
 			// it — so no separate extension check is needed on this path.
-			data, err := os.ReadFile(path)
+			//
+			// The read is guarded, not bare: a well-formed NAME says nothing about
+			// the leaf behind it, and in a hostile clone that leaf is a FIFO that
+			// would hang this scan, a symlink to a file outside the ledger, or a
+			// body sized to make the read unbounded. Each is a skipped record the
+			// surfaces already render, never a hang and never serialized.
+			content, err := readRecordGuarded(path)
 			if err != nil {
 				skipped = append(skipped, SkipRecord{Path: path, Error: err.Error()})
 				continue
 			}
-			fm, body, err := parseFrontmatterAndBody(string(data))
+			fm, body, err := parseFrontmatterAndBody(content)
 			if err != nil {
 				skipped = append(skipped, SkipRecord{Path: path, Error: err.Error()})
 				continue

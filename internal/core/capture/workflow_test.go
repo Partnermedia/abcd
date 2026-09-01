@@ -2,6 +2,7 @@ package capture
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/intentdriven/abcd/internal/core/issueschema"
 	"github.com/intentdriven/abcd/internal/core/recordid"
 )
 
@@ -1017,4 +1019,165 @@ func readRaw(t *testing.T, issuesRoot, id string) string {
 		t.Fatal(err)
 	}
 	return string(data)
+}
+
+// hostileRecordLedger provisions a ledger with one real captured issue and
+// returns the roots, the real id and the bytes of the captured record, which the
+// hostile-leaf tests reshape (a copied frontmatter with a different id and slug)
+// so every planted file is schema-shaped and only its LEAF is what the reader
+// must refuse.
+func hostileRecordLedger(t *testing.T) (repo, ir, realID, frontmatter string) {
+	t.Helper()
+	repo, ir = ledger(t)
+	res, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir, Text: "a real finding", Severity: SeverityMinor,
+		Category: "bug", Source: "manual-test", Slug: "real", FoundDuring: "t",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	src, _, err := findIssue(ir, res.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Frontmatter is the leading `---` block up to and including its closer.
+	end := strings.Index(string(data[4:]), "\n---\n")
+	if !strings.HasPrefix(string(data), "---\n") || end < 0 {
+		t.Fatalf("captured record has no frontmatter block:\n%s", data)
+	}
+	return repo, ir, res.ID, string(data[:4+end+len("\n---\n")])
+}
+
+// reshapeRecord returns frontmatter rewritten to carry id and slug, followed by
+// body, so the file is a valid record at `<id>-<slug>.md` in every respect
+// except the one under test.
+func reshapeRecord(t *testing.T, frontmatter, fromID, id, slug, body string) string {
+	t.Helper()
+	out := strings.Replace(frontmatter, `id: "`+fromID+`"`, `id: "`+id+`"`, 1)
+	out = strings.Replace(out, `slug: "real"`, `slug: "`+slug+`"`, 1)
+	if !strings.Contains(out, `id: "`+id+`"`) || !strings.Contains(out, `slug: "`+slug+`"`) {
+		t.Fatalf("could not reshape the record's frontmatter:\n%s", frontmatter)
+	}
+	return out + "\n" + body
+}
+
+// withinDeadline runs fn and fails the test if it has not returned within d —
+// the shape a hung read takes: a FIFO at a record name blocks the open forever,
+// and a scan that blocks is a verb that never comes back.
+func withinDeadline(t *testing.T, what string, d time.Duration, fn func() error) {
+	t.Helper()
+	done := make(chan error, 1)
+	go func() { done <- fn() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("%s: %v", what, err)
+		}
+	case <-time.After(d):
+		t.Fatalf("%s hung for %s on a FIFO record", what, d)
+	}
+}
+
+// skippedNames returns the base names of the skipped records, asserting each
+// was refused as a path-unsafe leaf and not for any other reason.
+func skippedNames(t *testing.T, skipped []SkipRecord) map[string]bool {
+	t.Helper()
+	names := map[string]bool{}
+	for _, s := range skipped {
+		if !strings.Contains(s.Error, ErrPathUnsafe.Error()) {
+			t.Fatalf("skipped %s for %q, want a %q refusal", s.Path, s.Error, ErrPathUnsafe)
+		}
+		names[filepath.Base(s.Path)] = true
+	}
+	return names
+}
+
+// TestScanLedgerRefusesNonRegularOversizeAndSymlinkedRecords pins the READ side
+// of the ledger to the trust boundary the write side already holds. A committed
+// leaf at a well-formed record name is attacker-shaped in a hostile clone: a FIFO
+// hangs the open, an oversize file makes the read unbounded, and a symlink reads
+// an out-of-tree file into `list --json`. Each is skipped and reported, the real
+// record still lists, and nothing behind a link is serialized.
+func TestScanLedgerRefusesNonRegularOversizeAndSymlinkedRecords(t *testing.T) {
+	t.Run("a FIFO at a record name hangs neither list nor status", func(t *testing.T) {
+		repo, ir, realID, _ := hostileRecordLedger(t)
+		fifo := filepath.Join(ir, "open", "iss-1-hang.md")
+		if err := syscall.Mkfifo(fifo, 0o600); err != nil {
+			t.Skipf("mkfifo unsupported: %v", err)
+		}
+		var list ListResult
+		withinDeadline(t, "List", 5*time.Second, func() (err error) {
+			list, err = List(ListRequest{RepoRoot: repo, IssuesRoot: ir, State: StateAll})
+			return err
+		})
+		if len(list.Issues) != 1 || list.Issues[0].ID != realID {
+			t.Fatalf("List must still list the real record alone, got %+v", list.Issues)
+		}
+		if names := skippedNames(t, list.Skipped); len(names) != 1 || !names["iss-1-hang.md"] {
+			t.Fatalf("List must skip the FIFO and only the FIFO, got %+v", list.Skipped)
+		}
+		var status StatusResult
+		withinDeadline(t, "Status", 5*time.Second, func() (err error) {
+			status, err = Status(StatusRequest{RepoRoot: repo, IssuesRoot: ir})
+			return err
+		})
+		if status.OpenCount != 1 {
+			t.Fatalf("Status.OpenCount = %d, want 1", status.OpenCount)
+		}
+		if names := skippedNames(t, status.Skipped); len(names) != 1 || !names["iss-1-hang.md"] {
+			t.Fatalf("Status must skip the FIFO and only the FIFO, got %+v", status.Skipped)
+		}
+	})
+
+	t.Run("a record over the read cap is skipped, not listed", func(t *testing.T) {
+		repo, ir, realID, fm := hostileRecordLedger(t)
+		big := reshapeRecord(t, fm, realID, "iss-2", "big", strings.Repeat("x", issueschema.RecordReadLimit+1)+"\n")
+		if err := os.WriteFile(filepath.Join(ir, "open", "iss-2-big.md"), []byte(big), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		list, err := List(ListRequest{RepoRoot: repo, IssuesRoot: ir, State: StateAll})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(list.Issues) != 1 || list.Issues[0].ID != realID {
+			t.Fatalf("an oversize record must not be listed, got %d issue(s)", len(list.Issues))
+		}
+		if names := skippedNames(t, list.Skipped); len(names) != 1 || !names["iss-2-big.md"] {
+			t.Fatalf("the oversize record must be skipped and reported, got %+v", list.Skipped)
+		}
+	})
+
+	t.Run("a symlinked leaf is skipped and its target is never serialized", func(t *testing.T) {
+		repo, ir, realID, fm := hostileRecordLedger(t)
+		const marker = "MARKER-MUST-NOT-SERIALIZE"
+		outside := filepath.Join(t.TempDir(), "iss-3-leak.md")
+		leak := reshapeRecord(t, fm, realID, "iss-3", "leak", "a body holding "+marker+"\n")
+		if err := os.WriteFile(outside, []byte(leak), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(outside, filepath.Join(ir, "open", "iss-3-leak.md")); err != nil {
+			t.Skipf("symlink unsupported: %v", err)
+		}
+		list, err := List(ListRequest{RepoRoot: repo, IssuesRoot: ir, State: StateAll})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(list.Issues) != 1 || list.Issues[0].ID != realID {
+			t.Fatalf("a symlinked record must not be listed, got %d issue(s)", len(list.Issues))
+		}
+		if names := skippedNames(t, list.Skipped); len(names) != 1 || !names["iss-3-leak.md"] {
+			t.Fatalf("the symlinked record must be skipped and reported, got %+v", list.Skipped)
+		}
+		out, err := json.Marshal(list)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if bytes.Contains(out, []byte(marker)) {
+			t.Fatalf("the symlink target's body reached the serialized result:\n%s", out)
+		}
+	})
 }

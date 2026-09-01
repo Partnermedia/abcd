@@ -21,14 +21,11 @@ package capture
 // content, and saying so is better than letting the header claim cover for it.
 
 import (
-	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
-	"syscall"
 
 	"github.com/intentdriven/abcd/internal/core/issueschema"
 	"github.com/intentdriven/abcd/internal/core/recordid"
@@ -731,39 +728,6 @@ func readingItemPaths(issuesRoot, item string) ([]string, error) {
 		}
 	}
 	return matches, nil
-}
-
-// readRecordGuarded reads one record file through the shared trust-boundary
-// primitive: fsutil.ReadGuarded opens once with O_NOFOLLOW and validates on the
-// SAME descriptor, so no symlink swap fits between a check and the read. The cap
-// is issueschema.RecordReadLimit, the ONE cap this family has — core/lint applies
-// the same value, because a cap the board applies loosely and the verb applies
-// tightly makes the ledger say two things about one file. It replaces
-// Lstat-then-ReadFile everywhere in this family — the two-syscall shape
-// left a window a racing local writer could use to swap a link under the read
-// that licenses a stamp.
-//
-// The sentinels are mapped to this package's own: a non-regular leaf, or a
-// symlink refused by O_NOFOLLOW, is ErrPathUnsafe, which is what every caller
-// here already tests for.
-func readRecordGuarded(path string) (string, error) {
-	data, err := fsutil.ReadGuarded(path, issueschema.RecordReadLimit)
-	if err == nil {
-		return string(data), nil
-	}
-	if errors.Is(err, fsutil.ErrNotRegular) || errors.Is(err, syscall.ELOOP) {
-		return "", fmt.Errorf("%w: record path is not a regular file: %s", ErrPathUnsafe, path)
-	}
-	if errors.Is(err, fsutil.ErrTooBig) {
-		return "", fmt.Errorf("%w: record exceeds the %d-byte cap: %s", ErrPathUnsafe, issueschema.RecordReadLimit, path)
-	}
-	// A record the process may not open is a refusal with a name, not a raw open
-	// error surfacing through a verb: the caller is told the ledger could not be
-	// read and which file, rather than a syscall's own wording.
-	if errors.Is(err, fs.ErrPermission) {
-		return "", fmt.Errorf("%w: record is unreadable (permission denied): %s", ErrPathUnsafe, path)
-	}
-	return "", err
 }
 
 // refuseSymlinkedDir is safeMkdirLeaf's guard without the mkdir: it refuses a

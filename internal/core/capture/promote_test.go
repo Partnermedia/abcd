@@ -543,3 +543,37 @@ func TestPromoteReadingItemRefusesGrounds(t *testing.T) {
 		t.Fatalf("the reading route must still promote with no grounds: %v", err)
 	}
 }
+
+// TestPromoteRefusesASymlinkedRecordLeaf pins the pre-flight read: a record
+// whose leaf is a symlink is refused before anything is minted, so a committed
+// link in a hostile clone neither seeds a draft from an out-of-tree file nor
+// has its stamp written through the link.
+func TestPromoteRefusesASymlinkedRecordLeaf(t *testing.T) {
+	repo, ir, issID := promoteFixture(t, "a record behind a symlink")
+	src, _, err := findIssue(ir, issID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	moved := filepath.Join(t.TempDir(), filepath.Base(src))
+	if err := os.WriteFile(moved, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(src); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(moved, src); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+
+	_, err = Promote(PromoteRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: issID})
+	if !errors.Is(err, ErrPathUnsafe) {
+		t.Fatalf("promote of a symlinked record: want ErrPathUnsafe, got %v", err)
+	}
+	if n := draftCount(t, repo); n != 0 {
+		t.Fatalf("a refused promote must mint nothing, got %d draft(s)", n)
+	}
+}
