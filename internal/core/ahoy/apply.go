@@ -159,6 +159,12 @@ func Install(cwd string, opts InstallOptions, p Prompter) (InstallResult, error)
 	if len(remaining) > 0 {
 		status = "partial"
 	}
+	if ac.configMalformed {
+		// The config could not be parsed, so nothing that depends on it ran.
+		// config.malformed is a diagnostic (non-resolvable) gap and so never
+		// counts in Remaining, but a run that refused its own config is not clean.
+		status = "partial"
+	}
 	return InstallResult{
 		Status:             status,
 		Writes:             ac.writes,
@@ -284,6 +290,7 @@ type applyCtx struct {
 	visibilityForced bool     // an explicit --visibility override overwrote a valid value
 	docsTargetForced bool     // an explicit --docs-target override overwrote a valid value
 	markerRetract    []string // marker files a narrowed docs-target override de-selected
+	configMalformed  bool     // config.json could not be parsed; the refusal note was given once
 }
 
 // note is the receipt seam; it lives in receipt.go with the path scrub it
@@ -294,6 +301,22 @@ type applyCtx struct {
 // travels with the install result. Callers pass text already rendered for a
 // human — user-scope paths in tilde form.
 func (a *applyCtx) refuse(reason string) { a.notes = append(a.notes, reason) }
+
+// refuseMalformedConfig records, once per run, that .abcd/config.json could not
+// be parsed and that no step will touch it. Three steps read the file
+// (stepConfigValues, stepMarker, stepVersionStamp) and each must fail safe on
+// the same error — the advisory GHSA-mchq-gm34-3j34 is precisely one of them
+// rebuilding the file another had refused — but the operator needs the reason
+// once, not three times.
+func (a *applyCtx) refuseMalformedConfig(err error) {
+	if a.configMalformed {
+		return
+	}
+	a.configMalformed = true
+	a.refuse("refused to touch .abcd/config.json: it could not be parsed (" + errText(err) +
+		") — repair the file (a merge-conflict marker is the usual cause) and re-run `abcd ahoy install`; " +
+		"no config value, marker block or setup stamp was written.")
+}
 
 // stepIdentityPin adopts the iss-62 identity gate for an un-pinned repo: it
 // writes .abcd/config/identity.json from the current git author identity (the
@@ -362,6 +385,8 @@ func (a *applyCtx) stepConfigValues() *InstallConfig {
 	// we cannot parse and report a partial install so the operator repairs it.
 	ic, ok := loadPersistedInstallConfig(a.cwd)
 	if !ok {
+		_, err := readConfig(a.cwd)
+		a.refuseMalformedConfig(err)
 		return nil
 	}
 
@@ -1080,7 +1105,13 @@ func (a *applyCtx) stepVersionStamp() {
 	if !a.has("install_meta.missing") && !a.has("version.upgrade") {
 		return
 	}
-	cfgMap, _ := readConfig(a.cwd)
+	cfgMap, err := readConfig(a.cwd)
+	if err != nil {
+		// The same posture as stepConfigValues: a file that cannot be parsed is
+		// never rebuilt from an empty map (GHSA-mchq-gm34-3j34).
+		a.refuseMalformedConfig(err)
+		return
+	}
 	if cfgMap == nil {
 		cfgMap = map[string]any{}
 	}

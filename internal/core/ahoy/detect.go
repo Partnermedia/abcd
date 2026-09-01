@@ -74,6 +74,7 @@ func Detect(cwd string) (DetectionResult, error) {
 		gaps = append(gaps, detectIdentity(identity, idx)...)
 		gaps = append(gaps, detectGitIdentity(abs)...)
 		gaps = append(gaps, detectHistoryStore(identity.RootSHA)...)
+		gaps = append(gaps, detectConfigIntegrity(abs)...)
 		gaps = append(gaps, detectConfigValues(abs)...)
 		gaps = append(gaps, detectMarkerDrift(abs)...)
 		gaps = append(gaps, detectPathSymlink(pluginRoot, pluginOK)...)
@@ -324,7 +325,11 @@ func detectConfigValues(cwd string) []Gap {
 	var gaps []Gap
 	cfg, err := readConfig(cwd)
 	if err != nil {
-		cfg = nil // malformed config is treated as absent for value checks
+		// A config that cannot be parsed has values that are unknown, not
+		// missing: reporting them missing would arm the value collection, which
+		// then rebuilds the file (GHSA-mchq-gm34-3j34). detectConfigIntegrity
+		// raises the one diagnostic for this state.
+		return nil
 	}
 	repo := subMap(cfg, "repo")
 	docs := subMap(cfg, "docs")
@@ -587,8 +592,33 @@ func detectHookManifest(pluginRoot string, pluginOK bool) []Gap {
 	}}
 }
 
+// detectConfigIntegrity raises the one diagnostic for a config.json that is
+// present but cannot be parsed (a merge-conflict marker is the usual cause).
+// It is Required so it shows on the status board, and NOT Resolvable, so it is
+// excluded from Remaining and never arms a step: the file is the user's data
+// and repairing it is theirs to do (GHSA-mchq-gm34-3j34). Every other reader of
+// the config returns no gap on the same error, so this is the only line the
+// state produces.
+func detectConfigIntegrity(cwd string) []Gap {
+	if _, err := readConfig(cwd); err != nil {
+		return []Gap{{
+			ID: "config.malformed", Category: ConfigChange, Scope: "repo",
+			Title:    ".abcd/config.json could not be parsed",
+			Detail:   ".abcd/config.json is present but could not be parsed (" + errText(err) + "); its values are unknown and ahoy install will not rewrite it.",
+			FixHint:  "Repair the file by hand — a merge-conflict marker is the usual cause — and re-run ahoy install.",
+			Required: true, Resolvable: false,
+		}}
+	}
+	return nil
+}
+
 func detectVersion(cwd string) []Gap {
-	cfg, _ := readConfig(cwd)
+	cfg, err := readConfig(cwd)
+	if err != nil {
+		// Never install_meta.missing: that gap arms stepVersionStamp, which would
+		// republish the unparseable file as a meta-only one.
+		return nil
+	}
 	meta := subMap(cfg, "meta")
 	setupVersion, hasVersion := stringVal(meta, "setup_version")
 	setupDate, hasDate := stringVal(meta, "setup_date")
