@@ -393,9 +393,16 @@ func trimCorePrefix(msg string) string {
 func renderIngestResult(w io.Writer, res reading.IngestResult) {
 	// A refusal before the run's identity is proven has no run to head the
 	// render with; what follows is then the disclosure alone.
-	if res.RunID == "" {
+	switch {
+	case res.RunID == "":
 		fmt.Fprintln(w, "no run: the output was refused before the run it names was proven")
-	} else {
+	case res.Regime == "":
+		// The run was proven and refused before a regime was resolved for it
+		// — its definition did not resolve, or it already had an outcome — so
+		// the header names no regime; the refusal line below says why.
+		fmt.Fprintf(w, "%s: %d record(s) at the %s position; no regime was resolved for the run\n",
+			res.RunID, len(res.Records), res.Position)
+	default:
 		fmt.Fprintf(w, "%s: %d record(s) at the %s position under the %s regime\n",
 			res.RunID, len(res.Records), res.Position, res.Regime)
 	}
@@ -409,13 +416,9 @@ func renderIngestResult(w io.Writer, res reading.IngestResult) {
 		fmt.Fprintf(w, "  refused items: %d\n", res.RefusedCount)
 	}
 	for _, r := range res.RefusedItems {
-		// The elision entry names no item, so it is not rendered as one: there
-		// is no item 0, and printing one would send a reader looking for it.
-		if r.Ordinal == 0 {
-			fmt.Fprintf(w, "                 (%s) %s\n", r.Rule, r.Detail)
-			continue
-		}
-		fmt.Fprintf(w, "                 item %d (%s): %s\n", r.Ordinal, r.Rule, r.Detail)
+		// One rule for the list, shared with the refusal record's reason: the
+		// elision entry names no item, so neither surface renders it as one.
+		fmt.Fprintf(w, "                 %s\n", r.Render())
 	}
 	for _, f := range res.ReviewFlags {
 		fmt.Fprintf(w, "  review flag:   item %d matches %s\n", f.Ordinal, f.SignatureID)

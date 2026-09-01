@@ -268,7 +268,7 @@ func boundedRefusals(refusals []ItemRefusal) []ItemRefusal {
 	// it as "item 0" would name a thing that does not exist. Both surfaces print
 	// the total beside it, so the count is visible without reading the JSON.
 	return append(out, ItemRefusal{
-		Rule:   "refusals-elided",
+		Rule:   refusalsElidedRule,
 		Detail: fmt.Sprintf("and %d more item(s) refused", len(refusals)-maxReportedRefusals),
 	})
 }
@@ -296,7 +296,7 @@ func checkItem(ordinal int, fields map[string]string, def Definition,
 	// an unconditional defeat of a criterion whose own words are "without
 	// exception at any regime". The encoder runs later, so this still sees raw
 	// bytes rather than the percent-encoded form.
-	if strings.TrimSpace(foldForMatching(fields[PatternField])) == "" {
+	if isBlank(fields[PatternField]) {
 		return &ItemRefusal{Ordinal: ordinal, Rule: "named-provenance", Field: PatternField,
 			Detail: fmt.Sprintf("item %d names no %q: every item at every regime carries the pattern it "+
 				"was read under, without exception, and the definitions instruct it", ordinal, PatternField)}
@@ -326,7 +326,7 @@ func checkItem(ordinal int, fields map[string]string, def Definition,
 	// invisible rune states nothing.
 	var missing []string
 	for _, f := range bodyFields {
-		if strings.TrimSpace(foldForMatching(fields[f])) == "" {
+		if isBlank(fields[f]) {
 			missing = append(missing, f)
 		}
 	}
@@ -464,10 +464,13 @@ func bodyText(fields map[string]string, bodyFields []string) string {
 //   - Every invisible rune is DROPPED, across all three of the categories that
 //     hold one: Cf (zero-width space, soft hyphen, the bidi controls),
 //     Other_Default_Ignorable_Code_Point (U+034F, a combining GRAPHEME JOINER —
-//     a mark, not a format rune) and Variation_Selector (U+FE00–FE0F). Dropping
-//     rather than folding is what catches a rune placed INSIDE a keyword:
-//     folding one to a space would split the word in two and the signature would
-//     still not match. Guarding Cf alone was the same defect one category over.
+//     a mark, not a format rune) and Variation_Selector (U+FE00–FE0F) — and the
+//     one graphic character outside all three that renders as nothing, U+2800
+//     BRAILLE PATTERN BLANK (isInvisible). Dropping rather than folding is what
+//     catches a rune placed INSIDE a keyword: folding one to a space would split
+//     the word in two and the signature would still not match. Guarding Cf alone
+//     was the same defect one category over, and the three categories alone was
+//     the same defect one more out.
 //   - NFKC folds the compatibility forms. The fi LIGATURE and the fullwidth
 //     letters are the registry's own phrasing written in code points that render
 //     the same, which is the defect side of this intent's own test — "the
@@ -481,9 +484,7 @@ func bodyText(fields map[string]string, bodyFields []string) string {
 func foldForMatching(text string) string {
 	folded := strings.Map(func(r rune) rune {
 		switch {
-		case unicode.Is(unicode.Cf, r),
-			unicode.Is(unicode.Other_Default_Ignorable_Code_Point, r),
-			unicode.Is(unicode.Variation_Selector, r):
+		case isInvisible(r):
 			return -1
 		case unicode.IsSpace(r):
 			return ' '
@@ -491,6 +492,37 @@ func foldForMatching(text string) string {
 		return r
 	}, text)
 	return norm.NFKC.String(folded)
+}
+
+// isBlank is the verb's one blankness test: a value is blank when nothing of it
+// survives the fold. It judges the provenance field, every body field and the
+// instrument's three parts, so a rune that renders as nothing satisfies none of
+// them — and adding one to isInvisible closes it everywhere at once.
+func isBlank(s string) bool {
+	return strings.TrimSpace(foldForMatching(s)) == ""
+}
+
+// braillePatternBlank is U+2800, the empty braille cell. It is a graphic
+// character — category So, not Cf, not default-ignorable, not a variation
+// selector, and unicode.IsSpace is false for it — and it renders as nothing in
+// every common font. Written numerically so this file carries none of the runes
+// it folds.
+const braillePatternBlank = 0x2800
+
+// isInvisible is this package's one predicate for a rune that renders as
+// nothing: the three Unicode categories that hold one, plus the braille blank,
+// which is in none of them. It decides the fold above and, through the fold,
+// both the blankness of a provenance or body field and what a signature reads.
+// A pattern of one such rune was accepted and the record then asserted a
+// provenance that renders as blank (iss-2608311518250688) — the same failure
+// the zero-width fix closed, one category further out. The categories are
+// Unicode's own tables and are not restated here; the braille blank is the one
+// rune they leave standing.
+func isInvisible(r rune) bool {
+	return unicode.Is(unicode.Cf, r) ||
+		unicode.Is(unicode.Other_Default_Ignorable_Code_Point, r) ||
+		unicode.Is(unicode.Variation_Selector, r) ||
+		r == braillePatternBlank
 }
 
 // present returns the members of names the item carries, in the table's order.
@@ -539,11 +571,14 @@ func sortedKeys(m map[string]json.RawMessage) []string {
 	return out
 }
 
-// renderRefusals renders the refusal list for a list-level message.
+// renderRefusals renders the refusal list for a list-level message — the text
+// that becomes the refusal record's reason. Each entry renders under the one
+// rule every surface shares (ItemRefusal.Render), so the elision entry reaches
+// the durable record as an elision and never as item 0.
 func renderRefusals(refusals []ItemRefusal) string {
 	parts := make([]string, 0, len(refusals))
 	for _, r := range refusals {
-		parts = append(parts, fmt.Sprintf("item %d (%s): %s", r.Ordinal, r.Rule, r.Detail))
+		parts = append(parts, r.Render())
 	}
 	return strings.Join(parts, "; ")
 }
