@@ -12,7 +12,7 @@ resolution: "Both records now name the mutation that can establish the precondit
 impact: internal
 resolved_by:
   intent: "itd-187"
-  commit: "47586d66"
+  commit: "bde26ff0"
 ---
 
 spc-65 and itd-187 both prescribe watching TestAssembledInputIsByteIdenticalAcrossRuns red by removing the assembler's walk sort. Run on a copy of the tree, that mutation does not make it red: removing the sort yields a different but still deterministic order, so two assemblies of one commit stay byte-identical and only the order oracle fires. The mutations that do make the identity assertion red are a genuinely nondeterministic walk (candidates rebuilt from a map) and an absolute repository path embedded in the bundle. The record's prescribed hand-run for ac-1 names a mutation that cannot falsify ac-1.
