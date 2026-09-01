@@ -39,9 +39,6 @@ type PromoteRequest struct {
 
 // PromoteResult is the outcome of a successful Promote. Paths are
 // repo-relative. Linked reports stamp-only mode (no draft minted this call).
-// MintWarning is the loud-degrade note from the intent-id refs-union scan
-// (empty when the scan completed, and always empty in link mode) — the surface
-// MUST render it so a degrade to working-tree-only minting is never silent.
 type PromoteResult struct {
 	IssueID string `json:"issue_id"`
 	// IssueStatus is the source record's status. For an issue that is its status
@@ -53,7 +50,6 @@ type PromoteResult struct {
 	IntentID    string `json:"intent_id"`
 	IntentPath  string `json:"intent_path"`
 	Linked      bool   `json:"linked"`
-	MintWarning string `json:"mint_warning,omitempty"`
 	// Redacted / Degraded mirror TransitionResult: the grounds text is free prose
 	// written to the same committed ledger, so it goes through the same redactor
 	// and reports the same way. Rewriting somebody's reasoning in silence is worse
@@ -154,7 +150,7 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 		return PromoteResult{}, err
 	}
 
-	var itdID, intentPath, mintWarning string
+	var itdID, intentPath string
 	linked := req.LinkIntent != ""
 	if linked {
 		// Stamp-only mode: the target intent must exist in the store (any bucket)
@@ -177,7 +173,7 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 		title := issueTitleLine(body, slug)
 		seed := "Graduated from `" + req.ID + "`: " + title +
 			". Read that issue record for the source observation."
-		it, warn, err := intent.CreateDraft(repoRoot, intent.DraftOptions{
+		it, err := intent.CreateDraft(repoRoot, intent.DraftOptions{
 			Slug:         slug,
 			Title:        title,
 			SeedBody:     seed,
@@ -189,7 +185,7 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 		if err != nil {
 			return PromoteResult{}, err
 		}
-		itdID, intentPath, mintWarning = it.ID, it.Path, warn
+		itdID, intentPath = it.ID, it.Path
 	}
 
 	// Stamp second, under the ledger lock (the same flock every ledger mutation
@@ -263,7 +259,6 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 		IntentID:    itdID,
 		IntentPath:  intentPath,
 		Linked:      linked,
-		MintWarning: mintWarning,
 		Redacted:    gRedacted,
 		Degraded:    gDegraded,
 	}, nil
@@ -334,7 +329,7 @@ func promoteReadingItem(repoRoot, issuesRoot string, req PromoteRequest) (Promot
 	}
 	state := issueschema.DispositionAccepted
 
-	var itdID, intentPath, mintWarning string
+	var itdID, intentPath string
 	linked := req.LinkIntent != ""
 	if linked {
 		if !reItdID.MatchString(req.LinkIntent) {
@@ -357,7 +352,7 @@ func promoteReadingItem(repoRoot, issuesRoot string, req PromoteRequest) (Promot
 		}
 		seed := "Graduated from `" + req.ID + "` (" + state + "): " + title +
 			". Read that reading record for the instrument's own text."
-		it, warn, err := intent.CreateDraft(repoRoot, intent.DraftOptions{
+		it, err := intent.CreateDraft(repoRoot, intent.DraftOptions{
 			Slug:         slug,
 			Title:        title,
 			SeedBody:     seed,
@@ -369,7 +364,7 @@ func promoteReadingItem(repoRoot, issuesRoot string, req PromoteRequest) (Promot
 		if err != nil {
 			return PromoteResult{}, err
 		}
-		itdID, intentPath, mintWarning = it.ID, it.Path, warn
+		itdID, intentPath = it.ID, it.Path
 	}
 
 	if beforeStampHook != nil {
@@ -433,7 +428,6 @@ func promoteReadingItem(repoRoot, issuesRoot string, req PromoteRequest) (Promot
 		IntentID:    itdID,
 		IntentPath:  intentPath,
 		Linked:      linked,
-		MintWarning: mintWarning,
 	}, nil
 }
 

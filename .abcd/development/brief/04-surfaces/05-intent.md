@@ -127,7 +127,8 @@ Until then, `kind_notes` is the free-text descriptor.
 
 ```
 1. /abcd:intent "<free-text>"   (canonical bare quoted create)
-   ├─ Assigns next itd-N ID (capture-stable once assigned)
+   ├─ Mints a timestamp-numeric itd-N id through the shared record-id seam
+   │   (adr-45: no maximum consulted, capture-stable once assigned)
    ├─ Seeds the draft skeleton: frontmatter (kind: null, suggested_kind: null,
    │   spec_id: null, reclassification_history: [], builds_on: [], severity: minor)
    │   and a body carrying the seed text under `## Why This Matters`, with a

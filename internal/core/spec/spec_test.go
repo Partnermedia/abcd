@@ -8,12 +8,16 @@ import (
 	"github.com/intentdriven/abcd/internal/core/provenance"
 )
 
-// TestSpecNumIgnoresOverflow proves an over-int64 spec number is treated as no
-// reservation (0), not the clamped MaxInt64: keeping the clamp made NextID compute
-// max+1 and wrap to a negative id.
+// TestSpecNumIgnoresOverflow proves an over-int64 spec number carries no usable
+// number (0), not the clamped MaxInt64: with the clamp, every such spelling
+// would compare equal under SameNum and Lookup would hand back a spec that no
+// reference names.
 func TestSpecNumIgnoresOverflow(t *testing.T) {
 	if n := specNum("spc-99999999999999999999999"); n != 0 {
-		t.Errorf("specNum(over-int64) = %d, want 0 (an unreal number must not seed a wrapping max)", n)
+		t.Errorf("specNum(over-int64) = %d, want 0 (an unreal number names nothing)", n)
+	}
+	if SameNum("spc-99999999999999999999999", "spc-99999999999999999999998") {
+		t.Error("two over-int64 spellings must not compare equal through the clamp")
 	}
 	if n := specNum("spc-7-a-slug"); n != 7 {
 		t.Errorf("specNum(spc-7-a-slug) = %d, want 7", n)

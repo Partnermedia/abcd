@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"github.com/intentdriven/abcd/internal/core/frontmatter"
 	"github.com/intentdriven/abcd/internal/core/intent"
 	"github.com/intentdriven/abcd/internal/core/issueschema"
+	"github.com/intentdriven/abcd/internal/core/recordid"
 )
 
 // promoteFixture captures one issue into a fresh ledger and returns the roots
@@ -84,8 +86,8 @@ func TestPromoteMintsDraftAndStampsIssue(t *testing.T) {
 	if res.Linked {
 		t.Fatalf("mint mode must report Linked=false")
 	}
-	if res.IntentID != "itd-1" {
-		t.Fatalf("IntentID = %q, want itd-1", res.IntentID)
+	if !reNativeIntentID.MatchString(res.IntentID) {
+		t.Fatalf("IntentID = %q, want a native itd-<yymmddHHMMSS><rrrr> id", res.IntentID)
 	}
 	if filepath.IsAbs(res.IntentPath) || filepath.IsAbs(res.IssuePath) {
 		t.Fatalf("result paths must be repo-relative, got %q / %q", res.IntentPath, res.IssuePath)
@@ -217,19 +219,20 @@ func TestPromoteStampFailureReportsOrphanAndLinkRepairs(t *testing.T) {
 	if err == nil {
 		t.Fatalf("stamp into an unwritable ledger must fail")
 	}
-	if !strings.Contains(err.Error(), "itd-1") {
-		t.Fatalf("orphan report must name the minted draft, got: %v", err)
-	}
-	if !strings.Contains(err.Error(), "--intent itd-1") {
-		t.Fatalf("orphan report must carry the --intent remedy, got: %v", err)
-	}
 	if n := draftCount(t, repo); n != 1 {
 		t.Fatalf("mint-first contract: expected the orphan draft to persist, got %d", n)
+	}
+	orphan := soleDraftID(t, repo)
+	if !strings.Contains(err.Error(), orphan) {
+		t.Fatalf("orphan report must name the minted draft %s, got: %v", orphan, err)
+	}
+	if !strings.Contains(err.Error(), "--intent "+orphan) {
+		t.Fatalf("orphan report must carry the --intent remedy, got: %v", err)
 	}
 
 	// Repair: link the orphan draft. No second mint.
 	stampWriteHook = nil
-	res, err := Promote(PromoteRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: issID, LinkIntent: "itd-1"})
+	res, err := Promote(PromoteRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: issID, LinkIntent: orphan})
 	if err != nil {
 		t.Fatalf("link-mode repair: %v", err)
 	}
@@ -239,9 +242,33 @@ func TestPromoteStampFailureReportsOrphanAndLinkRepairs(t *testing.T) {
 	if n := draftCount(t, repo); n != 1 {
 		t.Fatalf("link mode minted: %d drafts, want 1", n)
 	}
-	if iss := readIssue(t, ir, issID); iss.PromotedTo != "itd-1" {
+	if iss := readIssue(t, ir, issID); iss.PromotedTo != orphan {
 		t.Fatalf("repair did not stamp promoted_to: %q", iss.PromotedTo)
 	}
+}
+
+// reNativeIntentID is the shape of a native itd id (adr-45): the family tag, a
+// 12-digit UTC second stamp and a 4-digit suffix.
+var reNativeIntentID = regexp.MustCompile(`^itd-[0-9]{16}$`)
+
+// soleDraftID returns the id of the one draft in the intent store, derived
+// from its filename through the canonical record-filename grammar.
+func soleDraftID(t *testing.T, repo string) string {
+	t.Helper()
+	entries, err := os.ReadDir(filepath.Join(repo, intent.IntentsRelDir, intent.BucketDrafts))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, e := range entries {
+		if m := recordid.FilenameNumRe("itd").FindStringSubmatch(e.Name()); m != nil {
+			ids = append(ids, "itd-"+m[1])
+		}
+	}
+	if len(ids) != 1 {
+		t.Fatalf("drafts = %v, want exactly one", ids)
+	}
+	return ids[0]
 }
 
 // TestPromoteSerializesOnLedgerLock: the stamp acquires the same allocator

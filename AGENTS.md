@@ -166,15 +166,13 @@ irreversible; guessing downward costs nothing.**
   mutation from real work. Correspondingly, a merge, commit, push or gate run
   proves the tree clean **immediately before the act**, never inheriting an
   emptiness check from earlier in the sequence (itd-193).
-- **Isolation protects the tree, not the sequential record ids.** Intents and
-  specs still mint `max+1` under a lock that is advisory and scoped to one
-  checkout, so it cannot see a sibling worktree: Two current checkouts
-  minting in the same window allocate the same id by construction, and being
-  up to date does not help. Say which family you are about to mint into, or
-  mint from one checkout. The durable fix is the timestamp mint that captures
-  already use (iss-2608210737260468, with the collision paths recorded as
-  iss-2608220150157512 and iss-2608221126066632); this note is a caveat, not
-  a remedy.
+- **Record ids need no coordination between checkouts.** Captures, intents
+  and specs mint timestamp-numeric ids through one allocator that reads no
+  maximum (adr-45), so two current checkouts minting in the same window
+  allocate distinct ids by construction; the per-checkout mint lock only
+  serialises minters inside one checkout. ADRs keep their hand-numbered
+  filename ordinal, so an ADR is the one record family where minting from two
+  checkouts still needs a word first.
 
 ## Definition of done
 

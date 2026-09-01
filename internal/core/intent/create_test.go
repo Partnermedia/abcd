@@ -17,12 +17,12 @@ import (
 func TestCreateFromTextSeedsDraft(t *testing.T) {
 	root := t.TempDir()
 
-	it, _, err := CreateFromText(root, "I want users to feel the card respects their time", "", "")
+	it, err := CreateFromText(root, "I want users to feel the card respects their time", "", "")
 	if err != nil {
 		t.Fatalf("CreateFromText: %v", err)
 	}
-	if it.ID != "itd-1" {
-		t.Fatalf("first minted id = %q, want itd-1", it.ID)
+	if !nativeIntentIDRe.MatchString(it.ID) {
+		t.Fatalf("minted id = %q, want a native itd-<yymmddHHMMSS><rrrr> id", it.ID)
 	}
 	if it.Bucket != BucketDrafts {
 		t.Fatalf("bucket = %q, want drafts", it.Bucket)
@@ -44,28 +44,11 @@ func TestCreateFromTextSeedsDraft(t *testing.T) {
 	}
 	// Canonical draft frontmatter: spec_id null, kind null/standalone/bundle-member.
 	fields := frontmatter.Fields(strings.Split(body, "\n"))
-	if fields["id"].Value != "itd-1" {
-		t.Fatalf("frontmatter id = %q, want itd-1", fields["id"].Value)
+	if fields["id"].Value != it.ID {
+		t.Fatalf("frontmatter id = %q, want %s", fields["id"].Value, it.ID)
 	}
 	if !frontmatter.IsNull(fields["spec_id"].Value) {
 		t.Fatalf("drafts spec_id must be null, got %q", fields["spec_id"].Value)
-	}
-}
-
-// TestCreateFromTextAllocatesNextID proves the allocator mints max+1 across every
-// bucket, not always itd-1.
-func TestCreateFromTextAllocatesNextID(t *testing.T) {
-	root := t.TempDir()
-	writeFile(t, root, draftsDir+"/itd-5-alpha.md", draftWithAC("itd-5", "alpha"))
-	writeFile(t, root, plannedDir+"/itd-9-beta.md",
-		"---\nid: itd-9\nslug: beta\nspec_id: spc-1\nkind: standalone\n---\n# beta\n")
-
-	it, _, err := CreateFromText(root, "another product intent", "", "")
-	if err != nil {
-		t.Fatalf("CreateFromText: %v", err)
-	}
-	if it.ID != "itd-10" {
-		t.Fatalf("minted id = %q, want itd-10 (max 9 + 1)", it.ID)
 	}
 }
 
@@ -74,7 +57,7 @@ func TestCreateFromTextAllocatesNextID(t *testing.T) {
 func TestCreateFromTextRefusesEmpty(t *testing.T) {
 	root := t.TempDir()
 	for _, in := range []string{"", "   ", "\t\n"} {
-		if _, _, err := CreateFromText(root, in, "", ""); err == nil {
+		if _, err := CreateFromText(root, in, "", ""); err == nil {
 			t.Fatalf("CreateFromText(%q) must be refused", in)
 		}
 	}
@@ -98,7 +81,7 @@ func TestCreateFromTextRedactsSecretsAndHomePaths(t *testing.T) {
 	const fakeHome = "/Users/alice/.ssh/id_rsa"
 	text := "leftover " + fakeToken + " and " + fakeHome + " in the install receipt"
 
-	it, _, err := CreateFromText(root, text, "", "")
+	it, err := CreateFromText(root, text, "", "")
 	if err != nil {
 		t.Fatalf("CreateFromText: %v", err)
 	}
@@ -134,7 +117,7 @@ func TestCreateFromTextRedactsSecretsAndHomePaths(t *testing.T) {
 // over a freshly seeded draft — the "abcd lint stays green" guarantee.
 func TestCreateFromTextPassesRecordLint(t *testing.T) {
 	root := t.TempDir()
-	if _, _, err := CreateFromText(root, "seeded from a quoted-text capture", "", ""); err != nil {
+	if _, err := CreateFromText(root, "seeded from a quoted-text capture", "", ""); err != nil {
 		t.Fatalf("CreateFromText: %v", err)
 	}
 	cfg := lint.Config{
@@ -160,7 +143,7 @@ func TestCreateFromTextPassesRecordLint(t *testing.T) {
 func TestCreateDraftPromotedFromRoundTrip(t *testing.T) {
 	root := t.TempDir()
 
-	it, _, err := CreateDraft(root, DraftOptions{
+	it, err := CreateDraft(root, DraftOptions{
 		Slug:         "an-issue-that-grew-up",
 		Title:        "An issue that grew up",
 		SeedBody:     "Graduated from `iss-7`: an issue that grew up. Read that issue record for the source observation.",
@@ -184,7 +167,7 @@ func TestCreateDraftPromotedFromRoundTrip(t *testing.T) {
 		t.Fatalf("parsed-back PromotedFrom = %q, want iss-7", got.PromotedFrom)
 	}
 	// Absent on every existing record: a draft minted from text has none.
-	plain, _, err := CreateFromText(root, "a plain quoted-text draft", "", "")
+	plain, err := CreateFromText(root, "a plain quoted-text draft", "", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,10 +184,10 @@ func TestCreateDraftPromotedFromRoundTrip(t *testing.T) {
 // or promoted_from before any path is built.
 func TestCreateDraftValidatesInputs(t *testing.T) {
 	root := t.TempDir()
-	if _, _, err := CreateDraft(root, DraftOptions{Slug: "../evil", Title: "x", SeedBody: "y"}); err == nil {
+	if _, err := CreateDraft(root, DraftOptions{Slug: "../evil", Title: "x", SeedBody: "y"}); err == nil {
 		t.Fatalf("CreateDraft must refuse a non-kebab slug")
 	}
-	if _, _, err := CreateDraft(root, DraftOptions{Slug: "ok-slug", Title: "x", SeedBody: "y", PromotedFrom: "itd-3"}); err == nil {
+	if _, err := CreateDraft(root, DraftOptions{Slug: "ok-slug", Title: "x", SeedBody: "y", PromotedFrom: "itd-3"}); err == nil {
 		t.Fatalf("CreateDraft must refuse a promoted_from that is not an iss-N id")
 	}
 	if entries, err := os.ReadDir(filepath.Join(root, IntentsRelDir, BucketDrafts)); err == nil && len(entries) > 0 {
@@ -219,7 +202,7 @@ func TestCreateDraftValidatesInputs(t *testing.T) {
 // anything is written.
 func TestSeedDraftStampsProvenance(t *testing.T) {
 	root := t.TempDir()
-	it, _, err := CreateFromText(root, "a draft worth stamping with its provenance", "", "")
+	it, err := CreateFromText(root, "a draft worth stamping with its provenance", "", "")
 	if err != nil {
 		t.Fatalf("CreateFromText: %v", err)
 	}
@@ -232,7 +215,7 @@ func TestSeedDraftStampsProvenance(t *testing.T) {
 	}
 
 	// A declared mode is stamped; the origin does not move with it.
-	it2, _, err := CreateFromText(root, "a dictated draft worth stamping", "", "dictated-and-formatted")
+	it2, err := CreateFromText(root, "a dictated draft worth stamping", "", "dictated-and-formatted")
 	if err != nil {
 		t.Fatalf("CreateFromText with a declared mode: %v", err)
 	}
@@ -245,7 +228,7 @@ func TestSeedDraftStampsProvenance(t *testing.T) {
 	}
 
 	// A promote-shaped draft declares the other arrival path.
-	it3, _, err := CreateDraft(root, DraftOptions{
+	it3, err := CreateDraft(root, DraftOptions{
 		Slug: "graduated", Title: "Graduated", SeedBody: "from a record",
 		PromotedFrom: "iss-1", Origin: provenance.KindExtractedFromRecord,
 	})
@@ -259,7 +242,7 @@ func TestSeedDraftStampsProvenance(t *testing.T) {
 
 	// An out-of-vocabulary mode is refused before anything is written.
 	before := draftCount(t, root)
-	if _, _, err := CreateFromText(root, "a draft with a bogus production mode", "", "typed"); err == nil {
+	if _, err := CreateFromText(root, "a draft with a bogus production mode", "", "typed"); err == nil {
 		t.Error("an out-of-vocabulary production mode must be refused")
 	}
 	if after := draftCount(t, root); after != before {
