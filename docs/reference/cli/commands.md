@@ -834,9 +834,12 @@ claim, each regime's reserved names are refused with the licence stated, and a r
 of named signatures catches prose that ranks, settles or proposes without the field.
 
 Item identifiers are minted here. The payload carries none, so a supplied one is refused
-as an unknown field. Nothing durable is written until the whole payload validates, and
-the run metadata is written last as the commit marker: a run without one never happened,
-and an orphaned stage is named and cleared by the next invocation.
+as an unknown field. Nothing durable is written or deleted until the whole payload
+validates — a refusal after the run is proven leaves its refusal record and nothing else —
+and the run metadata is written last as the commit marker: a run without one never
+happened. An orphaned stage is named by every invocation; it is cleared, and its
+never-committed records rolled back out of the ledger, only by the next invocation whose
+payload validates, and a refused run reports the orphans it left in place.
 
 **Flags:**
 
