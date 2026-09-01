@@ -352,7 +352,7 @@ func TestIngestPayloadGuards(t *testing.T) {
 		{
 			name:     "a schema from the future",
 			raw:      `{"schema_version":99,"prompt_version":"1.0.0","next_tag":"v0.4.1","entries":[]}`,
-			wantSaid: "upgrade abcd",
+			wantSaid: "update abcd:",
 		},
 		{
 			name:     "no prompt_version",
