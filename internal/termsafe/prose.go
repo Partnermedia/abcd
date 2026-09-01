@@ -29,9 +29,16 @@ package termsafe
 // The rule fires ANYWHERE in the string, not only at a line start, and that is
 // deliberate rather than an over-reach: the same swallow was demonstrated from
 // INSIDE a markdown table cell, where the opener is mid-line, and the cleaner
-// cannot know what surrounds the field it is handed. The cost is a fidelity
-// regression on legitimate angle-bracket prose — a changelog line's
-// `<repo>` placeholder reads `< repo>` — which is accepted: a slightly uglier
+// cannot know what surrounds the field it is handed. The one place it does not
+// fire is inside a CommonMark code span, where no HTML is parsed and the
+// neutralisation only corrupts: a documented `--reading-json <path>` was
+// written as `< path>`, a shell input redirection (iss-2609011217083577). Span
+// boundaries follow the spec — a run of N backticks opens a span closed by the
+// next run of exactly N, a backslash-escaped backtick is literal, and a run
+// with no closer is literal too — so an unbalanced backtick leaves everything
+// after it prose, and the primitive fails closed. The remaining cost is a
+// fidelity regression on angle-bracket prose OUTSIDE a span — a bare `<repo>`
+// placeholder reads `< repo>` — which is accepted: a slightly uglier
 // placeholder is cheaper than a record that can conceal its own contents.
 //
 // The link rule is not a spoofing defence but a gate one (iss-2608311504353427):
@@ -46,6 +53,15 @@ package termsafe
 // a shortcut reference `[label]` is not neutralised, because doing so would have
 // to rewrite every bracket in every field and it opens no link unless a matching
 // definition exists in the surrounding document.
+//
+// The link rule does NOT take the code-span exemption the HTML rule takes, and
+// the asymmetry follows from what each one defends. The HTML rule defends the
+// RENDER, and a renderer parses no raw HTML inside a code span, so neutralising
+// there buys nothing and corrupts the quoted content. The link rule defends a
+// GATE, and the gate does not read the same grammar: record-lint's `checkLinks`
+// masks fenced blocks only, so an inline span is scanned like any other prose
+// and a `](` left inside one still refuses the whole tree. Until the gate
+// exempts spans, the cleaner cannot.
 //
 // Every rule inserts a form the same rule no longer matches, so the cleaner is
 // idempotent: a field cleaned twice is the field cleaned once, and a downstream
@@ -98,20 +114,115 @@ func cleanProse(s string, capBytes int, normalise func(string) string) string {
 	s = strings.ReplaceAll(s, "\r", " ")
 	s = strings.ReplaceAll(s, "\n", " ")
 	s = Sanitize(s)
-	// A space after the `<` is enough: CommonMark needs the name, `/`, `!`, or `?`
-	// to follow immediately. This subsumes the comment-open case — `<!--` becomes
-	// `< !--` — so the two rules are one.
-	s = htmlOpenerRe.ReplaceAllStringFunc(s, func(m string) string { return "< " + m[1:] })
-	s = strings.ReplaceAll(s, "-->", "-- >")
-	// A space after the `]` is enough for links too: CommonMark requires the
+	s = neutraliseOutsideCodeSpans(s)
+	// The link rule fires everywhere, code spans included, and that asymmetry
+	// with the HTML rule is the difference between the two defences. The HTML
+	// rule protects the RENDER, and a renderer parses no HTML inside a span, so
+	// firing there would corrupt content for nothing. The link rule protects a
+	// GATE, and record-lint's checkLinks masks fenced blocks only — an inline
+	// span is scanned like any other prose — so a `](` left inside a span still
+	// refuses the tree. A space after the `]` is enough: CommonMark requires the
 	// destination `(` or the label `[` to follow the link text immediately, and
-	// the record-lint links_resolve pattern requires the same adjacency.
+	// the links_resolve pattern requires the same adjacency.
 	s = strings.ReplaceAll(s, "](", "] (")
 	s = strings.ReplaceAll(s, "][", "] [")
 	s = normalise(s)
-	if len(s) > capBytes {
-		s = strings.ToValidUTF8(s[:capBytes], "")
-		s = strings.TrimSpace(s)
+	// The cap is applied last, and a cut can land inside a code span: the closing
+	// backticks go, the span stops being one, and its untouched content is prose
+	// again with its openers live. So every cut is followed by another HTML
+	// neutralisation pass, and the pair repeats until the result fits — the pass
+	// is idempotent and each cut retains strictly fewer of the original bytes, so
+	// it ends. The link rule needs no second pass: a cut removes trailing bytes
+	// and trims the ends, neither of which can make two characters adjacent that
+	// were not adjacent before. A cut landing mid-rune drops the partial rune
+	// rather than emitting replacement bytes.
+	for len(s) > capBytes {
+		s = strings.TrimSpace(strings.ToValidUTF8(s[:capBytes], ""))
+		s = neutraliseOutsideCodeSpans(s)
 	}
 	return s
+}
+
+// neutraliseHTML is the opener rule over one run of prose. A space after the
+// `<` is enough: CommonMark needs the name, `/`, `!`, or `?` to follow
+// immediately. This subsumes the comment-open case — `<!--` becomes `< !--` —
+// so the two rules are one; the comment-close rule is its pair.
+func neutraliseHTML(prose string) string {
+	prose = htmlOpenerRe.ReplaceAllStringFunc(prose, func(m string) string { return "< " + m[1:] })
+	return strings.ReplaceAll(prose, "-->", "-- >")
+}
+
+// neutraliseOutsideCodeSpans applies neutraliseHTML to every part of s that is
+// not a CommonMark code span, and copies each span through byte-for-byte. A
+// span is a run of N backticks followed, anywhere later, by the next run of
+// exactly N; a run with no such closer is literal backticks and the text after
+// it is prose. Backslash escapes are honoured outside a span (an escaped
+// backtick opens nothing) and ignored inside one (the spec parses none there),
+// so the boundary the renderer will draw is the boundary this draws.
+func neutraliseOutsideCodeSpans(s string) string {
+	var out strings.Builder
+	i := 0
+	for i < len(s) {
+		open := nextBacktickRun(s, i)
+		if open < 0 {
+			out.WriteString(neutraliseHTML(s[i:]))
+			break
+		}
+		openEnd := open
+		for openEnd < len(s) && s[openEnd] == '`' {
+			openEnd++
+		}
+		n := openEnd - open
+		closeAt := closingRun(s, openEnd, n)
+		if closeAt < 0 {
+			out.WriteString(neutraliseHTML(s[i:openEnd]))
+			i = openEnd
+			continue
+		}
+		out.WriteString(neutraliseHTML(s[i:open]))
+		out.WriteString(s[open : closeAt+n])
+		i = closeAt + n
+	}
+	return out.String()
+}
+
+// nextBacktickRun returns the index of the first backtick at or after from that
+// is not backslash-escaped — the start of a run that may open a span — or -1.
+// An odd number of preceding backslashes escapes the backtick; an even number
+// is escaped backslashes followed by a live one.
+func nextBacktickRun(s string, from int) int {
+	for j := from; j < len(s); j++ {
+		if s[j] != '`' {
+			continue
+		}
+		backslashes := 0
+		for k := j; k > 0 && s[k-1] == '\\'; k-- {
+			backslashes++
+		}
+		if backslashes%2 == 0 {
+			return j
+		}
+	}
+	return -1
+}
+
+// closingRun returns the index of the first run of exactly n backticks at or
+// after from, or -1. Runs of any other length are span content and skipped
+// whole, so a longer run never matches by its prefix.
+func closingRun(s string, from, n int) int {
+	for j := from; j < len(s); {
+		if s[j] != '`' {
+			j++
+			continue
+		}
+		k := j
+		for k < len(s) && s[k] == '`' {
+			k++
+		}
+		if k-j == n {
+			return j
+		}
+		j = k
+	}
+	return -1
 }

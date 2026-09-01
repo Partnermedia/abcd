@@ -9,6 +9,8 @@ found_during: "the v0.7.0 cut, changelog ingest"
 found_at: "internal/termsafe/prose.go"
 origin: researcher-authored
 production_mode: hand-written
+resolution: "cleanProse leaves CommonMark code spans byte-for-byte and still neutralises every HTML opener and comment close outside one: neutraliseOutsideCodeSpans draws span boundaries the way a renderer does (a run of N backticks closed by the next run of exactly N, backslash-escaped backticks literal outside a span, a run with no closer literal), so a documented placeholder in a span survives ingest and an unbalanced backtick leaves what follows prose. The cap is followed by a re-neutralisation loop so a cut inside a span cannot expose its content. TestCleanProseLeavesCodeSpansAlone pins the span, double-backtick, unbalanced and escaped cases and TestCleanProseCapCannotExposeASpan pins the cap at every length. The exemption is the HTML rule's alone: the markdown-link rule that landed on main meanwhile (iss-2608311504353427) still fires inside a span, because it defends record-lint's links_resolve gate rather than the render and checkLinks masks fenced blocks only, so a code span is scanned like any other prose; TestCleanProseNeutralisesLinkSyntaxInsideACodeSpan pins that asymmetry. The whole suite passes."
+impact: fix
 ---
 
 The prose scrubber neutralises angle brackets inside code spans, so a documented
@@ -49,6 +51,8 @@ documenting an HTML comment or an arrow token is exposed the same way.
   redactor routes through; the v0.7.0 line was reworded to avoid the placeholder
   instead, which leaves the defect intact and recorded rather than half-fixed
   under release pressure
+
+- pursued: the neutralisation buys nothing where CommonMark parses no HTML, so skipping spans by the spec's own boundary rule is faithful and fails closed on a malformed span; refusing at ingest would have kept the corruption reachable from every other redactor on the primitive's path
 
 ## Candidate remedies
 
