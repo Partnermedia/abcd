@@ -37,6 +37,7 @@ import (
 	"github.com/intentdriven/abcd/internal/core/record"
 	"github.com/intentdriven/abcd/internal/core/rules"
 	"github.com/intentdriven/abcd/internal/core/spec"
+	"github.com/intentdriven/abcd/internal/core/update"
 	"github.com/intentdriven/abcd/internal/fsutil"
 	"github.com/intentdriven/abcd/internal/gitutil"
 	"github.com/intentdriven/abcd/internal/term"
@@ -630,9 +631,8 @@ func newDisembarkCommand(asJSON *bool) *cobra.Command {
 						"disembark coverage: %s is not a coverage report: missing schema_version", path)}
 				}
 				if cov.SchemaVersion > lifeboat.SchemaVersion {
-					return &exitError{Code: 2, Msg: fmt.Sprintf(
-						"disembark coverage: %s is schema v%d; this abcd knows up to v%d — upgrade abcd",
-						path, cov.SchemaVersion, lifeboat.SchemaVersion)}
+					return &exitError{Code: 2, Msg: "disembark coverage: " +
+						update.TooNew(path, cov.SchemaVersion, lifeboat.SchemaVersion).Error()}
 				}
 				covs = append(covs, cov)
 			}
