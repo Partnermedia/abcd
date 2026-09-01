@@ -730,3 +730,25 @@ func TestHumanBytesAndThousands(t *testing.T) {
 		}
 	}
 }
+
+// TestPluginPageReportsTheSizeAndScope is ac-2's plugin half and itd-199's,
+// which were prose in commands/reading.md with nothing asserting it. The
+// content-assertion pattern already existed twice in this file for other
+// fields; it was simply not extended to the new ones.
+func TestPluginPageReportsTheSizeAndScope(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "commands", "reading.md"))
+	if err != nil {
+		t.Fatalf("read the plugin page: %v", err)
+	}
+	page := string(raw)
+	for _, want := range []string{
+		"size", "by_kind", "tokens_est", "basis",
+		"--scope", "scope", "overridden",
+		"comparative position does not assemble",
+	} {
+		if !strings.Contains(page, want) {
+			t.Errorf("commands/reading.md does not mention %q, so the host is not told to "+
+				"report it and the surface says less than the binary does", want)
+		}
+	}
+}

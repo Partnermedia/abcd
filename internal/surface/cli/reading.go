@@ -96,7 +96,7 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 			// and never a path (adr-58).
 			if scope == "" {
 				return &exitError{Code: 2, Msg: "reading assemble: --scope is required: a record id " +
-					"(itd-N, spc-N, adr-N, iss-N), a material kind, or a committed preset named in " +
+					"(itd-N, spc-N), a material kind, or a committed preset named in " +
 					reading.PresetConfigPath}
 			}
 			pos, err := reading.ParsePosition(position)
@@ -139,11 +139,13 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 		},
 	}
 	assembleCmd.Flags().StringVar(&position, "position", "",
-		"the reading position: "+positionTokens())
+		"the reading position: "+positionTokens()+"\n"+
+			"(comparative does not assemble: its object is the widening reading's\n"+
+			"pre-admission output, which no channel supplies, so it refuses)")
 	assembleCmd.Flags().StringVar(&target, "target", "",
 		"the commit the assembly describes: HEAD, or a hexadecimal sha of 7 to 40 digits")
 	assembleCmd.Flags().StringVar(&scope, "scope", "",
-		"what the reading is about: a record id (itd-N, spc-N, adr-N, iss-N), a material kind,\n"+
+		"what the reading is about: a record id (itd-N, spc-N), a material kind,\n"+
 			"or a committed preset. No repository path is accepted here; a preset is where one may be named")
 	assembleCmd.Flags().StringVar(&outDir, "out", "",
 		"an empty or absent directory the assembled input and the manifest are written to\n"+

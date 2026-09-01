@@ -14,12 +14,13 @@ import (
 // version 2 the manifest item gained a kind and the bundle's shape did not
 // move; the bundle was restamped anyway. At version 3 BOTH shapes moved, the
 // bundle gaining the scope a reading was given and the manifest gaining the
-// effective scope, its hash and the override stamp — so at this version the
-// shared constant costs nothing. That is a known consequence of the
+// effective scope, its hash and the override stamp — so at that version the
+// shared constant cost nothing. At version 4 the manifest item gained its byte
+// length, so the shared constant restamps the bundle again. That is a known consequence of the
 // shared constant, accepted rather than fixed inside a change that needed only
 // one half of it — splitting the two is a larger change, and making the split
 // silently is how a shape version stops meaning anything (spc-68).
-const SchemaVersion = 3
+const SchemaVersion = 4
 
 // The two artefact type tags. They are carried in the documents themselves so a
 // reader of a loose file can tell the two apart without its filename.
@@ -112,7 +113,15 @@ type ManifestItem struct {
 	// against the manifest rather than asserted beside it. It is deliberately
 	// NOT omitempty: an item without a kind is a defect, and a shape that can
 	// omit the field cannot tell that defect from a well-formed item (spc-68).
-	Kind   Kind   `json:"kind"`
+	Kind Kind `json:"kind"`
+	// Bytes is the length of the passed text. Without it the size report was
+	// only HALF checkable against the manifest: an auditor could recompute the
+	// per-kind item COUNTS and not the per-kind BYTES, which is the figure
+	// itd-198 exists to add. The bundle carries the text and goes to the
+	// reader; the manifest stays with the auditor, so an auditor holding only
+	// the manifest could not corroborate the number the intent promised was
+	// corroborable.
+	Bytes  int    `json:"bytes"`
 	SHA256 string `json:"sha256"`
 }
 

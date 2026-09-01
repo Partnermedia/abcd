@@ -34,6 +34,13 @@ In:
 - `Kind` added to `Render()`, closing a latent gap in the version's coverage.
 - `Kind` recorded per `ManifestItem`.
 - `SchemaVersion` 1 to 2; `AssemblerVersion` 1.0.0 to 1.1.0.
+- A third declared exemption in the determinism eval's packed-digit scan, for
+  the stamped version. It is named here rather than reaching the tree through a
+  commit message alone: it relaxes what a firewall tolerates, on a lane
+  `make preflight` does not run, and a firewall relaxation that no scope
+  statement records is the shape this intent's own version-pin bullet exists to
+  complain about. It is matched by SHAPE, not by key name, so a value that
+  stopped being a digest is scanned again.
 - The assembler version made structurally unable to misreport its table.
 
 Out:
@@ -225,7 +232,7 @@ const AssemblerVersionCore = "1.1.0"
 // so a manifest can no longer name a version that does not describe its table.
 func AssemblerVersion() string {
 	sum := sha256.Sum256([]byte(Render()))
-	return AssemblerVersionCore + "+" + hex.EncodeToString(sum[:])[:12]
+	return AssemblerVersionCore + "+" + hex.EncodeToString(sum[:])
 }
 ```
 
@@ -268,7 +275,15 @@ type ManifestItem struct {
 ```
 
 `Kind` is not `omitempty`: an item without a kind is a defect, and a shape that
-can omit the field cannot distinguish one from an old manifest. `DecodeManifest`
+can omit the field cannot distinguish one from an old manifest.
+
+**`Bytes` joins it**, because the kind alone did not deliver what this intent
+promised. "Checkable against the manifest" was half true: an auditor could
+recompute per-kind item COUNTS and not per-kind BYTES, which is the figure the
+intent exists to add — and the bundle that carries the text goes to the reader
+while the manifest stays with the auditor. Fidelity review found the claim
+reading as whole when it was half. The report is now rebuilt from the manifest
+by a test and must match. `DecodeManifest`
 is already strict on unknown fields, trailing content and schema version, so it
 refuses a v1 manifest against v2 without further work.
 
@@ -332,13 +347,24 @@ Every test below is watched fail before the change and pass after.
 - `TestSizeReportOmitsKindsThatPassedNothing` — a position passing no test file
   reports no `test` row rather than a zero row.
 - `TestDryRunCarriesTheSizeReport` — a dry run writes nothing and still reports.
-- `TestRenderIncludesKindAndSuffix` — **proved by mutation**: reassigning an
+- `TestRenderCoversKindAndSuffix` — **proved by mutation**: reassigning an
   existing row's `Kind`, and adding a suffix to a row, each move `Render()`.
   This is the vacuity the old pin had, so it is proved by breaking it, not by
   passing.
-- `TestAssemblerVersionCarriesTheTableDigest` — the stamped version's build
-  metadata equals the digest of the current rendering; **proved by mutation**:
-  a table edit moves the stamped version with no other edit.
+- `TestAssemblerVersionCarriesTheTableDigest` — a composition check only. It
+  re-derives what `AssemblerVersion()` computes, so it cannot fail for any table
+  change, and it is NOT the gate; it is here because a reader finding only it
+  would reasonably think it was.
+- `TestATableChangeMovesTheStampedVersion` — the actual mutation proof: a table
+  edit moves the stamped version with no other edit.
+- `TestRenderCannotForgeARowBoundary` — no row field carries a pipe or a
+  newline. `Render()` flattens into an unescaped table, so without this a Rule
+  containing `\n|` could forge a row boundary and make two structurally
+  different tables stamp alike — the same author-controlled channel this spec
+  cites to refuse a truncated digest, which fidelity review found still open
+  against rendering ambiguity.
+- `TestTheSizeReportIsCheckableAgainstTheManifest` — the whole report is rebuilt
+  from the manifest and must match.
 - `TestManifestItemRoundTripsKind` — strict decode of an encoded manifest
   preserves every item's kind.
 - `TestDecodeManifestRefusesAnItemWithoutAKind` — an empty kind, an absent kind

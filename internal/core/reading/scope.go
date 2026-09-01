@@ -43,7 +43,16 @@ const PresetSchemaVersion = 1
 
 // recordIDRe is the record-id token form. It is deliberately narrow: a token
 // that is not one of these shapes is not a record id, and is never guessed at.
-var recordIDRe = regexp.MustCompile(`^(itd|spc|adr|iss)-[0-9]+$`)
+//
+// It names ONLY the families the include table can admit. `adr-N` and `iss-N`
+// were in it, and were dead: no row names a decisions store or an issue store,
+// so those tokens validated, resolved, selected nothing, and ended in the
+// selects-nothing refusal at every position — while the CLI help, the plugin
+// page and the generated reference all advertised them. An affordance that can
+// never work is worse than an absent one, because the operator's first move is
+// to doubt their own invocation. If the table ever admits those families, this
+// regex is where they come back.
+var recordIDRe = regexp.MustCompile(`^(itd|spc)-[0-9]+$`)
 
 // presetNameRe bounds a preset name to a shape that cannot be confused with a
 // path, a record id or prose.
@@ -195,6 +204,12 @@ func LoadPresets(repoRoot string) (PresetFile, error) {
 	// the run `overridden: false`, asserting "ran as reviewed" on an
 	// examination that established only "git reported no modification". That is
 	// an attestation exceeding its evidence, which brief invariant 16 forbids.
+	// trackedSet reads the git INDEX, not HEAD, so on its own this establishes
+	// "known to git" rather than "committed". The committed property is
+	// delivered by this check together with the dirty gate downstream, which
+	// refuses an added-but-uncommitted preset as an `A ` entry. Both are needed:
+	// the dirty gate alone missed an ignored file, and this check alone would
+	// admit a staged one.
 	tracked, err := trackedSet(repoRoot)
 	if err != nil {
 		return PresetFile{}, err
@@ -440,8 +455,8 @@ func ResolveScope(pf PresetFile, position Position, token string) (Scope, error)
 
 	preset, ok := pf.Presets[token]
 	if !ok {
-		return Scope{}, fmt.Errorf("unknown scope %q: name a record id (itd-N, spc-N, adr-N, "+
-			"iss-N), a material kind (%s), or a committed preset (%s)",
+		return Scope{}, fmt.Errorf("unknown scope %q: name a record id (itd-N, spc-N), a "+
+			"material kind (%s), or a committed preset (%s)",
 			token, joinKinds(), joinPresets(pf))
 	}
 
