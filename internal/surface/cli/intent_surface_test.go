@@ -114,8 +114,8 @@ func TestIntentFreeTextTitleStillWrites(t *testing.T) {
 	if err := json.Unmarshal(out, &r); err != nil {
 		t.Fatalf("intent output not JSON: %v\n%s", err, out)
 	}
-	if r.ID != "itd-1" {
-		t.Fatalf("free-text draft id = %q, want itd-1", r.ID)
+	if !cliNativeIntentIDRe.MatchString(r.ID) {
+		t.Fatalf("free-text draft id = %q, want a native itd id", r.ID)
 	}
 	if n := intentDraftCount(t, repo); n != 1 {
 		t.Fatalf("free-text draft wrote %d draft(s), want 1", n)

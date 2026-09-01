@@ -185,13 +185,10 @@ func sortStrings(s []string) {
 }
 
 // PlanResult reports a completed Plan: the updated planned intent and the spec
-// minted to realise it. MintWarning is the loud-degrade note from the spec-id
-// refs-union scan (empty when the scan completed) — the surface MUST render it so
-// a degrade to working-tree-only minting is never silent.
+// minted to realise it.
 type PlanResult struct {
-	Intent      Intent    `json:"intent"`
-	Spec        spec.Spec `json:"spec"`
-	MintWarning string    `json:"mint_warning,omitempty"`
+	Intent Intent    `json:"intent"`
+	Spec   spec.Spec `json:"spec"`
 	// ConditionsStamped is how many scope-condition bullets this run gave an
 	// identity to.
 	ConditionsStamped int `json:"conditions_stamped"`

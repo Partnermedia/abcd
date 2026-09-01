@@ -1574,7 +1574,6 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return &exitError{Code: 2, Msg: "abcd intent plan: " + err.Error()}
 			}
-			emitMintWarning(cmd, res.MintWarning)
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				if res.StampOnly {
 					// The identity step alone, over a record already planned: say what
@@ -1773,25 +1772,13 @@ func createIntentFromText(cmd *cobra.Command, cwd, text, impact, productionMode 
 	if err != nil {
 		return err
 	}
-	it, mintWarning, err := intent.CreateFromText(cwd, text, impact, mode)
+	it, err := intent.CreateFromText(cwd, text, impact, mode)
 	if err != nil {
 		return &exitError{Code: 2, Msg: "abcd intent: " + err.Error()}
 	}
-	emitMintWarning(cmd, mintWarning)
 	return render(cmd.OutOrStdout(), asJSON, it, func(w io.Writer) {
 		fmt.Fprintf(w, "created %s (%s) — %s\n", it.ID, it.Bucket, termsafe.Sanitize(it.Path))
 	})
-}
-
-// emitMintWarning prints a record-id mint degrade note to stderr (loud-staging:
-// a stage that degraded to working-tree-only minting must say so, never silently
-// fall back). The note is engine-produced and path-free; it is sanitised anyway
-// before it touches the terminal. Empty warnings emit nothing.
-func emitMintWarning(cmd *cobra.Command, warning string) {
-	if warning == "" {
-		return
-	}
-	fmt.Fprintln(cmd.ErrOrStderr(), "warning: "+termsafe.Sanitize(warning))
 }
 
 // newIntentAuditCommand builds `abcd intent audit`: `ingest --verdict-json`
@@ -2750,7 +2737,6 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return groundsUsageError("promote", err)
 			}
-			emitMintWarning(cmd, res.MintWarning)
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				verb := "minted"
 				if res.Linked {

@@ -2,11 +2,9 @@ package intent
 
 import (
 	"fmt"
-	"math"
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -20,28 +18,41 @@ import (
 // lock. A var (not const) so a test can shorten it to exercise contention.
 var mintLockTimeout = 5 * time.Second
 
-// intentNumRe extracts N from an itd-N-<slug>.md filename (the allocator scan).
-var intentNumRe = regexp.MustCompile(`^itd-([0-9]+)(?:-[a-z0-9-]+)?\.md$`)
+// intentFamily is the intent store's id prefix, the family tag the mint splices
+// into every native itd id.
+const intentFamily = "itd"
+
+// minter is the intent family's record-id mint seam (adr-45; per-family
+// adoption as configuration, ruling 3). The zero value is the production
+// configuration — real clock, crypto entropy; tests inject both so a
+// same-instant case is deterministic.
+var minter recordid.Minter
+
+// mintRetryBudget bounds how many fresh ids one draft mint draws when a
+// candidate already names a record in this checkout — the same-second,
+// same-suffix coincidence, which is redrawn rather than bumped (spc-33 ruling
+// 2). It mirrors the capture ledger's placeholder retry budget.
+const mintRetryBudget = 8
 
 // maxSlugLen caps a derived slug so a pathological free-text line cannot produce
 // an unwieldy filename. Mirrors the capture-side derivation budget.
 const maxSlugLen = 60
 
 // CreateFromText files a new draft intent seeded from free-form text, mirroring
-// the capture engine's create shape: it derives a filename-safe slug, mints the
-// next itd-N under the exclusive store mint lock (so two concurrent sessions
-// never mint the same id), and atomically writes drafts/itd-N-<slug>.md with the
-// canonical draft frontmatter set and a minimal, honest body skeleton carrying
-// the text. Empty/whitespace text is refused and nothing is written.
+// the capture engine's create shape: it derives a filename-safe slug, mints a
+// native timestamp-numeric itd id under the store mint lock, and atomically
+// writes drafts/itd-N-<slug>.md with the canonical draft frontmatter set and a
+// minimal, honest body skeleton carrying the text. Empty/whitespace text is
+// refused and nothing is written.
 //
 // The seeded record is lint-valid (intent_lifecycle accepts a draft whose kind is
 // null and whose spec_id is null) and passes Validate; a human expands it, then
 // `abcd intent plan` schedules it. This is the quoted-text create path itd-46
 // delivers — the create half of what spc-6 AC3 (promote) needs.
-func CreateFromText(repoRoot, text, impact, productionMode string) (Intent, string, error) {
+func CreateFromText(repoRoot, text, impact, productionMode string) (Intent, error) {
 	trimmed := strings.TrimSpace(text)
 	if trimmed == "" {
-		return Intent{}, "", fmt.Errorf("intent: refusing to create from empty text")
+		return Intent{}, fmt.Errorf("intent: refusing to create from empty text")
 	}
 	// Redact the caller's text through the one canonical scanner BEFORE anything
 	// derived from it is built (gh-486). The slug becomes the filename and is
@@ -52,11 +63,11 @@ func CreateFromText(repoRoot, text, impact, productionMode string) (Intent, stri
 	// body again as its own boundary guard; that second pass is idempotent here.
 	redacted, _, err := redactIntentText(repoRoot, trimmed)
 	if err != nil {
-		return Intent{}, "", err
+		return Intent{}, err
 	}
 	slug, err := deriveIntentSlug(redacted)
 	if err != nil {
-		return Intent{}, "", err
+		return Intent{}, err
 	}
 	return CreateDraft(repoRoot, DraftOptions{
 		Slug:     slug,
@@ -104,20 +115,21 @@ var promotedFromRe = regexp.MustCompile(`^(iss|rdi)-[0-9]+$`)
 // create (CreateFromText) and the capture-promote path (capture.Promote, which
 // supplies an explicit slug and seed body) route through it, so a draft can
 // never be minted outside the store mint lock. It validates every option at the
-// boundary — the slug becomes a filename — mints the next itd-N, and atomically
-// writes drafts/itd-N-<slug>.md. On any refusal nothing is written.
-func CreateDraft(repoRoot string, opts DraftOptions) (Intent, string, error) {
+// boundary — the slug becomes a filename — mints a native timestamp-numeric itd
+// id through the shared recordid seam, and atomically writes
+// drafts/itd-N-<slug>.md. On any refusal nothing is written.
+func CreateDraft(repoRoot string, opts DraftOptions) (Intent, error) {
 	if !slugRe.MatchString(opts.Slug) {
-		return Intent{}, "", fmt.Errorf("intent: slug %q is not kebab-case", opts.Slug)
+		return Intent{}, fmt.Errorf("intent: slug %q is not kebab-case", opts.Slug)
 	}
 	if strings.TrimSpace(opts.Title) == "" {
-		return Intent{}, "", fmt.Errorf("intent: refusing to create a draft with an empty title")
+		return Intent{}, fmt.Errorf("intent: refusing to create a draft with an empty title")
 	}
 	if strings.TrimSpace(opts.SeedBody) == "" {
-		return Intent{}, "", fmt.Errorf("intent: refusing to create a draft with an empty seed body")
+		return Intent{}, fmt.Errorf("intent: refusing to create a draft with an empty seed body")
 	}
 	if opts.PromotedFrom != "" && !promotedFromRe.MatchString(opts.PromotedFrom) {
-		return Intent{}, "", fmt.Errorf("intent: promoted_from %q must match ^(iss|rdi)-[0-9]+$", opts.PromotedFrom)
+		return Intent{}, fmt.Errorf("intent: promoted_from %q must match ^(iss|rdi)-[0-9]+$", opts.PromotedFrom)
 	}
 	// impact is optional on a draft (intent_impact_valid gates the move into
 	// shipped/, not the seed), but when set it must be a legal, non-internal
@@ -127,10 +139,10 @@ func CreateDraft(repoRoot string, opts DraftOptions) (Intent, string, error) {
 	if opts.Impact != "" {
 		imp, err := changelog.ParseImpact(opts.Impact)
 		if err != nil {
-			return Intent{}, "", fmt.Errorf("intent: %w", err)
+			return Intent{}, fmt.Errorf("intent: %w", err)
 		}
 		if imp == changelog.ImpactInternal {
-			return Intent{}, "", fmt.Errorf("intent: impact must not be internal on an intent — a press-release-first intent is user-facing by definition; declare one of additive|breaking|fix, or record the work as an issue instead")
+			return Intent{}, fmt.Errorf("intent: impact must not be internal on an intent — a press-release-first intent is user-facing by definition; declare one of additive|breaking|fix, or record the work as an issue instead")
 		}
 	}
 
@@ -144,7 +156,7 @@ func CreateDraft(repoRoot string, opts DraftOptions) (Intent, string, error) {
 	}
 	stamp, err := provenance.NewStamp(kind, opts.ProductionMode)
 	if err != nil {
-		return Intent{}, "", fmt.Errorf("intent: %w", err)
+		return Intent{}, fmt.Errorf("intent: %w", err)
 	}
 
 	// Boundary redaction (gh-486): CreateDraft is the ONE canonical draft-mint
@@ -157,34 +169,32 @@ func CreateDraft(repoRoot string, opts DraftOptions) (Intent, string, error) {
 	// scanner; the pass is idempotent for text a caller already redacted.
 	rTitle, _, err := redactIntentText(repoRoot, opts.Title)
 	if err != nil {
-		return Intent{}, "", err
+		return Intent{}, err
 	}
 	rBody, _, err := redactIntentText(repoRoot, opts.SeedBody)
 	if err != nil {
-		return Intent{}, "", err
+		return Intent{}, err
 	}
 	opts.Title = rTitle
 	opts.SeedBody = rBody
 
 	var created Intent
-	var mintWarning string
 	err = withIntentMintLock(repoRoot, func() error {
-		id, warn, err := nextIntentID(repoRoot)
-		if err != nil {
-			return err
-		}
-		mintWarning = warn
 		draftsDirAbs := filepath.Join(repoRoot, IntentsRelDir, BucketDrafts)
 		if err := ensureRealDir(draftsDirAbs, filepath.Join(IntentsRelDir, BucketDrafts)); err != nil {
+			return err
+		}
+		// Minted under the lock, so the presence check inside mintIntentID and
+		// the write below are one critical section: no draft in this checkout can
+		// take the id between the two. The id names no existing record in any
+		// bucket, so the filename it forms is free by construction.
+		id, err := mintIntentID(repoRoot)
+		if err != nil {
 			return err
 		}
 		name := id + "-" + opts.Slug + ".md"
 		rel := filepath.Join(IntentsRelDir, BucketDrafts, name)
 		abs := filepath.Join(draftsDirAbs, name)
-		// Refuse to clobber an existing draft (best-effort guard under the lock).
-		if _, statErr := os.Lstat(abs); statErr == nil {
-			return fmt.Errorf("intent: refusing to overwrite existing %s", rel)
-		}
 		content := seedDraft(id, opts, stamp)
 		if err := writeIntentFile(abs, rel, content); err != nil {
 			return err
@@ -201,9 +211,9 @@ func CreateDraft(repoRoot string, opts DraftOptions) (Intent, string, error) {
 		return nil
 	})
 	if err != nil {
-		return Intent{}, "", err
+		return Intent{}, err
 	}
-	return created, mintWarning, Validate(created)
+	return created, Validate(created)
 }
 
 // deriveIntentSlug lowercases the text, collapses non-[a-z0-9] runs to a single
@@ -227,19 +237,35 @@ func deriveIntentSlug(text string) (string, error) {
 
 var slugNonAlnumRe = regexp.MustCompile(`[^a-z0-9]+`)
 
-// nextIntentID returns the next free itd-N: max N over every intent file in every
-// bucket AND over intent filenames on every other git ref, plus one. Called under
-// the mint lock so the working-tree scan and the subsequent write are one critical
-// section (no two concurrent creates in the same worktree observe the same max).
-// Folding in recordid.MaxAcrossRefs is what stops two parallel branches from
-// re-minting the same itd-N once one has committed it (iss-115, iss-120). The
-// returned mintWarning is non-empty (and MUST be surfaced) when the ref scan
-// degraded to working-tree-only, so the fallback is never silent.
-func nextIntentID(repoRoot string) (id, mintWarning string, err error) {
-	max := 0
+// mintIntentID draws a native itd id that names no record in any bucket of this
+// checkout. It reads no maximum (adr-45 ruling 2): the clock orders the ids and
+// the entropy separates two minters in the same second, so a sibling checkout —
+// which no lock here can see — needs no coordination to stay distinct. A
+// candidate already present is the same-second, same-suffix coincidence inside
+// one checkout, and it is redrawn, never bumped: a bump would re-derive the next
+// id from the store's occupancy, a miniature maximum-plus-one (spc-33 ruling 2).
+// Called under the mint lock so the check and the caller's write are atomic
+// within the checkout.
+func mintIntentID(repoRoot string) (string, error) {
+	for attempt := 0; attempt < mintRetryBudget; attempt++ {
+		id, err := minter.Mint(intentFamily)
+		if err != nil {
+			return "", err
+		}
+		if !intentPresent(repoRoot, id) {
+			return id, nil
+		}
+	}
+	return "", fmt.Errorf("intent: could not mint a free itd id after %d draws", mintRetryBudget)
+}
+
+// intentPresent reports whether id names a file in any intent bucket, judged by
+// the one canonical filename grammar (recordid.FilenameNumRe). It walks Buckets
+// rather than a literal, so a bucket this scan does not visit is not one the
+// mint could re-issue an id into.
+func intentPresent(repoRoot, id string) bool {
 	for _, bucket := range Buckets {
-		dir := filepath.Join(repoRoot, IntentsRelDir, bucket)
-		entries, err := os.ReadDir(dir)
+		entries, err := os.ReadDir(filepath.Join(repoRoot, IntentsRelDir, bucket))
 		if err != nil {
 			continue // absent bucket is soft
 		}
@@ -247,34 +273,19 @@ func nextIntentID(repoRoot string) (id, mintWarning string, err error) {
 			if e.IsDir() {
 				continue
 			}
-			m := intentNumRe.FindStringSubmatch(e.Name())
-			if m == nil {
-				continue
-			}
-			n, err := strconv.Atoi(m[1])
-			if err != nil {
-				continue
-			}
-			if n > max {
-				max = n
+			m := intentFileNumRe.FindStringSubmatch(e.Name())
+			if m != nil && intentFamily+"-"+m[1] == id {
+				return true
 			}
 		}
 	}
-	scan := recordid.MaxAcrossRefs(repoRoot, "itd", []string{IntentsRelDir})
-	if scan.Max > max {
-		max = scan.Max
-	}
-	// Guard the max+1 below against int overflow: a hand-crafted MaxInt itd-N
-	// (a local file or a fetched remote-tracking ref carrying itd-<MaxInt>-x.md)
-	// parses to math.MaxInt with no error, so max+1 would wrap to math.MinInt and
-	// mint itd--9223372036854775808 — a malformed draft WriteFileAtomic persists
-	// before Validate runs, plus a mint DoS for the family. Refuse clearly instead,
-	// mirroring the capture allocator's ceiling guard.
-	if max >= math.MaxInt {
-		return "", "", fmt.Errorf("intent: itd-N counter near the integer ceiling (highest observed %d); refusing to allocate", max)
-	}
-	return fmt.Sprintf("itd-%d", max+1), scan.Warning(), nil
+	return false
 }
+
+// intentFileNumRe is the intent store's filename grammar, shared with the
+// read-side resolver and record-lint so the presence check judges exactly the
+// files those two resolve.
+var intentFileNumRe = recordid.FilenameNumRe(intentFamily)
 
 // seedDraft renders the canonical draft skeleton: the full draft frontmatter set
 // (id, slug, spec_id: null, kind: null, suggested_kind: null,
@@ -402,10 +413,15 @@ func titleLine(text string) string {
 }
 
 // withIntentMintLock runs fn while holding an exclusive advisory lock over the
-// intent store, serializing id minting across concurrent abcd processes in the
-// same worktree. It flocks the intents/ directory file descriptor itself, so no
-// lock artifact is left in the committed record tree (mirroring the spec store's
-// mint lock). O_NOFOLLOW refuses a symlinked intents/.
+// intent store. It serializes the presence check and the write of one mint
+// against concurrent abcd processes in the SAME checkout (two agent sessions, a
+// hook firing beside a manual command), which is the one clash — same second,
+// same suffix, one directory — that time and entropy leave to the store to
+// arbitrate (spc-33 ruling 2). It cannot see a sibling checkout and does not
+// need to: the mint reads no maximum, so two checkouts never share the state a
+// lock would have to protect. It flocks the intents/ directory file descriptor
+// itself, so no lock artifact is left in the committed record tree (mirroring
+// the spec store's mint lock). O_NOFOLLOW refuses a symlinked intents/.
 func withIntentMintLock(repoRoot string, fn func() error) error {
 	intentsDir := filepath.Join(repoRoot, IntentsRelDir)
 	if err := ensureRealDir(intentsDir, IntentsRelDir); err != nil {
