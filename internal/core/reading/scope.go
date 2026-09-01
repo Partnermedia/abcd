@@ -436,7 +436,7 @@ func ResolveScope(pf PresetFile, position Position, token string) (Scope, error)
 	switch {
 	case token == "":
 		return Scope{}, fmt.Errorf("no scope named: a reading is commissioned ABOUT something. " +
-			"Name a record id (itd-N, spc-N, adr-N, iss-N), a material kind, or a committed preset")
+			"Name a record id (itd-N, spc-N), a material kind, or a committed preset")
 
 	case recordIDRe.MatchString(token):
 		return Scope{

@@ -12,6 +12,36 @@ over the brief's earlier `1.0.0`-at-close expectation). The four M6 synthesis
 agents below entered at `0.1.0`, wired to their `abcd disembark` verbs and
 unmeasured; `lifeboat-oracle` has since become `lifeboat-reviewer` at `0.1.1`.
 
+## 0.2.0 — 2026-09-01 (iss-2609011207114761 — the base_tag baseline rule)
+
+### release-changelog-composer 0.2.0
+
+MINOR: the section-choice guidance gains a baseline rule, which changes what the
+composer emits for the same cut. `Changed`, `Deprecated` and `Removed` are claims
+about what a user upgrading FROM `base_tag` experiences, so a capability that was
+not reachable there is `Added` however much its record narrates a change. The
+table rows for those three sections now say so, and a new subsection states the
+question to ask before using one, the tell that a surface debuts in this cut (its
+introducing records sit in the same `added[]`), and the instruction to treat a
+record's own "no longer" or "has no users" wording as its baseline rather than the
+composer's.
+
+Occasioned by the v0.7.0 cut, where the previous prompt placed three lines under
+`Changed`/`Removed` describing a migration burden from v0.6.9 for the `abcd
+reading` verb, which does not exist at v0.6.9. The records were not at fault: both
+carried the disambiguating facts, and neither was asked a question that used them.
+Re-composed under this rule the same cut yields no `Changed` or `Removed` lines at
+all and cites the same 104 records.
+
+The rule is TRUSTED, not checked: the composer's inputs are the cut and the record
+bodies, never `base_tag`'s surface, so it is told to ask a question it cannot
+verify. Where the cut leaves the answer undecidable it is instructed to choose
+`Added` and say why, an over-cautious `Added` understating a change while a wrong
+`Changed` fabricates a migration. iss-2609011207114761 holds the binary-side half
+and argues for refusing at ingest, where the completeness bijection already lives.
+Unmeasured — no calibration corpus exists for release prose yet, and no
+self-improvement pre-flight was run.
+
 ## 0.1.0 — 2026-08-31 (itd-184 / spc-62 — the four cold-reading definitions)
 
 Four definitions enter together, one per supply regime, as instances within one

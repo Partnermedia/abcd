@@ -786,7 +786,7 @@ Bare `abcd reading` renders the assembler's state and writes nothing.
 
 Assemble one reading's input and its manifest
 
-**Usage:** `abcd reading assemble --position <position> --target <HEAD|sha> [flags]`
+**Usage:** `abcd reading assemble --position <position> --target <HEAD|sha> --scope <itd-N|spc-N|kind|preset> [flags]`
 
 Walk the repository under the include table at one reading position and write two
 artefacts: the assembled input, which carries no repository path, and the manifest,
@@ -794,7 +794,9 @@ which maps every passed item back to its path, its field and its hash.
 
 The invocation carries no free text. --position takes one of four closed tokens;
 --target takes HEAD or a hexadecimal commit sha of 7 to 40 digits, because a branch
-or a tag moves and the manifest's re-runnability rests on a reference that cannot.
+or a tag moves and the manifest's re-runnability rests on a reference that cannot;
+--scope names what the reading is about, as a record id (itd-N or spc-N), a material
+kind, or a preset named in .abcd/config/reading-presets.json. All three are required.
 
 **Flags:**
 
@@ -813,8 +815,8 @@ or a tag moves and the manifest's re-runnability rests on a reference that canno
 **Example:**
 
 ```
-abcd reading assemble --position widening --target HEAD --dry-run
-  abcd reading assemble --position entailment --target HEAD \
+abcd reading assemble --position widening --target HEAD --scope cold --dry-run
+  abcd reading assemble --position entailment --target HEAD --scope cold \
     --out .abcd/.work.local/scratch/reading-runs/manual --json
 ```
 

@@ -16,9 +16,9 @@ writes**.
 Two things this surface does not do. It never runs a reading: it produces the
 input a reading would be given, and dispatching that input to a reader is host
 work. And it carries no free text at any position — the operator supplies a
-position and a target state, and the reading's object and question come from
-its definition, so there is no channel through which ledger content can travel
-in the framing of a request.
+position, a target state and a scope, each in a closed grammar, and the
+reading's object and question come from its definition, so there is no channel
+through which ledger content can travel in the framing of a request.
 
 ## Status (bare)
 
@@ -75,9 +75,10 @@ an unknown position, a missing operand, and any positional argument.
 Report from the JSON: `run_id`, `position`, `target_commit`, `item_count`,
 `manifest_hash`, and — where the run wrote — `out_dir` and `artefacts`.
 
-Report `scope` too: the token the operator gave, the selectors it resolved to,
-and `scope_overridden` — true when the run named a record or a kind directly
-rather than a committed preset. Say plainly when a run was overridden, because
+Report `scope` too: `scope.source`, the token the operator gave; `scope.selectors`,
+what it resolved to; and `scope.overridden` — true when the run named a record or
+a kind directly rather than a committed preset. (The written manifest spells that
+last one `scope_overridden`; the verb's own JSON nests it under `scope`.) Say plainly when a run was overridden, because
 a run nobody can tell departed from the reviewed presets is a run whose drift
 is invisible.
 
