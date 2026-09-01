@@ -7,7 +7,7 @@ PATH-installed copy atomically. The verb is the explicit ask — abcd never
 checks for or applies updates on its own
 ([adr-38](../../decisions/adrs/0038-implicit-checks-are-disk-only.md)); this
 verb and `version --check` are the only two paths to the release origin, each
-only when invoked ([itd-130](../../intents/planned/itd-130-abcd-update-completes-a-chosen-update-in-one-verb-it-fetches.md), spc-32).
+only when invoked ([itd-130](../../intents/shipped/itd-130-abcd-update-completes-a-chosen-update-in-one-verb-it-fetches.md), spc-32).
 
 ## Behaviour
 
@@ -34,5 +34,5 @@ tag, digest, old→new) prints in both modes.
 ## References
 
 - Plugin command: [`commands/update.md`](../../../../commands/update.md)
-- Intent / spec: [itd-130](../../intents/planned/itd-130-abcd-update-completes-a-chosen-update-in-one-verb-it-fetches.md) / [spc-32](../../specs/open/spc-32-abcd-update-completes-a-chosen-update-in-one-verb-it-fetches.md)
+- Intent / spec: [itd-130](../../intents/shipped/itd-130-abcd-update-completes-a-chosen-update-in-one-verb-it-fetches.md) / [spc-32](../../specs/closed/spc-32-abcd-update-completes-a-chosen-update-in-one-verb-it-fetches.md)
 - Staleness check it completes: [`12-version.md`](12-version.md)
