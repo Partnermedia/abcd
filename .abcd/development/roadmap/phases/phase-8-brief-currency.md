@@ -101,8 +101,9 @@ is only worth building on a brief that tells them the truth.
 
 1. Whether itd-61, the reverse direction, belongs in this phase or in its
    own. The maintainer left it adjacent on 2026-09-01.
-2. How the brief marks the passages that are ahead of the current release,
-   if it marks them at all, so a reader at a release knows which sentences
-   describe the next cut.
-3. Whether the doc-fidelity gate of itd-60 and the crosscheck gate at the
-   release cut are one mechanism at two points or two mechanisms.
+2. Settled 2026-09-01: no marker. The release is the boundary; the brief
+   always reads as the current design, and a reader at a release reads the
+   brief at that tag.
+3. Settled 2026-09-01: one mechanism at two points. The shipped move refuses
+   per intent and the release cut refuses over everything; the deterministic
+   layer needs no oracle and the semantic layer fails closed without one.

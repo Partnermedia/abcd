@@ -80,6 +80,24 @@ failure modes in the same paragraphs:
 Two copies of one fact, one of them authoritative: `one-canonical-primitive`
 violated at two copies rather than three.
 
+## Decisions (grilled 2026-09-01)
+
+The maintainer resolved the open questions at the planning interview; these are
+commitments, not options.
+
+- **One generated appendix per chapter.** The block sits at the end of the
+  chapter under a marker; the prose above it never states a flag or sub-verb.
+- **A staged chapter gets an empty block that says unbuilt.** Every chapter
+  carries a block; one whose surface has not shipped reads that there is no
+  shipped surface, so the reader learns it from the same place as the flags.
+- **Flags and sub-verbs only, first.** Exit codes and JSON output fields stay
+  prose until the binary records them somewhere a generator can read.
+- **The external-state category stays out.** The two-way split (derivable from
+  the tree, or rationale) holds; a claim about external state is neither and is
+  not this intent's to check.
+- **Sequenced as Phase 8**, the brief is the shipped state, with itd-60 as the
+  other rung; standalone kind, its own spec.
+
 ## What's In Scope
 
 - **A generated shape block per surface chapter**, derived from the same command

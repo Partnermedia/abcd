@@ -39,6 +39,27 @@ abcd already has the machinery to grade one artifact against another determinist
 
 This is the **forward** direction: built reality drives the brief and the docs. The **reverse** direction — a human editing the brief, with the implied roadmap changes drawn out — is a separate, paired intent ([[itd-61-brief-change-derivation]]).
 
+## Decisions (grilled 2026-09-01)
+
+The maintainer resolved the open questions at the planning interview; these are
+commitments, not options.
+
+- **The gate refuses at both moments.** An intent's move to shipped is refused
+  while the brief lags the surface it delivered, and the release cut refuses
+  again over every shipped intent. Belt and braces, deliberately.
+- **Built reality is checked in two layers.** A deterministic layer refuses on
+  its own with no oracle: every verb, sub-verb and agent the binary ships must
+  have a brief chapter naming it. A semantic layer, host-delegated, reads what
+  the intent delivered against the chapter and refuses on a confirmed false
+  sentence; when the reviewer is unavailable the gate fails closed.
+- **Brief only, for Phase 8.** A stale public-doc sentence is reported, never
+  refuses; the public docs are a later rung.
+- **Draft and apply, review after.** When drift is found the pass edits the
+  brief in the shipping change and flags it for the maintainer's review; the
+  brief may carry a sentence the maintainer did not write until they read it.
+- **Sequenced as Phase 8**, the brief is the shipped state, with itd-147 as the
+  other rung; standalone kind, its own spec.
+
 ## What's In Scope
 
 - **Two layers, one gate — a deterministic floor beneath a semantic pass.** The pass is not one mechanism but two, stacked. Layer 1 grades *mechanics*; layer 2 (everything below) grades *meaning*.
