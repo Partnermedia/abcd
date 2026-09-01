@@ -751,4 +751,25 @@ func TestPluginPageReportsTheSizeAndScope(t *testing.T) {
 				"report it and the surface says less than the binary does", want)
 		}
 	}
+
+	// Every shipped INVOCATION must actually run. --scope is required, so an
+	// example without it exits 2 — a page that documents a command by showing
+	// it failing is worse than one that shows nothing. Both examples on this
+	// page were left stale when the operand landed, and only a retrospective
+	// reading the branch tip noticed.
+	for _, line := range strings.Split(page, "\n") {
+		if !strings.Contains(line, "reading assemble") {
+			continue
+		}
+		// The examples span lines with a trailing backslash; take the whole
+		// fenced command by scanning forward from the opening line.
+		idx := strings.Index(page, line)
+		cmd := page[idx:]
+		if end := strings.Index(cmd, "```"); end > 0 {
+			cmd = cmd[:end]
+		}
+		if !strings.Contains(cmd, "--scope") {
+			t.Errorf("a shipped `reading assemble` example carries no --scope, so it exits 2:\n%s", cmd)
+		}
+	}
 }
