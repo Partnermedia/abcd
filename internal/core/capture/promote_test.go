@@ -577,3 +577,56 @@ func TestPromoteRefusesASymlinkedRecordLeaf(t *testing.T) {
 		t.Fatalf("a refused promote must mint nothing, got %d draft(s)", n)
 	}
 }
+
+// TestPromoteRefusesAnInvalidRecordBeforeMinting pins the residue contract in
+// Promote's doc comment to the validators: a record that can never be stamped —
+// its frontmatter fails validateStrict, or disagrees with its filename — is
+// refused from the pre-flight bytes, with nothing minted. Before this, the
+// validators ran only under the lock, after the mint, so every attempt left one
+// more orphan draft and the repair verb refused on the same invariant.
+func TestPromoteRefusesAnInvalidRecordBeforeMinting(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		old, new string
+		want     error
+	}{
+		{"filename slug disagrees with frontmatter slug",
+			`slug: "a-promotable-observation"`, `slug: "attacker-chosen-slug"`, ErrInvariantViolation},
+		{"severity outside the enum",
+			`severity: "minor"`, `severity: "bogus"`, ErrMalformedFrontmatter},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo, ir, issID := promoteFixture(t, "a legit finding")
+			src, _, err := findIssue(ir, issID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rewriteIssue(t, ir, issID, func(s string) string {
+				if !strings.Contains(s, tc.old) {
+					t.Fatalf("record does not contain %q:\n%s", tc.old, s)
+				}
+				return strings.Replace(s, tc.old, tc.new, 1)
+			})
+
+			for attempt := 1; attempt <= 2; attempt++ {
+				_, err := Promote(PromoteRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: issID})
+				if !errors.Is(err, tc.want) {
+					t.Fatalf("attempt %d: want %v, got %v", attempt, tc.want, err)
+				}
+				if strings.Contains(err.Error(), "orphaned") {
+					t.Fatalf("attempt %d: a pre-flight refusal must not report an orphan: %v", attempt, err)
+				}
+				if n := draftCount(t, repo); n != 0 {
+					t.Fatalf("attempt %d: a refused promote must mint nothing, got %d draft(s)", attempt, n)
+				}
+			}
+			data, err := os.ReadFile(src)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(data), "promoted_to") {
+				t.Fatalf("a refused promote must not stamp the record:\n%s", data)
+			}
+		})
+	}
+}

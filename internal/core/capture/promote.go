@@ -87,9 +87,10 @@ var beforeStampHook func()
 // (`capture promote <iss-N> --intent <itd-N>`).
 //
 // Every refusal that can be established from the bytes in hand is therefore
-// raised BEFORE the mint: the grounds text, and whether the record can take the
-// append at all. What is left to the stamp is what only a write under the lock
-// can discover, which is the residue the remedy above is for — never a
+// raised BEFORE the mint: the grounds text, whether the record is one the
+// validators would let the stamp write at all, and whether it can take the
+// append. What is left to the stamp is what only a write under the lock can
+// discover, which is the residue the remedy above is for — never a
 // deterministic refusal that would leak one draft per attempt.
 func Promote(req PromoteRequest) (PromoteResult, error) {
 	repoRoot, issuesRoot, err := resolveRoots(req.RepoRoot, req.IssuesRoot)
@@ -117,7 +118,7 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 
 	// Pre-flight outside the lock: locate and read the issue, refuse a
 	// double-promote early (re-checked under the lock at stamp time).
-	src, _, err := findIssue(issuesRoot, req.ID)
+	src, status, err := findIssue(issuesRoot, req.ID)
 	if err != nil {
 		return PromoteResult{}, err
 	}
@@ -127,6 +128,19 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 	}
 	fm, body, err := parseFrontmatterAndBody(content)
 	if err != nil {
+		return PromoteResult{}, err
+	}
+	// The validators run on the pre-flight bytes, not only under the lock after
+	// the mint. A record the stamp could never validate — a frontmatter slug that
+	// disagrees with its filename, a value outside an enum — used to reach the
+	// mint anyway, fail the stamp on the invariant, and leave one orphan draft
+	// per attempt with a repair verb that refused on the same invariant
+	// (GHSA-cxmf-gw6r-2pf5). The stamp-step checks stay: they judge the
+	// post-append bytes under the lock, which these cannot.
+	if err := validateStrict(fm); err != nil {
+		return PromoteResult{}, err
+	}
+	if err := validateInvariants(fm, status, src); err != nil {
 		return PromoteResult{}, err
 	}
 	if existing := asString(fm["promoted_to"]); existing != "" {
