@@ -3,6 +3,7 @@ package scanner
 import (
 	"os/exec"
 	"regexp"
+	"sort"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -14,11 +15,20 @@ import (
 // environment. Its matchers are built at scan time; empty fields disable the
 // corresponding kind.
 type Identity struct {
-	GitUserName       string
-	GitUserEmail      string
-	GitRemoteUsername string
-	HomePath          string
-	HomeUser          string
+	GitUserName  string
+	GitUserEmail string
+	// OtherGitUserNames and OtherGitUserEmails are the caller's OTHER git
+	// identities: every user.name / user.email value git resolves for this
+	// repository in a scope the effective value displaced — the unconditional
+	// global identity under a repo-local persona, or the reverse, or an
+	// includeIf persona keyed on where the repository sits. A persona ADDS an
+	// identity to redact; it never replaces one (GHSA-v826-5jf4-p8xg,
+	// GHSA-gxhr-pmwv-r99p, GHSA-rvhr-3455-c5jw).
+	OtherGitUserNames  []string
+	OtherGitUserEmails []string
+	GitRemoteUsername  string
+	HomePath           string
+	HomeUser           string
 }
 
 // Built-in identity kinds.
@@ -47,7 +57,10 @@ func DefaultIdentitySeverities() map[string]Severity {
 
 // ProbeIdentity gathers the caller's identity from git config and $HOME,
 // best-effort: any probe that fails leaves its field empty. repoRoot scopes the
-// git config reads so a per-repo user.name/email is honoured.
+// git config reads so a per-repo user.name/email is honoured — and honoured in
+// ADDITION to the caller's other identities, not instead of them: the name and
+// email fields hold the value git resolves in this repository, and the Other*
+// fields hold every value another scope configured that it displaced.
 func ProbeIdentity(repoRoot string) Identity {
 	var id Identity
 	git := func(args ...string) string {
@@ -66,8 +79,17 @@ func ProbeIdentity(repoRoot string) Identity {
 		}
 		return strings.TrimSpace(string(out))
 	}
-	id.GitUserName = git("config", "--get", "user.name")
-	id.GitUserEmail = git("config", "--get", "user.email")
+	// --get-all lists every value git resolves for the key, in scope order
+	// with the effective one last — system, global with its includeIf
+	// includes evaluated where they sit, repo-local, worktree. --get returned
+	// only that last value, so a repo-local or includeIf persona displaced the
+	// caller's global identity from the matcher set and the displaced identity
+	// was stored in clear text. Neither --local nor --global sees an includeIf
+	// persona for what it is (the former misses it, the latter hides it behind
+	// the unconditional value), which is why the union comes from ONE
+	// unscoped listing rather than a scope-by-scope reassembly.
+	id.GitUserName, id.OtherGitUserNames = splitIdentityValues(git("config", "--get-all", "user.name"))
+	id.GitUserEmail, id.OtherGitUserEmails = splitIdentityValues(git("config", "--get-all", "user.email"))
 	if remote := git("config", "--get", "remote.origin.url"); remote != "" {
 		if m := githubRemoteRe.FindStringSubmatch(remote); m != nil {
 			id.GitRemoteUsername = m[1]
@@ -80,6 +102,88 @@ func ProbeIdentity(repoRoot string) Identity {
 		}
 	}
 	return id
+}
+
+// splitIdentityValues turns a `git config --get-all` listing into the
+// effective (last) value and the distinct others it displaced — trimmed,
+// empties dropped, and de-duplicated case-insensitively, the way every
+// identity matcher compares.
+func splitIdentityValues(listing string) (effective string, others []string) {
+	var vals []string
+	for _, v := range strings.Split(listing, "\n") {
+		if v = strings.TrimSpace(v); v != "" {
+			vals = append(vals, v)
+		}
+	}
+	if len(vals) == 0 {
+		return "", nil
+	}
+	effective = vals[len(vals)-1]
+	for _, v := range vals[:len(vals)-1] {
+		if strings.EqualFold(v, effective) || containsFold(others, v) {
+			continue
+		}
+		others = append(others, v)
+	}
+	return effective, others
+}
+
+// identityValues lists one identity field's values to match — the effective
+// value and the others — trimmed, non-empty, de-duplicated case-insensitively,
+// and longest first, so an alternation built from them never settles for a
+// shorter value that is a prefix of a longer one at the same offset.
+func identityValues(effective string, others []string) []string {
+	var out []string
+	for _, v := range append([]string{effective}, others...) {
+		v = strings.TrimSpace(v)
+		if v == "" || containsFold(out, v) {
+			continue
+		}
+		out = append(out, v)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return len(out[i]) > len(out[j]) })
+	return out
+}
+
+func containsFold(list []string, v string) bool {
+	for _, x := range list {
+		if strings.EqualFold(x, v) {
+			return true
+		}
+	}
+	return false
+}
+
+// foldedAlternation compiles values into one case-insensitive literal
+// alternation. The (?i) is what every identity matcher already carried; the
+// alternation is what lets one matcher stand for every scope's value.
+func foldedAlternation(values []string) *regexp.Regexp {
+	quoted := make([]string, len(values))
+	for i, v := range values {
+		quoted[i] = regexp.QuoteMeta(v)
+	}
+	return regexp.MustCompile(`(?i)(?:` + strings.Join(quoted, `|`) + `)`)
+}
+
+// isPublicHandle reports whether a git user.name is the caller's public GitHub
+// handle rather than a real name: equal to the remote's owner, or to the login
+// one of the caller's noreply addresses carries. The remote-owner comparison
+// alone breaks on an org-owned remote (iss-283): the owner stops being the
+// caller the moment the repo transfers, and the caller's public handle would
+// start scanning as a real name. The noreply address carries the caller's own
+// GitHub login locally, so a user.name equal to that login is the same public
+// handle, whatever the remote's owner is. A handle is reported as
+// github_username, never promoted to a hard-fail real_name.
+func isPublicHandle(name string, id Identity) bool {
+	if id.GitRemoteUsername != "" && strings.EqualFold(name, id.GitRemoteUsername) {
+		return true
+	}
+	for _, email := range identityValues(id.GitUserEmail, id.OtherGitUserEmails) {
+		if lm := noreplyLoginRe.FindStringSubmatch(email); lm != nil && strings.EqualFold(name, lm[1]) {
+			return true
+		}
+	}
+	return false
 }
 
 var (
@@ -125,12 +229,11 @@ type identityMatchers struct {
 	// rule that would otherwise have caught the name (iss-2608292034215745).
 	bytes        bool
 	homeSelf     *regexp.Regexp
-	email        *regexp.Regexp
-	name         *regexp.Regexp
+	email        *regexp.Regexp // every scope's user.email, one alternation
+	name         *regexp.Regexp // every scope's user.name that is not a public handle
 	github       *regexp.Regexp
 	localBare    *regexp.Regexp
 	localEncoded string // path-encoded username (dots->hyphens); boundary checked in Go
-	nameEqGithub bool
 }
 
 func newIdentityMatchers(id Identity) identityMatchers {
@@ -142,19 +245,28 @@ func newIdentityMatchers(id Identity) identityMatchers {
 		// the (?i) already applied to the email/name/github matchers below.
 		m.homeSelf = regexp.MustCompile(`(?i)` + regexp.QuoteMeta(id.HomePath))
 	}
-	if id.GitUserEmail != "" {
+	if emails := identityValues(id.GitUserEmail, id.OtherGitUserEmails); len(emails) > 0 {
 		// Case-insensitive: email addresses are compared case-insensitively in
 		// practice (the domain always, and mailbox providers overwhelmingly), so a
 		// trivial case variant of the caller's own address must not slip the
 		// hard_fail real_email gate.
-		m.email = regexp.MustCompile(`(?i)` + regexp.QuoteMeta(id.GitUserEmail))
+		m.email = foldedAlternation(emails)
 	}
-	if n := strings.TrimSpace(id.GitUserName); len(n) >= 3 {
+	var names []string
+	for _, n := range identityValues(id.GitUserName, id.OtherGitUserNames) {
+		// A public handle is reported as github_username by its own matcher,
+		// never as a hard-fail real_name; a name under three runes is too
+		// short to be one.
+		if len(n) >= 3 && !isPublicHandle(n, id) {
+			names = append(names, n)
+		}
+	}
+	if len(names) > 0 {
 		// No RE2 \b: it is ASCII-only, so a name whose first or last rune is
 		// non-ASCII (accented, CJK, Cyrillic) never satisfies the boundary and the
 		// hard_fail real_name detector silently never fires. The word boundary is a
 		// Unicode-aware Go predicate applied to each match instead.
-		m.name = regexp.MustCompile(`(?i)` + regexp.QuoteMeta(id.GitUserName))
+		m.name = foldedAlternation(names)
 	}
 	if id.GitRemoteUsername != "" {
 		// GitHub usernames are case-insensitive; \b dropped for the same
@@ -170,19 +282,6 @@ func newIdentityMatchers(id Identity) identityMatchers {
 		m.localBare = regexp.MustCompile(`(?i)` + regexp.QuoteMeta(id.HomeUser))
 		if enc := strings.ReplaceAll(id.HomeUser, ".", "-"); enc != id.HomeUser {
 			m.localEncoded = enc
-		}
-	}
-	m.nameEqGithub = id.GitUserName != "" && id.GitRemoteUsername != "" &&
-		strings.EqualFold(id.GitUserName, id.GitRemoteUsername)
-	// The remote-owner comparison alone breaks on an org-owned remote (iss-283):
-	// the owner stops being the caller the moment the repo transfers, and the
-	// caller's public handle would start scanning as a real name. The noreply
-	// address carries the caller's own GitHub login locally, so a user.name equal
-	// to that login is the same public handle, whatever the remote's owner is.
-	if !m.nameEqGithub && id.GitUserName != "" {
-		if lm := noreplyLoginRe.FindStringSubmatch(id.GitUserEmail); lm != nil &&
-			strings.EqualFold(id.GitUserName, lm[1]) {
-			m.nameEqGithub = true
 		}
 	}
 	return m
@@ -296,8 +395,9 @@ func (m identityMatchers) findings(line string, lineno int, id2sev map[string]Se
 			add(kindRealEmail, loc[0]+1, matched, "<github-userid>@users.noreply.github.com or remove")
 		}
 	}
-	// real_name — suppress inside URL spans and when it equals the github username.
-	if m.name != nil && !m.nameEqGithub {
+	// real_name — suppress inside URL spans (a name that is the public handle
+	// was left out of the matcher: isPublicHandle).
+	if m.name != nil {
 		for _, loc := range m.name.FindAllStringIndex(line, -1) {
 			if !wordBounded(line, loc[0], loc[1]) {
 				continue
