@@ -11,7 +11,11 @@ package termsafe
 //     (a changelog bullet, a markdown table row, a list item) in the record;
 //   - anything that could OPEN raw HTML is broken apart — a tag, a closing tag, a
 //     declaration, a processing instruction, or a comment — so prose can neither
-//     open nor close an HTML construct and swallow the record around it.
+//     open nor close an HTML construct and swallow the record around it;
+//   - markdown link syntax is broken apart — an inline link `[t](d)`, an image,
+//     and a reference link `[t][l]` — so a faithful quotation of code can never
+//     land as a live link in a committed record (an autolink `<https://…>` is
+//     already caught by the HTML rule, since its scheme starts with a letter).
 //
 // The HTML rule is not cosmetic. In CommonMark a `<` followed by a letter, `/`,
 // `!`, or `?` at the start of a line begins an HTML BLOCK, and several of those
@@ -29,6 +33,23 @@ package termsafe
 // regression on legitimate angle-bracket prose — a changelog line's
 // `<repo>` placeholder reads `< repo>` — which is accepted: a slightly uglier
 // placeholder is cheaper than a record that can conceal its own contents.
+//
+// The link rule is not a spoofing defence but a gate one (iss-2608311504353427):
+// an auditor quoting an element path of the form `items[0](itm-0001)` writes an
+// inline link whose target resolves to nothing, and record-lint's links_resolve
+// rule then refuses the whole tree on a record the ingest itself just wrote — a
+// failure no care in the author can prevent, because the offending text is a
+// faithful quotation of the code under review. The neutralisation is the one the
+// comment delimiters get, a single space breaking the adjacency CommonMark
+// requires, so `items[0] (itm-0001)` still reads as the code it quotes. Only the
+// adjacency is touched: a bracket or a parenthesis on its own is left alone, and
+// a shortcut reference `[label]` is not neutralised, because doing so would have
+// to rewrite every bracket in every field and it opens no link unless a matching
+// definition exists in the surrounding document.
+//
+// Every rule inserts a form the same rule no longer matches, so the cleaner is
+// idempotent: a field cleaned twice is the field cleaned once, and a downstream
+// caller that re-cleans what it was handed does not drift it further.
 //
 // Two forms exist because two callers legitimately want different whitespace
 // handling, and the difference is visible in the record: CleanProse trims,
@@ -82,6 +103,11 @@ func cleanProse(s string, capBytes int, normalise func(string) string) string {
 	// `< !--` — so the two rules are one.
 	s = htmlOpenerRe.ReplaceAllStringFunc(s, func(m string) string { return "< " + m[1:] })
 	s = strings.ReplaceAll(s, "-->", "-- >")
+	// A space after the `]` is enough for links too: CommonMark requires the
+	// destination `(` or the label `[` to follow the link text immediately, and
+	// the record-lint links_resolve pattern requires the same adjacency.
+	s = strings.ReplaceAll(s, "](", "] (")
+	s = strings.ReplaceAll(s, "][", "] [")
 	s = normalise(s)
 	if len(s) > capBytes {
 		s = strings.ToValidUTF8(s[:capBytes], "")

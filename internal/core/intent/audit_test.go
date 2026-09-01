@@ -519,3 +519,52 @@ func TestReEmitAuditToleratesSpecIDSpelling(t *testing.T) {
 		t.Fatalf("ReEmitAudit result = %+v, want an owed receipt", res)
 	}
 }
+
+// TestIngestNeutralisesLinkSyntax (iss-2608311504353427) proves a verdict that
+// faithfully quotes code of the shape `items[0](itm-0001)` — a bracket followed
+// immediately by a parenthesis — cannot write a live markdown link into the
+// shipped intent's Audit Notes. Before the fix the record-lint links_resolve
+// gate refused the whole tree on the record the ingest had just written, because
+// the link's target resolves to nothing. The neutralised text must stay legible
+// (the quoted code is still readable) and the gate must pass over the result.
+func TestIngestNeutralisesLinkSyntax(t *testing.T) {
+	root := t.TempDir()
+	rcp := shipOne(t, root)
+	const quoted = "items[0](itm-0001)"
+	payload := strings.Replace(validVerdict(rcp),
+		"the ship-move writes the OWED stub and request file",
+		"the element path "+quoted+" is quoted verbatim, as is [text][label] and <https://example.invalid/x>", 1)
+	payload = strings.Replace(payload, "func emitAuditForIntent(", quoted, 1)
+	payload = strings.Replace(payload, "OWED stub emitted at ship", "the path "+quoted+" resolves", 1)
+	vp := writeVerdict(t, root, payload)
+
+	res, err := IngestVerdict(root, vp)
+	if err != nil || res.Status != "ingested" {
+		t.Fatalf("ingest = %+v, err %v", res, err)
+	}
+	body, _ := os.ReadFile(filepath.Join(root, shippedDir, "itd-10-alpha.md"))
+	s := string(body)
+	if strings.Contains(s, "](") || strings.Contains(s, "][") || strings.Contains(s, "<https://") {
+		t.Fatalf("live link syntax survived into the record:\n%s", s)
+	}
+	// Legibility: the quoted code is still readable as the code it quotes.
+	if !strings.Contains(s, "items[0]") || !strings.Contains(s, "(itm-0001)") {
+		t.Fatalf("neutralisation destroyed the quoted code:\n%s", s)
+	}
+
+	cfg := lint.Config{
+		Roots: []string{".abcd/development"},
+		Rules: map[string]lint.RuleConfig{
+			"links_resolve": {Enabled: true, Severity: "blocker"},
+		},
+	}
+	findings, err := lint.Lint(cfg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range findings {
+		if f.RuleID == "links_resolve" {
+			t.Fatalf("links_resolve finding on the ingested record: %s:%d %s\n%s", f.File, f.Line, f.Message, s)
+		}
+	}
+}
