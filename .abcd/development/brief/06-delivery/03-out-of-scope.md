@@ -98,6 +98,7 @@ gate. That is what keeps "not hand-counted" true after the day it was written.
 - `itd-164` — Licence vetting at source admission: `docs cite refresh` records each source's licence verdict into the committed baseline, and the zero-network gate refuses a new entry without one (builds on itd-163)
 - `itd-159` — the repo visibility model has a committed-record mode between private and public, with the matching fence-suppression (graduated from iss-223)
 - `itd-194` — the reading include table admits only what the exclusion floor can read, so a document the floor cannot parse is refused at admission rather than passed through unscanned and asserted over (carries itd-183's ten-record exclusion residue; the recognition fork ruled 2026-08-30 for narrowing admission)
+- `itd-200` — a managed repository shows it is managed, and whose answer the loop is waiting on, in the host's status line
 <!-- /index -->
 
 **Later-phase items with no intent id.** These four were written into the brief
