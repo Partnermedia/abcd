@@ -327,6 +327,38 @@ expect_refusal_naming "$d" "RS001 on an id with no record anywhere says so" \
 expect_refusal_not_naming "$d" "RS001 on an id with no record anywhere does not prescribe a rebase" \
 	"[Rr]ebase" -- commits main HEAD
 
+# The stale-branch diagnosis on a record whose slug carries a non-ASCII byte.
+# `git ls-tree --name-only` C-quotes such a path ("…/iss-998-\303\251.md",
+# quotes included), so a locator reading it unquoted takes the opening quote as
+# the status folder and the diagnosis silently falls back to the generic text
+# (iss-2609012047552618). Same topology as the stale-branch case above; the
+# only difference is the slug.
+d="$(newrepo rs001-stale-branch-nonascii)"
+cat >"$d/$ISS_DIR/open/iss-998-é.md" <<'EOF'
+---
+schema_version: 1
+id: "iss-998"
+---
+A fixture issue with an accented slug.
+EOF
+git -C "$d" add -A
+git -C "$d" commit -qm "chore: capture with an accented slug"
+git -C "$d" checkout -q main
+git -C "$d" merge -q --ff-only work
+git -C "$d" checkout -q work
+git -C "$d" mv "$ISS_DIR/open/iss-998-é.md" "$ISS_DIR/resolved/iss-998-é.md"
+git -C "$d" add -A
+git -C "$d" commit -qm "fix: something
+
+Resolves: iss-998"
+git -C "$d" checkout -q main
+git -C "$d" mv "$ISS_DIR/open/iss-998-é.md" "$ISS_DIR/resolved/iss-998-é.md"
+git -C "$d" add -A
+git -C "$d" commit -qm "fix: something (squash of work)"
+git -C "$d" checkout -q work
+expect_refusal_naming "$d" "RS001 on a stale branch diagnoses a record with a non-ASCII slug" \
+	"iss-998 already sits in $ISS_DIR/resolved/ at main .*squash of work.*[Rr]ebase onto main" -- commits main HEAD
+
 # --- RS002: a stamp added here must name a reachable commit ------------------
 
 d="$(newrepo rs002-bad)"

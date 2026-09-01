@@ -68,6 +68,17 @@ if [ "$rc" -ne 0 ]; then
 fi
 cd "$toplevel"
 
+# Every git call below lists or addresses paths, and git C-quotes a path holding
+# a non-ASCII byte by default ("…/iss-998-\303\251.md", quotes included). A
+# locator reading that unquoted takes the opening quote as the status folder,
+# a `git show ref:path` on it finds nothing, and the gate degrades silently for
+# exactly the records whose slug carries an accent (iss-2609012047552618). One
+# wrapper turns quoting off for the whole script rather than per call, so a
+# call added later cannot reintroduce it.
+git() {
+	command git -c core.quotePath=false "$@"
+}
+
 ISSUES_DIR=".abcd/work/issues"
 # STATUS_DIRS is the ledger's status-directory list. The shell cannot import Go,
 # so this is the second and LAST spelling of internal/core/issueschema's
