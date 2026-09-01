@@ -26,12 +26,20 @@ assembly and diff the result.
 
 ## The invocation carries no free text
 
-`assemble` takes exactly two operands, both closed in shape.
+`assemble` takes exactly three operands, every one closed in shape. It carries
+no prose: that is the property the 2026-08-28 rulings protected by closing the
+invocation at two, and [adr-58] restates it as the rule that binds now that a
+third has been admitted.
 
 | Operand | Grammar |
 |---|---|
-| `--position` | one of `widening`, `entailment`, `comparative`, `detection` |
+| `--position` | one of `widening`, `entailment`, `comparative`, `detection` — though `comparative` does not assemble and refuses |
 | `--target` | `HEAD`, or a hexadecimal commit sha of 7 to 40 digits |
+| `--scope` | a record id (`itd-N`, `spc-N`), a material kind, or a committed preset |
+
+**No repository path is accepted at the invocation.** A path may be named only
+inside the committed preset file, where it is reviewed, shape-validated and
+inside the dirty gate.
 
 A branch name or a tag is refused as mutable: the manifest's re-runnability
 rests on a reference that cannot move. A positional argument is refused

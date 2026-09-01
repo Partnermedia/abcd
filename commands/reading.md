@@ -37,11 +37,14 @@ sitting in the local tier). Zero writes.
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/abcd" reading assemble \
-  --position widening --target HEAD --json
+  --position widening --target HEAD --scope cold --json
 ```
 
 `--position` takes one of four closed tokens — `widening`, `entailment`,
-`comparative`, `detection`. An unknown token is refused by name. `--target`
+`comparative`, `detection`. An unknown token is refused by name. **The
+comparative position does not assemble** and refuses, naming the channel it
+lacks: its object is the widening reading's pre-admission output, which is not
+repository material. `--target`
 takes `HEAD` or a hexadecimal commit sha of 7 to 40 digits; a branch name or a
 tag is refused, because it moves and the manifest's re-runnability rests on a
 reference that cannot.
@@ -91,7 +94,7 @@ to dispatch it.
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/abcd" reading assemble \
-  --position entailment --target HEAD \
+  --position entailment --target HEAD --scope cold \
   --out .abcd/.work.local/scratch/reading-runs/manual --json
 ```
 
