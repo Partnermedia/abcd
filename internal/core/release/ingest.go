@@ -37,6 +37,7 @@ import (
 
 	"github.com/intentdriven/abcd/internal/core/changelog"
 	"github.com/intentdriven/abcd/internal/core/surface"
+	"github.com/intentdriven/abcd/internal/core/update"
 	"github.com/intentdriven/abcd/internal/fsutil"
 	"github.com/intentdriven/abcd/internal/termsafe"
 )
@@ -309,7 +310,7 @@ func decodeChangelogPayload(raw []byte) (ChangelogPayload, error) {
 	case p.SchemaVersion == 0:
 		return ChangelogPayload{}, errors.New("changelog payload is missing schema_version")
 	case p.SchemaVersion > ChangelogSchemaVersion:
-		return ChangelogPayload{}, fmt.Errorf("changelog schema v%d; this abcd knows up to v%d — upgrade abcd",
+		return ChangelogPayload{}, update.TooNew("changelog",
 			p.SchemaVersion, ChangelogSchemaVersion)
 	case p.SchemaVersion != ChangelogSchemaVersion:
 		return ChangelogPayload{}, fmt.Errorf("unsupported changelog schema_version %d", p.SchemaVersion)
