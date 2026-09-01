@@ -72,7 +72,7 @@ func readingRepoAt(t *testing.T, root string) string {
 
 	gitCmd(t, root, "init", "-q", "-b", "main")
 	gitCmd(t, root, "add", "-A")
-	gitCmd(t, root, "commit", "-q", "-m", "fixture")
+	gitCommit(t, root, "commit", "-q", "-m", "fixture")
 	return root
 }
 

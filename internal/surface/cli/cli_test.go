@@ -371,6 +371,21 @@ func runCLIStdin(t *testing.T, stdin string, args ...string) []byte {
 	return out
 }
 
+// gitCommit is gitCmd with a commit identity pinned.
+//
+// gittest.Env deliberately pins NO identity — its doc says a caller that needs
+// one supplies it — so a bare `git commit` resolves whatever the machine
+// happens to carry. That is an ambient dependency: it passes on any developer
+// machine with a system or global user.name, and fails with "Author identity
+// unknown" on a CI runner that has neither. The sibling fixture in
+// internal/core/reading pins one; this surface did not, and eleven tests failed
+// the first time they ever ran in CI (iss-2609010759382400).
+func gitCommit(t *testing.T, repo string, args ...string) string {
+	t.Helper()
+	ident := []string{"-c", "user.name=abcd test", "-c", "user.email=test@example.invalid"}
+	return gitCmd(t, repo, append(ident, args...)...)
+}
+
 func gitCmd(t *testing.T, repo string, args ...string) string {
 	t.Helper()
 	full := append([]string{"-C", repo}, args...)
@@ -398,7 +413,7 @@ func TestHistoryListEmptyStoreIsJSONArray(t *testing.T) {
 		t.Fatal(err)
 	}
 	gitCmd(t, repo, "add", ".")
-	gitCmd(t, repo, "commit", "-m", "init")
+	gitCommit(t, repo, "commit", "-m", "init")
 	t.Chdir(repo)
 
 	out := strings.TrimSpace(string(runCLI(t, "history", "list", "--json")))
@@ -423,7 +438,7 @@ func TestHistoryCaptureWiredAndRedacts(t *testing.T) {
 		t.Fatal(err)
 	}
 	gitCmd(t, repo, "add", ".")
-	gitCmd(t, repo, "commit", "-m", "init")
+	gitCommit(t, repo, "commit", "-m", "init")
 	t.Chdir(repo)
 
 	// Create the store dir exactly as `abcd ahoy install` would (Capture never
@@ -505,7 +520,7 @@ func TestHistoryShowSanitisesTranscriptBody(t *testing.T) {
 		t.Fatal(err)
 	}
 	gitCmd(t, repo, "add", ".")
-	gitCmd(t, repo, "commit", "-m", "init")
+	gitCommit(t, repo, "commit", "-m", "init")
 	t.Chdir(repo)
 
 	rootSHA := gitCmd(t, repo, "rev-list", "--max-parents=0", "HEAD")
@@ -807,7 +822,7 @@ func hermeticGitRepo(t *testing.T) (repo, rootSHA string) {
 	gitCmd(t, repo, "init", "-q")
 	gitCmd(t, repo, "config", "user.email", "dev@example.com")
 	gitCmd(t, repo, "config", "user.name", "Dev")
-	gitCmd(t, repo, "commit", "-q", "--allow-empty", "-m", "root")
+	gitCommit(t, repo, "commit", "-q", "--allow-empty", "-m", "root")
 	rootSHA = gitCmd(t, repo, "rev-list", "--max-parents=0", "HEAD")
 	t.Chdir(repo)
 	return repo, rootSHA
