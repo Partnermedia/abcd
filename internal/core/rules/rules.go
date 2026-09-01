@@ -338,10 +338,15 @@ func mergeDomain(base, over Domain) Domain {
 }
 
 // Validate checks structural invariants: schema_version == 1, every domain name
-// matches [A-Z][A-Z0-9_]*, every state is active/dormant (or empty), and no rule
-// body is empty or whitespace-only. An empty rule body otherwise passes here and
-// renders as a bare contentless "- " bullet in the injected block
-// (iss-2608261550497978) — a loud refusal at load beats a silent empty bullet.
+// matches [A-Z][A-Z0-9_]*, every state is active/dormant (or empty), every
+// domain carries at least one rule, and no rule body is empty or
+// whitespace-only. An empty rule body otherwise passes here and renders as a
+// bare contentless "- " bullet in the injected block (iss-2608261550497978),
+// and a domain with no rules at all — an override of {"rules": []}, or a custom
+// domain declared without any — renders as a heading-only "## NAME" block,
+// suppression wearing the domain's name (GHSA-22f8-qf5r-gjgq sibling). A loud
+// refusal at load beats either silent shape; {"state": "dormant"} is the way to
+// silence a domain.
 func Validate(rs RuleSet) error {
 	if rs.SchemaVersion != 1 {
 		return fmt.Errorf("schema_version must be 1, got %d", rs.SchemaVersion)
@@ -354,6 +359,9 @@ func Validate(rs RuleSet) error {
 		case "", StateActive, StateDormant:
 		default:
 			return fmt.Errorf("domain %q: unknown state %q", name, d.State)
+		}
+		if len(d.Rules) == 0 {
+			return fmt.Errorf("domain %q: has no rules (it would inject a heading-only block; set \"state\": \"dormant\" to silence a domain)", name)
 		}
 		for i, r := range d.Rules {
 			if strings.TrimSpace(r) == "" {

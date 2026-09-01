@@ -613,3 +613,37 @@ func contains(s, sub string) bool {
 	}
 	return false
 }
+
+// A domain whose merged rules are empty injects a heading-only "## NAME" block:
+// suppression wearing the domain's name, and to the agent a domain that appears
+// to say nothing (GHSA-22f8-qf5r-gjgq sibling). The documented way to silence a
+// domain is {"state": "dormant"}; an override that empties the rules, or a
+// custom domain declared without any, is refused loudly at load instead.
+func TestValidateRefusesDomainWithoutRules(t *testing.T) {
+	emptied := Merge(Defaults(), RuleSet{SchemaVersion: 1, Domains: map[string]Domain{
+		"PII": {Rules: []string{}},
+	}})
+	err := Validate(emptied)
+	if err == nil {
+		t.Fatal("an override that empties a bundled domain's rules passed validation (heading-only block)")
+	}
+	if !strings.Contains(err.Error(), "PII") || !strings.Contains(err.Error(), "dormant") {
+		t.Fatalf("refusal must name the domain and the dormant remedy: %v", err)
+	}
+	ruleless := Merge(Defaults(), RuleSet{SchemaVersion: 1, Domains: map[string]Domain{
+		"CUSTOM": {Recall: []string{"widget"}},
+	}})
+	if err := Validate(ruleless); err == nil {
+		t.Fatal("a custom domain declared without rules passed validation (heading-only block)")
+	}
+	// The bundled defaults and a dormant state-only override still validate.
+	if err := Validate(Defaults()); err != nil {
+		t.Fatalf("defaults must validate: %v", err)
+	}
+	silenced := Merge(Defaults(), RuleSet{SchemaVersion: 1, Domains: map[string]Domain{
+		"PII": {State: StateDormant},
+	}})
+	if err := Validate(silenced); err != nil {
+		t.Fatalf("a dormant state-only override must validate: %v", err)
+	}
+}
