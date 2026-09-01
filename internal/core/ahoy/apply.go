@@ -786,8 +786,14 @@ func (a *applyCtx) stepMarker(cfg *InstallConfig) {
 	if cfg != nil && cfg.DocsTarget != "" {
 		target = cfg.DocsTarget
 	} else {
-		// fall back to persisted config
-		cm, _ := readConfig(a.cwd)
+		// fall back to persisted config — and when that cannot be read, plant
+		// nothing: the default would write a block into BOTH files against a
+		// docs.target the user chose but this run cannot see.
+		cm, err := readConfig(a.cwd)
+		if err != nil {
+			a.refuseMalformedConfig(err)
+			return
+		}
 		if v, ok := stringVal(subMap(cm, "docs"), "target"); ok {
 			target = v
 		}

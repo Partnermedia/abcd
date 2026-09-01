@@ -14,7 +14,8 @@ const conflictedConfig = `{"repo":{"visibility":"public"},"scan":{"native_secret
 <<<<<<<
 `
 
-// conflictedRepo is an adoptable repo whose config.json is conflictedConfig.
+// conflictedRepo is an adoptable repo whose config.json is conflictedConfig and
+// whose docs target is unreadable for the same reason.
 func conflictedRepo(t *testing.T) string {
 	t.Helper()
 	repo := t.TempDir()
@@ -68,9 +69,29 @@ func TestInstallNeverRebuildsMalformedConfig(t *testing.T) {
 	}
 }
 
+// TestInstallPlantsNoMarkerOnMalformedConfig is the stepMarker sibling: the
+// user's docs.target is unreadable, so no marker block may be planted — least
+// of all into both files by the default.
+func TestInstallPlantsNoMarkerOnMalformedConfig(t *testing.T) {
+	setupHermetic(t)
+	repo := conflictedRepo(t)
+	adopt := true
+	// No docs_target override: the value has to come from the file, which cannot be read.
+	opts := InstallOptions{Adopt: &adopt, Yes: true}
+
+	if _, err := Install(repo, opts, RefusingPrompter{}); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"CLAUDE.md", "AGENTS.md"} {
+		if _, err := os.Stat(filepath.Join(repo, name)); err == nil {
+			t.Fatalf("install planted %s although docs.target could not be read", name)
+		}
+	}
+}
+
 // TestDetectMalformedConfigIsOneDiagnosticGap: detection on an unparseable
 // config raises one non-resolvable config.malformed gap and nothing that would
-// arm a rewrite (install_meta.missing, config.*_missing).
+// arm a rewrite (install_meta.missing, marker.missing, config.*_missing).
 func TestDetectMalformedConfigIsOneDiagnosticGap(t *testing.T) {
 	setupHermetic(t)
 	repo := conflictedRepo(t)
@@ -84,7 +105,7 @@ func TestDetectMalformedConfigIsOneDiagnosticGap(t *testing.T) {
 		switch g.ID {
 		case "config.malformed":
 			malformed = append(malformed, g)
-		case "install_meta.missing",
+		case "install_meta.missing", "marker.missing", "marker.outdated",
 			"config.visibility_missing", "config.docs_target_missing",
 			"config.oracle_backend_missing", "config.scan_deep_missing":
 			t.Errorf("gap %s raised on an unparseable config; it would arm a rewrite of user data", g.ID)

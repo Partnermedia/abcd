@@ -378,7 +378,12 @@ func cfgGap(id, title, detail string) Gap {
 }
 
 func detectMarkerDrift(cwd string) []Gap {
-	cfg, _ := readConfig(cwd)
+	cfg, err := readConfig(cwd)
+	if err != nil {
+		// docs.target is unknowable, so no marker gap may arm a plant into the
+		// default targets (both files) the user never chose.
+		return nil
+	}
 	docs := subMap(cfg, "docs")
 	target, _ := stringVal(docs, "target")
 	files := markerTargets(target)
