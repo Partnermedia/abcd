@@ -1,6 +1,7 @@
 package termsafe
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -118,6 +119,113 @@ func TestCleanProseTruncationStaysValidUTF8(t *testing.T) {
 	for _, r := range got {
 		if r == '�' {
 			t.Fatalf("CleanProse emitted a replacement rune: %q", got)
+		}
+	}
+}
+
+// opensRawHTML reports whether s still carries a `<` that CommonMark would read
+// as the start of raw HTML outside a code span — the shape every neutralisation
+// case below must be free of.
+func opensRawHTML(s string) bool {
+	return htmlOpenerRe.MatchString(s) || strings.Contains(s, "-->")
+}
+
+// TestCleanProseKeepsCodeSpans is iss-2609011217083577: CommonMark never parses
+// HTML inside a code span, so the neutralisation buys nothing there and corrupts
+// a documented placeholder into a shell redirect (`<path>` → `< path>`) instead.
+// With KeepCodeSpans the content of a CLOSED span is left alone; everything
+// outside a span keeps every existing neutralisation, and any shape a renderer
+// could read differently from the cleaner fails closed.
+func TestCleanProseKeepsCodeSpans(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		// The record's case: the invocation is a code span, the placeholder survives.
+		{"placeholder-in-span", "run `abcd reading ingest --reading-json <path>` first",
+			"run `abcd reading ingest --reading-json <path>` first"},
+		{"comment-close-in-span", "the `-->` token", "the `-->` token"},
+		{"whole-field-is-a-span", "`<script>`", "`<script>`"},
+		// CommonMark 6.1: a run of N backticks is closed by the next run of exactly N.
+		{"double-backtick-span", "``a ` <b>`` end", "``a ` <b>`` end"},
+		{"triple-backtick-span", "``` <script> ```", "``` <script> ```"},
+		// An unterminated opener is literal backticks, so what follows is prose.
+		{"unterminated-single", "` <script>", "` < script>"},
+		{"unterminated-double-then-single", "``a` <b>", "``a` < b>"},
+		{"mismatched-lengths", "``<b>`", "``< b>`"},
+		// CommonMark example: "`foo``bar``" — the single is literal, the doubles pair.
+		{"single-literal-doubles-pair", "`<a>``<b>``", "`< a>``<b>``"},
+		// An opener after a closed span is prose again.
+		{"opener-after-closed-span", "`x` <script>", "`x` < script>"},
+		{"prose-both-sides", "<a> `<b>` <c>", "< a> `<b>` < c>"},
+		{"two-spans", "`<a>` and `<b>`", "`<a>` and `<b>`"},
+		{"comment-open-after-span", "`x` <!-- hidden", "`x` < !-- hidden"},
+		// Fail-closed shapes: a backslash before a backtick is an escape outside a
+		// span (so the span the cleaner would see is not the one a renderer sees),
+		// and a pipe lets a table row re-split the field around the span. Either
+		// disables the exemption for the whole field.
+		{"escaped-backtick-disables", "\\`<script>`", "\\`< script>`"},
+		{"escaped-backtick-anywhere-disables", "`<a>` \\` `<b>`", "`< a>` \\` `< b>`"},
+		{"pipe-disables", "`<a>` | x", "`< a>` | x"},
+		{"pipe-inside-span-disables", "`a|<b>`", "`a|< b>`"},
+		// Ordinary prose is untouched either way.
+		{"comparison-kept", "a < b and `c > d`", "a < b and `c > d`"},
+		{"no-backticks", "<table><tr>", "< table>< tr>"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := CleanProse(c.in, 200, KeepCodeSpans)
+			if got != c.want {
+				t.Errorf("CleanProse(%q, KeepCodeSpans) = %q, want %q", c.in, got, c.want)
+			}
+			if again := CleanProse(got, 200, KeepCodeSpans); again != got {
+				t.Errorf("CleanProse is not idempotent: %q -> %q -> %q", c.in, got, again)
+			}
+			// The line form honours the option the same way; whitespace collapse is
+			// the only thing it adds.
+			if got := CleanProseLine(c.in, 200, KeepCodeSpans); got != strings.Join(strings.Fields(c.want), " ") {
+				t.Errorf("CleanProseLine(%q, KeepCodeSpans) = %q, want %q", c.in, got, c.want)
+			}
+		})
+	}
+}
+
+// TestCleanProseDefaultStillNeutralisesInsideSpans pins that the exemption is
+// opt-in: a caller that wraps a cleaned field in its own backticks would re-pair
+// the field's spans, so the default has to stay the neutralise-everything form.
+func TestCleanProseDefaultStillNeutralisesInsideSpans(t *testing.T) {
+	for _, in := range []string{"`<script>`", "run `abcd x <path>`", "``<!-- hidden``"} {
+		if got := CleanProse(in, 200); opensRawHTML(got) {
+			t.Errorf("CleanProse(%q) = %q, want the span content neutralised by default", in, got)
+		}
+		if got := CleanProseLine(in, 200); opensRawHTML(got) {
+			t.Errorf("CleanProseLine(%q) = %q, want the span content neutralised by default", in, got)
+		}
+	}
+}
+
+// TestCleanProseCapCannotReopenASpan: the cap runs after the neutralisation, so a
+// cut landing inside an exempt span leaves an unterminated opener behind — and the
+// raw HTML the span was protecting would then be prose. The result must be both
+// within the cap and free of any opener.
+var closedSingleSpanRe = regexp.MustCompile("`[^`]*`")
+
+func TestCleanProseCapCannotReopenASpan(t *testing.T) {
+	in := "`aa <script> b` and `<table>` tail"
+	for capBytes := 1; capBytes <= len(in)+2; capBytes++ {
+		got := CleanProse(in, capBytes, KeepCodeSpans)
+		if len(got) > capBytes {
+			t.Errorf("cap %d: len(%q) = %d exceeds the cap", capBytes, got, len(got))
+		}
+		// Only a still-closed span may carry the raw form: strip every closed
+		// single-backtick span (the fixture uses no other run length) and what is
+		// left must open nothing.
+		if outside := closedSingleSpanRe.ReplaceAllString(got, ""); opensRawHTML(outside) {
+			t.Errorf("cap %d: %q left a raw opener outside a closed span", capBytes, got)
+		}
+		if again := CleanProse(got, capBytes, KeepCodeSpans); again != got {
+			t.Errorf("cap %d: not idempotent: %q -> %q", capBytes, got, again)
 		}
 	}
 }

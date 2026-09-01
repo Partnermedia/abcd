@@ -556,8 +556,15 @@ func insertSection(root string, section []string) (string, error) {
 // form is not: this prose lands in a file whose line structure is machine-read, so
 // an embedded newline could otherwise forge a heading, a section, or a whole
 // release.
+//
+// KeepCodeSpans is asked for because this field stands alone on its bullet: the
+// render is "- <text> (<ids>)", and neither the marker before it nor the
+// parenthesised ids after it carries a backtick, so the code spans the composer
+// closes are the code spans the changelog renders. A documented invocation such
+// as `abcd reading ingest --reading-json <path>` therefore ships as written
+// rather than as the shell redirect `< path>` (iss-2609011217083577).
 func cleanChangelogProse(s string) string {
-	return termsafe.CleanProseLine(s, maxEntryProseBytes)
+	return termsafe.CleanProseLine(s, maxEntryProseBytes, termsafe.KeepCodeSpans)
 }
 
 // sectionList renders the registered sections for an error message, written from

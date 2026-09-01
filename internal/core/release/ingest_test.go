@@ -568,3 +568,28 @@ func TestIngestResultJSONShape(t *testing.T) {
 		t.Errorf("the nested cut lost its wire shape: %v", cut)
 	}
 }
+
+// TestIngestKeepsCodeSpanPlaceholders is iss-2609011217083577: a composed line
+// documenting an invocation inside a code span must reach the changelog as
+// written — `<path>` is an inert placeholder there, and the neutralised
+// `< path>` is a shell redirect a reader would copy. The neutralisation outside
+// a span is unchanged.
+func TestIngestKeepsCodeSpanPlaceholders(t *testing.T) {
+	r := shippableRepo(t)
+	entries := []ChangelogEntry{
+		{Section: SectionAdded, Records: []string{"itd-73"},
+			Text: "the invocation `abcd reading ingest --reading-json <path>` ships as written."},
+		{Section: SectionFixed, Records: []string{"iss-51"},
+			Text: "a fix <!-- abcd:marker --> outside a span is still neutralised."},
+	}
+	if _, err := Ingest(r.Root(), liveSurface(), marshalPayload(t, "v0.4.1", entries), cutAt); err != nil {
+		t.Fatalf("Ingest: %v", err)
+	}
+	got := readChangelog(t, r.Root())
+	if want := "`abcd reading ingest --reading-json <path>`"; !strings.Contains(got, want) {
+		t.Errorf("the code-span placeholder did not survive the ingest; want %q in:\n%s", want, got)
+	}
+	if strings.Contains(got, "<!--") {
+		t.Errorf("an HTML comment delimiter survived into the changelog:\n%s", got)
+	}
+}
