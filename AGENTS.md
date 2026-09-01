@@ -91,7 +91,8 @@ first and falls through to `go run` only when nothing earlier resolves; in this
 checkout the first rung exists and answers, so the fallback written for exactly
 this case is never reached by following the ladder literally
 (iss-2608230943088357 holds the surface half). The loader's `DOGFOODING` domain
-in `.abcd/rules.json` injects this rule on a prompt that names an abcd verb.
+in `.abcd/rules.json` injects this rule on a prompt that names `abcd` or any of
+its top-level verbs (the `Available Commands` list of `go run ./cmd/abcd --help`).
 
 CI (`.github/workflows/ci.yml`) runs its `check` job on macOS + Linux — build,
 vet, test and the race-enabled internal tests on both, with the `gofmt -l .`

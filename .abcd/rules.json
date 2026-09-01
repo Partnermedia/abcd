@@ -74,13 +74,30 @@
     },
     "DOGFOODING": {
       "recall": [
-        "capture",
-        "launch",
-        "changelog",
+        "abcd",
         "ahoy",
-        "version",
-        "ship",
-        "release"
+        "banlist",
+        "capture",
+        "changelog",
+        "completion",
+        "disembark",
+        "docs",
+        "embark",
+        "guard",
+        "help",
+        "history",
+        "ideate",
+        "identity",
+        "intent",
+        "launch",
+        "lint",
+        "memory",
+        "reading",
+        "rules",
+        "site",
+        "spec",
+        "update",
+        "version"
       ],
       "rules": [
         "In a source checkout of abcd itself, every abcd invocation is `go run ./cmd/abcd <verb>` from the repo root — never the plugin-root binary and never an `abcd` on PATH. Both are the last PUBLISHED version, stale by construction here and further behind with every commit, and the failure is often silent rather than a refusal: an empty `changelog --json` cut, a record written through a schema the gates no longer accept. The documented resolution ladder reaches the plugin-root binary first and it answers, so the `go run` fallback is never reached by following it; go straight to `go run ./cmd/abcd` (AGENTS.md, Build, test, and checks)."
