@@ -239,6 +239,17 @@ The interview turns a draft into an intent the maintainer has signed off. Run
 it only in a live session with the human; deferral of any question is a valid
 answer, but silence is not consent.
 
+**How every question is asked (the GRILL rule domain).** One question at a
+time, through the harness's interactive question tool, never as a numbered
+list inside prose. Each question carries one sentence of context, one concrete
+example of what each answer means in practice, and options that widen rather
+than recommend: no starred default, no recommended label, the null answer
+always offered. A recommendation the human asks for is given in prose apart
+from the question. The next question waits for the last answer. The register follows
+the addressee: a product thinker gets outcomes in product terms with no
+record ids or internals; a technical facilitator gets the mechanism and the
+ids. Where the hat is unknown, that is the first question.
+
 **Prerequisite — two adversarial reviews.** Before the interview, the draft
 has been through two independent adversarial reviewers with different lenses
 (design/feasibility and record-discipline are the proven pair), and their
