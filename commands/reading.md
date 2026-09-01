@@ -212,18 +212,21 @@ the structural halves above carry no such bound.
 
 ### Where the records land
 
-Nothing durable is written until the whole payload validates. The reading
-records land in the reading-record family, the run's manifest is promoted
-beside its run metadata, and the run metadata is written **last** as the commit
-marker — a run without one never happened. An ingest interrupted before that
-marker leaves a stage in the local tier, and the next invocation names the
-orphan, rolls the run back and clears it. One ingest runs at a time in a
-checkout: a second waits, and reports contention rather than sweeping the
-first one's records away.
+Nothing durable is written or deleted until the whole payload validates; a
+refusal after the run is proven leaves its refusal record and nothing else. The
+reading records land in the reading-record family, the run's manifest is
+promoted beside its run metadata, and the run metadata is written **last** as
+the commit marker — a run without one never happened. An ingest interrupted
+before that marker leaves a stage in the local tier. Every later invocation
+names that orphan; the next one whose payload validates rolls the run back and
+clears it, and a refused run reports the orphans it left in place. One ingest
+runs at a time in a checkout: a second waits, and reports contention rather
+than sweeping the first one's records away.
 
 Report from the JSON: `run_id`, `records`, `refused_items`, `review_flags`,
-`cleared_stages`, and `run_record` — or, on a refusal that recorded one,
-`refusal_record`.
+`cleared_stages`, `rolled_back_records`, `pending_stages`, and `run_record` —
+or, on a refusal that recorded one, `refusal_record`. A refusal renders the
+JSON whenever it has one of these to disclose, so read it on exit 2 as well.
 
 **Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
 provisions the binary into the plugin root, so this is the rung that fires for a

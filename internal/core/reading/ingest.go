@@ -245,8 +245,26 @@ type IngestResult struct {
 	// committed tier is reported by id: "cleared an orphaned stage" does not tell
 	// an operator that records left the ledger with it.
 	RolledBack []string `json:"rolled_back_records,omitempty"`
-	Redacted   int      `json:"redacted,omitempty"`
-	Degraded   string   `json:"redaction_degraded,omitempty"`
+	// PendingStages names the orphaned stages this invocation found and LEFT
+	// IN PLACE. The sweep is a delete in the committed tier, and every such
+	// delete is fenced behind the whole payload validating, so an invocation
+	// that is refused — or that fails before the sweep — reports the orphans
+	// it saw and leaves them for the next one that validates. A sweep that
+	// skipped something says so.
+	PendingStages []string `json:"pending_stages,omitempty"`
+	Redacted      int      `json:"redacted,omitempty"`
+	Degraded      string   `json:"redaction_degraded,omitempty"`
+}
+
+// HasDisclosure reports whether the result carries something the operator has
+// to be told even when the verb returned an error: a refusal record written, a
+// stage cleared, a record removed from the ledger, an orphan seen and left in
+// place, or a degraded outcome. The front doors render the result on the error
+// path exactly when this is true — one predicate, so a field added here cannot
+// be one the surface silently drops.
+func (r IngestResult) HasDisclosure() bool {
+	return r.RefusalPath != "" || len(r.ClearedStages) > 0 || len(r.RolledBack) > 0 ||
+		len(r.PendingStages) > 0 || r.Degraded != ""
 }
 
 // The three points the test seam can be entered at: the two windows of the
@@ -274,11 +292,14 @@ func fireFault(step string) error {
 
 // Ingest validates one reading's output and writes its records.
 //
-// The order is the protocol, and it is the order for a reason: nothing durable
-// is written until the whole payload validates, the ledger records land as one
+// The order is the protocol, and it is the order for a reason: the durable
+// tier is never mutated by a run that is refused — nothing is written and
+// nothing is deleted until the whole payload validates, save the refusal record
+// that a refusal after step 3 exists to leave — the ledger records land as one
 // batch, and the run metadata lands last as the commit marker.
 //
-//  1. Sweep any orphaned stage a previous invocation left, naming and clearing it.
+//  1. Find any orphaned stage a previous invocation left, read-only, so a
+//     refusal below can name what it saw. Nothing is cleared yet.
 //  2. Read and decode the payload strictly.
 //  3. Check the envelope, and resolve the parked run's manifest by content hash.
 //     Until this passes, the run has no proven identity, so nothing — not even a
@@ -287,8 +308,16 @@ func fireFault(step string) error {
 //     A refusal from here on writes a refusal record.
 //  5. Validate every item; an item-level violation refuses that item and lands
 //     the rest.
-//  6. Stage, write the ledger records, promote the manifest, and write the run
+//  6. Sweep the orphans found at step 1, naming and clearing each and rolling
+//     its never-committed run back. This is the first delete in the committed
+//     tier, and the payload it runs under has validated in full.
+//  7. Stage, write the ledger records, promote the manifest, and write the run
 //     metadata last.
+//
+// The sweep sat at step 1 once, and with an orphan present an ingest refused at
+// the type check deleted that orphan's ledger records and reported the type
+// error alone (iss-2608311517509690). A refused run now leaves the orphans it
+// found in place and reports them as pending.
 func Ingest(req IngestRequest) (IngestResult, error) {
 	res := IngestResult{}
 	repoRoot := strings.TrimSpace(req.RepoRoot)
@@ -307,7 +336,7 @@ func Ingest(req IngestRequest) (IngestResult, error) {
 	// it, and this verb walks and removes files under two directories a hostile
 	// clone can commit a symlink at — git mode 120000 on the ledger's run
 	// directory or on the readings tree lands a write, or a DELETE, outside the
-	// repository, and the orphan sweep runs before the payload is even read.
+	// repository, and the orphan sweep is reached by any payload that validates.
 	// os.Root resolves every component in the kernel and refuses the traversal,
 	// which is the containment fsutil.ReadGuardedInRoot and WriteFileAtomicInRoot
 	// already exist to give, and the stance core/capture takes on the same ledger
@@ -318,8 +347,8 @@ func Ingest(req IngestRequest) (IngestResult, error) {
 	}
 	defer root.Close()
 
-	// One ingest at a time in one checkout, from the sweep through the commit
-	// marker.
+	// One ingest at a time in one checkout, from the orphan probe through the
+	// commit marker.
 	//
 	// The sweep DELETES committed reading records, and its only test for an
 	// orphan is that a stage exists with no commit marker beside it — which is
@@ -363,12 +392,15 @@ func ensureStageRoot(root *os.Root) error {
 
 // ingestUnderLock is Ingest's body, everything the stage lock has to cover.
 func ingestUnderLock(root *os.Root, repoRoot string, req IngestRequest, res *IngestResult) error {
-	cleared, rolledBack, err := sweepOrphanStages(root)
-	res.ClearedStages = cleared
-	res.RolledBack = rolledBack
+	// Read-only. The orphans are named now so that every path out of this
+	// function — a refusal before the run is proven, a recorded refusal, a
+	// failed write — can say what it saw; they are cleared only below, once the
+	// payload has validated in full. Until then every one of them is pending.
+	orphans, err := findOrphanStages(root)
 	if err != nil {
 		return err
 	}
+	res.PendingStages = orphans
 
 	raw, err := readOutputFile(req.OutputPath)
 	if err != nil {
@@ -420,7 +452,41 @@ func ingestUnderLock(root *os.Root, repoRoot string, req IngestRequest, res *Ing
 		return refuse(root, res, out, manifest, def, err)
 	}
 
+	// The whole payload has validated: this is the first point at which the
+	// committed tier may be deleted from. The sweep reports what it cleared
+	// and what it rolled back, and whatever it did not reach stays pending —
+	// set before the error check, so a sweep that stopped short is reported
+	// as far as it got rather than not at all.
+	cleared, rolledBack, err := sweepOrphanStages(root, orphans)
+	res.ClearedStages = cleared
+	res.RolledBack = rolledBack
+	res.PendingStages = leftPending(orphans, cleared)
+	if err != nil {
+		return err
+	}
+
 	return write(root, repoRoot, res, out, manifest, def, items)
+}
+
+// leftPending is the orphans found minus the stages the sweep cleared: what a
+// later invocation will find again. Both lists are sorted, and the cleared list
+// is a prefix of the found one in sweep order, but the subtraction does not
+// rest on either.
+func leftPending(found, cleared []string) []string {
+	if len(cleared) == 0 {
+		return found
+	}
+	done := make(map[string]bool, len(cleared))
+	for _, c := range cleared {
+		done[c] = true
+	}
+	var pending []string
+	for _, f := range found {
+		if !done[f] {
+			pending = append(pending, f)
+		}
+	}
+	return pending
 }
 
 // readOutputFile reads the untrusted payload behind fsutil.ReadGuarded
@@ -653,6 +719,8 @@ func refuseARerun(root *os.Root, runID string) error {
 // happened, and a rerun is a NEW run with a new run id, never an amendment. It
 // carries the run metadata and the named reason and no items, and nothing was
 // ever moved out of the stage — so there are no reading records to leave behind.
+// The orphans found at the start stay exactly where they were: the refusal
+// record is the only thing a refused run writes, and it deletes nothing.
 func refuse(root *os.Root, res *IngestResult, out Output, m Manifest, def Definition, cause error) error {
 	rec := RefusalRecord{
 		Type: RefusalType, SchemaVersion: SchemaVersion, RunID: out.RunID,
@@ -674,23 +742,21 @@ func refuse(root *os.Root, res *IngestResult, out Output, m Manifest, def Defini
 	return fmt.Errorf("reading: %w; the refusal is recorded at %s", cause, rel)
 }
 
-// sweepOrphanStages reports and clears every stage a previous invocation left.
-//
-// An orphan means an ingest reached the stage and never reached its commit
-// marker, so the run never happened — and a run that never happened must leave
-// no reading records behind. The rollback therefore removes what the stage says
-// the ingest wrote, then the run's own directory when the commit marker is
-// absent. A stage whose run DID commit is a leftover and only the stage goes.
-func sweepOrphanStages(root *os.Root) (cleared, rolledBack []string, err error) {
+// findOrphanStages lists, without touching anything, every stage a previous
+// invocation left. It is the sweep's first half split off so that a refusal can
+// report the orphans it is leaving in place, and it reads only the stage root —
+// never the ledger, which the rollback alone walks.
+func findOrphanStages(root *os.Root) ([]string, error) {
 	entries, err := readDirIn(root, IngestStageDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil, nil
+			return nil, nil
 		}
-		return nil, nil, fmt.Errorf("reading: listing the ingest stage: %w", err)
+		return nil, fmt.Errorf("reading: listing the ingest stage: %w", err)
 	}
+	var found []string
 	for _, e := range entries {
-		// Only a well-formed run id is swept, and only a real directory: a
+		// Only a well-formed run id is an orphan, and only a real directory: a
 		// DirEntry for a symlink reports IsDir false, so a planted link is
 		// skipped rather than followed. A directory named anything else was not
 		// written by this verb, and a sweep that removed it would be deleting
@@ -698,16 +764,36 @@ func sweepOrphanStages(root *os.Root) (cleared, rolledBack []string, err error) 
 		if !e.IsDir() || !recordid.ValidReadingRunID(e.Name()) {
 			continue
 		}
-		removed, err := rollbackRun(root, e.Name())
+		found = append(found, e.Name())
+	}
+	sort.Strings(found)
+	return found, nil
+}
+
+// sweepOrphanStages reports and clears the orphaned stages findOrphanStages
+// named. It runs only once the whole payload has validated: it is the verb's
+// first delete in the committed tier, and a refused run must not reach it.
+//
+// An orphan means an ingest reached the stage and never reached its commit
+// marker, so the run never happened — and a run that never happened must leave
+// no reading records behind. The rollback therefore removes what the stage says
+// the ingest wrote, then the run's own directory when the commit marker is
+// absent. A stage whose run DID commit is a leftover and only the stage goes.
+//
+// On an error the two lists carry what was done before it: a caller reports a
+// sweep that stopped short as far as it got, never as nothing.
+func sweepOrphanStages(root *os.Root, stages []string) (cleared, rolledBack []string, err error) {
+	for _, runID := range stages {
+		removed, err := rollbackRun(root, runID)
 		if err != nil {
-			return cleared, nil, err
+			return cleared, rolledBack, err
 		}
 		rolledBack = append(rolledBack, removed...)
-		if err := root.RemoveAll(IngestStageDir + "/" + e.Name()); err != nil {
+		if err := root.RemoveAll(IngestStageDir + "/" + runID); err != nil {
 			return cleared, rolledBack, fmt.Errorf("reading: clearing the orphaned stage of run %s: %w",
-				e.Name(), err)
+				runID, err)
 		}
-		cleared = append(cleared, e.Name())
+		cleared = append(cleared, runID)
 	}
 	sort.Strings(cleared)
 	sort.Strings(rolledBack)

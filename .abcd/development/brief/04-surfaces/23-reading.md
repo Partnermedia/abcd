@@ -124,11 +124,15 @@ proposal or a disposition phrased outside the registry's signatures is not
 caught. The reserved names carry no such bound, because a field is present or it
 is not.
 
-Writes are staged. Nothing durable exists until the whole payload validates; the
-reading records land in the reading-record family; and the run metadata is
-written **last**, as the commit marker, so a run without one never happened. An
-ingest interrupted before that marker leaves a stage in the local tier, and the
-next invocation names the orphan, rolls the run back and clears it.
+Writes are staged. Nothing durable is written or deleted until the whole payload
+validates — a refusal after the run is proven leaves its refusal record and
+nothing else; the reading records land in the reading-record family; and the run
+metadata is written **last**, as the commit marker, so a run without one never
+happened. An ingest interrupted before that marker leaves a stage in the local
+tier. Every later invocation names the orphan; the next one whose payload
+validates rolls the run back and clears it, and a refused run reports the
+orphans it left in place — the sweep is a delete in the committed tier, and a
+refused run never reaches one.
 
 ## What this surface does not claim
 

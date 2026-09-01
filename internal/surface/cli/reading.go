@@ -167,9 +167,12 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 			"claim, each regime's reserved names are refused with the licence stated, and a registry\n" +
 			"of named signatures catches prose that ranks, settles or proposes without the field.\n\n" +
 			"Item identifiers are minted here. The payload carries none, so a supplied one is refused\n" +
-			"as an unknown field. Nothing durable is written until the whole payload validates, and\n" +
-			"the run metadata is written last as the commit marker: a run without one never happened,\n" +
-			"and an orphaned stage is named and cleared by the next invocation.",
+			"as an unknown field. Nothing durable is written or deleted until the whole payload\n" +
+			"validates — a refusal after the run is proven leaves its refusal record and nothing else —\n" +
+			"and the run metadata is written last as the commit marker: a run without one never\n" +
+			"happened. An orphaned stage is named by every invocation; it is cleared, and its\n" +
+			"never-committed records rolled back out of the ledger, only by the next invocation whose\n" +
+			"payload validates, and a refused run reports the orphans it left in place.",
 		Example: "  abcd reading ingest --reading-json ./reading-output.json --json",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) > 0 {
@@ -201,9 +204,17 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 				// exits. The record path is the operator's handle on the event,
 				// and the plugin page tells a host to report `refusal_record` —
 				// which it could never find if the render only ran on success.
-				// A refusal reached before the run's identity is proven writes
-				// no record and renders none, because there is no run to name.
-				if res.RefusalPath != "" {
+				//
+				// The same goes for everything else the result discloses about
+				// the committed tier: an orphaned stage seen and left in place,
+				// a stage cleared, a record rolled back. The core owns the
+				// predicate, so a refusal reached before the run's identity is
+				// proven — which writes no record — still renders when it has
+				// something to say. Keying the render on the refusal record
+				// alone once left a delete in the ledger reported as a bare
+				// type error (iss-2608311517509690). A refusal with nothing to
+				// disclose renders nothing, because there is no run to name.
+				if res.HasDisclosure() {
 					_ = render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 						renderIngestResult(w, res)
 					})
@@ -380,8 +391,14 @@ func trimCorePrefix(msg string) string {
 // which the record writer redacts on the way in, and a refusal quoting a
 // reading's prose back to a terminal would leave that redaction behind.
 func renderIngestResult(w io.Writer, res reading.IngestResult) {
-	fmt.Fprintf(w, "%s: %d record(s) at the %s position under the %s regime\n",
-		res.RunID, len(res.Records), res.Position, res.Regime)
+	// A refusal before the run's identity is proven has no run to head the
+	// render with; what follows is then the disclosure alone.
+	if res.RunID == "" {
+		fmt.Fprintln(w, "no run: the output was refused before the run it names was proven")
+	} else {
+		fmt.Fprintf(w, "%s: %d record(s) at the %s position under the %s regime\n",
+			res.RunID, len(res.Records), res.Position, res.Regime)
+	}
 	if res.RunRecordPath != "" {
 		fmt.Fprintf(w, "  run metadata:  %s\n", res.RunRecordPath)
 	}
@@ -409,6 +426,11 @@ func renderIngestResult(w io.Writer, res reading.IngestResult) {
 	if len(res.RolledBack) > 0 {
 		fmt.Fprintf(w, "  rolled back:   %s removed from the ledger (their run never committed)\n",
 			strings.Join(res.RolledBack, ", "))
+	}
+	if len(res.PendingStages) > 0 {
+		fmt.Fprintf(w, "  left in place: orphaned stage(s) of %s; the sweep runs only under a payload that "+
+			"validates, and the next ingest that does rolls them back and clears them\n",
+			strings.Join(res.PendingStages, ", "))
 	}
 	if res.Degraded != "" {
 		fmt.Fprintf(w, "  redaction:     %s\n", res.Degraded)

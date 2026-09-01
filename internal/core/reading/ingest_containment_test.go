@@ -9,9 +9,11 @@ package reading
 // 120000", and capture refuses a symlinked run directory before walking it — and
 // this verb deletes and writes in that tree. A symlink committed at the ledger's
 // run directory, at the durable readings tree, or at the stage root would
-// otherwise redirect a delete or a write outside the repository root, and the
-// orphan sweep runs BEFORE the payload is read, so no valid payload is needed to
-// reach it.
+// otherwise redirect a delete or a write outside the repository root. The
+// orphan sweep runs only once the whole payload has validated
+// (iss-2608311517509690), so every case that needs the sweep reached drives it
+// with a LEGAL payload: a case that fired the verb on an absent one would pass
+// whether or not the containment held, because the sweep would never run.
 //
 // Every case here works the same way: plant the symlink, run the verb, and
 // assert the directory outside the repository is untouched.
@@ -103,8 +105,8 @@ func TestASymlinkedReadingsTreeCannotRedirectTheDurableWrite(t *testing.T) {
 
 // TestASymlinkedLedgerRunCannotRedirectTheRollback: the orphan sweep deletes
 // reading records, and a committed symlink at the run's ledger directory must
-// not make it delete them somewhere else. The sweep is step one of the verb, so
-// this fires on a payload that does not even exist.
+// not make it delete them somewhere else. The payload is legal, so the sweep is
+// reached; the refusal asserted is the sweep's own.
 func TestASymlinkedLedgerRunCannotRedirectTheRollback(t *testing.T) {
 	f := newIngestFixture(t, "detection")
 	orphan := "rdg-2608310000000011"
@@ -114,8 +116,9 @@ func TestASymlinkedLedgerRunCannotRedirectTheRollback(t *testing.T) {
 		[]byte(`{"_type":"`+StageType+`","run_id":"`+orphan+`","records":[]}`))
 	f.linkTo(".abcd/work/issues/readings/"+orphan, outside)
 
-	// The payload does not exist, so nothing but the sweep can have run.
-	_, _ = Ingest(IngestRequest{RepoRoot: f.root, OutputPath: filepath.Join(f.t.TempDir(), "absent.json")})
+	if _, err := f.ingest(f.payload(1)); err == nil {
+		t.Error("a symlinked ledger run directory was swept rather than refused")
+	}
 	assertUntouched(t, outside, "rdi-2608310000000012.md")
 }
 
@@ -130,7 +133,10 @@ func TestASymlinkedDurableRunCannotRedirectTheRollback(t *testing.T) {
 		[]byte(`{"_type":"`+StageType+`","run_id":"`+orphan+`","records":[]}`))
 	f.linkTo(ReadingsRecordDir+"/"+orphan, outside)
 
-	_, _ = Ingest(IngestRequest{RepoRoot: f.root, OutputPath: filepath.Join(f.t.TempDir(), "absent.json")})
+	// The sweep is reached only under a legal payload. The rollback's removes
+	// on the durable run directory are best-effort, so the verb may or may not
+	// refuse; what must hold either way is that nothing outside moved.
+	_, _ = f.ingest(f.payload(1))
 	assertUntouched(t, outside, "manifest.json")
 }
 
@@ -148,7 +154,12 @@ func TestASymlinkedStageRootCannotRedirectTheSweep(t *testing.T) {
 	}
 	f.linkTo(IngestStageDir, outside)
 
-	_, _ = Ingest(IngestRequest{RepoRoot: f.root, OutputPath: filepath.Join(f.t.TempDir(), "absent.json")})
+	// A symlinked stage root is refused before the lock is even taken, so the
+	// payload's legality is immaterial here; it is legal anyway, so that if
+	// that refusal ever moved later the sweep would still be reached.
+	if _, err := f.ingest(f.payload(1)); err == nil {
+		t.Error("a symlinked stage root was accepted")
+	}
 	assertUntouched(t, outside, "rdg-2608310000000014")
 	assertUntouched(t, runDir, "important.txt")
 }
@@ -206,10 +217,8 @@ func TestASymlinkedRunDirectoryInsideTheRepoIsRefusedToo(t *testing.T) {
 	// first version of this case vacuous (iss-2608311306539528).
 	f.linkTo(".abcd/work/issues/readings/"+orphan, "rdg-2608310000000016")
 
-	if _, err := Ingest(IngestRequest{
-		RepoRoot:   f.root,
-		OutputPath: filepath.Join(f.t.TempDir(), "absent.json"),
-	}); err == nil {
+	// Legal payload, so the sweep — and the guard under test — is reached.
+	if _, err := f.ingest(f.payload(1)); err == nil {
 		t.Error("a symlinked run directory was walked rather than refused")
 	}
 	if !f.exists(victim + "/rdi-2608310000000017.md") {
