@@ -24,13 +24,16 @@ func pluginVersion() string { return core.Version }
 // git identity helpers
 // ---------------------------------------------------------------------------
 
-// originURL returns the trimmed origin remote URL, or "" on any failure.
+// originURL returns the trimmed origin remote URL with any credential
+// scrubbed out of its userinfo (see scrubRemoteUserinfo), or "" on any failure.
+// This is the only reader of the remote URL, so the scrub here is what keeps
+// the registry files and the JSON surfaces credential-free.
 func originURL(cwd string) string {
 	out, err := runGit(cwd, "remote", "get-url", "origin")
 	if err != nil {
 		return ""
 	}
-	return strings.TrimSpace(out)
+	return scrubRemoteUserinfo(strings.TrimSpace(out))
 }
 
 func runGit(cwd string, args ...string) (string, error) {
