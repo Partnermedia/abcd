@@ -848,19 +848,25 @@ func (a *applyCtx) stepSymlink() {
 // A legacy owned symlink or a dev shim at the target is replaced (the heal); an
 // owned copy already matching is left alone. Without a usable cache it
 // degrades, loudly, to the spc-21 pinned symlink — there is nothing on disk
-// whose provenance a copy could record.
+// whose provenance a copy could record. The cache is reached through the
+// hook's CLAUDE_PLUGIN_DATA or, from the terminal the bootstrap's notice sends
+// the reader to, through the plugin root's .data-dir stamp
+// (iss-2609012111168716); the re-verification below is the same either way.
 func (a *applyCtx) installOwnedEntry(target string, kind binTargetKind) {
-	if !ownedCopySourceReady() {
+	look := pluginDataDir(a.det.pluginRoot)
+	if !cacheSourceReady(look.dir) {
 		if kind != binTargetOwnedSymlink {
 			// Notes is the loud channel (see refuse): the degradation must be
 			// SAID, because a symlink into the plugin root dies at the next
-			// plugin update and a silent fallback would hide why.
-			a.refuse("no verified release artefact is available in the persistent plugin data directory, so the PATH entry was written as a symlink to the plugin-root binary — it will stop working when a plugin update replaces that directory. Re-run `abcd ahoy install` from a session whose hooks have provisioned the cache to upgrade it to an owned copy.")
+			// plugin update and a silent fallback would hide why — and it names
+			// every source tried, so the reader knows which one to restore.
+			a.refuse("no verified release artefact is available in the persistent plugin data directory (" + look.explainMissingCache() +
+				"), so the PATH entry was written as a symlink to the plugin-root binary — it will stop working when a plugin update replaces that directory. Start a session so the hooks provision the cache and record its location in the plugin root, then re-run `abcd ahoy install` to upgrade it to an owned copy.")
 		}
 		a.installPinnedSymlink(target, kind)
 		return
 	}
-	dataDir := pluginDataDir()
+	dataDir := look.dir
 	artefact := cacheAssetPath(dataDir)
 	want := cacheRecordedSHA(dataDir)
 	data, err := fsutil.ReadGuarded(artefact, maxBinaryArtefactBytes)

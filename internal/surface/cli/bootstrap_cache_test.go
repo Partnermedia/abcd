@@ -449,10 +449,19 @@ func TestBootstrapDegradesLoudlyWithoutDataDir(t *testing.T) {
 	root := bootstrapRoot(t)
 	body := []byte("#!/bin/sh\nexit 0\n")
 	fx := bootstrapServer(t, body, bootstrapManifest(body))
+	// A stale stamp from an earlier cache-mode provision of this root would
+	// route a terminal `ahoy install` to a data dir this binary did not come
+	// from; the degraded path leaves no such record behind.
+	if err := os.WriteFile(filepath.Join(root, ".data-dir"), []byte("data_dir="+t.TempDir()+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	out, code := runBootstrap(t, root, fx, "")
 	if code != 0 {
 		t.Fatalf("the degraded per-root fetch must still install, got %d (output %q)", code, out)
+	}
+	if _, err := os.Stat(filepath.Join(root, ".data-dir")); !os.IsNotExist(err) {
+		t.Errorf("the degraded path must leave no .data-dir stamp, since no data dir provisioned this root: %v", err)
 	}
 	if got, err := os.ReadFile(filepath.Join(root, "abcd")); err != nil || string(got) != string(body) {
 		t.Errorf("the degraded path must install the verified download; got %q (%v)", got, err)
@@ -676,5 +685,38 @@ func TestBootstrapCachePathsStayOutOfMessagesRaw(t *testing.T) {
 	}
 	if strings.ContainsRune(out, 0x1b) {
 		t.Errorf("the refusal must strip control characters from the cache path it echoes; output %q", out)
+	}
+}
+
+// TestBootstrapCacheProvisionRecordsDataDirInRoot is iss-2609012111168716: the
+// success notice tells the reader to run '<plugin-root>/abcd' ahoy install
+// from a terminal, where CLAUDE_PLUGIN_DATA is not exported, so a root
+// provisioned out of the cache records the data dir it came from beside the
+// binary — one data_dir= line in .data-dir — and the terminal verb reaches the
+// verified cache through it. Both cache-mode provisions write it: the cache
+// hit and the download-into-cache.
+func TestBootstrapCacheProvisionRecordsDataDirInRoot(t *testing.T) {
+	cached := []byte("#!/bin/sh\n# cached artefact\nexit 0\n")
+	fx := bootstrapServer(t, cached, bootstrapManifest(cached))
+
+	hit := bootstrapRoot(t)
+	hitData := t.TempDir()
+	seedBootstrapCache(t, hitData, bootstrapTag, cached)
+	out, code := runBootstrapWithData(t, hit, hitData, fx, "")
+	if code != 0 {
+		t.Fatalf("the cache hit must install, got %d (output %q)", code, out)
+	}
+	if got, err := os.ReadFile(filepath.Join(hit, ".data-dir")); err != nil || string(got) != "data_dir="+hitData+"\n" {
+		t.Errorf("a cache-provisioned root must record the data dir it was provisioned from; got %q (%v) (output %q)", got, err, out)
+	}
+
+	fresh := bootstrapRoot(t)
+	freshData := t.TempDir()
+	out, code = runBootstrapWithData(t, fresh, freshData, fx, "")
+	if code != 0 {
+		t.Fatalf("the download-into-cache provision must install, got %d (output %q)", code, out)
+	}
+	if got, err := os.ReadFile(filepath.Join(fresh, ".data-dir")); err != nil || string(got) != "data_dir="+freshData+"\n" {
+		t.Errorf("a root provisioned from a freshly filled cache must record the data dir too; got %q (%v) (output %q)", got, err, out)
 	}
 }
