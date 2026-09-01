@@ -1201,6 +1201,11 @@ func Doctor(cwd string) (DoctorReport, error) {
 }
 
 // auditGaps reports read-only reconciliation issues (a stale registered path).
+// Both paths it quotes render through displayPath, like every other
+// path-bearing gap: doctor's JSON is pasted into issues, and a registered path
+// under the home directory would otherwise carry the username
+// (GHSA-m8pg-chhv-hxvq). A foreign machine's home in the registered path is
+// the user's own cross-machine registry and is left as recorded.
 func auditGaps(cwd string, det DetectionResult) []Gap {
 	var gaps []Gap
 	if det.RootSHA == "" {
@@ -1219,7 +1224,7 @@ func auditGaps(cwd string, det DetectionResult) []Gap {
 		gaps = append(gaps, Gap{
 			ID: "history.path_stale", Category: UserState, Scope: "repo",
 			Title:   "registered path is stale",
-			Detail:  "index.json records " + entry.Path + " but the repo is at " + abs + ".",
+			Detail:  "index.json records " + displayPath(entry.Path) + " but the repo is at " + displayPath(abs) + ".",
 			FixHint: "ahoy install refreshes the registered path.", Required: false, Resolvable: true,
 		})
 	}
