@@ -163,17 +163,28 @@ func WritePages(repoRoot string, writes []PageWrite, merge RegistryMerge, now ti
 	// left the next verb's bodies — a host-delegated distiller's file-back
 	// page — landing raw. index.md and log.md are derived from these bodies
 	// (reconcile reads the written files; the log event is derived from the
-	// PageWrite body), so redacting here covers those derived surfaces too. It
-	// fails closed on a degraded scanner: a heal-only pass writes no acquired
-	// text and needs no scanner, so the check is skipped only then. The
-	// FRONTMATTER is not redacted here: a host-supplied citation title or
-	// recall entry is rendered verbatim by renderWrites, which is the open
-	// door iss-2608291941064448 records.
-	if len(writes) > 0 {
-		redactor, err := newStoreRedactor(repoRoot)
+	// PageWrite body), so redacting here covers those derived surfaces too.
+	//
+	// Every string leaf of the FRONTMATTER goes through the same detector
+	// (GHSA-x46m-mw9h-5jwj, iss-2608291941064448): a host-supplied citation
+	// title, recall entry, contradicts target, sources[] licence or weighting
+	// note was rendered verbatim by renderWrites, and contradictions.md is
+	// derived from it. So do the REGISTRY leaves the merge introduces, judged
+	// against the registry as read under the lock (writePagesLocked) — which
+	// is why the redactor is built whenever there is a merge, not only when
+	// there are pages: the registry-only fast path used to build none and
+	// wrote its fill-if-empty origin raw. It fails closed on a degraded
+	// scanner; a heal-only pass (no pages, no merge) writes no acquired text
+	// and needs no scanner, so the check is skipped only then.
+	var redactor *storeRedactor
+	if len(writes) > 0 || merge != nil {
+		r, err := newStoreRedactor(repoRoot)
 		if err != nil {
 			return WriteReport{}, err
 		}
+		redactor = r
+	}
+	if len(writes) > 0 {
 		redacted := make([]PageWrite, 0, len(writes))
 		for _, w := range writes {
 			body, _, rerr := redactor.redactText(w.Body, w.Filename)
@@ -181,6 +192,15 @@ func WritePages(repoRoot string, writes []PageWrite, merge RegistryMerge, now ti
 				return WriteReport{}, rerr
 			}
 			w.Body = body
+			// The caller's map is never mutated; a nil frontmatter is left for
+			// renderWrites to refuse with its contract error.
+			if w.Frontmatter != nil {
+				fm := deepCopyMap(w.Frontmatter)
+				if err := redactor.redactLeaves(nil, fm, w.Filename); err != nil {
+					return WriteReport{}, err
+				}
+				w.Frontmatter = fm
+			}
 			redacted = append(redacted, w)
 		}
 		writes = redacted
@@ -191,7 +211,7 @@ func WritePages(repoRoot string, writes []PageWrite, merge RegistryMerge, now ti
 	}
 	var report WriteReport
 	lockErr := WithStoreLock(repoRoot, func() error {
-		r, err := writePagesLocked(repoRoot, rendered, merge, now)
+		r, err := writePagesLocked(repoRoot, rendered, merge, redactor, now)
 		if err != nil {
 			return err
 		}
@@ -204,7 +224,7 @@ func WritePages(repoRoot string, writes []PageWrite, merge RegistryMerge, now ti
 	return report, nil
 }
 
-func writePagesLocked(repoRoot string, rendered []renderedWrite, merge RegistryMerge, now time.Time) (WriteReport, error) {
+func writePagesLocked(repoRoot string, rendered []renderedWrite, merge RegistryMerge, redactor *storeRedactor, now time.Time) (WriteReport, error) {
 	mem := Dir(repoRoot)
 	if now.IsZero() {
 		now = time.Now().UTC()
@@ -244,8 +264,24 @@ func writePagesLocked(repoRoot string, rendered []renderedWrite, merge RegistryM
 		if err != nil {
 			return WriteReport{}, err
 		}
+		// The baseline for "what did this write introduce" is a copy taken
+		// BEFORE the merge runs: MergeIngest copies its input, but a merge is
+		// free to mutate the map it was given and hand it back, and comparing
+		// the result against itself would judge nothing.
+		baseline := deepCopyMap(current)
 		registry, err := merge(current)
 		if err != nil {
+			return WriteReport{}, err
+		}
+		// Every leaf the merge introduced — a fresh entry's origin, licence and
+		// citation, a fill-if-empty origin, a backlinked or file-back consumer's
+		// citation — is judged here; a leaf the registry already held is not
+		// (GHSA-x46m-mw9h-5jwj). In place, so the merged map the caller may
+		// still hold is the written one.
+		if redactor == nil {
+			return WriteReport{}, newWriterContractError("registry merge without a store redactor")
+		}
+		if err := redactor.redactLeaves(baseline, registry, filepath.Base(SourcesIndexPath(repoRoot))); err != nil {
 			return WriteReport{}, err
 		}
 		if err := writeStringAtomic(SourcesIndexPath(repoRoot), SerializeRegistry(registry)); err != nil {

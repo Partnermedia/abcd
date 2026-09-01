@@ -27,8 +27,13 @@ import (
 // inside WritePages, the one primitive every verb (ingest, ask --file-back)
 // writes through, so no body lands unscanned whichever verb built it; the
 // --keep-original copy in Ingest; and, transitively, since they are derived
-// from the redacted bodies, index.md and log.md. Page frontmatter is the one
-// acquired text this does not yet cover (iss-2608291941064448).
+// from the redacted bodies, index.md and log.md. Page FRONTMATTER and the
+// registry leaves a write introduces go through the same detector by way of
+// redactLeaves (GHSA-x46m-mw9h-5jwj, iss-2608291941064448): a host-supplied
+// citation title or recall entry, the licence the core lifts from an SPDX line
+// or a License: header, and a redirect-controlled origin are acquired text as
+// much as a body is, and the one place every verb writes through is where they
+// are judged. contradictions.md is derived from the redacted frontmatter.
 
 // storeRedactor holds a per-repo scanner plus the caller's resolved $HOME for
 // the deterministic literal backstop. Construct it with newStoreRedactor, which
@@ -86,6 +91,75 @@ func (r *storeRedactor) redactText(text, label string) (string, int, error) {
 		return "", 0, newIngestError("refusing to write: redaction left %d blocking span(s) unresolved [%s]", len(resid), strings.Join(kinds, ", "))
 	}
 	return redacted, len(findings), nil
+}
+
+// redactLeaves walks target — the nested map[string]any / []any / string shape
+// the frontmatter dumper and the JSON registry share — IN PLACE, and sanitises
+// through redactText every string leaf the write is INTRODUCING. A leaf is
+// introduced when current holds no string at the same path, or a different
+// one; a leaf present and equal in current is the store's already, not this
+// write's to judge, and stays byte-identical — so a legacy registry carrying
+// a dirty cached citation is neither refused on re-ingest (the one verb that
+// repairs it) nor rewritten behind the operator's back; reporting it is the
+// lint's job. A nil current introduces every leaf. Keys are schema-fixed and
+// never walked; non-string scalars pass through untouched.
+//
+// Mutating in place is the contract, not a shortcut: the map a RegistryMerge
+// returned IS what the store then writes, so a caller that kept hold of it —
+// the registry-only fast path reads its result licence and citation off the
+// merged map — sees the written bytes rather than a pre-redaction copy.
+func (r *storeRedactor) redactLeaves(current, target any, label string) error {
+	switch v := target.(type) {
+	case map[string]any:
+		cm, _ := current.(map[string]any)
+		for k, item := range v {
+			var cv any
+			if cm != nil {
+				cv = cm[k]
+			}
+			if s, ok := item.(string); ok {
+				red, err := r.judgeLeaf(cv, s, label)
+				if err != nil {
+					return err
+				}
+				v[k] = red
+				continue
+			}
+			if err := r.redactLeaves(cv, item, label); err != nil {
+				return err
+			}
+		}
+	case []any:
+		cl, _ := current.([]any)
+		for i, item := range v {
+			var cv any
+			if i < len(cl) {
+				cv = cl[i]
+			}
+			if s, ok := item.(string); ok {
+				red, err := r.judgeLeaf(cv, s, label)
+				if err != nil {
+					return err
+				}
+				v[i] = red
+				continue
+			}
+			if err := r.redactLeaves(cv, item, label); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// judgeLeaf is redactLeaves' one leaf rule: unchanged from current, keep it;
+// otherwise it is this write's and goes through redactText.
+func (r *storeRedactor) judgeLeaf(current any, leaf, label string) (string, error) {
+	if c, ok := current.(string); ok && c == leaf {
+		return leaf, nil
+	}
+	red, _, err := r.redactText(leaf, label)
+	return red, err
 }
 
 // redactOriginalBytes sanitises the --keep-original source copy. A text source's

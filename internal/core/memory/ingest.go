@@ -135,6 +135,19 @@ func Ingest(req IngestRequest) (IngestResult, error) {
 	if err != nil {
 		return IngestResult{}, err
 	}
+	// The origin and title the core copies into every citation and registry
+	// entry are acquired text too: a redirect-controlled final URL carries its
+	// query string, a local path can sit under the caller's home. They are
+	// judged here, once, before either path reads them, so the fast path's
+	// fill-if-empty origin, the citation, the registry event and the returned
+	// result all agree on the one redacted value (GHSA-x46m-mw9h-5jwj). The
+	// WritePages leaf walk stays the fail-closed backstop behind this.
+	if material.origin, _, err = redactor.redactText(material.origin, "citation.origin"); err != nil {
+		return IngestResult{}, err
+	}
+	if material.title, _, err = redactor.redactText(material.title, "citation.title"); err != nil {
+		return IngestResult{}, err
+	}
 	normalized := NormaliseSourceText(material.text)
 	if strings.TrimSpace(normalized) == "" {
 		return IngestResult{}, newIngestError("source has no text content: %s", material.origin)
@@ -233,7 +246,16 @@ func Ingest(req IngestRequest) (IngestResult, error) {
 
 	// ---- Licence detect (sourceRoot="": SPDX header + HTTP License:) --------
 	detection := DetectLicence(material.text, "", material.headers)
-	licence := detection.Licence
+	// The licence is lifted verbatim from the source's own bytes (an SPDX line)
+	// or from a response header, so it is judged before it is copied into the
+	// source block, the registry event and IngestResult.Licence — the same
+	// discipline as a body: redact, then refuse only a blocking residual, so a
+	// fingerprinted token is stored as the honest "ghp_***" it is rather than
+	// the whole ingest refused on a value the operator never wrote.
+	licence, _, err := redactor.redactText(detection.Licence, "source.licence")
+	if err != nil {
+		return IngestResult{}, err
+	}
 
 	citation := BuildCitation("knowledge", material.origin, "unknown", material.title, now.Year(), ingestedAt, ingestedBy)
 	sourceBlock, err := buildSingleSource(material.sourceClass, citation, licence, contentHash, ingestedAt)
