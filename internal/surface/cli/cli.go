@@ -3732,26 +3732,17 @@ func captureRoot(cwd string) string {
 	return cwd
 }
 
-// rulesRoot resolves the repo root the modular-rules loader must read: the
-// nearest ancestor of cwd (cwd itself included) that holds a .abcd directory.
-// rules.Load/LoadBackstop join ".abcd/rules.json" onto the path they are given,
-// so handing them a subdirectory silently ignored the per-repo overrides AND the
-// kill switch — a repo that had disabled a domain (or the whole loader) would
-// still inject it whenever abcd ran from any nested directory. Falls back to the
-// git working-tree root, then cwd, so a repo without a .abcd dir still resolves.
+// rulesRoot resolves the repo root the modular-rules loader (and the shell
+// guard, which shares it) must read: the nearest directory holding a .abcd,
+// searched from cwd upward but never past the git working tree, and cwd itself
+// outside git. rules.Load/LoadBackstop join ".abcd/rules.json" onto the path
+// they are given, so handing them a subdirectory silently ignored the per-repo
+// overrides AND the kill switch; an unbounded walk instead let a .abcd planted
+// above the working tree govern the session (GHSA-vvqc-3mv2-5p49). The
+// resolution lives in core (rules.ResolveRoot) because it is behaviour, not
+// formatting; this front door only hands it cwd.
 func rulesRoot(cwd string) string {
-	dir := cwd
-	for {
-		if fi, err := os.Stat(filepath.Join(dir, ".abcd")); err == nil && fi.IsDir() {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
-	}
-	return captureRoot(cwd)
+	return rules.ResolveRoot(cwd)
 }
 
 func repoRootSHA() (string, error) {

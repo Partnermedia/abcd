@@ -310,8 +310,9 @@ func guardCandidate(cmd *cobra.Command, flag string) (string, error) {
 }
 
 // loadGuardRegistry resolves the repo root the same way the modular-rules loader
-// does — the nearest ancestor holding a .abcd directory — so `.abcd/guard.json`
-// is honoured from any nested working directory, kill switch included.
+// does — the nearest .abcd directory inside the git working tree, never one
+// planted above it — so `.abcd/guard.json` is honoured from any nested working
+// directory, kill switch included, and only the repo's own file can throw it.
 func loadGuardRegistry() (guard.Registry, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
