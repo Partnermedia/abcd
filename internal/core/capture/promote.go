@@ -84,7 +84,8 @@ var beforeStampHook func()
 // is attempted — the ledger lock alone guards the stamp, exactly as transition
 // does — so a failure after the mint leaves an orphan draft; the returned
 // error names the draft and the stamp-only remedy
-// (`capture promote <iss-N> --intent <itd-N>`).
+// (`capture promote <iss-N> --intent <itd-N> --grounds "..."`), carrying the
+// promotion's own grounds so the remedy runs as printed.
 //
 // Every refusal that can be established from the bytes in hand is therefore
 // raised BEFORE the mint: the grounds text, whether the record is one the
@@ -258,10 +259,14 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 	})
 	if stampErr != nil {
 		if !linked {
-			// The mint already happened; report the orphan and the repair verb.
+			// The mint already happened; report the orphan and the repair verb. The
+			// remedy carries the grounds this call was given: the issue route refuses
+			// without them, so a remedy that named only --intent refused on its own
+			// text for every orphan (iss-2609012037130181), and the repair stamps
+			// the same conjecture the failed promotion was pursuing.
 			return PromoteResult{}, fmt.Errorf(
-				"%w — the minted draft %s (%s) is orphaned; complete the link with `abcd capture promote %s --intent %s`",
-				stampErr, itdID, intentPath, req.ID, itdID)
+				"%w — the minted draft %s (%s) is orphaned; complete the link with `abcd capture promote %s --intent %s --grounds %s`",
+				stampErr, itdID, intentPath, req.ID, itdID, shellQuoted(g.String()))
 		}
 		return PromoteResult{}, stampErr
 	}
@@ -276,6 +281,24 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 		Redacted:    gRedacted,
 		Degraded:    gDegraded,
 	}, nil
+}
+
+// shellQuoted wraps s in double quotes for the shell a remedy is pasted into,
+// escaping the four characters a POSIX shell still interprets inside them. It
+// exists so the orphan remedy runs as printed: a repair command a person has to
+// re-quote by hand is a remedy that fails on its own text.
+func shellQuoted(s string) string {
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, r := range s {
+		switch r {
+		case '\\', '"', '$', '`':
+			b.WriteByte('\\')
+		}
+		b.WriteRune(r)
+	}
+	b.WriteByte('"')
+	return b.String()
 }
 
 // issueTitleLine derives the minted draft's title — the issue's one-line

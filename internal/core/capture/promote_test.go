@@ -630,3 +630,98 @@ func TestPromoteRefusesAnInvalidRecordBeforeMinting(t *testing.T) {
 		})
 	}
 }
+
+// shellWords splits a printed command into its words the way a POSIX shell
+// would for the shapes a remedy uses: whitespace-separated, with double quotes
+// grouping a word and a backslash escaping the next character inside them.
+func shellWords(t *testing.T, cmd string) []string {
+	t.Helper()
+	var words []string
+	var cur strings.Builder
+	inWord, quoted := false, false
+	for i := 0; i < len(cmd); i++ {
+		c := cmd[i]
+		switch {
+		case quoted && c == '\\' && i+1 < len(cmd):
+			i++
+			cur.WriteByte(cmd[i])
+		case c == '"':
+			quoted, inWord = !quoted, true
+		case !quoted && (c == ' ' || c == '\t'):
+			if inWord {
+				words = append(words, cur.String())
+				cur.Reset()
+				inWord = false
+			}
+		default:
+			cur.WriteByte(c)
+			inWord = true
+		}
+	}
+	if quoted {
+		t.Fatalf("unbalanced quote in remedy: %s", cmd)
+	}
+	if inWord {
+		words = append(words, cur.String())
+	}
+	return words
+}
+
+// TestPromoteOrphanRemedyRunsAsPrinted runs the repair verb exactly as the
+// orphan error prints it. The issue route requires --grounds, so a remedy that
+// named only `--intent` refused on its own text for every orphan, and the one
+// test of the repair passed grounds the message never mentioned.
+func TestPromoteOrphanRemedyRunsAsPrinted(t *testing.T) {
+	repo, ir, issID := promoteFixture(t, "the stamp will fail after the mint")
+
+	stampWriteHook = func(string, []byte) error {
+		return errors.New("simulated unwritable ledger")
+	}
+	_, err := Promote(PromoteRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: issID})
+	stampWriteHook = nil
+	if err == nil {
+		t.Fatal("stamp into an unwritable ledger must fail")
+	}
+
+	const lead = "complete the link with `"
+	msg := err.Error()
+	start := strings.Index(msg, lead)
+	if start < 0 {
+		t.Fatalf("orphan report carries no remedy: %v", err)
+	}
+	rest := msg[start+len(lead):]
+	end := strings.Index(rest, "`")
+	if end < 0 {
+		t.Fatalf("remedy is not closed: %v", err)
+	}
+	words := shellWords(t, rest[:end])
+	if len(words) < 4 || words[0] != "abcd" || words[1] != "capture" || words[2] != "promote" || words[3] != issID {
+		t.Fatalf("remedy is not `abcd capture promote %s ...`: %q", issID, words)
+	}
+	req := PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: words[3]}
+	for i := 4; i < len(words); i++ {
+		switch words[i] {
+		case "--intent":
+			i++
+			req.LinkIntent = words[i]
+		case "--grounds":
+			i++
+			req.Grounds = words[i]
+		default:
+			t.Fatalf("remedy carries an argument this test cannot run: %q in %q", words[i], words)
+		}
+	}
+	res, err := Promote(req)
+	if err != nil {
+		t.Fatalf("the remedy as printed refused: %v\nremedy: %s", err, rest[:end])
+	}
+	if !res.Linked || res.IntentID != req.LinkIntent {
+		t.Fatalf("the remedy must link the orphan draft, got %+v", res)
+	}
+	if got := theGround(t, ir, issID); got != testGrounds {
+		t.Fatalf("the repair must stamp the promotion's own grounds, got %q", got)
+	}
+	if n := draftCount(t, repo); n != 1 {
+		t.Fatalf("the remedy must mint nothing, got %d draft(s)", n)
+	}
+}

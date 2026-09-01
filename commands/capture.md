@@ -304,7 +304,8 @@ signal is the keyed disposition, and it has no folder to name.
 
 `--intent <itd-N>` is the stamp-only mode: it links an *existing* draft instead
 of minting — the repair path when a stamp failed after the mint (the error
-names the orphan draft and this exact remedy), and the path for "I already
+names the orphan draft and this exact remedy, the promotion's own `--grounds`
+included, so it runs as printed), and the path for "I already
 filed the intent by hand; link them". Report the `issue_id`, the minted (or
 linked) `intent_id`, and both paths from the JSON.
 
