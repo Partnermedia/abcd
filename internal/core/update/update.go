@@ -68,6 +68,12 @@ type Report struct {
 	Refusal    *Refusal `json:"refusal,omitempty"`
 }
 
+// RemedyPluginUpdate is the way out of every refusal whose cause is a binary
+// the plugin install owns: the plugin-root refusal here, and the stale-binary
+// note the CLI appends to an unknown command (iss-2608230943088357). One
+// string, so the two surfaces cannot drift apart.
+const RemedyPluginUpdate = "take a plugin update in the host (e.g. /plugin update abcd)"
+
 // brewCellarPrefixes are the resolved locations a Homebrew-installed binary
 // lives under. A PREFIX test on the resolved path, never a substring match
 // (the 2026-08-20 decision-log entry): a plain copy at /usr/local/bin/abcd
@@ -116,7 +122,7 @@ func Plan(t ahoy.UpdateTarget) *Refusal {
 		return &Refusal{
 			Shape:  string(t.Kind),
 			Detail: "the binary at " + targetPath + " belongs to the plugin install; abcd update never touches a plugin root; take a plugin update in the host",
-			Remedy: "take a plugin update in the host (e.g. /plugin update abcd)",
+			Remedy: RemedyPluginUpdate,
 		}
 	case ahoy.UpdateTargetDevShim:
 		return &Refusal{
@@ -155,6 +161,40 @@ func Plan(t ahoy.UpdateTarget) *Refusal {
 			Remedy: "see `abcd ahoy` for the install's health",
 		}
 	}
+}
+
+// NextStep renders the one line naming how the classified install is brought
+// forward — the answer `abcd update` itself would give. The swappable shape is
+// pointed at the verb; every other shape is pointed at the mechanism that owns
+// its binary, taken verbatim from Plan's refusal so the remedy text lives in
+// exactly one place. This is the canonical "what do I run next" primitive:
+// `version --check` and every schema-too-new refusal render through it
+// (itd-130 / iss-2609012111168872).
+func NextStep(t ahoy.UpdateTarget) string {
+	if r := Plan(t); r != nil {
+		return r.Remedy
+	}
+	return "run `abcd update`"
+}
+
+// resolveTarget is the disk-only classification NextStepHere consults — a
+// package var so a test can pin an install shape without a PATH fixture.
+var resolveTarget = ahoy.ResolveUpdateTarget
+
+// NextStepHere classifies the install that answers to `abcd` on this machine
+// and renders NextStep for it. Disk only: the walk reads PATH and the plugin
+// root and touches no network (adr-38), so it is safe inside an error path.
+func NextStepHere() string {
+	return NextStep(resolveTarget())
+}
+
+// TooNew is the canonical schema-too-new refusal: an artefact stamped with a
+// schema this binary does not know yet. The frame is stable ("<what> schema
+// vN; this abcd knows up to vM — update abcd: ...") and the tail names the
+// command for this install shape, so the message ends in something the user
+// can type rather than the verbless "upgrade" it used to end in.
+func TooNew(what string, got, want int) error {
+	return fmt.Errorf("%s schema v%d; this abcd knows up to v%d — update abcd: %s", what, got, want, NextStepHere())
 }
 
 // scrubbedEnv are the transport-override variables the updater refuses to

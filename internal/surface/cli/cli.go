@@ -37,6 +37,7 @@ import (
 	"github.com/intentdriven/abcd/internal/core/record"
 	"github.com/intentdriven/abcd/internal/core/rules"
 	"github.com/intentdriven/abcd/internal/core/spec"
+	"github.com/intentdriven/abcd/internal/core/update"
 	"github.com/intentdriven/abcd/internal/fsutil"
 	"github.com/intentdriven/abcd/internal/gitutil"
 	"github.com/intentdriven/abcd/internal/term"
@@ -630,9 +631,8 @@ func newDisembarkCommand(asJSON *bool) *cobra.Command {
 						"disembark coverage: %s is not a coverage report: missing schema_version", path)}
 				}
 				if cov.SchemaVersion > lifeboat.SchemaVersion {
-					return &exitError{Code: 2, Msg: fmt.Sprintf(
-						"disembark coverage: %s is schema v%d; this abcd knows up to v%d — upgrade abcd",
-						path, cov.SchemaVersion, lifeboat.SchemaVersion)}
+					return &exitError{Code: 2, Msg: "disembark coverage: " +
+						update.TooNew(path, cov.SchemaVersion, lifeboat.SchemaVersion).Error()}
 				}
 				covs = append(covs, cov)
 			}
@@ -3807,6 +3807,13 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		code = coded.ExitCode()
 	}
 	if msg := scrubPaths(err); msg != "" {
+		// An unknown command or flag on a binary that can prove it is stale
+		// names the staleness and the way out, on a second line, from disk
+		// alone; otherwise cobra's line stands byte-for-byte
+		// (iss-2608230943088357, staleusage.go).
+		if note := staleUsageNote(root, args, msg); note != "" {
+			msg += "\nabcd: " + note
+		}
 		// Honour --json for the error surface too: a caller that asked for
 		// machine output must get a JSON envelope, never raw Go text (iss-29).
 		if asJSON, _ := root.PersistentFlags().GetBool("json"); asJSON {
