@@ -23,7 +23,8 @@ inbound = outbound statement is the whole of it.
   Linux leg alone adds the `gofmt -l .` format gate, the record-lint and
   docs-lint steps, and the site-render gate; separate jobs run the
   reviews-charter and issue-resolution checks (RS001–RS003), `gitleaks`,
-  `zizmor`, dependency review, `govulncheck` and the smoke harness.
+  `zizmor`, dependency review, `govulncheck`, the smoke harness and the
+  cold-reading evals (`make evals-cold-reading`, which runs on every event).
 - **Merge queue.** Merging goes through the queue ("Merge when ready"): the
   required checks run against the actual merged result, so branches never need
   manual updating against `main`. A pull request confined to `docs/`,

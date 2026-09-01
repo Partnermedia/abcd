@@ -3,9 +3,11 @@ package cli
 // reading.go is the front door onto internal/core/reading — the cold-reading
 // input assembler (itd-183, spc-61).
 //
-// The verb's whole interface is two closed operands. A position selects the
+// The verb's whole interface is three closed operands. A position selects the
 // reading's object from the include table; a target names the commit the
-// assembly describes. There is no free-text argument anywhere, at any position,
+// assembly describes; a scope names what the reading is ABOUT, so an assembly
+// passes the intersection of the two rather than a position's whole corpus
+// (itd-199, admitted by adr-58). There is no free-text argument anywhere,
 // because a prose operand is a channel ledger content could travel down in the
 // framing of a request, and the point of the assembler is that no such channel
 // exists (ruling (5) of 2026-08-28).
@@ -59,27 +61,29 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 	var position, target, outDir, scope string
 	var dryRun bool
 	assembleCmd := &cobra.Command{
-		Use:   "assemble --position <position> --target <HEAD|sha>",
+		Use:   "assemble --position <position> --target <HEAD|sha> --scope <itd-N|spc-N|kind|preset>",
 		Short: "Assemble one reading's input and its manifest",
 		Long: "Walk the repository under the include table at one reading position and write two\n" +
 			"artefacts: the assembled input, which carries no repository path, and the manifest,\n" +
 			"which maps every passed item back to its path, its field and its hash.\n\n" +
 			"The invocation carries no free text. --position takes one of four closed tokens;\n" +
 			"--target takes HEAD or a hexadecimal commit sha of 7 to 40 digits, because a branch\n" +
-			"or a tag moves and the manifest's re-runnability rests on a reference that cannot.",
-		Example: "  abcd reading assemble --position widening --target HEAD --dry-run\n" +
-			"  abcd reading assemble --position entailment --target HEAD \\\n" +
+			"or a tag moves and the manifest's re-runnability rests on a reference that cannot;\n" +
+			"--scope names what the reading is about, as a record id (itd-N or spc-N), a material\n" +
+			"kind, or a preset named in .abcd/config/reading-presets.json. All three are required.",
+		Example: "  abcd reading assemble --position widening --target HEAD --scope cold --dry-run\n" +
+			"  abcd reading assemble --position entailment --target HEAD --scope cold \\\n" +
 			"    --out .abcd/.work.local/scratch/reading-runs/manual --json",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) > 0 {
 				return &exitError{Code: 2, Msg: "reading assemble: this verb takes no positional argument; " +
 					"a reading's object and question come from its definition, and the invocation " +
-					"carries a position and a target state and nothing else"}
+					"carries a position, a target state and a scope, and nothing else"}
 			}
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			// The two operands are required rather than defaulted. A defaulted
+			// All three operands are required rather than defaulted. A defaulted
 			// position would pick a reading's object on the operator's behalf, and
 			// a defaulted target would let the manifest name a commit nobody chose.
 			if position == "" {

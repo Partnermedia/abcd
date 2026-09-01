@@ -757,19 +757,72 @@ func TestPluginPageReportsTheSizeAndScope(t *testing.T) {
 	// it failing is worse than one that shows nothing. Both examples on this
 	// page were left stale when the operand landed, and only a retrospective
 	// reading the branch tip noticed.
-	for _, line := range strings.Split(page, "\n") {
+	assertAssembleExamplesRun(t, "commands/reading.md", page)
+}
+
+// TestEveryShippedAssembleExampleCarriesAScope widens the guard above to every
+// surface that ships an invocation, which is the fix this class actually
+// needed.
+//
+// The plugin page was corrected on its own and the others drifted: the verb's
+// own cobra Example, the generated CLI reference derived from it, and the
+// brief's surface chapter all went on showing a two-operand invocation that now
+// exits 2. Fixing one spelling and leaving the siblings armed is what the
+// bug-hunting note means by grepping the pattern rather than the instance.
+func TestEveryShippedAssembleExampleCarriesAScope(t *testing.T) {
+	root := repoRootFromTest(t)
+	for _, rel := range []string{
+		"commands/reading.md",
+		"docs/reference/cli/commands.md",
+		".abcd/development/brief/04-surfaces/23-reading.md",
+	} {
+		raw, err := os.ReadFile(filepath.Join(root, rel))
+		if err != nil {
+			t.Errorf("read %s: %v", rel, err)
+			continue
+		}
+		assertAssembleExamplesRun(t, rel, string(raw))
+	}
+
+	// The verb's own Example string is the source the reference is generated
+	// from, so it is checked at the source rather than only in the artefact.
+	cmd := newReadingCommand(new(bool))
+	for _, sub := range cmd.Commands() {
+		if sub.Name() != "assemble" {
+			continue
+		}
+		if !strings.Contains(sub.Example, "--scope") {
+			t.Errorf("the assemble verb's own Example shows no --scope, so every surface "+
+				"generated from it ships an invocation that exits 2:\n%s", sub.Example)
+		}
+		if !strings.Contains(sub.Use, "--scope") {
+			t.Errorf("the assemble verb's Use line omits --scope: %q", sub.Use)
+		}
+	}
+}
+
+// assertAssembleExamplesRun fails on any `reading assemble` invocation in text
+// that omits the required scope operand.
+func assertAssembleExamplesRun(t *testing.T, where, text string) {
+	t.Helper()
+	for _, line := range strings.Split(text, "\n") {
 		if !strings.Contains(line, "reading assemble") {
+			continue
+		}
+		// Skip prose that merely names the verb; only look at invocations.
+		if !strings.Contains(line, "--position") && !strings.Contains(line, "\\") {
 			continue
 		}
 		// The examples span lines with a trailing backslash; take the whole
 		// fenced command by scanning forward from the opening line.
-		idx := strings.Index(page, line)
-		cmd := page[idx:]
-		if end := strings.Index(cmd, "```"); end > 0 {
-			cmd = cmd[:end]
+		idx := strings.Index(text, line)
+		invocation := text[idx:]
+		if end := strings.Index(invocation, "```"); end > 0 {
+			invocation = invocation[:end]
 		}
-		if !strings.Contains(cmd, "--scope") {
-			t.Errorf("a shipped `reading assemble` example carries no --scope, so it exits 2:\n%s", cmd)
+		if !strings.Contains(invocation, "--scope") {
+			t.Errorf("%s ships a `reading assemble` invocation with no --scope, so it exits 2:\n%s",
+				where, invocation)
 		}
 	}
 }

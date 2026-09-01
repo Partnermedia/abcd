@@ -807,3 +807,42 @@ func TestTheShippedColdScopesEveryAssemblingPositionDistinctly(t *testing.T) {
 		seen[key] = p
 	}
 }
+
+// TestARecordScopeAssemblesThatRecordsMaterial is itd-199 ac-2's POSITIVE half,
+// which nothing exercised.
+//
+// Every preset — the generated fixture and the committed file alike — carries an
+// empty `records` list, and the one record-shaped assembly in the suite used an
+// id that selects nothing and asserted the refusal. So the selecting path was
+// held by reading the matcher, not by running it: `pathNamesRecord` was unit
+// tested, and no assembly ever passed a record's material through it.
+func TestARecordScopeAssemblesThatRecordsMaterial(t *testing.T) {
+	root := fixtureRepo(t)
+	res, err := Assemble(AssembleRequest{
+		RepoRoot: root, Position: PositionEntailment, Target: "HEAD",
+		Scope: "itd-1", DryRun: true,
+	})
+	if err != nil {
+		t.Fatalf("a record scope naming a record the fixture holds refused: %v", err)
+	}
+	if len(res.Manifest.Items) == 0 {
+		t.Fatal("a record scope assembled nothing")
+	}
+	for _, m := range res.Manifest.Items {
+		if !pathNamesRecord(m.Path, "itd-1") {
+			t.Errorf("the assembly passed %s, which the scope itd-1 does not name; a scope "+
+				"admits its own record's material and no other", m.Path)
+		}
+	}
+	// And it must be a genuine narrowing, or the assertion above is trivially
+	// satisfied by a scope that happened to select everything.
+	wide := assembleFixture(t, root, PositionEntailment)
+	if len(res.Manifest.Items) >= len(wide.Manifest.Items) {
+		t.Errorf("the record scope passed %d items and the unscoped assembly %d; this test "+
+			"proves nothing unless the scope narrows", len(res.Manifest.Items), len(wide.Manifest.Items))
+	}
+	// The bundle must tell the reading which record it was given.
+	if len(res.Bundle.Scope.Records) != 1 || res.Bundle.Scope.Records[0] != "itd-1" {
+		t.Errorf("the bundle's scope records are %v, want [itd-1]", res.Bundle.Scope.Records)
+	}
+}
