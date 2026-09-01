@@ -155,7 +155,7 @@ func IngestReading(req IngestReadingRequest) (IngestReadingResult, error) {
 		return IngestReadingResult{}, fmt.Errorf("%w: a run with no items is recorded as a run with an empty item set, not as an ingest",
 			ErrMissingRequiredField)
 	}
-	if err := mutationPreamble(issuesRoot); err != nil {
+	if err := mutationPreamble(repoRoot, issuesRoot); err != nil {
 		return IngestReadingResult{}, err
 	}
 
@@ -189,7 +189,7 @@ func IngestReading(req IngestReadingRequest) (IngestReadingResult, error) {
 	}
 
 	runDir := filepath.Join(issuesRoot, issueschema.ReadingsDir, req.Run)
-	err = withLedgerLock(issuesRoot, func() error {
+	err = withLedgerLock(repoRoot, issuesRoot, func() error {
 		if err := ensureFamilyDir(issuesRoot, issueschema.ReadingsDir, req.Run); err != nil {
 			return err
 		}
@@ -282,7 +282,7 @@ func Disposition(req DispositionRequest) (DispositionResult, error) {
 		return DispositionResult{}, fmt.Errorf("%w: item %q does not match ^%s-[0-9]+$",
 			ErrMalformedFrontmatter, req.Item, issueschema.ReadingItemFamily)
 	}
-	if err := mutationPreamble(issuesRoot); err != nil {
+	if err := mutationPreamble(repoRoot, issuesRoot); err != nil {
 		return DispositionResult{}, err
 	}
 
@@ -314,7 +314,7 @@ func Disposition(req DispositionRequest) (DispositionResult, error) {
 
 	itemDir := filepath.Join(issuesRoot, issueschema.DispositionsDir, req.Item)
 	path := filepath.Join(itemDir, id+".md")
-	err = withLedgerLock(issuesRoot, func() error {
+	err = withLedgerLock(repoRoot, issuesRoot, func() error {
 		if err := ensureFamilyDir(issuesRoot, issueschema.DispositionsDir, req.Item); err != nil {
 			return err
 		}

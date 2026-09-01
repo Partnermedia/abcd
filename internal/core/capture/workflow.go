@@ -24,13 +24,13 @@ import (
 // fills its reserved placeholder via commitCapture, which now also holds the
 // ledger lock, so the sweep's classify-then-unlink can no longer interleave with
 // a commit's fill and delete a just-committed issue file.
-func mutationPreamble(issuesRoot string) error {
-	if err := withLedgerLock(issuesRoot, func() error {
+func mutationPreamble(repoRoot, issuesRoot string) error {
+	if err := withLedgerLock(repoRoot, issuesRoot, func() error {
 		return cleanOrphanPlaceholders(issuesRoot)
 	}); err != nil {
 		return err
 	}
-	return ensureLedgerDirs(issuesRoot)
+	return ensureLedgerDirs(repoRoot, issuesRoot)
 }
 
 // Capture appends a new issue to open/ with an auto-assigned (or forced) iss-N.
@@ -41,7 +41,7 @@ func Capture(req CaptureRequest) (CaptureResult, error) {
 	if err != nil {
 		return CaptureResult{}, err
 	}
-	if err := mutationPreamble(issuesRoot); err != nil {
+	if err := mutationPreamble(repoRoot, issuesRoot); err != nil {
 		return CaptureResult{}, err
 	}
 	if err := captureBlockers(issuesRoot, req.BlockedBy); err != nil {
@@ -88,12 +88,12 @@ func Capture(req CaptureRequest) (CaptureResult, error) {
 	// no maximum, so the refs-union scan the max+1 allocator needed (iss-115,
 	// iss-120) is gone — time orders the ids and entropy separates same-second
 	// minters on branches this working tree cannot see.
-	issID, placeholder, err := reservePath(issuesRoot, slugNorm, req.ForceID)
+	issID, placeholder, err := reservePath(repoRoot, issuesRoot, slugNorm, req.ForceID)
 	if err != nil {
 		return CaptureResult{}, err
 	}
 
-	result, err := commitCapture(issuesRoot, req, issID, slugNorm, placeholder)
+	result, err := commitCapture(repoRoot, issuesRoot, req, issID, slugNorm, placeholder)
 	if err != nil {
 		_ = cancelReservation(placeholder)
 		return CaptureResult{}, err
@@ -129,7 +129,7 @@ func captureBlockers(issuesRoot string, blockedBy []string) error {
 	return nil
 }
 
-func commitCapture(issuesRoot string, req CaptureRequest, issID, slug, placeholder string) (CaptureResult, error) {
+func commitCapture(repoRoot, issuesRoot string, req CaptureRequest, issID, slug, placeholder string) (CaptureResult, error) {
 	// The disclosure pair (itd-178). origin is DERIVED — a capture is a person
 	// filing an observation, so it is researcher-authored and no request member
 	// carries it — while the production mode is the closed choice the caller
@@ -211,7 +211,7 @@ func commitCapture(issuesRoot string, req CaptureRequest, issID, slug, placehold
 	// just-committed file deleted. If the sweep reclaimed the placeholder first, the
 	// re-read fails and the capture reports an error rather than a false success.
 	var result CaptureResult
-	err = withLedgerLock(issuesRoot, func() error {
+	err = withLedgerLock(repoRoot, issuesRoot, func() error {
 		// Guard the overwrite: the placeholder must still be the zero-byte file we
 		// reserved (expected_checksum = sha256("")).
 		_, checksum, rerr := readWithChecksum(placeholder)
@@ -451,7 +451,7 @@ func transition(repoRoot, issuesRoot, issID, verb, field, note string, extra []k
 	if err != nil {
 		return TransitionResult{}, err
 	}
-	if err := mutationPreamble(ir); err != nil {
+	if err := mutationPreamble(rr, ir); err != nil {
 		return TransitionResult{}, err
 	}
 	if !reIssID.MatchString(issID) {
@@ -467,7 +467,7 @@ func transition(repoRoot, issuesRoot, issID, verb, field, note string, extra []k
 	// already moved out of open/ and conflicts, instead of both passing the
 	// checksum re-read and landing the issue in two status dirs (split-brain).
 	var result TransitionResult
-	err = withLedgerLock(ir, func() error {
+	err = withLedgerLock(rr, ir, func() error {
 		src, status, err := findIssue(ir, issID)
 		if err != nil {
 			return err

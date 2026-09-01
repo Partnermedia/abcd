@@ -62,11 +62,11 @@ func TestTransitionSerializesOnLedgerLock(t *testing.T) {
 // placeholder, so a traversal id cannot touch the filesystem outside the ledger.
 func TestReservePathRejectsUnsafeForceID(t *testing.T) {
 	repo, ir := ledger(t)
-	if err := ensureLedgerDirs(ir); err != nil {
+	if err := ensureLedgerDirs(repo, ir); err != nil {
 		t.Fatal(err)
 	}
 	for _, bad := range []string{"../../evil", "iss-1/x", "iss-1 ", "not-an-id", "iss-1/../../evil"} {
-		id, target, err := reservePath(ir, "note", bad)
+		id, target, err := reservePath(repo, ir, "note", bad)
 		if err == nil {
 			t.Fatalf("reservePath must reject unsafe ForceID %q before any fs op (got id=%q target=%q)", bad, id, target)
 		}
@@ -718,7 +718,7 @@ func TestDerivedPriorityUnblockedFirstThenSeverity(t *testing.T) {
 // sees, so it must be scrubbed at the source (iss-81).
 func TestListSkippedErrorIsPathFree(t *testing.T) {
 	repo, ir := ledger(t)
-	if err := ensureLedgerDirs(ir); err != nil {
+	if err := ensureLedgerDirs(repo, ir); err != nil {
 		t.Fatal(err)
 	}
 	// A dangling symlink named like a record: os.ReadFile fails, and the raw

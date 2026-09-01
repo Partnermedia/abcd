@@ -96,7 +96,7 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 	if err != nil {
 		return PromoteResult{}, err
 	}
-	if err := mutationPreamble(issuesRoot); err != nil {
+	if err := mutationPreamble(repoRoot, issuesRoot); err != nil {
 		return PromoteResult{}, err
 	}
 	// The reading item is a DIFFERENT route with its own recorded reasoning: its
@@ -195,7 +195,7 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 		path   string
 		status State
 	}
-	stampErr := withLedgerLock(issuesRoot, func() error {
+	stampErr := withLedgerLock(repoRoot, issuesRoot, func() error {
 		src, status, err := findIssue(issuesRoot, req.ID)
 		if err != nil {
 			return err
@@ -370,7 +370,7 @@ func promoteReadingItem(repoRoot, issuesRoot string, req PromoteRequest) (Promot
 	if beforeStampHook != nil {
 		beforeStampHook()
 	}
-	stampErr := withLedgerLock(issuesRoot, func() error {
+	stampErr := withLedgerLock(repoRoot, issuesRoot, func() error {
 		src, err := findReadingItem(issuesRoot, req.ID)
 		if err != nil {
 			return err

@@ -64,6 +64,14 @@ func resolveRoots(repoRoot, issuesRoot string) (string, string, error) {
 	} else {
 		ir = filepath.Join(rr, LedgerRelPath)
 	}
+	// Every verb passes through here first, the readers included, so this is
+	// where the ledger's ancestors are judged for a List or Status: a committed
+	// symlink at .abcd or .abcd/work would otherwise make a read serialize a
+	// ledger from outside the checkout (GHSA-865x-5m7q-qm79). The write paths
+	// judge them again, creating, from under ensureLedgerDirs.
+	if err := ledgerAncestors(rr, ir, false); err != nil {
+		return "", "", err
+	}
 	return rr, ir, nil
 }
 

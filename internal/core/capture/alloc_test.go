@@ -1,6 +1,7 @@
 package capture
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -43,8 +44,9 @@ func TestOrphanStillRemovableRejectsCommittedFile(t *testing.T) {
 // regressing normal sweep behaviour: a genuinely aged zero-byte placeholder is
 // still removed.
 func TestCleanOrphanPlaceholdersStillSweepsAgedOrphan(t *testing.T) {
-	ir := filepath.Join(t.TempDir(), "issues")
-	if err := ensureLedgerDirs(ir); err != nil {
+	repo := t.TempDir()
+	ir := filepath.Join(repo, "issues")
+	if err := ensureLedgerDirs(repo, ir); err != nil {
 		t.Fatal(err)
 	}
 	orphan := filepath.Join(ir, "open", "iss-1-note.md")
@@ -60,5 +62,62 @@ func TestCleanOrphanPlaceholdersStillSweepsAgedOrphan(t *testing.T) {
 	}
 	if _, err := os.Lstat(orphan); !os.IsNotExist(err) {
 		t.Fatalf("aged zero-byte orphan should have been swept, Lstat err=%v", err)
+	}
+}
+
+// TestLedgerAncestorSymlinkRefused pins the ledger's ANCESTORS to the same rule
+// its leaves already obey. ensureLedgerDirs refused a symlinked issues/ or
+// status directory, but provisioned the parents by following whatever was there
+// — so a committed `.abcd` or `.abcd/work` symlink in a hostile clone put the
+// whole store (the allocator lock included) outside the checkout while the
+// result still reported a repo-relative path. Every verb resolves its roots
+// first, so the guard there covers the readers too: a List over a redirected
+// ledger is refused rather than serialized.
+func TestLedgerAncestorSymlinkRefused(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		setup func(t *testing.T, repo, outside string)
+	}{
+		{".abcd/work is a symlink", func(t *testing.T, repo, outside string) {
+			if err := os.Mkdir(filepath.Join(repo, ".abcd"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(outside, filepath.Join(repo, ".abcd", "work")); err != nil {
+				t.Skipf("symlink unsupported: %v", err)
+			}
+		}},
+		{".abcd is a symlink", func(t *testing.T, repo, outside string) {
+			if err := os.Symlink(outside, filepath.Join(repo, ".abcd")); err != nil {
+				t.Skipf("symlink unsupported: %v", err)
+			}
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo, outside := t.TempDir(), t.TempDir()
+			tc.setup(t, repo, outside)
+			ir := filepath.Join(repo, LedgerRelPath)
+
+			_, err := Capture(CaptureRequest{
+				RepoRoot: repo, IssuesRoot: ir, Text: "b", Severity: SeverityMinor,
+				Category: "bug", Source: "manual-test", Slug: "s", FoundDuring: "t",
+			})
+			if !errors.Is(err, ErrPathUnsafe) {
+				t.Fatalf("Capture through a symlinked ancestor: want ErrPathUnsafe, got %v", err)
+			}
+			entries, rerr := os.ReadDir(outside)
+			if rerr != nil {
+				t.Fatal(rerr)
+			}
+			if len(entries) != 0 {
+				var names []string
+				for _, e := range entries {
+					names = append(names, e.Name())
+				}
+				t.Fatalf("Capture wrote outside the checkout: %v", names)
+			}
+			if _, err := List(ListRequest{RepoRoot: repo, IssuesRoot: ir}); !errors.Is(err, ErrPathUnsafe) {
+				t.Fatalf("List through a symlinked ancestor: want ErrPathUnsafe, got %v", err)
+			}
+		})
 	}
 }

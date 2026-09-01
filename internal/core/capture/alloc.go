@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -33,14 +34,20 @@ var lockTimeout = 5 * time.Second
 var beforeOrphanRemoveHook func(cand string)
 
 // ensureLedgerDirs provisions issuesRoot and its status sub-directories, refusing
-// symlinked leaves. The list is issueschema.StatusDirs — the same value the
-// readers scan and the deterministic gates scope to, so a folder can never be
-// provisioned that one of them does not look in. Idempotent.
-func ensureLedgerDirs(issuesRoot string) error {
+// symlinked leaves AND symlinked ancestors. The list is issueschema.StatusDirs —
+// the same value the readers scan and the deterministic gates scope to, so a
+// folder can never be provisioned that one of them does not look in. Idempotent.
+//
+// The ancestors are provisioned one segment at a time from repoRoot, never with
+// MkdirAll: MkdirAll follows whatever is already there, and a committed symlink
+// at .abcd or .abcd/work in a hostile clone sent the whole store — the lock, the
+// status directories and the record — outside the checkout while the result
+// still reported a repo-relative path (GHSA-865x-5m7q-qm79).
+func ensureLedgerDirs(repoRoot, issuesRoot string) error {
 	if !filepath.IsAbs(issuesRoot) {
 		return fmt.Errorf("issuesRoot must be absolute, got %q", issuesRoot)
 	}
-	if err := os.MkdirAll(filepath.Dir(issuesRoot), 0o755); err != nil {
+	if err := ledgerAncestors(repoRoot, issuesRoot, true); err != nil {
 		return err
 	}
 	if err := safeMkdirLeaf(issuesRoot); err != nil {
@@ -48,6 +55,60 @@ func ensureLedgerDirs(issuesRoot string) error {
 	}
 	for _, sub := range issueschema.StatusDirs {
 		if err := safeMkdirLeaf(filepath.Join(issuesRoot, sub)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ledgerAncestors walks every path segment between repoRoot and the ledger's
+// parent — for the default ledger, `.abcd` then `.abcd/work` — and refuses any
+// that exists as something other than a real directory, so a committed symlink
+// on the way to the store can neither redirect a write nor make a read serialize
+// a ledger from outside the checkout. Every verb passes through resolveRoots,
+// which runs this without create so the READ paths are covered; the write paths
+// run it again with create from under ensureLedgerDirs, where a missing segment
+// is made one level at a time with os.Mkdir (safeMkdirLeaf) — never MkdirAll,
+// which follows whatever is already there. Without create, a missing segment
+// ends the walk: nothing below it can exist, and an absent ledger is a state the
+// readers already tolerate.
+//
+// The walk is modelled on memory.memoryDir (the GHSA-72rp fix) and carries the
+// same residue: the window between one segment's Lstat and its Mkdir is a
+// local-racer TOCTOU, closed only by opening the store as an os.Root, which is
+// the package-wide follow-up iss-2609012037143368 records.
+//
+// An issuesRoot outside repoRoot is an operator-typed operand with no boundary
+// to walk from: it keeps the leaf-only guards, and with create its parent is
+// provisioned as before.
+func ledgerAncestors(repoRoot, issuesRoot string, create bool) error {
+	parent := filepath.Dir(issuesRoot)
+	if !fsutil.PathWithin(parent, repoRoot, false) {
+		if create {
+			return os.MkdirAll(parent, 0o755)
+		}
+		return nil
+	}
+	rel, err := filepath.Rel(repoRoot, parent)
+	if err != nil {
+		return err
+	}
+	if rel == "." {
+		return nil
+	}
+	current := repoRoot
+	for _, segment := range strings.Split(rel, string(filepath.Separator)) {
+		current = filepath.Join(current, segment)
+		if create {
+			if err := safeMkdirLeaf(current); err != nil {
+				return err
+			}
+			continue
+		}
+		if _, err := os.Lstat(current); os.IsNotExist(err) {
+			return nil
+		}
+		if err := refuseSymlinkedDir(current); err != nil {
 			return err
 		}
 	}
@@ -81,8 +142,8 @@ func safeMkdirLeaf(target string) error {
 // the shared fsutil.WithFileLock primitive (the one-canonical inter-process
 // load-modify-write lock), mapping its sentinels back to the capture-facing
 // ErrAllocatorContention / ErrPathUnsafe the ledger callers already test.
-func withLedgerLock(issuesRoot string, fn func() error) error {
-	if err := ensureLedgerDirs(issuesRoot); err != nil {
+func withLedgerLock(repoRoot, issuesRoot string, fn func() error) error {
+	if err := ensureLedgerDirs(repoRoot, issuesRoot); err != nil {
 		return err
 	}
 	lockPath := filepath.Join(issuesRoot, lockFilename)
@@ -109,11 +170,11 @@ func withLedgerLock(issuesRoot string, fn func() error) error {
 // — so a caller must not hold it across any exported verb of this package, every
 // one of which takes it internally.
 func WithLedgerLock(repoRoot string, fn func() error) error {
-	_, issuesRoot, err := resolveRoots(repoRoot, "")
+	rr, issuesRoot, err := resolveRoots(repoRoot, "")
 	if err != nil {
 		return err
 	}
-	return withLedgerLock(issuesRoot, fn)
+	return withLedgerLock(rr, issuesRoot, fn)
 }
 
 // minter is the capture family's mint seam (adr-45; mechanics per spc-33). The
@@ -133,7 +194,7 @@ var minter recordid.Minter
 // ids and entropy separates same-second minters on other branches. The
 // presence check runs first because the O_EXCL create guards open/ alone; a
 // clash with a resolved or wontfixed id also redraws.
-func reservePath(issuesRoot, slug, forceID string) (string, string, error) {
+func reservePath(repoRoot, issuesRoot, slug, forceID string) (string, string, error) {
 	// Validate a caller-supplied ForceID against the iss-N shape BEFORE it is used
 	// to build a path or create a placeholder — a traversal id (../../evil) must
 	// never touch the filesystem outside the ledger, even transiently.
@@ -141,7 +202,7 @@ func reservePath(issuesRoot, slug, forceID string) (string, string, error) {
 		return "", "", fmt.Errorf("%w: ForceID %q must match ^iss-[0-9]+$", ErrPathUnsafe, forceID)
 	}
 	var resID, resTarget string
-	err := withLedgerLock(issuesRoot, func() error {
+	err := withLedgerLock(repoRoot, issuesRoot, func() error {
 		if forceID != "" {
 			if issPresent(issuesRoot, forceID) {
 				return fmt.Errorf("%w: %s already exists in the ledger", ErrDuplicateIssueID, forceID)
