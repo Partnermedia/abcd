@@ -1,8 +1,8 @@
 ---
 id: itd-200
 slug: abcd-s-presence-should-be-visible-in-the-host-harness-s-stat
-spec_id: null
-kind: null
+spec_id: spc-70
+kind: standalone
 suggested_kind: null
 reclassification_history: []
 builds_on: [itd-20]
@@ -129,15 +129,15 @@ right person, because the current hat is always on screen.
 
 ## Scope Conditions
 
-- Holds only on a harness that renders a status line by invoking a command
+- Holds only on a harness that renders a status line by invoking a command <!-- cond: cond-2609012158056931 -->
   and displaying its stdout, which is the first harness in the roster.
-- Holds only in an abcd-managed repository; elsewhere abcd writes nothing to
+- Holds only in an abcd-managed repository; elsewhere abcd writes nothing to <!-- cond: cond-2609012158055017 -->
   the line and changes no setting.
-- Holds where the badge's word and inverse video are legible; colour is
+- Holds where the badge's word and inverse video are legible; colour is <!-- cond: cond-2609012158057285 -->
   reinforcement and the design does not depend on it.
-- Holds under the width the host chooses: the line is designed for
+- Holds under the width the host chooses: the line is designed for <!-- cond: cond-2609012158056783 -->
   truncation, not layout, and only the leading badge is guaranteed to survive.
-- Holds for the payload fields the first harness supplies today (model name,
+- Holds for the payload fields the first harness supplies today (model name, <!-- cond: cond-2609012158058166 -->
   context percentage, five-hour and seven-day usage); a harness that stops
   supplying one drops that element rather than breaking the line. The
   maintainer's own 2026-08-29 demonstration wiring is the reference rendering
