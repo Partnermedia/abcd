@@ -81,6 +81,18 @@ not options.
   record sets.
 - **Word and inverse video carry the meaning.** Colour reinforces; it is never
   the only signal.
+- **abcd owns the whole row in a managed repository.** Once installed, the
+  line is abcd's own elements, not a prefix on the user's previous status
+  command, in this order: the badge, the repository name, the branch, the
+  model, context used as a percentage, the five-hour and seven-day usage
+  percentages, and the record's counts of intents and issues. The badge is
+  fixed and leads; every element after it is one the user can switch off at
+  install time or later in the same user-level setting. Elements that come
+  from the harness's status payload (model, context, usage) render only when
+  the payload carries them, and an absent field drops the element rather than
+  showing a placeholder. The branch comes from the repository; the counts
+  come from the record, and what they count exactly (open issues; intents not
+  yet shipped) is settled in the spec.
 - **Out of scope, recorded for a later iteration:** a communication path that
   adapts to the role, where the product thinker answers through a web surface
   and the facilitator stays at the terminal. This intent only makes the parked
@@ -125,6 +137,11 @@ right person, because the current hat is always on screen.
   reinforcement and the design does not depend on it.
 - Holds under the width the host chooses: the line is designed for
   truncation, not layout, and only the leading badge is guaranteed to survive.
+- Holds for the payload fields the first harness supplies today (model name,
+  context percentage, five-hour and seven-day usage); a harness that stops
+  supplying one drops that element rather than breaking the line. The
+  maintainer's own 2026-08-29 demonstration wiring is the reference rendering
+  for every element except the two record counts, which are new.
 
 ## Acceptance Criteria
 
@@ -152,8 +169,17 @@ right person, because the current hat is always on screen.
   board shows the state afterwards.
 - **Given** `ahoy install` on the first harness, **when** it reaches the
   status line step, **then** it offers the line, states why it is worth
-  having, takes the basic element configuration, and writes no wiring if the
-  user declines.
+  having, lets the user switch each element after the badge on or off, and
+  writes no wiring if the user declines.
+- **Given** the line is installed with every element on, **when** the host
+  renders it with a payload carrying model, context and usage figures,
+  **then** the row reads, in order, the badge, the repository name, the
+  branch, the model, the context percentage, the five-hour and seven-day
+  usage percentages, and the intent and issue counts, each separated the same
+  way.
+- **Given** the payload lacks a field an element needs, **when** the line
+  renders, **then** that element is absent and no placeholder takes its
+  place.
 - **Given** a configured presence badge whose foreground and background fall
   below the contrast bar, **when** the setting is read, **then** it is
   refused with the measured ratio and the default renders instead.
