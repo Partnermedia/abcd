@@ -838,7 +838,7 @@ func sealLine(src string, findings []Finding, idxs []int) string {
 		if start >= end {
 			continue
 		}
-		spans = append(spans, sealSpan{start, end, IsIdentityKind(findings[i].Kind)})
+		spans = append(spans, sealSpan{start, end, maskedWhole(findings[i].Kind)})
 		cov[start]++
 		cov[end]--
 	}

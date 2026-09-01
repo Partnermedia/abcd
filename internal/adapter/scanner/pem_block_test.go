@@ -1,0 +1,170 @@
+package scanner
+
+import (
+	"strings"
+	"testing"
+)
+
+// pem_block_test.go — GHSA-gmp7-9rvm-qcr3 / GHSA-5qr6-f78x-g2cx /
+// GHSA-29jw-3jg9-qmhx: the pem_private_key pattern matched the BEGIN header
+// only, so Redact masked one line and every store wrote the base64 key body
+// and the END line verbatim while reporting the record redacted. Every marker
+// here is assembled from halves at runtime and every body is a repeated
+// letter: nothing in this file is, or scans as, a private key.
+
+func pemFixture() (header, body1, body2, tail, end string) {
+	header = "-----BEGIN " + "OPENSSH PRIVATE KEY-----"
+	body1 = strings.Repeat("Q", 64)
+	body2 = strings.Repeat("R", 64)
+	tail = strings.Repeat("S", 12) + "="
+	end = "-----END " + "OPENSSH PRIVATE KEY-----"
+	return
+}
+
+func redactAll(t *testing.T, text string) string {
+	t.Helper()
+	findings := ScanText(text, Identity{}, DefaultPatterns(), DefaultIdentitySeverities(), "t")
+	if !hasKind(findings, "token:pem_private_key") {
+		t.Fatalf("the PEM header was not detected at all: %v", findings)
+	}
+	out, _ := Redact(text, findings)
+	return out
+}
+
+// TestRedactPEMBlockConsumesBodyThroughEnd: a header on its own line is
+// followed by the key body and the END line; none of them may survive, the
+// prose on either side must, and the stage-two rescan must be clean.
+func TestRedactPEMBlockConsumesBodyThroughEnd(t *testing.T) {
+	header, body1, body2, tail, end := pemFixture()
+	pat := "ghp_" + strings.Repeat("a", 40)
+	text := strings.Join([]string{
+		"before the key",
+		header, body1, body2, tail, end,
+		"after the key, token " + pat,
+	}, "\n")
+	out := redactAll(t, text)
+	for _, leak := range []string{body1, body2, tail, end, pat} {
+		if strings.Contains(out, leak) {
+			t.Errorf("redaction left %q in place:\n%s", leak[:8], out)
+		}
+	}
+	for _, keep := range []string{"before the key", "after the key, token "} {
+		if !strings.Contains(out, keep) {
+			t.Errorf("redaction lost the prose %q:\n%s", keep, out)
+		}
+	}
+	if resid := BlockingResidual(ScanText(out, Identity{}, DefaultPatterns(), DefaultIdentitySeverities(), "t")); len(resid) != 0 {
+		t.Errorf("stage-two rescan of the redacted text is not clean: %v", resid)
+	}
+}
+
+// TestRedactPEMHeaderWithoutEndKeepsProse: a header with no END line must not
+// swallow the record after it. Prose lines are not body-shaped, so the
+// consumer stops at the first one.
+func TestRedactPEMHeaderWithoutEndKeepsProse(t *testing.T) {
+	header, body1, _, _, _ := pemFixture()
+	text := strings.Join([]string{
+		header, body1, "",
+		"The next paragraph is prose that must stay.",
+		"So must this one, with an https://example.com/link in it.",
+	}, "\n")
+	out := redactAll(t, text)
+	if strings.Contains(out, body1) {
+		t.Errorf("the body line after a truncated block survived:\n%s", out)
+	}
+	for _, keep := range []string{"The next paragraph is prose that must stay.", "So must this one, with an https://example.com/link in it."} {
+		if !strings.Contains(out, keep) {
+			t.Errorf("a truncated block swallowed the prose %q:\n%s", keep, out)
+		}
+	}
+}
+
+// TestRedactPEMOneLineBodyDoesNotSurvive: header, body and END on ONE line —
+// a resolve note, a JSON/K8s secret dump with literal \n escapes. Byte-span
+// sealing of the header alone left every body byte after it in place.
+func TestRedactPEMOneLineBodyDoesNotSurvive(t *testing.T) {
+	header, body1, _, tail, end := pemFixture()
+	cases := map[string]string{
+		"note":        "note: " + header + " " + body1 + " " + tail + " " + end + " rotated since",
+		"json":        `{"key":"` + header + `\n` + body1 + `\n` + tail + `\n` + end + `\n"}`,
+		"no end":      "pasted " + header + " " + body1 + " " + tail,
+		"header only": "the file starts with " + header + " and is 3 KiB",
+	}
+	for name, text := range cases {
+		t.Run(name, func(t *testing.T) {
+			out := redactAll(t, text)
+			if strings.Contains(out, body1) || strings.Contains(out, tail) {
+				t.Errorf("body bytes on the header line survived:\n%s", out)
+			}
+			if name == "note" && !strings.Contains(out, "rotated since") {
+				t.Errorf("prose after the END marker was lost:\n%s", out)
+			}
+			if name == "header only" && !strings.Contains(out, "is 3 KiB") {
+				t.Errorf("prose after a bare header was lost:\n%s", out)
+			}
+		})
+	}
+}
+
+// TestPEMHeaderIsMaskedWhole: a private-key span keeps no head/tail
+// fingerprint. On the header alone the fingerprint was harmless; once the span
+// extends over body bytes, the kept tail would be two bytes of key.
+func TestPEMHeaderIsMaskedWhole(t *testing.T) {
+	header, body1, _, _, _ := pemFixture()
+	text := header + " " + body1
+	out := redactAll(t, text)
+	if strings.Contains(out, "---") || strings.HasSuffix(out, "QQ") {
+		t.Errorf("PEM span kept a fingerprint of the raw bytes: %q", out)
+	}
+}
+
+// TestRedactPEMBodyConsumerIsBounded pins the bound pem.go states: the
+// consumer takes at most maxPEMBodyLines after the header and reports how
+// many it took; what lies beyond is outside the block it will claim (the
+// documented residual), and the prose after the block is untouched.
+func TestRedactPEMBodyConsumerIsBounded(t *testing.T) {
+	header, body1, _, _, end := pemFixture()
+	const beyond = 3
+	lines := []string{header}
+	for i := 0; i < maxPEMBodyLines+beyond; i++ {
+		lines = append(lines, body1)
+	}
+	lines = append(lines, end, "prose after an oversized block")
+	out := redactAll(t, strings.Join(lines, "\n"))
+	if !strings.Contains(out, pemBodyPlaceholder(maxPEMBodyLines)) {
+		t.Errorf("placeholder does not report the bound: %q", out[len(out)-200:])
+	}
+	if !strings.Contains(out, "prose after an oversized block") {
+		t.Errorf("prose after the block was lost")
+	}
+	if got := strings.Count(out, body1); got != beyond {
+		t.Errorf("body lines beyond the bound: got %d, want %d (the bound is the contract)", got, beyond)
+	}
+}
+
+// TestRedactPEMBlockWithGutters: a block pasted with indentation, a diff
+// marker, a line-number gutter and JSON quoting is still consumed through
+// its END line.
+func TestRedactPEMBlockWithGutters(t *testing.T) {
+	header, body1, body2, tail, end := pemFixture()
+	cases := map[string][]string{
+		"indented":  {"    " + header, "    " + body1, "    " + body2, "    " + tail, "    " + end},
+		"diff":      {"+" + header, "+" + body1, "-" + body2, "+" + tail, "+" + end},
+		"numbered":  {"  1\t" + header, "  2\t" + body1, "  3\t" + body2, "  4\t" + tail, "  5\t" + end},
+		"quoted":    {`  "` + header + `",`, `  "` + body1 + `",`, `  "` + body2 + `",`, `  "` + tail + `",`, `  "` + end + `"`},
+		"encrypted": {header, "Proc-Type: 4,ENCRYPTED", "DEK-Info: AES-128-CBC,0123456789ABCDEF0123456789ABCDEF", "", body1, tail, end},
+	}
+	for name, block := range cases {
+		t.Run(name, func(t *testing.T) {
+			out := redactAll(t, "before\n"+strings.Join(block, "\n")+"\nafter")
+			for _, leak := range []string{body1, body2, tail, end} {
+				if strings.Contains(out, leak) {
+					t.Errorf("%q survived:\n%s", leak[:8], out)
+				}
+			}
+			if !strings.HasPrefix(out, "before\n") || !strings.HasSuffix(out, "\nafter") {
+				t.Errorf("prose around the block was disturbed:\n%s", out)
+			}
+		})
+	}
+}

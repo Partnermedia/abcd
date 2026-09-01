@@ -33,6 +33,11 @@ const awsExample = "AKIAIOSFODNN7EXAMPLE"
 // carrying it is already redacted and must not be re-flagged.
 const rpRedactedPlaceholder = "<RP-SESSION-UUID-REDACTED>"
 
+// kindPEMPrivateKey is the one bundled secret kind whose finding is a BLOCK
+// rather than a token: Redact consumes the body lines after it (pem.go) and
+// masks its span whole (maskedWhole).
+const kindPEMPrivateKey = "token:pem_private_key"
+
 // DefaultPatterns returns the bundled secret pattern set (spec §2.2), ported
 // verbatim from scripts/abcd/defaults/pii.json, plus the network-identifier set
 // from network.go. Every secret pattern is hard_fail and non-sanitisable. This
@@ -95,12 +100,24 @@ func DefaultPatterns() []Pattern {
 			Suggestion: "DELETE AND ROTATE — never commit credentials",
 		},
 		{
-			// PEM private-key header. The scanner is line-oriented and the BEGIN
-			// line is single-line and self-identifying, so matching the header
-			// flags the block's presence (RSA/EC/DSA/OPENSSH/PGP/ENCRYPTED/plain).
-			Name: "pem_private_key", Kind: "token:pem_private_key",
-			Label:      "PEM private key header",
-			Re:         regexp.MustCompile(`-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY( BLOCK)?-----`),
+			// PEM private-key block. The scanner is line-oriented and the BEGIN
+			// line is single-line and self-identifying, so the header is what
+			// flags the block (RSA/EC/DSA/OPENSSH/PGP/ENCRYPTED/plain). The match
+			// then reaches over a body that shares the header's LINE — base64
+			// chunks separated by blanks or the literal \n and \r escapes of a
+			// JSON or YAML dump — through an END marker on that line when there
+			// is one, so Redact masks the body bytes a one-line key carries and
+			// not just the header before them. The body must OPEN with a long
+			// chunk (a real body's first chunk always is), so prose after a bare
+			// header ("… PRIVATE KEY----- and is 3 KiB") is not taken for one;
+			// once a body has opened, every chunk to the END is taken, the short
+			// final one included. Body lines of their own belong to the block
+			// consumer (pem.go); the span is masked whole (maskedWhole).
+			Name: "pem_private_key", Kind: kindPEMPrivateKey,
+			Label: "PEM private key",
+			Re: regexp.MustCompile(`-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----` +
+				`(?:(?:[ \t]|\\[nr])*[A-Za-z0-9+/=]{16,}(?:(?:[ \t]|\\[nr])+[A-Za-z0-9+/=]+)*)?` +
+				`(?:(?:[ \t]|\\[nr])*-----END (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----)?`),
 			Severity:   SeverityHardFail,
 			Suggestion: "DELETE AND ROTATE — private key material must never be committed",
 		},

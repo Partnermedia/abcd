@@ -53,7 +53,23 @@ func Redact(text string, findings []Finding) (string, int) {
 		lines[idx] = line
 		rewritten += n
 	}
+	// A PEM private key is the one finding whose leak is not on the line the
+	// pattern matched: the header names the block, and the body it announces
+	// follows on the lines after it. Those are consumed here, through the END
+	// line, bounded (pem.go) — the one place every store's redaction shares.
+	lines, blocks := consumePEMBodies(lines, findings)
+	rewritten += blocks
 	return strings.Join(lines, "\n"), rewritten
+}
+
+// maskedWhole reports whether a finding's span is masked with no head/tail
+// fingerprint: every identity kind, where the head and tail are what
+// re-identify the machine, and a PEM private-key span, whose tail is body
+// bytes once the pattern reaches past the header — two bytes of key are two
+// bytes too many, and a header needs no fingerprint to be recognised for
+// what it was.
+func maskedWhole(kind string) bool {
+	return IsIdentityKind(kind) || kind == kindPEMPrivateKey
 }
 
 // redactLine masks every finding on one source line. Secret spans are sealed by
