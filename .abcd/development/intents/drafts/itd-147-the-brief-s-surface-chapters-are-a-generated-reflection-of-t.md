@@ -13,6 +13,11 @@ severity: major
 
 ## Press Release
 
+> _Sequenced 2026-09-01 as a delivery rung of
+> [Phase 8 — the brief is the shipped state](../../roadmap/phases/phase-8-brief-currency.md);
+> the phase records the sync rule and its one legitimate lead._
+
+
 > **The design record stops being able to lie about the shipped surface.** Each
 > surface chapter in the brief carries a generated block — the verb's flags,
 > sub-verbs, exit codes, schema fields and counts, derived from the command tree
