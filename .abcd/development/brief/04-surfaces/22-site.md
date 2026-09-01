@@ -4,7 +4,9 @@
 ([adr-47](../../decisions/adrs/0047-abcdev-app-rendered-from-this-repository-alone.md)).
 The bare form is **strictly read-only**: it reports what the repository has
 declared and what the output directory holds. `build` is the render, and it
-writes only inside the directory it is given.
+writes only inside the directory it is given; `check` gates a rendered tree, and
+when the directory it is given holds no `index.html` it renders first — the one
+write path besides `build`, confined to the same directory.
 
 It answers a different question from `/abcd:launch`: `launch` prepares what a
 release ships to users who install the binary; `site` prepares what a reader
@@ -51,7 +53,7 @@ abcd site                    # what is declared, and what the last build left; e
 abcd site build              # render into ./site
 abcd site build --out DIR    # render into DIR
 abcd site build --preview    # stamp the render as unreleased · <commit>
-abcd site check --out DIR    # gate an already-rendered tree; exit 1 on findings
+abcd site check --out DIR    # gate the rendered tree (rendering first when DIR has no index.html); exit 1 on findings
 ```
 
 `--preview` is for a build of an untagged tree: the stamp renders the
@@ -94,7 +96,8 @@ else, and no network at any point.
 
 ## The gates
 
-`abcd site check` runs seven independent checks over a rendered tree and
+`abcd site check` runs seven independent checks over a rendered tree —
+rendering it first when the output directory holds no `index.html` — and
 reports every failure, not the first: the provenance walk (each visible text
 node sits in a resolvable `data-src` span or matches the allowlist of
 interface strings, numbers, dates, file and asset names), the hero against
