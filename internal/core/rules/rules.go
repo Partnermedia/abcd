@@ -661,9 +661,9 @@ func renderDomain(d ResolvedDomain) string {
 // sanitizeRuleBody makes a repo-controlled rule body safe to embed under its
 // domain heading. The rendered "## NAME" lines are the injection contract
 // host-side parsers rely on, and a rule body is untrusted input: control
-// characters are stripped (newline and tab kept) and any line the body tries
-// to start with "#" is indented one space, so a hostile rules.json cannot
-// forge domain headings or smuggle escapes into the rendered block.
+// characters are stripped (newline and tab kept) and every continuation line
+// is indented under the bullet, so a hostile rules.json cannot forge domain
+// headings, forge sibling rules, or smuggle escapes into the rendered block.
 func sanitizeRuleBody(r string) string {
 	// CRLF collapses to LF (editor-neutral signatures); a lone CR, LINE
 	// SEPARATOR and PARAGRAPH SEPARATOR become LF — they are line starts to
@@ -690,11 +690,22 @@ func sanitizeRuleBody(r string) string {
 	r = strings.TrimRight(r, " \t\n")
 	lines := strings.Split(r, "\n")
 	for i, line := range lines {
-		// The first line is already defused by the "- " bullet prefix; only a
-		// continuation line would sit flush-left and could forge a heading.
-		if i > 0 && strings.HasPrefix(line, "#") {
-			lines[i] = " " + line
+		// The first line is defused by the "- " bullet prefix the renderer adds.
+		// EVERY continuation line sits flush-left otherwise — Validate accepts a
+		// bare newline and the normalisation above turns CR, LS and PS into one
+		// — so each is indented two spaces, the markdown list-item continuation:
+		// the line stays inside its bullet instead of reading as a loose
+		// paragraph, a leading "- " cannot forge a sibling rule, and a leading
+		// "#" cannot forge a heading. The contract defended is the line-start
+		// one the host-side parser splits on ("## " flush-left); CommonMark
+		// would still read a two-space "## x" as a heading, which is not the
+		// boundary this block is parsed by. A line already indented keeps its
+		// own deeper indent, and a blank line stays blank, so the pass is a
+		// fixed point — rendered text fed back as a body re-renders unchanged.
+		if i > 0 && line != "" && !strings.HasPrefix(line, "  ") {
+			line = "  " + line
 		}
+		lines[i] = line
 		// Terminal-display safety is the canonical termsafe mask: C0/C1
 		// controls, bidi overrides and zero-width runes become '?', so a
 		// hostile rule body cannot recolour, reorder, or hide rendered text.
