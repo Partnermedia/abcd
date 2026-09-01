@@ -29,6 +29,11 @@ func SetCurrentVintageForTest(f func() vintage.Current) (restore func()) {
 	return func() { currentVintage = prev }
 }
 
+// VintageSourceCheckoutTip is the VintageStatus.Source a dogfood comparison
+// reports — the one reference that is ancestry-guarded and so the one whose
+// staleness may claim a direction (see Staleness).
+const VintageSourceCheckoutTip = "checkout tip"
+
 // VintageStatus is the assembled vintage picture for a repo: the install mode,
 // the comparator's report, and the human name of the reference compared against.
 // It is the single source the `version` and `ahoy` renders, the session-start
@@ -74,7 +79,7 @@ func vintageFrom(cur vintage.Current, mode, cwd, version, pinTag string) Vintage
 	// non-dogfood cwd yields Unknown here and falls through to the pinned
 	// comparison below rather than reporting a spurious stale.
 	if rep := vintage.Compare(cur, vintage.CheckoutTip(cwd, cur.Revision)); rep.Outcome != vintage.Unknown {
-		return VintageStatus{Mode: mode, Report: rep, Source: "checkout tip", RepoRoot: cwd}
+		return VintageStatus{Mode: mode, Report: rep, Source: VintageSourceCheckoutTip, RepoRoot: cwd}
 	}
 	// Everywhere else: the stamped version against the plugin-cache manifest pin.
 	// A "dev"/empty version is itself undeterminable as a pinned vintage.
@@ -192,7 +197,7 @@ func (v VintageStatus) Staleness() string {
 		// binary newer than its pin is the same inequality read the other way —
 		// so it stays non-directional ("differs from"), the caution skew.go and
 		// VersionTransition already take.
-		if v.Source == "checkout tip" {
+		if v.Source == VintageSourceCheckoutTip {
 			return "stale — behind the checkout tip (" + ref + ")"
 		}
 		src := v.Source

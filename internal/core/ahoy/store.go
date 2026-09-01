@@ -127,6 +127,12 @@ func resolvePluginRoot() (string, bool) {
 	return "", false
 }
 
+// ResolvePluginRoot is the exported face of resolvePluginRoot for the front
+// doors: the same ladder (ABCD_PLUGIN_ROOT -> CLAUDE_PLUGIN_ROOT ->
+// executable-ancestor -> recorded path-entry root), the same layout check, so
+// a surface never grows a second notion of where the plugin lives.
+func ResolvePluginRoot() (string, bool) { return resolvePluginRoot() }
+
 // pluginRootValid sanity-checks a candidate by verifying the expected plugin
 // layout (a hooks/ directory).
 func pluginRootValid(candidate string) bool {

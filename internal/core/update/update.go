@@ -68,6 +68,12 @@ type Report struct {
 	Refusal    *Refusal `json:"refusal,omitempty"`
 }
 
+// RemedyPluginUpdate is the way out of every refusal whose cause is a binary
+// the plugin install owns: the plugin-root refusal here, and the stale-binary
+// note the CLI appends to an unknown command (iss-2608230943088357). One
+// string, so the two surfaces cannot drift apart.
+const RemedyPluginUpdate = "take a plugin update in the host (e.g. /plugin update abcd)"
+
 // brewCellarPrefixes are the resolved locations a Homebrew-installed binary
 // lives under. A PREFIX test on the resolved path, never a substring match
 // (the 2026-08-20 decision-log entry): a plain copy at /usr/local/bin/abcd
@@ -116,7 +122,7 @@ func Plan(t ahoy.UpdateTarget) *Refusal {
 		return &Refusal{
 			Shape:  string(t.Kind),
 			Detail: "the binary at " + targetPath + " belongs to the plugin install; abcd update never touches a plugin root; take a plugin update in the host",
-			Remedy: "take a plugin update in the host (e.g. /plugin update abcd)",
+			Remedy: RemedyPluginUpdate,
 		}
 	case ahoy.UpdateTargetDevShim:
 		return &Refusal{
