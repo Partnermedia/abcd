@@ -20,6 +20,14 @@ type segment struct {
 	// tokenizer does not expand it, so it cannot say what the argv will be; the
 	// flag is how it says so, and Check turns it into a fail-closed block.
 	braceGroup bool
+	// heredocUnterminated records that this command opened a here-document
+	// whose delimiter line never came, so the tokenizer read the rest of the
+	// input as body without knowing whether it WAS body. bash runs such a line
+	// (it recovers silently), so it cannot be an error — the hook maps an error
+	// to fail-open — and it cannot be an allow either, because a `<<` the
+	// classifier misread has swallowed every later command. Check turns the
+	// flag into a fail-closed block, the braceGroup precedent.
+	heredocUnterminated bool
 }
 
 // tokenize splits a candidate command line into command-position segments,
@@ -77,7 +85,17 @@ func tokenize(line string) ([]segment, error) {
 		switch {
 		case c == '\\':
 			if i+1 >= len(line) {
-				return nil, fmt.Errorf("%w: trailing backslash", ErrUnparsableCommand)
+				// A backslash as the LAST byte is bash grammar, not a parse
+				// fault: bash 3.2 (the macOS /bin/bash and /bin/sh) and zsh drop
+				// it and run the line. bash 5.3 and dash keep it as a literal
+				// word instead, under which a hazard flag spelled `--force\`
+				// would not run — so "drop" is the reading under which the hazard
+				// executes, and the fail-safe one. Returning an error here was
+				// worse than either: the pre-tool-use hook maps a tokenizer
+				// error to fail-OPEN, so one appended byte walked any command
+				// past every blocker (GHSA-5wx3-2c86-fjpx).
+				i++
+				continue
 			}
 			if line[i+1] == '\n' {
 				// Line continuation: the newline is removed, the chain continues.
@@ -144,7 +162,17 @@ func tokenize(line string) ([]segment, error) {
 			if len(pending) > 0 && !lastList {
 				next, ok := skipHeredocBodies(line, i, pending)
 				if !ok {
-					return nil, fmt.Errorf("%w: unterminated here-document body", ErrUnparsableCommand)
+					// The delimiter line never came. bash RUNS this (it recovers
+					// silently, taking input-to-EOF as the body), so an error is
+					// the wrong route for the same reason as the brace group: the
+					// hook maps it to fail-open, and `<hazard> <<EOF` plus a
+					// newline walked past every blocker (GHSA-5wx3-2c86-fjpx).
+					// Succeeding quietly is wrong too — a `<<` the classifier
+					// misread has just swallowed every later line as body, and
+					// the classifier has been wrong twice (iss-184). The command
+					// that opened the document carries the flag; Check turns it
+					// into a fail-closed block on both front doors.
+					markHeredocUnterminated(&segs, chain)
 				}
 				i = next
 				pending = nil
@@ -188,7 +216,19 @@ func tokenize(line string) ([]segment, error) {
 			// attacker can supply a later line that happens to equal the
 			// misread "delimiter" and have it swallow real commands with no
 			// error at all.
-			followedByParen := next < len(line) && (line[next] == '(' || line[next] == ')')
+			//
+			// Blanks before the paren are skipped: `$(( x << y ))` puts a space
+			// between the misread "delimiter" and the closing paren, and testing
+			// only the immediate byte queued the shift as a heredoc, so the
+			// hazard on the next line was swallowed as body. With the
+			// unterminated body now a fail-closed block rather than an error,
+			// that misclassification would have been a false block on ordinary
+			// spaced arithmetic; before it, it was a fail-open.
+			k := next
+			for k < len(line) && (line[k] == ' ' || line[k] == '\t') {
+				k++
+			}
+			followedByParen := k < len(line) && (line[k] == '(' || line[k] == ')')
 			if !hd.quoted && (!isDelimStart(hd.delim) || followedByParen) {
 				cur = append(cur, '<', '<')
 				hasCur = true
@@ -342,6 +382,14 @@ const (
 	braceEntryID = "brace-expansion-unexpanded"
 
 	familyBrace = "brace expansion"
+
+	// heredocEntryID is the reserved id an unterminated here-document is
+	// reported under: another verdict the Pattern language cannot express ("the
+	// rest of this input may be commands or may be a document"), so no registry
+	// entry may claim it and it must never index Registry.Entries.
+	heredocEntryID = "heredoc-unterminated"
+
+	familyHeredoc = "here-document"
 
 	// braceScanBudget bounds the TOTAL look-ahead braceExpansionAt may spend
 	// across one tokenize call. The scan reads forward from every structural
@@ -760,7 +808,10 @@ func readHeredocDelim(line string, pos int) (heredoc, int, error) {
 			continue
 		case '\\':
 			if pos+1 >= len(line) {
-				return heredoc{}, 0, fmt.Errorf("%w: trailing backslash", ErrUnparsableCommand)
+				// The twin of tokenize's own trailing-backslash site: dropped,
+				// as bash 3.2 reads it, never an error the hook fails open on.
+				hd.delim = string(w)
+				return hd, pos + 1, nil
 			}
 			w = append(w, line[pos+1])
 			pos += 2
@@ -776,6 +827,35 @@ func readHeredocDelim(line string, pos int) (heredoc, int, error) {
 	return hd, pos, nil
 }
 
+// markHeredocUnterminated flags the command that opened an unterminated
+// here-document: the last segment emitted, or — for a line that holds the
+// redirection and nothing else — an empty segment carrying only the flag, so
+// the verdict is raised even when there is no command to hang it on.
+func markHeredocUnterminated(segs *[]segment, chain int) {
+	if n := len(*segs); n > 0 {
+		(*segs)[n-1].heredocUnterminated = true
+		return
+	}
+	*segs = append(*segs, segment{chain: chain, heredocUnterminated: true})
+}
+
+// heredocBlockSignal is the fail-closed verdict for a here-document whose
+// delimiter line never came. It is a BLOCK rather than a warn because the
+// tokenizer has just read everything after the redirection as data: if the
+// `<<` was a misclassified shift or a typo, the "document" is commands the guard
+// did not check, and it has no way to tell the two apart.
+func heredocBlockSignal() payloadSignal {
+	return payloadSignal{
+		id:      heredocEntryID,
+		verdict: VerdictBlock,
+		family:  familyHeredoc,
+		reason: "This command opens a here-document whose delimiter line never comes, so the shell would take the rest of the input as the document — " +
+			"and the guard cannot tell whether that rest is a document or commands it did not check.",
+		successor: "Terminate the here-document with its delimiter on a line of its own, or quote a `<<` that is not one, " +
+			"so the guard checks the command that actually runs.",
+	}
+}
+
 // skipHeredocBodies consumes the body of every pending here-document, starting
 // at pos (the first byte after the newline that ended the command line), and
 // returns the position just past the last body. The second return is false if
@@ -784,8 +864,8 @@ func readHeredocDelim(line string, pos int) (heredoc, int, error) {
 // mistook for one (an identifier-operand arithmetic shift, `$((1<<shift))`,
 // reads as a delimiter word). Either way, silently consuming the remainder of
 // the line as unchecked "body" text would swallow real commands with no
-// signal; the caller turns a false result into ErrUnparsableCommand so the
-// guard fails open LOUDLY on it instead of silently.
+// signal; the caller flags the opening command so Check fails CLOSED on it,
+// never an error, which the hook would turn into a fail-open.
 func skipHeredocBodies(line string, pos int, pending []heredoc) (int, bool) {
 	for _, hd := range pending {
 		found := false

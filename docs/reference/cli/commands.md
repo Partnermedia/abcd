@@ -449,7 +449,12 @@ bundled defaults merged with this repo's `.abcd/guard.json` — and reports
 allow, warn, or block. A blocker exits 1 and names the safe successor; a
 warn exits 0 with the warning rendered; an allow exits 0. A guard that
 cannot be evaluated at all (an unparsable command line, a malformed
-registry) exits 2, so a caller never reads silence as clearance.
+registry) exits 2, so a caller never reads silence as clearance. Unparsable
+means what no shell would run either — an unterminated quote. Two grammar
+states a shell does run get a verdict instead: a trailing backslash is read
+as bash reads it, and a here-document whose delimiter line never comes is
+a block, because the rest of the input may be commands the guard did not
+check.
 
 Matching is shell-token-aware and applies in command position only, so a
 hazard named inside a quoted argument never fires.
@@ -514,7 +519,10 @@ Anything the adapter cannot turn into a decision — an unreadable payload, a
 tool call that is not a shell command, an unparsable command line, a
 registry that will not load — allows the command and warns loudly on
 stderr. A guard that cannot answer never stops a session, and is never
-silently absent.
+silently absent. Unparsable means what no shell would run either (an
+unterminated quote); a trailing backslash and a here-document with no
+delimiter line are grammar a shell does run, so each gets a verdict — the
+backslash is read as bash reads it, the unterminated document blocks.
 
 ### `abcd history`
 

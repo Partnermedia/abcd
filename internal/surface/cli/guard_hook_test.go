@@ -124,6 +124,32 @@ func TestGuardHookFailsOpenLoud(t *testing.T) {
 	}
 }
 
+// TestGuardHookBlocksWhatBashWouldRun — GHSA-5wx3-2c86-fjpx. Two inputs the
+// tokenizer used to refuse are inputs bash RUNS: a trailing backslash (dropped
+// by bash 3.2 and zsh) and a here-document body with no delimiter line
+// (recovered silently). On the hook a tokenizer error is fail-open, so each was
+// a one-byte bypass of every blocker. Both must now reach the blocking status
+// with the entry named, while the unterminated-quote row in
+// TestGuardHookFailsOpenLoud stays a loud fail-open: no shell runs that one.
+func TestGuardHookBlocksWhatBashWouldRun(t *testing.T) {
+	for name, command := range map[string]string{
+		"trailing backslash":            "git push --force origin main \\",
+		"unterminated heredoc body":     "git push --force origin main <<EOF\n",
+		"spaced arithmetic then hazard": "echo $(( x << y ))\ngit push --force origin main",
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := guardRepo(t)
+			_, stderr, code := runGuard(preToolUse(t, "Bash", command, dir), "guard", "hook")
+			if code != 2 {
+				t.Errorf("bash runs this line, so the hook must block it: want exit 2, got %d (stderr %q)", code, stderr)
+			}
+			if !strings.Contains(stderr, "git-push-force") {
+				t.Errorf("the block must name the entry; stderr = %q", stderr)
+			}
+		})
+	}
+}
+
 // TestGuardHookBrokenRepoConfigKeepsBundledHazardsArmed pins the fail-SAFE
 // doctrine of iss-2608261551087492. A malformed repo .abcd/guard.json must NOT
 // disable the whole guard: the repo's own overrides are dropped, but the bundled

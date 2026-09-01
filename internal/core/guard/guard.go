@@ -386,6 +386,14 @@ func (r Registry) Check(command string) (Decision, error) {
 			break
 		}
 	}
+	// An unterminated here-document is the same shape: a tokenizer state that
+	// is bash grammar, not a fault, which the hook would otherwise fail open on.
+	for _, s := range segs {
+		if s.heredocUnterminated {
+			signals = append(signals, heredocBlockSignal())
+			break
+		}
+	}
 
 	ids := make([]string, 0, len(r.Entries))
 	for id := range r.Entries {

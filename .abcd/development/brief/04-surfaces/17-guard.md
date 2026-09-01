@@ -44,6 +44,17 @@ only format it:
 | `warn` | exit 0, warning rendered | exit 0, warning on stderr |
 | `block` | exit 1, why + successor rendered | the host's blocking status, why + successor as the message |
 
+Two verdicts have no registry entry behind them and are the guard's own voice,
+reported under reserved ids no entry may claim: a word the tokenizer cannot
+expand (`brace-expansion-unexpanded`) and a here-document whose delimiter line
+never comes (`heredoc-unterminated`). Both are **blocks**. They are tokenizer
+states, but they are not faults: bash runs both lines, so an error — which the
+hook maps to fail-open — would hand the command through unguarded, and a quiet
+allow would trust a `<<` the classifier has misread before (iss-184). The same
+reading gives a trailing backslash a verdict rather than an error: it is parsed
+as bash 3.2 parses it (dropped), the reading under which a hazard executes.
+What stays unparsable is what no shell runs either — an unterminated quote.
+
 A guard that cannot be **evaluated** — an unparsable command line, a registry
 that will not load, a candidate too long to read, a registry switched off — is a
 fourth case, and the two front doors part company on it deliberately:

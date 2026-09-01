@@ -8,7 +8,9 @@ import "errors"
 // session — it only names it.
 var (
 	// ErrUnparsableCommand is a candidate command line the shell tokenizer
-	// cannot split (an unterminated quote, a trailing backslash).
+	// cannot split — an unterminated quote, which no shell runs either. A state
+	// bash DOES run (a trailing backslash, an unterminated here-document) is
+	// never this error: the hook maps it to fail-open, so those get a verdict.
 	ErrUnparsableCommand = errors.New("guard: unparsable command line")
 
 	// ErrMalformedConfig is a per-repo .abcd/guard.json that is unreadable or
