@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/intentdriven/abcd/internal/core/recordid"
+	"github.com/intentdriven/abcd/internal/core/update"
 	"github.com/intentdriven/abcd/internal/fsutil"
 	"github.com/intentdriven/abcd/internal/termsafe"
 )
@@ -224,7 +225,7 @@ func decodePayload(raw []byte) (Payload, error) {
 	case p.SchemaVersion == 0:
 		return Payload{}, errors.New("verdict payload is missing schema_version")
 	case p.SchemaVersion > SchemaVersion:
-		return Payload{}, fmt.Errorf("verdict schema v%d; this abcd knows up to v%d — upgrade abcd",
+		return Payload{}, update.TooNew("verdict",
 			p.SchemaVersion, SchemaVersion)
 	case p.SchemaVersion != SchemaVersion:
 		return Payload{}, fmt.Errorf("unsupported verdict schema_version %d", p.SchemaVersion)
