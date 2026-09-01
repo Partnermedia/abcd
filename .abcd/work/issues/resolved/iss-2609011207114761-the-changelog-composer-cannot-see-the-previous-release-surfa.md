@@ -9,6 +9,10 @@ found_during: "the v0.7.0 cut, docs-currency gate"
 found_at: "agents/release-changelog-composer.md"
 origin: researcher-authored
 production_mode: hand-written
+resolution: "The composer writes only Added and Fixed until it can see the previous release: writableSections in internal/core/release is the one declaration of the set, the ingest refuses Changed, Deprecated, Removed and Security by name and by ruling, every derived section carries one sentence under its heading saying what the notes list and do not claim, and the composer prompt's table is pinned to the set by test. A breaking record is an Added line that states the break."
+impact: fix
+resolved_by:
+  commit: "d45a2312"
 ---
 
 The changelog composer cannot see the previous release surface, so its `Changed`
@@ -51,6 +55,8 @@ that would have used them.
 - pursued: the prompt-side half is fixed in this same change, adding a `base_tag`
   baseline rule to the section-choice guidance, because a release record that
   fabricates a migration is falsifiable by anyone who reads the previous tag
+
+- pursued: the prompt-side half is fixed in this same change, adding a `base_tag`
 
 ## What is still open
 
