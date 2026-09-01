@@ -15,6 +15,7 @@ import (
 	"github.com/intentdriven/abcd/internal/core/recordid"
 	"github.com/intentdriven/abcd/internal/core/spec"
 	"github.com/intentdriven/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/termsafe"
 )
 
 // audit.go — the intent-audit outbox+inbox (itd-80 phase 4; renamed from
@@ -939,18 +940,28 @@ func hasCitedEvidence(ev []verdictEvidence) bool {
 	return false
 }
 
+// maxNoteFieldBytes caps one untrusted verdict field rendered into the committed
+// Audit Notes. It matches the release ingest's per-entry cap: a rationale, a
+// claim or a quoted line is a sentence or a few, and an unbounded field is the
+// one a hostile verdict uses to bury the record.
+const maxNoteFieldBytes = 4096
+
 // oneLine sanitises an untrusted verdict string before it is rendered into the
-// committed Audit Notes. It collapses newlines (so injected content cannot break
-// out of its line) AND neutralises HTML-comment delimiters, so untrusted content
-// can never forge an `<!-- abcd-review: <STATE> receipt=<rcp> -->` marker to spoof
-// review state, misroute a future ingest, or poison idempotency into a false
-// no-op. Every untrusted field rendered into the record passes through here.
+// committed Audit Notes. It is termsafe.CleanProseLine under this package's cap,
+// NOT a second sanitiser: that package is the canonical home for the
+// untrusted-prose cleaner every host-delegated ingest boundary needs, and routing
+// through it is what gives this record the same guarantees the others have —
+// newlines collapse (so injected content cannot break out of its line), HTML
+// comment delimiters are broken apart (so untrusted content can never forge an
+// `<!-- abcd-review: <STATE> receipt=<rcp> -->` marker to spoof review state,
+// misroute a future ingest, or poison idempotency into a false no-op), raw HTML
+// cannot open, terminal-display attack runes are masked, and markdown link
+// syntax is neutralised so a faithful quotation of code such as
+// `items[0](itm-0001)` cannot trip the links_resolve gate on the record this
+// ingest just wrote (iss-2608311504353427). Every untrusted field rendered into
+// the record passes through here.
 func oneLine(s string) string {
-	s = strings.ReplaceAll(s, "\r", " ")
-	s = strings.ReplaceAll(s, "\n", " ")
-	s = strings.ReplaceAll(s, "<!--", "< !--")
-	s = strings.ReplaceAll(s, "-->", "-- >")
-	return strings.TrimSpace(s)
+	return termsafe.CleanProseLine(s, maxNoteFieldBytes)
 }
 
 func orDash(s string) string {
