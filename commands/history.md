@@ -16,8 +16,11 @@ Capture of a live session is split across two hooks. SessionEnd only **stages**
 the raw transcript, because redacting at exit costs roughly 0.7s per MB and the
 host cancels a shutdown hook rather than wait, which silently dropped every
 transcript past a couple of megabytes. The next SessionStart drains staging into
-the store. `staged` shows what has ended but is not yet stored; `drain` finishes
-it without waiting for another session.
+the store. Staging is locked and keyed on content: a SessionEnd that re-fires
+for a session with identical bytes is a no-op, one with different bytes replaces
+the staged copy, so a session has one staged copy and the newer snapshot wins.
+`staged` shows what has ended but is not yet stored; `drain` finishes it without
+waiting for another session.
 
 ## List
 
