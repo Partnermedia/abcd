@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -131,6 +132,88 @@ func TestCaptureGitleaksLoudStagePropagates(t *testing.T) {
 	for _, r := range recs {
 		if r.SessionID == "sess-loud" {
 			t.Error("a record was written despite the loud-stage failure")
+		}
+	}
+}
+
+// TestCaptureRefusesWhenAugmentedSpanIsNotMasked pins GHSA-j7v5-q7x6-v3rp's
+// asymmetric-verification limb at the store: an augmented finding whose span
+// Redact could not apply (here a line number past the end of the text, which
+// Redact silently skips) must make Capture refuse the write. Without a span-
+// exact verify the record is written with the secret verbatim and its
+// frontmatter counts the finding as redacted — a record asserting cleanliness
+// over bytes it holds.
+func TestCaptureRefusesWhenAugmentedSpanIsNotMasked(t *testing.T) {
+	repoRoot, home := setupStore(t)
+
+	restore := scanGitleaks
+	t.Cleanup(func() { scanGitleaks = restore })
+	scanGitleaks = func(_, _, logical string) ([]scanner.Finding, error) {
+		return []scanner.Finding{{
+			File:     logical,
+			Line:     999, // a span Redact cannot apply
+			Column:   1,
+			Kind:     "gitleaks:generic-api-key",
+			Severity: scanner.SeverityHardFail,
+			Matched:  gitleaksResidueSecret,
+		}}, nil
+	}
+
+	transcript := strings.Join([]string{
+		"user: set the key",
+		"api_key = " + gitleaksResidueSecret,
+		"assistant: done",
+	}, "\n")
+
+	res, err := Capture(repoRoot, testRootSHA, "sess-unsealed", []byte(transcript), "native")
+	var rerr *RedactionResidualError
+	if !errors.As(err, &rerr) {
+		t.Fatalf("Capture = (wrote=%v, err=%v); want a *RedactionResidualError for the unmasked augmented span", res.Wrote, err)
+	}
+	if res.Wrote {
+		t.Error("Capture reported Wrote=true alongside a refusal")
+	}
+	tdir := filepath.Join(home, ".abcd", "history", testRootSHA, "transcripts")
+	entries, err := os.ReadDir(tdir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		data, err := os.ReadFile(filepath.Join(tdir, e.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if bytes.Contains(data, []byte(gitleaksResidueSecret)) {
+			t.Errorf("the secret is on disk in %s despite the refusal", e.Name())
+		}
+	}
+}
+
+// TestCaptureFailsClosedOnUnlocatableGitleaksReport is the store-level echo of
+// the adapter's ErrFindingNotLocated: a report the adapter could not place
+// makes Capture refuse and write nothing, exactly as an armed-but-absent binary
+// does (TestCaptureGitleaksLoudStagePropagates). Silently capturing with less
+// coverage than the repo armed is the fail-open this store forbids.
+func TestCaptureFailsClosedOnUnlocatableGitleaksReport(t *testing.T) {
+	repoRoot, _ := setupStore(t)
+
+	restore := scanGitleaks
+	t.Cleanup(func() { scanGitleaks = restore })
+	scanGitleaks = func(_, _, _ string) ([]scanner.Finding, error) {
+		return nil, gitleaks.ErrFindingNotLocated
+	}
+
+	_, err := Capture(repoRoot, testRootSHA, "sess-unlocated", []byte("user: hi\n"), "native")
+	if !errors.Is(err, gitleaks.ErrFindingNotLocated) {
+		t.Fatalf("Capture did not fail closed on an unlocatable gitleaks report: %v", err)
+	}
+	recs, lerr := List(testRootSHA)
+	if lerr != nil {
+		t.Fatalf("List: %v", lerr)
+	}
+	for _, r := range recs {
+		if r.SessionID == "sess-unlocated" {
+			t.Error("a record was written despite the refused augmentation")
 		}
 	}
 }

@@ -47,6 +47,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -86,6 +87,15 @@ var ErrConfiguredNotFound = errors.New("gitleaks configured but not found")
 // it is equally loud: the history store fails closed on it, and the adapter
 // never falls back to PATH after refusing a configured path.
 var ErrConfiguredPathRefused = errors.New("gitleaks configured path refused")
+
+// ErrFindingNotLocated is returned when gitleaks reported a finding whose
+// Secret and Match both occur nowhere in the scanned text, so there is no span
+// to redact. It is loud for the reason ErrConfiguredNotFound is: a repo that
+// armed the adapter must not store a transcript the external scanner flagged
+// while the record counts zero findings (GHSA-j7v5-q7x6-v3rp). The history
+// store fails closed on it; the remedy is the rule that reported the value, or
+// enabled:false.
+var ErrFindingNotLocated = errors.New("gitleaks finding not located in the text")
 
 // Config is the on-disk opt-in shape (.abcd/config/gitleaks.json). Absent file
 // means not opted in (the default).
@@ -164,7 +174,9 @@ func Scan(repoRoot, text, logical string) ([]scanner.Finding, error) {
 //   - opted in, binary absent: returns ErrConfiguredNotFound (loud-stage).
 //   - opted in, binary present but inadmissible (admitBinary): returns
 //     ErrConfiguredPathRefused (loud-stage), with no fallback to PATH.
-//   - opted in, binary present and admitted: runs it and converts its findings.
+//   - opted in, binary present and admitted: runs it and converts its findings;
+//     a report it cannot place in the text is ErrFindingNotLocated (loud-stage),
+//     never a dropped finding.
 func (a *Adapter) Augment(ctx context.Context, repoRoot string, cfg Config, text, logical string) ([]scanner.Finding, error) {
 	if !cfg.Enabled {
 		return nil, nil
@@ -181,7 +193,7 @@ func (a *Adapter) Augment(ctx context.Context, repoRoot string, cfg Config, text
 	if err != nil {
 		return nil, fmt.Errorf("gitleaks: cannot parse report: %w", err)
 	}
-	return toFindings(text, logical, reports), nil
+	return toFindings(text, logical, reports)
 }
 
 // resolveBinary finds the gitleaks binary and admits it under admitBinary. A
@@ -350,19 +362,37 @@ func parseReport(raw []byte) ([]report, error) {
 
 // toFindings converts gitleaks reports into scanner.Findings positioned against
 // the scanned text, so scanner.Redact masks them exactly as it masks a native
-// secret (byte-span fingerprint). It locates each secret by CONTENT — searching
-// the text for the reported value rather than trusting gitleaks' line/column
-// indexing — which keeps the byte column exact for sealLine and is robust
-// across gitleaks versions. Every line carrying the value gets a finding, so a
-// value repeated on several lines is redacted on each.
+// secret (byte-span fingerprint). It locates each reported value by CONTENT in
+// the whole text — the reported Secret, or Match when the Secret does not occur
+// verbatim (a rule that reports a decoded credential while the transcript holds
+// the encoded form) — rather than trusting gitleaks' line/column indexing,
+// which keeps the byte column exact for sealLine and is robust across gitleaks
+// versions. Every occurrence gets a finding — a value repeated on several
+// lines, or echoed twice on one (a request with its response, a retry log), is
+// redacted at each — so after Redact no occurrence of a located value remains,
+// which is what lets the store verify an augmented finding by its bytes.
 //
-// A single-line credential (generic-api-key, the rule iss-96's measurement
-// showed doing the work) is fully covered. A multi-line secret (a PEM block) is
-// skipped here — it is already native-covered by token:pem_private_key — so this
-// adapter never has to reason about spans that cross a line boundary.
-func toFindings(text, logical string, reports []report) []scanner.Finding {
+// A value that spans lines is split into one finding per line it crosses, each
+// carrying that line's fragment, so the line-scoped sealLine masks every line
+// of it. gitleaks' default private-key rule reports the key BODY this way, and
+// the native pem_private_key pattern matches the BEGIN header only, so this
+// split is the one thing that sees the body when the adapter is armed; a
+// custom multi-line rule is covered the same way. A report that locates
+// nothing is ErrFindingNotLocated: this adapter never drops a finding it was
+// handed (GHSA-j7v5-q7x6-v3rp).
+func toFindings(text, logical string, reports []report) ([]scanner.Finding, error) {
 	lines := strings.Split(text, "\n")
-	var out []scanner.Finding
+	// Byte offset at which each line starts, to map a whole-text hit to a
+	// (line, column) the line-scoped redactor understands.
+	starts := make([]int, len(lines))
+	for i, off := 0, 0; i < len(lines); i++ {
+		starts[i] = off
+		off += len(lines[i]) + 1
+	}
+	lineAt := func(pos int) int {
+		// The last line starting at or before pos.
+		return sort.Search(len(starts), func(i int) bool { return starts[i] > pos }) - 1
+	}
 	// One Finding per (line, column, value) span: two reports of the same
 	// value each locate every occurrence, so the same span must not be
 	// reported once per report.
@@ -371,46 +401,56 @@ func toFindings(text, logical string, reports []report) []scanner.Finding {
 		value     string
 	}
 	seen := map[span]bool{}
+	var out []scanner.Finding
 	for _, r := range reports {
-		needle := r.Secret
-		if needle == "" {
-			needle = r.Match
-		}
-		if needle == "" || strings.ContainsAny(needle, "\n\r") {
-			continue
-		}
 		kind := "gitleaks:" + r.RuleID
 		if r.RuleID == "" {
 			kind = "gitleaks:generic"
 		}
-		for i, ln := range lines {
-			// Every occurrence on the line, not the first: gitleaks reports a
-			// secret echoed twice on one line (a request with its response, a
-			// retry log) as two reports, and a search that never advances past
-			// its first hit positions both on the first occurrence, leaving the
-			// second one verbatim after redaction.
-			for start := 0; start < len(ln); {
-				idx := strings.Index(ln[start:], needle)
+		located := false
+		for _, needle := range []string{r.Secret, r.Match} {
+			if needle == "" {
+				continue
+			}
+			for from := 0; from < len(text); {
+				idx := strings.Index(text[from:], needle)
 				if idx < 0 {
 					break
 				}
-				col := start + idx
-				start = col + len(needle)
-				if seen[span{i, col, needle}] {
-					continue
+				hit := from + idx
+				from = hit + len(needle)
+				// One finding per line the value crosses; a fragment that is
+				// only whitespace has nothing to seal.
+				pos := hit
+				for _, frag := range strings.Split(needle, "\n") {
+					if strings.TrimSpace(frag) != "" {
+						i := lineAt(pos)
+						col := pos - starts[i]
+						if !seen[span{i, col, frag}] {
+							seen[span{i, col, frag}] = true
+							out = append(out, scanner.Finding{
+								File:     logical,
+								Line:     i + 1,
+								Column:   col + 1, // 1-based byte column, matching sealLine
+								Kind:     kind,
+								Severity: scanner.SeverityHardFail,
+								Matched:  frag,
+								Snippet:  lines[i],
+							})
+						}
+						located = true
+					}
+					pos += len(frag) + 1
 				}
-				seen[span{i, col, needle}] = true
-				out = append(out, scanner.Finding{
-					File:     logical,
-					Line:     i + 1,
-					Column:   col + 1, // 1-based byte column, matching sealLine
-					Kind:     kind,
-					Severity: scanner.SeverityHardFail,
-					Matched:  needle,
-					Snippet:  ln,
-				})
+			}
+			if located {
+				break
 			}
 		}
+		if !located {
+			return nil, fmt.Errorf("%w: rule %s reported a value that occurs nowhere in the transcript; fix the rule or set enabled:false",
+				ErrFindingNotLocated, strings.TrimPrefix(kind, "gitleaks:"))
+		}
 	}
-	return out
+	return out, nil
 }

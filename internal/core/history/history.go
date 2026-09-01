@@ -184,8 +184,13 @@ func Capture(repoRoot, rootSHA, sessionID string, raw []byte, kind string) (Capt
 	}
 
 	// Stage two — verify. Re-scan the redacted text; a surviving finding that
-	// carries a leak blocks the write (fail-closed).
+	// carries a leak blocks the write (fail-closed). The native re-scan cannot
+	// see an augmented span — a different detector found it — so every
+	// augmented finding is verified by its bytes instead, and a survivor blocks
+	// the write the same way: verification is symmetric with detection
+	// (GHSA-j7v5-q7x6-v3rp).
 	residual := scanner.BlockingResidual(sc.ScanText(redacted, "transcript"))
+	residual = append(residual, unsealedAugmented(redacted, extra)...)
 	if len(residual) > 0 {
 		return CaptureResult{Residual: residual}, &RedactionResidualError{Residual: residual}
 	}
@@ -268,6 +273,37 @@ func Read(rootSHA, sessionOrFile string) (Record, []byte, error) {
 	}
 	rec.Path = match.Path
 	return rec, []byte(body), nil
+}
+
+// unsealedAugmented returns, for every augmented finding whose reported bytes
+// still occur anywhere in the redacted text, a finding naming its kind and
+// declared position with the bytes withheld (the error it feeds lists kinds
+// only). Presence anywhere is the right test, not the declared span: the
+// adapter locates every occurrence of a value across the whole text and
+// secret kinds are sealed length-preservingly, so after Redact no occurrence
+// of a located value can legitimately remain, while a span compare would drift
+// under the identity placeholders Redact rewrites after the seal (they change
+// line lengths) and would miss a finding whose declared position Redact could
+// not apply at all — the exact case in which the record would otherwise count
+// a redaction it never performed. Re-running gitleaks over the redacted text
+// is the other symmetric shape; it doubles a 30 s-timeout subprocess and is not
+// deterministic across rule sets, so the bytes the adapter reported are what
+// is checked.
+func unsealedAugmented(redacted string, extra []scanner.Finding) []scanner.Finding {
+	var out []scanner.Finding
+	for _, f := range extra {
+		if f.Matched == "" || !strings.Contains(redacted, f.Matched) {
+			continue
+		}
+		out = append(out, scanner.Finding{
+			File:     f.File,
+			Line:     f.Line,
+			Column:   f.Column,
+			Kind:     f.Kind,
+			Severity: f.Severity,
+		})
+	}
+	return out
 }
 
 // countBuckets rolls the redacted findings into the two audit counters stamped
