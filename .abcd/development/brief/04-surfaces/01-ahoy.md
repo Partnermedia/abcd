@@ -33,8 +33,10 @@ announces that it writes before it runs — and each also ships on the CLI as
 - **`/abcd:ahoy install`** — install or update the plugin in this repo
   (idempotent; covers first-install and upgrade). Runs the detection pass, then
   the apply pass over the resulting gaps.
-- **`/abcd:ahoy uninstall`** — reversible marker-only removal: removes the
-  marker block and abcd's own `PATH` entry (if owned by this plugin).
+- **`/abcd:ahoy uninstall`** — reversible removal: removes the marker block,
+  abcd's own `PATH` entry (if owned by this plugin) and the provenance record
+  that proves that ownership. `--bin-dir` names the directory holding the entry,
+  needed only when `install --bin-dir` put it somewhere not on `PATH`.
   NEVER mutates `hooks/hooks.json` (plugin-static per spc-14 T7 + spc-16 T1).
   Leaves `.abcd/` intact. Re-running `install` re-installs cleanly.
 - **`/abcd:ahoy dry-run`** — run the detection pass and render the
@@ -272,7 +274,9 @@ detection (step 7) is only meaningful because the marker block has one
 canonical source. The name guard `install` writes comes from the same directory
 (`pre-commit`, `pre-merge-commit`) — the generalised form of the prototype this
 repo runs on itself, with the repo-specific gates dropped, embedded so the binary
-is self-contained.
+is self-contained. The `prepare-commit-msg` prompt that `install --attribution`
+opts a repo into — asking every commit to declare whether a tool assisted it —
+is the fourth file in that directory.
 The `.abcd/rules.json` skeleton is written inline by the apply pass
 (`stepRules`); a later phase moves it — and `.abcd/usage.md`, once that artefact
 ships — to canonical files under `defaults/` too.
@@ -291,9 +295,15 @@ unmanaged-repo adoption question, `--docs-target` (`claude_md` | `agents_md` |
 `--scan-deep` (`true` | `false`) toggles the deep scan, `--visibility`
 (`private` | `public`) sets repo visibility, `--dev` selects track-latest
 dogfood mode (the PATH entry rebuilds from the source tip on every call instead
-of pinning the built binary), and `--allow-stale-binary` proceeds even when the
+of pinning the built binary), `--allow-stale-binary` proceeds even when the
 running binary is stale against its source tip or of undeterminable vintage
-(the default refuses before any write and names the rebuild fix). `--yes` does not adopt an
+(the default refuses before any write and names the rebuild fix), `--bin-dir`
+names the directory for the `PATH` entry (default `~/.local/bin`, or an existing
+abcd install adopted in place; a directory abcd cannot write refuses, because
+abcd never escalates privileges), and `--attribution` opts the repo into the
+committed `prepare-commit-msg` prompt asking every commit to declare whether a
+tool assisted it — the choice is recorded, so a later install without the flag
+keeps the hook. `--yes` does not adopt an
 unmanaged repo or pin an unset git identity — those still need `--adopt` and an
 answered prompt. The identity-pin exclusion is stated, never assumed: `--yes`
 names it in its own help, the install envelope carries it as `optional_skipped`,
@@ -431,9 +441,11 @@ notes the orphaned-predecessor possibility in the summary.
 ## Sub-verb semantics
 
 **Uninstall (`/abcd:ahoy uninstall`):** removes the BEGIN/END marker block from
-CLAUDE.md/AGENTS.md and abcd's own `PATH` entry (`~/.local/bin/abcd`, or wherever
-on `PATH` it sits) **if it points at this
-plugin** (otherwise leave it alone). `hooks/hooks.json` is plugin-static per
+CLAUDE.md/AGENTS.md, abcd's own `PATH` entry (`~/.local/bin/abcd`, or wherever
+on `PATH` it sits) **if it points at this plugin** (otherwise leave it alone),
+and the provenance record by which that ownership is proven; `--bin-dir` names
+the directory holding the entry when `install --bin-dir` put it somewhere not on
+`PATH`. `hooks/hooks.json` is plugin-static per
 spc-14 T7 — uninstall NEVER mutates it (per spc-16 T1 brief amendment).
 **Leaves the entire `.abcd/` namespace intact** (`config/`, `config.json`,
 `rules.json`, `development/`, `work/`, `memory/`) and the history store. Deeper

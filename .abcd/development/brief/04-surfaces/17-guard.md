@@ -139,8 +139,9 @@ at all:
   along with the `su -c` / `runuser -c` / `script -c` / `flock -c` family; what
   is not read is a payload the tokenizer cannot resolve, which warns;
 - a hazard inside a NON-shell interpreter's payload (`python -c`, `perl -e`) — one
-  opaque token the tokenizer cannot read: today a silent allow, not a warn. A loud
-  warn for it is a recorded design target, not yet implemented (iss-315);
+  opaque token the tokenizer cannot read: a silent allow, not a warn. The silent
+  allow is the recorded posture (iss-315, resolved) and no open record tracks a
+  warn: warning on every such payload is the storm adr-42 avoids;
 - one launched through a known wrapper carrying a value-taking flag the matcher's
   per-wrapper table does not name: `sudo -u bob <hazard>` is seen, the bundled
   short form `sudo -Hu bob <hazard>` reaches only the fail-safe's warn, not the

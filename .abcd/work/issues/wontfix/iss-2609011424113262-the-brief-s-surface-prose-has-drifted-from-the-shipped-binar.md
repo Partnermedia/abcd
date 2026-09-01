@@ -9,6 +9,7 @@ found_during: "the v0.7.0 cut, iss35 full-tier crosscheck"
 found_at: ".abcd/development/brief/04-surfaces/"
 origin: researcher-authored
 production_mode: hand-written
+wontfix_reason: "duplicate of iss-2609011424033603: the same twenty-one pre-existing findings captured twice from one receipt; this record carries the fuller body, and the resolution with fixing-commit provenance is recorded on the earlier id"
 ---
 
 The brief's surface prose has drifted from the shipped binary in twenty-one
@@ -91,6 +92,8 @@ in the binary without landing in the chapters that describe it.
 - deferred: not fixed in the v0.7.0 cut, because none of it is caused by or
   blocking this release and the cut was already two rounds deep in gate
   corrections; deferring was the maintainer's recorded decision at PROMOTE
+
+- declined: duplicate of iss-2609011424033603: the same twenty-one pre-existing findings captured twice from one receipt; this record carries the fuller body, and the resolution with fixing-commit provenance is recorded on the earlier id
 
 ## Worth deciding, not just fixing
 

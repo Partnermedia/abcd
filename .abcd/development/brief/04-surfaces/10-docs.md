@@ -38,9 +38,8 @@ when a maintainer asks.
   documentation cites can be confirmed.
 
 Bare `abcd docs` prints command usage — it does **not** render a status board;
-the bare-status convention is scoped to
-`ahoy`/`banlist`/`capture`/`identity`/`memory`/`intent`/`spec`
-and bare `abcd`, not to `docs`. The global `--json` flag emits the
+the [surfaces index](README.md) carries the one enumeration of where the
+bare-status convention holds, and `docs` is not on it. The global `--json` flag emits the
 machine-readable payload. The working verbs — `lint`, `cite refresh`, and
 `cite confirm` — accept `--config` (path to the
 `docs-lint.json` it loads, default `<root>/.abcd/docs-lint.json`) and `--root`
