@@ -94,6 +94,11 @@ are commitments, not options.
   receipt file; the network use is already granted (the user typed the
   verb). A copy matching no release stays foreign and is refused with the
   occupant described.
+- **Reversed 2026-08-21 by itd-132 (confirmed by the maintainer 2026-09-01).**
+  The persistent-data-dir alternative rejected below was adopted one day later
+  as spc-35's download cache with a copied PATH file; itd-132 carries the
+  typed link. The paragraph that follows stays as the record of what was
+  ruled on 2026-08-20.
 - **The binary's home stays the plugin root.** [[itd-108]]'s one-cut
   coherence (fresh root → matching binary) is preserved structurally;
   cold-start once per plugin update is the accepted cost — the 2026-08-20
