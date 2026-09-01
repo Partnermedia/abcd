@@ -1,7 +1,7 @@
 ---
 name: reading
 description: Assemble the input a cold reading is handed and validate the output it returns, by invoking the abcd binary. Bare invocation is a read-only status render; assemble produces the assembled input and its hashed manifest, and ingest validates one reading's output and writes its records.
-argument-hint: "[] | assemble --position <widening|entailment|detection> --target <HEAD|sha> --scope <record-id|kind|preset> [--out <dir>] [--dry-run] | ingest --reading-json <path>"
+argument-hint: "[] | assemble --position <widening|entailment|detection> --target <HEAD|sha> --scope <itd-N|spc-N|kind|preset> [--out <dir>] [--dry-run] | ingest --reading-json <path>"
 ---
 
 # `/abcd:reading` — cold-reading input assembler
@@ -47,7 +47,7 @@ tag is refused, because it moves and the manifest's re-runnability rests on a
 reference that cannot.
 
 `--scope` names what the reading is **about**, and is required. It takes one
-token in a closed grammar: a record id (`itd-N`, `spc-N`, `adr-N`, `iss-N`), a
+token in a closed grammar: a record id (`itd-N`, `spc-N`), a
 material kind, or the name of a preset committed in
 `.abcd/config/reading-presets.json`. **No repository path is accepted here** —
 a path may be named only inside the committed preset file, where it is
@@ -73,7 +73,10 @@ Report from the JSON: `run_id`, `position`, `target_commit`, `item_count`,
 `manifest_hash`, and — where the run wrote — `out_dir` and `artefacts`.
 
 Report `scope` too: the token the operator gave, the selectors it resolved to,
-and whether the run was an override.
+and `scope_overridden` — true when the run named a record or a kind directly
+rather than a committed preset. Say plainly when a run was overridden, because
+a run nobody can tell departed from the reviewed presets is a run whose drift
+is invisible.
 
 Also report `size`, on every run including a dry run: the total `bytes` and
 `tokens_est`, and each row of `by_kind` (`kind`, `items`, `bytes`,

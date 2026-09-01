@@ -30,6 +30,9 @@ not exercised at all, and that outcome is recorded as such rather than answered.
 
 ### Repository sources the assembler admits at this position
 
+_This position does not currently assemble; see the Object section. What follows
+is what it would receive if the channel its object needs existed._
+
 - `.abcd/development/brief/01-product` — the construal as it presently stands.
 - `.abcd/development/brief/02-constraints` — the platform, the dependency stance, the invariants and the naming.
 - `.abcd/development/brief/glossary` — the committed terms.
@@ -38,6 +41,11 @@ not exercised at all, and that outcome is recorded as such rather than answered.
 - `.abcd/development/specs` — the design record a capability was built against.
 - `.` — the shipped tree: source, tests, delivered documentation, root prose and build configuration.
 
+
+**What this section states, and what governs.** This section states what your
+position MAY read. A bundle states what THIS run was actually given, and where
+the two disagree the bundle governs — the same rule every other position
+carries, recorded here so it is already true if the channel below ever exists.
 
 **This position does not currently assemble.** Your object is the widening
 reading's pre-admission output, which is not repository material, and no channel

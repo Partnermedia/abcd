@@ -319,7 +319,8 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 		key := fmt.Sprintf("itm-%04d", i+1)
 		bundle.Items = append(bundle.Items, BundleItem{ItemKey: key, Kind: c.kind, Text: c.text})
 		manifest.Items = append(manifest.Items, ManifestItem{
-			ItemKey: key, Path: c.path, Field: c.field, Kind: c.kind, SHA256: sha256Hex([]byte(c.text)),
+			ItemKey: key, Path: c.path, Field: c.field, Kind: c.kind,
+			Bytes: len(c.text), SHA256: sha256Hex([]byte(c.text)),
 		})
 	}
 

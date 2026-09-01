@@ -46,8 +46,13 @@ itd-198's and landed first; a fifth position; the comparative channel itself.
 
 A scope is one token in a closed grammar of three forms, resolved in this order:
 
-1. **A record id** — `itd-N`, `spc-N`, `adr-N`, `iss-N`. Selects the items
-   whose path names that record.
+1. **A record id** — `itd-N` or `spc-N`. Selects the items whose path names
+   that record. `adr-N` and `iss-N` are deliberately NOT in the grammar: the
+   include table names no decisions store and no issue store, so those tokens
+   would validate, resolve, select nothing and end in the selects-nothing
+   refusal at every position, while the CLI help and the generated reference
+   advertised them. An affordance that can never work is worse than an absent
+   one, because the operator's first move is to doubt their own invocation.
 2. **A family token** — resolved as a **material kind** from `Kinds()`.
 3. **A preset name** — a key of the committed preset file.
 
@@ -100,7 +105,7 @@ whitespace, uses backslash separators, or is `.` — a scope that selects the
 whole repository narrows nothing, and a path carrying an escape sequence reaches
 a rendered terminal line, which brief invariant 13 forbids.
 
-**The file must be tracked at HEAD and must not be a symlink.** adr-58 admits a
+**The file must be known to git and must not be a symlink.** adr-58 admits a
 preset name at the invocation on the ground that it is committed and reviewed,
 and the amended invariant 15 says so — so that has to be checked rather than
 assumed. The dirty gate cannot supply it, and adversarial review demonstrated
@@ -113,6 +118,22 @@ permanently unreviewed and freely mutable with every gate green. Both stamped
 "ran as reviewed" on an examination establishing only "git reported no
 modification", which is brief invariant 16's forbidden shape. The remedy is to
 make the code hold what the invariant claims, not to soften the claim.
+
+Precisely: `trackedSet` reads the git INDEX, not HEAD, so on its own it
+establishes "known to git" rather than "committed". The committed property is
+delivered by that check TOGETHER with the dirty gate, which refuses an
+added-but-uncommitted preset as an `A ` entry. Both halves are needed — the
+dirty gate alone missed an ignored file, and the tracked check alone would admit
+a staged one — and saying "tracked at HEAD" would credit one line with what the
+pair delivers.
+
+**The shipped preset file is itself validated.** Every other test overwrites it
+with a fixture, so the file the whole committed-and-reviewed argument rests on
+was checked by nothing and could have shipped malformed, or with `warm` no
+longer extending `cold`, or with `cold` degenerate at a position, with every
+gate green. Three tests now load the committed file: that it parses, that the
+shipped warm contains the shipped cold at every assembling position, and that
+cold scopes the three positions distinctly.
 
 **Duplicate preset keys are refused.** Go's decoder takes the last silently, so
 a second block low in the file would replace the reviewed one while a reviewer
@@ -192,8 +213,10 @@ the position MAY read, the bundle states what THIS run was given, and where they
 disagree the bundle governs. Without it a reading holds two accounts of its
 object with no rule between them, and reports the difference as a finding.
 
-The comparative definition gets a different sentence, because its position
-refuses: it records that the position is not currently assembled and why.
+The comparative definition carries the precedence sentence too, and then a
+second paragraph recording that the position is not currently assembled and
+why. An earlier draft gave it only the second, which left ac-12's "each
+definition" true of three of four.
 
 ### The dirty gate and the operand pin
 

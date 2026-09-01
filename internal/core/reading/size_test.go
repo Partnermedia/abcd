@@ -487,3 +487,90 @@ func TestDecodeManifestRefusesAnItemWithoutAKind(t *testing.T) {
 		}
 	}
 }
+
+// TestTheSizeReportIsCheckableAgainstTheManifest is the criterion the intent
+// actually stated — "so the report is checkable against the manifest rather
+// than asserted beside it" — held rather than approximated.
+//
+// The kind alone did not deliver it: an auditor could recompute per-kind item
+// COUNTS from the manifest and not per-kind BYTES, which is the figure the
+// intent exists to add. The manifest now carries each item's length, so this
+// test rebuilds the whole report from the manifest and demands it match.
+func TestTheSizeReportIsCheckableAgainstTheManifest(t *testing.T) {
+	root := fixtureRepo(t)
+	res := assembleFixture(t, root, PositionWidening)
+
+	rebuilt := map[Kind]*KindSize{}
+	var totalBytes, totalItems int
+	for _, m := range res.Manifest.Items {
+		k, ok := rebuilt[m.Kind]
+		if !ok {
+			k = &KindSize{Kind: m.Kind}
+			rebuilt[m.Kind] = k
+		}
+		k.Items++
+		k.Bytes += m.Bytes
+		totalItems++
+		totalBytes += m.Bytes
+	}
+	if totalItems != res.Size.Items || totalBytes != res.Size.Bytes {
+		t.Errorf("the manifest rebuilds to %d items / %d bytes; the report says %d / %d",
+			totalItems, totalBytes, res.Size.Items, res.Size.Bytes)
+	}
+	for _, row := range res.Size.ByKind {
+		got, ok := rebuilt[row.Kind]
+		if !ok {
+			t.Errorf("the report names kind %q, which the manifest does not corroborate", row.Kind)
+			continue
+		}
+		if got.Items != row.Items || got.Bytes != row.Bytes {
+			t.Errorf("kind %q: manifest says %d items / %d bytes, report says %d / %d",
+				row.Kind, got.Items, got.Bytes, row.Items, row.Bytes)
+		}
+		if want := estimateTokens(got.Bytes); want != row.TokensEst {
+			t.Errorf("kind %q: the manifest's bytes estimate %d tokens, the report says %d",
+				row.Kind, want, row.TokensEst)
+		}
+	}
+	// And the byte length must be the length of the text that actually
+	// travelled, not of the file on disk.
+	for i, m := range res.Manifest.Items {
+		if m.Bytes != len(res.Bundle.Items[i].Text) {
+			t.Errorf("%s: the manifest says %d bytes, the bundle carries %d",
+				m.ItemKey, m.Bytes, len(res.Bundle.Items[i].Text))
+		}
+	}
+}
+
+// TestRenderCannotForgeARowBoundary closes the collision channel fidelity review
+// found in ac-9's absolute claim.
+//
+// Render() flattens the table into an unescaped pipe-delimited markdown table
+// and nothing constrained the free-text fields it digests, so a Rule containing
+// a newline and pipes could forge a row boundary and make two structurally
+// different tables render — and therefore stamp — identically. That is the same
+// author-controlled channel the spec cited to refuse a truncated digest, left
+// open against rendering ambiguity while it was closed against truncation.
+func TestRenderCannotForgeARowBoundary(t *testing.T) {
+	for _, row := range Table {
+		fields := map[string]string{"Source": row.Source, "Rule": row.Rule, "Store": row.Store,
+			"Bucket": row.Bucket, "Kind": string(row.Kind)}
+		for _, m := range row.Match {
+			fields["Match "+m] = m
+		}
+		for _, m := range row.MatchSuffix {
+			fields["MatchSuffix "+m] = m
+		}
+		for _, f := range row.Fields {
+			fields["Field "+f] = f
+		}
+		for name, val := range fields {
+			if strings.ContainsAny(val, "|\n\r") {
+				t.Errorf("row %q field %s contains a pipe or newline (%q); the rendering the "+
+					"assembler version digests is an unescaped table, so such a value can forge "+
+					"a row boundary and make two different tables stamp alike",
+					row.Source, name, val)
+			}
+		}
+	}
+}

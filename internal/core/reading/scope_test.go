@@ -2,6 +2,7 @@ package reading
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -374,7 +375,10 @@ func TestAScopeSelectingNothingRefuses(t *testing.T) {
 	root := fixtureRepo(t)
 	_, err := Assemble(AssembleRequest{
 		RepoRoot: root, Position: PositionWidening, Target: "HEAD",
-		Scope: "adr-9999", DryRun: true,
+		// A well-formed id of an admitted family that names no record in the
+		// fixture. It must be a token the grammar ACCEPTS, or this tests the
+		// unknown-token refusal instead of the selects-nothing one.
+		Scope: "itd-9999", DryRun: true,
 	})
 	if err == nil {
 		t.Fatal("a scope selecting no item assembled an empty bundle")
@@ -720,4 +724,86 @@ func gitStatusPorcelain(t *testing.T, root string) string {
 		t.Fatalf("git status: %v", err)
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// TestTheShippedPresetFileIsValid loads the COMMITTED preset configuration, not
+// a fixture.
+//
+// This is the gap fidelity review called the largest in the change, and it was
+// exactly right: every other test in this file overwrites
+// .abcd/config/reading-presets.json with its own, so the file the whole
+// "committed, reviewed, shape-validated" argument rests on — the one adr-58
+// cites to admit a preset name at the invocation at all — was checked by
+// nothing. It could have shipped malformed, or with `cold` empty at a position,
+// and `make preflight` would have stayed green.
+func TestTheShippedPresetFileIsValid(t *testing.T) {
+	root := repoRoot(t)
+	pf, err := LoadPresets(root)
+	if err != nil {
+		t.Fatalf("the committed preset file does not load: %v", err)
+	}
+	for _, want := range []string{"cold", "warm"} {
+		if _, ok := pf.Presets[want]; !ok {
+			t.Errorf("the committed presets do not name %q", want)
+		}
+	}
+}
+
+// TestTheShippedWarmContainsTheShippedCold holds ac-11 against the file that
+// ships, not against a fixture.
+//
+// The union is by construction, but the LINKAGE is by configuration: nothing in
+// validatePresets requires a preset named warm to extend cold, so deleting the
+// `extends` line would let warm be narrower than cold with every gate green.
+// This is the gate.
+func TestTheShippedWarmContainsTheShippedCold(t *testing.T) {
+	pf, err := LoadPresets(repoRoot(t))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	cold, warm := pf.Presets["cold"], pf.Presets["warm"]
+	if warm.Extends != "cold" {
+		t.Fatalf("the shipped warm preset extends %q, not cold; warm is cold plus a delta by "+
+			"construction, and that construction is the `extends` line", warm.Extends)
+	}
+	for _, p := range AssemblingPositions() {
+		c := presetSelectors(pf, cold, p)
+		w := presetSelectors(pf, warm, p)
+		have := make(map[Selector]bool, len(w))
+		for _, s := range w {
+			have[s] = true
+		}
+		for _, s := range c {
+			if !have[s] {
+				t.Errorf("position %s: the shipped warm does not contain cold's selector %+v", p, s)
+			}
+		}
+	}
+}
+
+// TestTheShippedColdScopesEveryAssemblingPositionDistinctly holds ac-9 against
+// the committed file. The measured finding this intent exists to fix is that
+// three positions received a byte-identical item set; a preset that scoped them
+// alike would reproduce it exactly, and only the shipped file can say.
+func TestTheShippedColdScopesEveryAssemblingPositionDistinctly(t *testing.T) {
+	pf, err := LoadPresets(repoRoot(t))
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	seen := map[string]Position{}
+	for _, p := range AssemblingPositions() {
+		sels := presetSelectors(pf, pf.Presets["cold"], p)
+		if len(sels) == 0 {
+			t.Errorf("the shipped cold preset scopes nothing at %s, so that position cannot "+
+				"assemble at all", p)
+			continue
+		}
+		key := fmt.Sprintf("%v", sels)
+		if other, dup := seen[key]; dup {
+			t.Errorf("the shipped cold preset gives %s and %s the same scope; a table that cannot "+
+				"say what a reading is about cannot distinguish readings about different things",
+				other, p)
+		}
+		seen[key] = p
+	}
 }
