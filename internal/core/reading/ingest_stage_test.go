@@ -591,3 +591,35 @@ func TestTheBareRenderNamesAnOrphanedIngestStage(t *testing.T) {
 		t.Errorf("the swept orphan is still reported: %v", status.OrphanedIngests)
 	}
 }
+
+// TestTheBareRenderTellsALeftoverStageFromAnOrphan: a stage directory survives
+// in two different states. An ingest that never reached its commit marker
+// leaves one, and so does a commit path whose RemoveAll failed AFTER run.json
+// landed. The sweep already tells them apart — rollbackRun probes the commit
+// marker and leaves a committed run's records alone — so a render that calls
+// both "an orphan whose records will be rolled back" is stating something the
+// sweep will not do. The render probes the same marker and reports the two
+// cases under different keys.
+func TestTheBareRenderTellsALeftoverStageFromAnOrphan(t *testing.T) {
+	f := newIngestFixture(t, "detection")
+	f.mustIngest(f.payload(1))
+
+	// The shape a failed RemoveAll leaves: the commit marker is down and the
+	// stage is still there.
+	f.write(IngestStageDir+"/"+f.runID+"/"+stageFileName,
+		[]byte(`{"_type":"`+StageType+`","run_id":"`+f.runID+`","records":[]}`))
+	if !f.exists(ReadingsRecordDir + "/" + f.runID + "/" + RunFileName) {
+		t.Fatal("the fixture's run did not commit, so this case proves nothing")
+	}
+
+	status, err := Describe(f.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(status.OrphanedIngests) != 0 {
+		t.Errorf("a committed run's leftover stage is reported as an orphan: %v", status.OrphanedIngests)
+	}
+	if len(status.LeftoverStages) != 1 || status.LeftoverStages[0] != f.runID {
+		t.Errorf("the render reports leftover stages %v, want [%s]", status.LeftoverStages, f.runID)
+	}
+}

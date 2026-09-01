@@ -935,3 +935,48 @@ func TestTheStatusRenderPrintsAnOrphanedIngest(t *testing.T) {
 		t.Errorf("the render does not say what an orphan means:\n%s", out)
 	}
 }
+
+// TestTheStatusRenderTellsALeftoverStageFromAnOrphan: the interrupted line says
+// a run's records "are in the ledger for a run with no commit marker" and will
+// be swept. That is true of an orphan and false of a committed run whose stage
+// merely failed to clear, so the two are rendered apart and the page that tells
+// a host what to report names both keys.
+func TestTheStatusRenderTellsALeftoverStageFromAnOrphan(t *testing.T) {
+	base := reading.Status{
+		AssemblerVersion: reading.AssemblerVersion(), SchemaVersion: 1,
+		Positions: reading.Positions(), Definitions: []string{"cold-reading-detection"},
+		LeftoverStages: []string{"rdg-2608310000000091"},
+	}
+	var buf bytes.Buffer
+	renderReadingStatus(&buf, base)
+	out := buf.String()
+	if !strings.Contains(out, "rdg-2608310000000091") {
+		t.Errorf("the render does not name the leftover stage:\n%s", out)
+	}
+	if !strings.Contains(out, "committed") || !strings.Contains(out, "clears the stage") {
+		t.Errorf("the render does not say the run committed and only its stage goes:\n%s", out)
+	}
+	if strings.Contains(out, "interrupted") || strings.Contains(out, "commit marker") {
+		t.Errorf("a committed run's leftover stage is rendered as an orphan:\n%s", out)
+	}
+
+	// Both at once render as two lines, each naming its own run.
+	base.OrphanedIngests = []string{"rdg-2608310000000092"}
+	buf.Reset()
+	renderReadingStatus(&buf, base)
+	out = buf.String()
+	if !strings.Contains(out, "interrupted:    rdg-2608310000000092") {
+		t.Errorf("the orphan line lost its run:\n%s", out)
+	}
+	if strings.Contains(out, "interrupted:    rdg-2608310000000091") {
+		t.Errorf("the leftover stage is listed on the orphan line:\n%s", out)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(repoRootFromTest(t), "commands", "reading.md"))
+	if err != nil {
+		t.Fatalf("read the plugin surface: %v", err)
+	}
+	if !strings.Contains(string(raw), "leftover_stages") {
+		t.Error("commands/reading.md does not name leftover_stages, so a host is never told to report it")
+	}
+}

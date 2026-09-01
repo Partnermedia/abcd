@@ -31,13 +31,20 @@ To render the assembler's state:
 Summarise the JSON for the user: `assembler_version`, `include_rows` and
 `exclusion_rows` (what the table admits and what it refuses), `definitions`
 (the reading definitions present under `agents/`), `staged_runs` (runs an
-assembly has parked in the local tier), and `orphaned_ingests`. Zero writes.
+assembly has parked in the local tier), `orphaned_ingests`, and
+`leftover_stages`. Zero writes.
 
 **`orphaned_ingests` is not routine.** Each name is a run whose ingest reached
 the ledger and never reached its commit marker, so its reading records are
 sitting in the committed ledger for a run that never happened. Report it
 whenever it is non-empty, and say that the next ingest that validates rolls
 those records back.
+
+**`leftover_stages` is the other thing a stage can be, and it is not an
+orphan.** Each name is a run that DID commit — its `run.json` is down — and
+whose stage merely failed to clear afterwards. Its records stay. Report it,
+and say that the next ingest that validates clears the stage alone; never say
+its records will be rolled back, because they will not be.
 
 ## Assemble one reading's input
 
@@ -235,12 +242,15 @@ An ingest interrupted before that marker leaves a stage in the local tier.
 Every later invocation names that orphan; the next one whose payload validates
 sweeps it: it **rolls that run's reading records out of the committed ledger** —
 the run never happened, so it must leave none — and clears the stage. Until
-then the bare verb reports it as `orphaned_ingests`. A refused run destroys no
-other run's records and reports the orphans it left in place; the one rollback
-a refusal does perform is of its OWN earlier crashed attempt, because a refused
-run leaves no reading records. The ids a sweep removed are reported however the
-invocation ends. One ingest runs at a time in a checkout: a second waits, and
-reports contention rather than sweeping the first one's records away.
+then the bare verb reports it as `orphaned_ingests`. A stage left behind AFTER
+the marker — the commit path could not clear it — is reported as
+`leftover_stages` instead: that run is complete, and the sweep clears the stage
+and leaves its records alone. A refused run destroys no other run's records and
+reports the orphans it left in place; the one rollback a refusal does perform is
+of its OWN earlier crashed attempt, because a refused run leaves no reading
+records. The ids a sweep removed are reported however the invocation ends. One
+ingest runs at a time in a checkout: a second waits, and reports contention
+rather than sweeping the first one's records away.
 
 Report from the JSON: `run_id`, `records`, `refused_items`, `review_flags`,
 `cleared_stages`, `rolled_back_records`, `pending_stages`, and `run_record` —

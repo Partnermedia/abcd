@@ -290,6 +290,15 @@ func renderReadingStatus(w io.Writer, s reading.Status) {
 			"commit marker, and the next ingest that validates sweeps them\n",
 			strings.Join(s.OrphanedIngests, ", "))
 	}
+	// A leftover stage is the other state a stage survives in, and it is NOT an
+	// orphan: the run committed and only its stage failed to clear. It gets a
+	// line of its own so it is never listed beside a run whose records are
+	// about to be rolled back (iss-2609012043437282).
+	if len(s.LeftoverStages) > 0 {
+		fmt.Fprintf(w, "  leftover stage: %s; the run committed and its records stay, and the next ingest "+
+			"that validates clears the stage alone\n",
+			strings.Join(s.LeftoverStages, ", "))
+	}
 }
 
 // renderAssembleResult writes one assembly's text render.
