@@ -76,6 +76,23 @@ go test ./internal/core/                 # a single package
 go test -run TestStatus ./internal/core/ # a single test
 ```
 
+**In a source checkout of abcd, every abcd invocation is `go run ./cmd/abcd
+<verb>` from the repo root** — never the plugin-root binary and never an `abcd`
+on PATH. Both are whatever version was last published, and in this repository
+that is the thing being developed, so they are stale by construction and fall
+further behind with every commit: a verb, flag, schema field or refusal added
+since the last release is unknown to them. The failure is not always a
+refusal. `launch ship` refuses on its surface guard, loudly and correctly, but
+`changelog --json` returned an empty cut against a tree holding 181 shipped
+records, and `capture` would have written records through a schema the record
+gates no longer accept — a plausible wrong answer, not an error. The plugin
+command pages document a resolution ladder that reaches the plugin-root binary
+first and falls through to `go run` only when nothing earlier resolves; in this
+checkout the first rung exists and answers, so the fallback written for exactly
+this case is never reached by following the ladder literally
+(iss-2608230943088357 holds the surface half). The loader's `DOGFOODING` domain
+in `.abcd/rules.json` injects this rule on a prompt that names an abcd verb.
+
 CI (`.github/workflows/ci.yml`) runs its `check` job on macOS + Linux — build,
 vet, test and the race-enabled internal tests on both, with the `gofmt -l .`
 format gate, the record-lint and docs-lint steps and the site-render gate on

@@ -71,6 +71,20 @@
         "Deferral is a real answer and is recorded as one; silence is never consent, and a step whose answer is missing is asked again rather than assumed.",
         "Address the reader in their register: a product thinker gets outcomes and choices in product terms, no record ids, no code, no internals; a technical facilitator gets the mechanism, the ids and the trade-offs. When it is not known which hat the human wears, the first question asks that, and the itd-200 mode is the record of the answer."
       ]
+    },
+    "DOGFOODING": {
+      "recall": [
+        "capture",
+        "launch",
+        "changelog",
+        "ahoy",
+        "version",
+        "ship",
+        "release"
+      ],
+      "rules": [
+        "In a source checkout of abcd itself, every abcd invocation is `go run ./cmd/abcd <verb>` from the repo root — never the plugin-root binary and never an `abcd` on PATH. Both are the last PUBLISHED version, stale by construction here and further behind with every commit, and the failure is often silent rather than a refusal: an empty `changelog --json` cut, a record written through a schema the gates no longer accept. The documented resolution ladder reaches the plugin-root binary first and it answers, so the `go run` fallback is never reached by following it; go straight to `go run ./cmd/abcd` (AGENTS.md, Build, test, and checks)."
+      ]
     }
   },
   "schema_version": 1
