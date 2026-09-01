@@ -86,7 +86,12 @@ failing categories. Receipts live at `.abcd/work/reviews/<commit-sha>/<gate>.jso
 has a PROMOTE receipt whose subject digest is the target commit, whose
 `policy.detector` names that gate, and which pins a judge model; a missing,
 mismatched, malformed, HOLD, model-less, or wrong-detector receipt **blocks** the
-release (fail-closed — an un-run semantic pass is never a silent pass).
+release (fail-closed — an un-run semantic pass is never a silent pass). Pinned
+is checked by shape: `judgeModel` must carry a version or date component
+(`claude-opus-4-8`, a dated snapshot id) and must not be a rolling alias — a
+bare family name (`opus`) or anything naming `latest` is refused, because a
+receipt that cannot say which judge produced it cannot be re-run against that
+judge.
 
 A receipt is bound to its gate by its `policy.detector` value, not by its
 filename: the `<gate>.json` at `.abcd/work/reviews/<sha>/` must carry
