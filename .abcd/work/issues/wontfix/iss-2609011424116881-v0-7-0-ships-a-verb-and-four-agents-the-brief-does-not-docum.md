@@ -9,6 +9,7 @@ found_during: "the v0.7.0 cut, iss35 full-tier crosscheck"
 found_at: ".abcd/development/brief/05-internals/08-skills.md"
 origin: researcher-authored
 production_mode: hand-written
+wontfix_reason: "duplicate of iss-2609011424033149: the same fifteen release-introduced findings captured twice from one receipt; this record carries the fuller body, and the resolution with fixing-commit provenance is recorded on the earlier id"
 ---
 
 v0.7.0 ships a verb and four agents the brief does not document anywhere. These
@@ -78,6 +79,8 @@ things are wrong.
   brief files and the release was already two rounds deep in gate corrections;
   deferring was the maintainer's recorded decision at PROMOTE, with the split
   from the pre-existing drift recorded so this half is not lost inside it
+
+- declined: duplicate of iss-2609011424033149: the same fifteen release-introduced findings captured twice from one receipt; this record carries the fuller body, and the resolution with fixing-commit provenance is recorded on the earlier id
 
 ## Scope for the follow-up
 
