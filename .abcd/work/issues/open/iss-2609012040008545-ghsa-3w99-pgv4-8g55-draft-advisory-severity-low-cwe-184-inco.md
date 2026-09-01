@@ -1,0 +1,14 @@
+---
+schema_version: 1
+id: "iss-2609012040008545"
+slug: "ghsa-3w99-pgv4-8g55-draft-advisory-severity-low-cwe-184-inco"
+severity: "minor"
+category: "security"
+source: "review-followup"
+found_during: "autonomous-run-2026-09-01"
+origin: researcher-authored
+production_mode: hand-written
+found_at: "internal/core/guard/match.go"
+---
+
+GHSA-3w99-pgv4-8g55 (draft advisory, severity low; CWE-184, Incomplete List of Disallowed Inputs): a hazard whose argv bash rewrites by glob expansion is an allow. `tokenize` (internal/core/guard/tokenize.go) has no glob branch — `*`, `?` and `[...]` fall to the default word branch and quotes are stripped as they are read, so nothing records that a metacharacter was unquoted — and `matchSegment` (internal/core/guard/match.go) compares the command name, operands 0/1 and every flag alternative literally. So `git pus? --force origin main`, `git push --forc? origin main`, `g?t push --force origin main`, `git push --for[c]e origin main`, `git push --force* origin main` (which expands to --force-with-lease, a member of the entry's own flag group) and the same spellings inside `sh -c` / `eval` payloads all allow, while a file named push, --force or git in the working directory makes bash run the hazard. Tier 2 cannot reach either shape: a flag is never a speculative start and a globbed command name resolves to a name no entry knows. The fix must record per token that it carried an unquoted, unescaped glob metacharacter, and at the positions an entry constrains — command name, subcommand/subcommand2, flag and flag-value alternatives — treat a literal the glob CAN produce (path.Match, decidable from the string with no filesystem read and no cwd) as produced, the fail-closed reading: the guard cannot see the post-cd directory and a file named for the hazard is the cheapest condition. Unconstrained positions are untouched, so `ls *`, `git add *.md`, the quoted and backslash-escaped spellings and the repo corpus stay allow; a segment behind the zsh `noglob` wrapper skips the compare. Siblings named as out of scope: the `wrappers` lookup in commandOf (`sud? rm -rf *` reaches Tier 2's warn, acceptable); the `isShellFamily`, execStringVerbs and singleStringLaunchers lookups (a globbed interpreter name keeps its payload one opaque token, a silent allow of iss-315's shape); `pathArgMatches` (a path glob needs a directory tree named for it in cwd); the `--flag=value` and short-cluster forms of a globbed flag and extended globs (extglob, `**`), which path.Match does not model — the simple compare is a floor; `set -f` as a separate segment (over-block direction, rare); tilde, $VAR and $(…), which need state outside the string and are adr-42's documented residual.
