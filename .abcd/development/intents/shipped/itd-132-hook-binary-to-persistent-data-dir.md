@@ -45,6 +45,10 @@ downloaded artefact.
 
 ## Decisions
 
+- **Reverses itd-130's 2026-08-20 decision** that "the persistent-data-dir
+  alternative is rejected, not deferred": the shape ruled below adopts that
+  alternative as a download cache. Recorded as a reversal, not a refinement,
+  at the maintainer's confirmation on 2026-09-01 (iss-2609012111150528).
 - **Shape (maintainer-ruled at the planning interview, 2026-08-21).** The
   data dir is a **download cache, not an execution home**: bootstrap fetches
   and verifies the release artefact into `${CLAUDE_PLUGIN_DATA}` once, and
