@@ -7,6 +7,7 @@ suggested_kind: null
 reclassification_history: []
 builds_on: []
 severity: major
+impact: additive
 ---
 
 # The brief's surface chapters are a generated reflection of the shipped surface, so a shape claim cannot drift
@@ -100,47 +101,76 @@ commitments, not options.
 
 ## What's In Scope
 
-- **A generated shape block per surface chapter**, derived from the same command
-  tree that already produces `docs/reference/cli/commands.md` and
-  `.abcd/development/release/surface.json`, with a drift test that fails when the
+- **One generated appendix per chapter.** Each surface chapter carries a single
+  generated block at its end, under a marker. The block is derived from the same
+  command tree that already produces `docs/reference/cli/commands.md` and
+  `.abcd/development/release/surface.json`, and a drift test fails when the
   committed block and the tree disagree.
-- **A seam that keeps prose hand-written.** The generated region is delimited so
-  a chapter's rationale is never machine-authored and never clobbered.
+- **Flags and sub-verbs, first.** The block carries the verb's flags and its
+  sub-verbs, because those are what the command tree records today. Exit codes
+  and JSON output fields stay prose until the binary records them somewhere a
+  generator can read; the seam is built so admitting them later is a generator
+  change, not a re-cut.
+- **Every chapter carries a block, including a staged one.** A chapter whose
+  surface has not shipped gets an empty block that says so — there is no shipped
+  surface — so a reader learns the surface is unbuilt from the same place they
+  read the flags, rather than from the block's absence.
+- **A marker that keeps prose hand-written.** The generated region is delimited,
+  so a chapter's rationale above the marker is never machine-authored and never
+  clobbered, and the prose above the marker states no flag and no sub-verb.
 - **The trust rule as an ADR plus a brief invariant:** shape claims are derived,
   never hand-authored.
 - **Retiring the hand-written shape prose** the generated block replaces, chapter
   by chapter, so the 124 findings are closed by construction rather than by a
   sweep that starts rotting the next day.
+- **`surface_coverage` stays, and says what it is.** It remains the row-level
+  presence check over the surfaces index, labelled as such, so nothing reads it
+  as a chapter-correctness gate.
 
 ## What's Out of Scope
 
+- **A claim about external state.** A third category surfaced while this was
+  drafted and fits neither half of the split: a claim that is checkable in
+  principle but has no local source to check against — the worked example is
+  `wrangler.jsonc` recording a dashboard setting with no durable local home,
+  where eight of eight pull requests on 2026-08-23 built through an integration
+  the record says is off. It is the most dangerous of the three shapes, because
+  the plan to change the external state and the assertion that it had changed
+  were written by the same hand in the same file, and it reads as a completed
+  decision rather than as an unchecked claim. Neither generation nor prose
+  reaches it. The two-way split stands for this intent; the category is held by
+  iss-2608231607594913 (refining iss-2608220150157502) and a remedy that reads
+  the real external state is that record's to propose.
 - **A "you changed a surface, so touch its chapter" gate.** It forces an edit
   without forcing correctness, which is a phantom gate — worse than none, and the
   precise class this intent is an instance of.
 - **A new principle.** `one-canonical-primitive` already says it; this is an
   application, and the confirmed decomposition records "none new" deliberately.
 - **Generating the rationale.** Prose about why is the half that cannot drift and
-  the half worth a human.
+  the half worth a human. This intent therefore does not make a hand-maintained
+  behavioural claim safe: ordering guarantees, failure semantics and what a verb
+  refuses stay prose and stay hand-maintained.
 - **Fixing the 147 by hand ahead of the seam.** The corpus is evidence; a hand
   sweep destroys the dataset and buys a clean brief that drifts again at the
   measured rate.
 
 ## Mechanism
 
+> _Facilitator-seeded from the measurement this intent rests on. The maintainer
+> stated no mechanism claim at the interview; strike this line and the paragraph
+> under it if it is not the claim being made._
+
 We expect this to work because it has already worked here, once, on the same
-class of content. `docs/reference/cli/commands.md` is generated from the command
-tree and pinned by `TestReferenceMatchesCommittedPage`; it returned zero
-discrepancies on the day the hand-written brief returned 147. The mechanism is
-not novel and needs no new infrastructure: the generator, the snapshot and the
-drift test all exist and are exercised every CI run.
+class of content: `docs/reference/cli/commands.md` is generated from the command
+tree and pinned by `TestReferenceMatchesCommittedPage`, and it returned zero
+discrepancies on the day the hand-written brief returned 147. The mechanism needs
+no new infrastructure — the generator, the snapshot and the drift test all exist
+and run every CI pass — and a `false-claim` or `stale-count` finding about a
+generated block in the next crosscheck run is what would show it wrong.
 
 ## Scope Conditions
 
-This holds only where a claim is derivable from the command tree. A chapter's
-claims about behaviour that no snapshot captures — ordering guarantees, failure
-semantics, what a verb refuses and why — stay prose and stay hand-maintained,
-and this intent does not make them safe. If the crosscheck's residue after the
-seam lands is dominated by that kind of claim, the remedy is a different one.
+None stated.
 
 ## SOTA
 
@@ -153,64 +183,54 @@ shape is where the drift is.
 
 ## Acceptance Criteria
 
-- **Given** a surface chapter with a generated shape block, **when** a verb gains
-  a flag or a sub-verb and the block is not regenerated, **then** the drift test
-  fails and names the chapter and the missing claim.
-- **Given** a chapter's hand-written rationale, **when** the shape block is
-  regenerated, **then** the prose is unchanged.
+- **Given** a surface chapter with a generated appendix under its marker,
+  **when** a verb gains a flag or a sub-verb and the appendix is not regenerated,
+  **then** the drift test fails and names the chapter and the missing claim.
+- **Given** a chapter's hand-written rationale above the marker, **when** the
+  appendix is regenerated, **then** nothing above the marker changes.
+- **Given** a chapter whose surface has not shipped, **when** the generator runs,
+  **then** the chapter carries an empty block under the same marker stating there
+  is no shipped surface, so the reader learns the surface is unbuilt from where
+  they would have read the flags.
+- **Given** the generated appendix, **when** it is composed, **then** it carries
+  the verb's flags and sub-verbs and nothing else — an exit code or a JSON output
+  field stays prose until the binary records it where a generator can read it.
+- **Given** a surface chapter's prose above the marker, **when** it is checked,
+  **then** it states no flag and no sub-verb; the shape claims live only in the
+  appendix.
 - **Given** a full-tier brief-to-surface crosscheck run after the seam lands,
   **when** its findings are classified, **then** no finding is a `false-claim` or
-  `stale-count` about a claim the generated block covers.
-- **Given** a chapter whose surface has no snapshot representation, **when** the
-  generator runs, **then** it emits no block for that chapter rather than an
-  empty or speculative one, and says so.
+  `stale-count` about a flag or a sub-verb the generated appendix covers.
+- **Given** `surface_coverage`, **when** it reports, **then** it names itself as
+  the row-level presence check over the surfaces index and claims nothing about
+  whether a chapter's prose is correct.
 - **Given** the crosscheck's non-reproducibility (iss-2608231409595789),
   **when** progress is assessed, **then** it is assessed on which chapters are
   implicated rather than on a finding count, because the count is not a metric.
 
 ## Open Questions
 
-- Where exactly is the seam? Per chapter, per section, or a single generated
-  appendix per chapter? The per-section answer preserves the most rationale and
-  costs the most machinery.
-- Does the surface snapshot already carry enough to generate a useful block, or
-  does it need fields it does not record today (exit codes and schema fields are
-  the likely gaps)?
-- What happens to a chapter documenting a *staged* surface — one the brief marks
-  as designed but unbuilt? A generator that only knows the shipped tree cannot
-  emit those, and they are a real and deliberate part of the record.
-- Should `surface_coverage` be retired, folded into the drift test, or left as
-  the row-level check it is? Leaving it is defensible; leaving it *unlabelled* is
-  what let it read as a chapter-correctness gate.
+> _Every question below was put to the maintainer at the planning interview on
+> 2026-09-01 and answered there; the answers are the rulings in the Decisions
+> section above. The section is kept so a later reader sees what was asked._
 
-- **Is the shape/intent split actually a two-way one?** This intent assumes every
-  claim is either derivable from the command tree (generate it) or is rationale
-  that cannot drift against code (leave it prose). A third category surfaced
-  while this was being drafted and fits neither: a claim about **external** state
-  that is checkable in principle but has no local source to check against.
-
-  The worked example is `wrangler.jsonc`, which records a Cloudflare dashboard
-  setting — automatic branch builds disabled — with no durable local home. Eight
-  of eight pull requests on 2026-08-23 built through that integration, verified
-  by two independent routes. So the recorded state describes no observed build at
-  all (iss-2608231607594913, refining iss-2608220150157502).
-
-  That is not stale drift. A stale record was true once and can be regenerated
-  from its source; this one had no source, so its truth was never a property
-  anything could establish. Prose does not make it safe and no generator can
-  reach it.
-
-  It is also the most dangerous shape of the three, for a reason worth stating
-  plainly: the plan to change the external state was recorded, the record was
-  written as though the change had landed, and nothing anywhere could have caught
-  that it had not. The intent and the unverifiable assertion were written by the
-  same hand in the same file. It does not read as an unchecked claim. It reads as
-  a completed decision.
-
-  If this category is admitted, the remedy is neither generation nor prose but a
-  check that reads the real external state — and the scope of this intent widens.
-  The two-way split was confirmed by the maintainer, so this is recorded as a
-  question rather than folded in.
+- **Resolved — where the seam is.** One generated appendix per chapter, at the
+  end, under a marker. Not per section: the per-section cut preserves the most
+  rationale and costs the most machinery, and the appendix keeps the prose
+  hand-written for a fraction of it.
+- **Resolved — whether the snapshot carries enough.** Flags and sub-verbs only,
+  first. Exit codes and JSON output fields are the gaps, and they stay prose
+  until the binary records them somewhere a generator can read, rather than being
+  invented into the snapshot to fill the block.
+- **Resolved — a chapter documenting a staged surface.** It gets an empty block
+  that says there is no shipped surface. Every chapter carries a block, so a
+  reader never has to infer anything from a block's absence.
+- **Resolved — what happens to `surface_coverage`.** Left as the row-level check
+  it is, and labelled as that. Leaving it was always defensible; leaving it
+  unlabelled is what let it read as a chapter-correctness gate.
+- **Resolved — the third, external-state category.** Recorded as out of scope
+  above. The two-way split stands for this intent, and the category is held by
+  iss-2608231607594913, refining iss-2608220150157502.
 
 ## Audit Notes
 
@@ -227,3 +247,7 @@ and 3 are a controlled comparison — the brief is byte-identical between their
 commits, so the detector's whole subject was held constant and it still returned
 17% more findings. Which chapters are implicated is broadly stable; how many and
 of what class is not.
+
+## Grounds
+
+- pursued: a shape claim nobody writes by hand cannot drift; a false-claim or stale-count finding about a generated block in the next crosscheck run shows it was wrong
