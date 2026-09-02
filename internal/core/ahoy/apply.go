@@ -944,26 +944,34 @@ func (a *applyCtx) stepSymlink() {
 // A legacy owned symlink or a dev shim at the target is replaced (the heal); an
 // owned copy already matching is left alone. Without a usable cache it
 // degrades, loudly, to the spc-21 pinned symlink — there is nothing on disk
-// whose provenance a copy could record.
+// whose provenance a copy could record. The cache is reached through the
+// hook's CLAUDE_PLUGIN_DATA or, from the terminal the bootstrap's notice sends
+// the reader to, through the plugin root's .data-dir stamp
+// (iss-2609012111168716); the re-verification below is the same either way.
 func (a *applyCtx) installOwnedEntry(target string, kind binTargetKind) {
-	if reason := dataDirHazard(pluginDataDir(), a.cwd); reason != "" {
+	look := pluginDataDir(a.det.pluginRoot)
+	if reason := dataDirHazard(look.dir, a.cwd); reason != "" {
 		// Said before the degradation below, so the operator learns both that
 		// the cache was not used and why this one could never have been the
-		// harness's directory.
-		a.refuse("ignored the plugin data directory named by CLAUDE_PLUGIN_DATA: " + reason +
+		// harness's directory. The story names which source proposed it — the
+		// environment or the plugin root's stamp — because the refusal is the
+		// same either way but the thing to repair is not.
+		a.refuse("ignored the plugin data directory (" + look.story + "): " + reason +
 			". The harness's persistent data directory never has that shape, so nothing in it was trusted as a verified release artefact.")
 	}
-	if !ownedCopySourceReady(a.cwd) {
+	if !cacheSourceReady(look.dir, a.cwd) {
 		if kind != binTargetOwnedSymlink {
 			// Notes is the loud channel (see refuse): the degradation must be
 			// SAID, because a symlink into the plugin root dies at the next
-			// plugin update and a silent fallback would hide why.
-			a.refuse("no verified release artefact is available in the persistent plugin data directory, so the PATH entry was written as a symlink to the plugin-root binary — it will stop working when a plugin update replaces that directory. Re-run `abcd ahoy install` from a session whose hooks have provisioned the cache to upgrade it to an owned copy.")
+			// plugin update and a silent fallback would hide why — and it names
+			// every source tried, so the reader knows which one to restore.
+			a.refuse("no verified release artefact is available in the persistent plugin data directory (" + look.explainMissingCache() +
+				"), so the PATH entry was written as a symlink to the plugin-root binary — it will stop working when a plugin update replaces that directory. Start a session so the hooks provision the cache and record its location in the plugin root, then re-run `abcd ahoy install` to upgrade it to an owned copy.")
 		}
 		a.installPinnedSymlink(target, kind)
 		return
 	}
-	dataDir := pluginDataDir()
+	dataDir := look.dir
 	artefact := cacheAssetPath(dataDir)
 	want := cacheRecordedSHA(dataDir)
 	data, err := fsutil.ReadGuarded(artefact, maxBinaryArtefactBytes)
