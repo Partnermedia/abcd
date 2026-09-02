@@ -94,10 +94,21 @@ glossary/
 │   ├── end-user.md
 │   ├── release.md
 │   └── version.md
-└── interview/
+├── interview/
+│   ├── README.md
+│   ├── embark.md
+│   └── session.md
+└── ledger/
     ├── README.md
-    ├── embark.md
-    └── session.md
+    ├── admission.md
+    ├── cold-reading.md
+    ├── construal.md
+    ├── disposition.md
+    ├── lapse.md
+    ├── position.md
+    ├── read-block.md
+    ├── regime.md
+    └── warm.md
 ```
 <!-- END GENERATED: glossary-layout -->
 
@@ -210,6 +221,20 @@ The complete write-back protocol is a **design target** of `/abcd:intent grill`'
 |---|---|---|
 | [embark](interview/embark.md) | stable | The opening move of a grill session in which the oracle reads the target intent, identifies the primary ambiguities, and poses the first round of Socratic questions. |
 | [session](interview/session.md) | stable | One complete interactive exchange between a human and the abcd grill sub-verb, spanning all rounds of Socratic questioning through PRD synthesis for a single intent or brief section. |
+
+### ledger/
+
+| Term | Status | Definition |
+|---|---|---|
+| [admission](ledger/admission.md) | draft | The researcher's act of taking a widening reading's proposed configuration into the candidate set, recorded with grounds, as distinct from declining it. |
+| [cold-reading](ledger/cold-reading.md) | draft | A reading of committed artefacts by a disinterested party that has command of established patterns and no investment in the framing, receiving its input only through the assembler and producing items that each name the pattern they apply. |
+| [construal](ledger/construal.md) | draft | The statement of what the situation is being treated as, in one or two sentences, held in the brief's framing chapter as the frame a widening reading reads against. |
+| [disposition](ledger/disposition.md) | draft | The researcher's recorded response to one reading item, written as a separate record keyed to the item, in one of four states: accepted, rejected, declined or held. |
+| [lapse](ledger/lapse.md) | draft | A recorded point at which the recording discipline was suspended, deferred or evaded, captured as its own category in the issue ledger and timestamped at the lapse rather than at write-up. |
+| [position](ledger/position.md) | draft | One of the four places in the loop at which a cold reading is commissioned, each with its own object, question and supply regime: widening, entailment, comparative and detection. |
+| [read-block](ledger/read-block.md) | draft | The wall that keeps ledger content from a cold reading: positive inclusion at the assembler, field projection out of files that hold both cold and warm material, a manifest that enumerates what was passed, and an eval that fails when warm material reaches a reading. |
+| [regime](ledger/regime.md) | draft | The licence a reading holds at its position, naming what it may produce and what the ingest verb refuses or flags: generative, explicative, evaluative or registrative. |
+| [warm](ledger/warm.md) | draft | The researcher's reserved reasoning, and the ledger material it is performed against: frame origination and admission, selection, explanation, the judgement of when to stop, and every record of how a prior tension was raised or settled. |
 <!-- END GENERATED: glossary-index -->
 
 ---
