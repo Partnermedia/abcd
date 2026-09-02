@@ -38,40 +38,41 @@ var beforeOrphanRemoveHook func(cand string)
 // the same value the readers scan and the deterministic gates scope to, so a
 // folder can never be provisioned that one of them does not look in. Idempotent.
 //
-// The ancestors are provisioned one segment at a time from repoRoot, never with
-// MkdirAll: MkdirAll follows whatever is already there, and a committed symlink
-// at .abcd or .abcd/work in a hostile clone sent the whole store — the lock, the
-// status directories and the record — outside the checkout while the result
-// still reported a repo-relative path (GHSA-865x-5m7q-qm79).
+// It is ledgerDirs with create, and nothing besides: one list of directories,
+// judged by the same rule whether a verb is about to write the ledger or only
+// read it.
 func ensureLedgerDirs(repoRoot, issuesRoot string) error {
 	if !filepath.IsAbs(issuesRoot) {
 		return fmt.Errorf("issuesRoot must be absolute, got %q", issuesRoot)
 	}
-	if err := ledgerAncestors(repoRoot, issuesRoot, true); err != nil {
-		return err
-	}
-	if err := safeMkdirLeaf(issuesRoot); err != nil {
-		return err
-	}
-	for _, sub := range issueschema.StatusDirs {
-		if err := safeMkdirLeaf(filepath.Join(issuesRoot, sub)); err != nil {
-			return err
-		}
-	}
-	return nil
+	return ledgerDirs(repoRoot, issuesRoot, true)
 }
 
-// ledgerAncestors walks every path segment between repoRoot and the ledger's
-// parent — for the default ledger, `.abcd` then `.abcd/work` — and refuses any
-// that exists as something other than a real directory, so a committed symlink
-// on the way to the store can neither redirect a write nor make a read serialize
-// a ledger from outside the checkout. Every verb passes through resolveRoots,
-// which runs this without create so the READ paths are covered; the write paths
-// run it again with create from under ensureLedgerDirs, where a missing segment
-// is made one level at a time with os.Mkdir (safeMkdirLeaf) — never MkdirAll,
-// which follows whatever is already there. Without create, a missing segment
-// ends the walk: nothing below it can exist, and an absent ledger is a state the
-// readers already tolerate.
+// ledgerDirs judges every directory the ledger is reached through and every
+// directory the ledger IS, refusing any that exists as something other than a
+// real directory. Exactly three groups, in this order:
+//
+//  1. each path segment between repoRoot and the ledger's parent — for the
+//     default ledger, `.abcd` then `.abcd/work`;
+//  2. issuesRoot itself;
+//  3. every issueschema.StatusDirs entry under it — open, resolved, wontfix.
+//
+// All three, because a symlink at ANY of them redirects the store: a committed
+// `.abcd` or `.abcd/work` sent the whole store — the lock, the status
+// directories and the record — outside the checkout while the result still
+// reported a repo-relative path (GHSA-865x-5m7q-qm79), and a committed `issues`
+// or `open` did the same to a read, because os.ReadDir follows a symlinked
+// directory and the guarded record reader's O_NOFOLLOW covers only the final
+// component. Guarding the first group alone left `capture list --json` and the
+// bare status render serializing a sibling checkout's records from a fresh
+// clone, under repo-relative paths.
+//
+// With create, each is provisioned one level at a time with os.Mkdir
+// (safeMkdirLeaf) — never MkdirAll, which follows whatever is already there.
+// Without create — the form every verb runs through resolveRoots, so the READ
+// paths are covered — an absent directory is not a fault: an unprovisioned
+// ledger is a state the readers already tolerate, and nothing can hide behind a
+// directory that is not there.
 //
 // The walk is modelled on memory.memoryDir (the GHSA-72rp fix) and carries the
 // same residue: the window between one segment's Lstat and its Mkdir is a
@@ -79,36 +80,40 @@ func ensureLedgerDirs(repoRoot, issuesRoot string) error {
 // the package-wide follow-up iss-2609012037143368 records.
 //
 // An issuesRoot outside repoRoot is an operator-typed operand with no boundary
-// to walk from: it keeps the leaf-only guards, and with create its parent is
-// provisioned as before.
-func ledgerAncestors(repoRoot, issuesRoot string, create bool) error {
+// to walk from: group 1 is skipped (with create, its parent is provisioned with
+// MkdirAll as before), and groups 2 and 3 are judged as they are inside.
+func ledgerDirs(repoRoot, issuesRoot string, create bool) error {
+	var dirs []string
 	parent := filepath.Dir(issuesRoot)
-	if !fsutil.PathWithin(parent, repoRoot, false) {
-		if create {
-			return os.MkdirAll(parent, 0o755)
+	if fsutil.PathWithin(parent, repoRoot, false) {
+		rel, err := filepath.Rel(repoRoot, parent)
+		if err != nil {
+			return err
 		}
-		return nil
+		if rel != "." {
+			current := repoRoot
+			for _, segment := range strings.Split(rel, string(filepath.Separator)) {
+				current = filepath.Join(current, segment)
+				dirs = append(dirs, current)
+			}
+		}
+	} else if create {
+		if err := os.MkdirAll(parent, 0o755); err != nil {
+			return err
+		}
 	}
-	rel, err := filepath.Rel(repoRoot, parent)
-	if err != nil {
-		return err
+	dirs = append(dirs, issuesRoot)
+	for _, sub := range issueschema.StatusDirs {
+		dirs = append(dirs, filepath.Join(issuesRoot, sub))
 	}
-	if rel == "." {
-		return nil
-	}
-	current := repoRoot
-	for _, segment := range strings.Split(rel, string(filepath.Separator)) {
-		current = filepath.Join(current, segment)
+	for _, dir := range dirs {
 		if create {
-			if err := safeMkdirLeaf(current); err != nil {
+			if err := safeMkdirLeaf(dir); err != nil {
 				return err
 			}
 			continue
 		}
-		if _, err := os.Lstat(current); os.IsNotExist(err) {
-			return nil
-		}
-		if err := refuseSymlinkedDir(current); err != nil {
+		if err := refuseSymlinkedDir(dir); err != nil {
 			return err
 		}
 	}

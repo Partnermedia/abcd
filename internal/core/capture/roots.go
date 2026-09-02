@@ -65,11 +65,12 @@ func resolveRoots(repoRoot, issuesRoot string) (string, string, error) {
 		ir = filepath.Join(rr, LedgerRelPath)
 	}
 	// Every verb passes through here first, the readers included, so this is
-	// where the ledger's ancestors are judged for a List or Status: a committed
-	// symlink at .abcd or .abcd/work would otherwise make a read serialize a
-	// ledger from outside the checkout (GHSA-865x-5m7q-qm79). The write paths
-	// judge them again, creating, from under ensureLedgerDirs.
-	if err := ledgerAncestors(rr, ir, false); err != nil {
+	// where the ledger's directories are judged for a List or Status: a committed
+	// symlink at .abcd, .abcd/work, issues/ or a status directory would otherwise
+	// make a read serialize a ledger from outside the checkout, under
+	// repo-relative paths (GHSA-865x-5m7q-qm79). The write paths judge the same
+	// list again, creating, from under ensureLedgerDirs.
+	if err := ledgerDirs(rr, ir, false); err != nil {
 		return "", "", err
 	}
 	return rr, ir, nil
@@ -184,7 +185,7 @@ func readRecordGuarded(path string) (string, error) {
 		return "", fmt.Errorf("%w: record path is not a regular file: %s", ErrPathUnsafe, path)
 	}
 	if errors.Is(err, fsutil.ErrTooBig) {
-		return "", fmt.Errorf("%w: record exceeds the %d-byte cap: %s", ErrPathUnsafe, issueschema.RecordReadLimit, path)
+		return "", fmt.Errorf("%w: record is larger than the %d-byte size cap and was left unread: %s", ErrPathUnsafe, issueschema.RecordReadLimit, path)
 	}
 	// A record the process may not open is a refusal with a name, not a raw open
 	// error surfacing through a verb: the caller is told the ledger could not be
