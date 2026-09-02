@@ -29,6 +29,13 @@ it — verbatim into durable provenance. PDF is a later-phase seam: the binary
 rejects a PDF source with a clear error, because no text-extraction dependency
 is wired.
 
+A credential carried by the URL never reaches the store: basic-auth userinfo
+(`https://user:pass@host/doc`) and credential-shaped query keys (`token`,
+`api_key`, `apikey`, `access_token`, `key`, `password`, `secret`, `signature`,
+case-insensitive) are stripped before the fetched address becomes the stored
+origin and title, and masked in every fetch-failure message. The rest of the
+address is reproduced unchanged.
+
 **You** are the distiller: read the source, produce the
 `DistilledPage` JSON array, and pass it to the binary via `--pages-json`
 (a file, or `-` for stdin). The binary computes the provenance, licence, and

@@ -551,15 +551,119 @@ func remoteScheme(source string) string {
 	return u.Scheme
 }
 
-// redactedSource renders a URL for an error message with any userinfo masked,
-// so a refusal never echoes a credential embedded in the source back to the
-// terminal or the run log.
+// credentialQueryKeys are the query parameter names whose value is, by
+// convention, a bearer credential. A URL is the one piece of acquired text the
+// store copies verbatim into a citation, and the write-time scanner cannot help
+// here: an opaque token or password matches no pattern, so it has to be dropped
+// structurally, by the name it travels under. The list is deliberately short and
+// closed — every entry is a name whose value is a secret in ordinary usage, so
+// dropping it loses no addressing information worth keeping.
+var credentialQueryKeys = map[string]bool{
+	"token":        true,
+	"api_key":      true,
+	"apikey":       true,
+	"access_token": true,
+	"key":          true,
+	"password":     true,
+	"secret":       true,
+	"signature":    true,
+}
+
+// dropCredentialQuery removes every credential-shaped query parameter from u in
+// place and reports whether it removed one. The surviving pairs keep their
+// original encoding — the raw query is filtered textually rather than round-
+// tripped through url.Values, which would re-order and re-escape an address the
+// store means to reproduce faithfully.
+func dropCredentialQuery(u *url.URL) bool {
+	if u.RawQuery == "" {
+		return false
+	}
+	dropped := false
+	pairs := strings.Split(u.RawQuery, "&")
+	kept := make([]string, 0, len(pairs))
+	for _, pair := range pairs {
+		name := pair
+		if i := strings.IndexByte(pair, '='); i >= 0 {
+			name = pair[:i]
+		}
+		decoded, err := url.QueryUnescape(name)
+		if err != nil {
+			decoded = name
+		}
+		if credentialQueryKeys[strings.ToLower(strings.TrimSpace(decoded))] {
+			dropped = true
+			continue
+		}
+		kept = append(kept, pair)
+	}
+	if dropped {
+		u.RawQuery = strings.Join(kept, "&")
+	}
+	return dropped
+}
+
+// sanitisedOrigin strips the credentials a URL can carry before it becomes the
+// durable origin and title of a stored page. Two of them: basic-auth userinfo
+// (dropped whole — a stored origin is a citation, not a way back in) and a
+// credential-shaped query key. Nothing else is touched, and a URL carrying
+// neither is returned byte-identical, so the address a citation reproduces is
+// the fetched one wherever there is no credential to remove.
+func sanitisedOrigin(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return maskUserinfo(raw)
+	}
+	changed := false
+	if u.User != nil {
+		u.User = nil
+		changed = true
+	}
+	if dropCredentialQuery(u) {
+		changed = true
+	}
+	if !changed {
+		return raw
+	}
+	return u.String()
+}
+
+// redactedSource renders a URL for an error message with any userinfo masked
+// and any credential-shaped query parameter dropped, so a refusal never echoes
+// a credential embedded in the source back to the terminal or the run log. It
+// keeps the username where the origin form drops it: a refusal is read by the
+// operator who typed the URL, and the account name is how they recognise it.
 func redactedSource(source string) string {
 	u, err := url.Parse(source)
 	if err != nil {
+		return maskUserinfo(source)
+	}
+	dropCredentialQuery(u)
+	return u.Redacted()
+}
+
+// maskUserinfo is the fallback for a string url.Parse refused: there is no
+// structured userinfo to mask, so the "scheme://user:pass@" prefix is masked
+// textually, in the shape url.URL.Redacted uses. A string with no such prefix
+// is returned unchanged — masking is all this does; it never claims the string
+// is a URL.
+func maskUserinfo(source string) string {
+	i := strings.Index(source, "://")
+	if i < 0 {
 		return source
 	}
-	return u.Redacted()
+	rest := source[i+3:]
+	at := strings.IndexByte(rest, '@')
+	if at < 0 {
+		return source
+	}
+	if slash := strings.IndexByte(rest, '/'); slash >= 0 && slash < at {
+		return source
+	}
+	user := rest[:at]
+	if colon := strings.IndexByte(user, ':'); colon >= 0 {
+		user = user[:colon]
+	}
+	return source[:i+3] + user + ":xxxxx@" + rest[at+1:]
 }
 
 func acquireSource(repoRoot, source string, fetcher Fetcher, pdf PDFExtractor) (sourceMaterial, error) {
@@ -584,7 +688,7 @@ func acquireSource(repoRoot, source string, fetcher Fetcher, pdf PDFExtractor) (
 			if errors.As(err, &ie) {
 				return sourceMaterial{}, err
 			}
-			return sourceMaterial{}, newIngestError("fetch failed for %s: %v", source, err)
+			return sourceMaterial{}, newIngestError("fetch failed for %s: %v", redactedSource(source), err)
 		}
 		return materialFromFetched(source, fetched, pdf)
 	}
@@ -612,7 +716,7 @@ func guardFetchHost(host string) error {
 func ingestRedirectPolicy(rawURL string) func(*http.Request, []*http.Request) error {
 	return func(r *http.Request, via []*http.Request) error {
 		if len(via) >= maxRedirects {
-			return newIngestError("too many redirects fetching %s", rawURL)
+			return newIngestError("too many redirects fetching %s", redactedSource(rawURL))
 		}
 		if r.URL.Scheme != "https" {
 			return newIngestError("redirect left https: %s", r.URL.Redacted())
@@ -624,7 +728,7 @@ func ingestRedirectPolicy(rawURL string) func(*http.Request, []*http.Request) er
 func defaultFetch(rawURL string) (FetchedSource, error) {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
-		return FetchedSource{}, newIngestError("fetch failed for %s: %v", rawURL, err)
+		return FetchedSource{}, newIngestError("fetch failed for %s: %v", redactedSource(rawURL), err)
 	}
 	// acquireSource has already refused a non-https source; this is the same
 	// rule stated where the connection is actually made, so the fetcher cannot
@@ -649,12 +753,12 @@ func defaultFetch(rawURL string) (FetchedSource, error) {
 	}
 	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
 	if err != nil {
-		return FetchedSource{}, newIngestError("fetch failed for %s: %v", rawURL, err)
+		return FetchedSource{}, newIngestError("fetch failed for %s: %v", redactedSource(rawURL), err)
 	}
 	req.Header.Set("User-Agent", "abcd-memory-ingest")
 	resp, err := client.Do(req)
 	if err != nil {
-		return FetchedSource{}, newIngestError("fetch failed for %s: %v", rawURL, err)
+		return FetchedSource{}, newIngestError("fetch failed for %s: %v", redactedSource(rawURL), err)
 	}
 	defer resp.Body.Close()
 	return readFetchedResponse(rawURL, resp)
@@ -665,11 +769,11 @@ func defaultFetch(rawURL string) (FetchedSource, error) {
 // content — otherwise the error page's HTML would be stored as knowledge.
 func readFetchedResponse(rawURL string, resp *http.Response) (FetchedSource, error) {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return FetchedSource{}, newIngestError("fetch failed for %s: HTTP %d %s", rawURL, resp.StatusCode, http.StatusText(resp.StatusCode))
+		return FetchedSource{}, newIngestError("fetch failed for %s: HTTP %d %s", redactedSource(rawURL), resp.StatusCode, http.StatusText(resp.StatusCode))
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxFetchBytes+1))
 	if err != nil {
-		return FetchedSource{}, newIngestError("fetch failed for %s: %v", rawURL, err)
+		return FetchedSource{}, newIngestError("fetch failed for %s: %v", redactedSource(rawURL), err)
 	}
 	headers := map[string]string{}
 	for k := range resp.Header {
@@ -761,7 +865,7 @@ func materialFromLocal(repoRoot, source string, pdf PDFExtractor) (sourceMateria
 
 func materialFromFetched(rawURL string, fetched FetchedSource, pdf PDFExtractor) (sourceMaterial, error) {
 	if len(fetched.Body) > maxFetchBytes {
-		return sourceMaterial{}, newIngestError("fetched source exceeds the %d-byte cap: %s", maxFetchBytes, rawURL)
+		return sourceMaterial{}, newIngestError("fetched source exceeds the %d-byte cap: %s", maxFetchBytes, redactedSource(rawURL))
 	}
 	ctype := contentType(fetched.Headers)
 	finalURL := fetched.FinalURL
@@ -775,6 +879,15 @@ func materialFromFetched(rawURL string, fetched FetchedSource, pdf PDFExtractor)
 	// fixed one door over (iss-359). Percent-encode the hidden runes losslessly here,
 	// once, before finalURL becomes the stored origin/title (iss-357).
 	finalURL = termsafe.EncodeHiddenRunes(finalURL)
+	// The same address is also the one place a CREDENTIAL reaches the store
+	// intact: `https://user:pass@host/doc` and `?token=…` are copied verbatim
+	// into the page frontmatter's citation, the sources registry and the
+	// returned result, and the write-time scanner cannot see an opaque password
+	// — it matches no pattern. Strip both here, once, before finalURL becomes
+	// the stored origin AND title. Hidden-rune encoding runs first so a URL
+	// carrying a control byte parses at all: url.Parse refuses one, and an
+	// unparseable URL is exactly where a credential would otherwise survive.
+	finalURL = sanitisedOrigin(finalURL)
 	if ctype == "application/pdf" {
 		text, err := extractPDFText(fetched.Body, pdf)
 		if err != nil {
