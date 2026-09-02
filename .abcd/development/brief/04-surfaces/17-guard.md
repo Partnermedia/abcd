@@ -60,11 +60,15 @@ delimiter word) in **command text**, which no shell runs either. Text inside a
 here-document **body** is not command text, so an apostrophe in a document is
 data. Getting that boundary right is what the class rests on: a body starts on
 the line after the redirection even when that line ends in `&&` or `|` (bash
-collects the bodies at the end of the physical line), and a `( cmd <<EOF )`
-subshell opens a genuine document rather than an arithmetic shift — an
-arithmetic expansion closes with `))` on the same line and has no body at all.
-Read either the other way and document text lands in command position, where one
-apostrophe becomes an error the hook hands through unguarded.
+collects the bodies at the end of the physical line), and whether a `<<` opens a
+document at all is decided by what ENCLOSES it. Inside a `$(( … ))` expansion or
+a bare `(( … ))` command there is no redirection, so a `<<` there is a shift;
+anywhere else a delimiter-shaped word opens a document, a `( cmd <<EOF )`
+subshell included. Reading the bytes after the delimiter word instead — "does a
+paren pair close right here?" — sees only the flattest shift: `$(( (1 << n) + 1
+))` closes its sub-expression with a single `)`. Read either the other way and
+document text lands in command position, where one apostrophe becomes an error
+the hook hands through unguarded.
 
 A third reserved id is a **warn**: `git-config-rewrite-unread`, raised when a
 git command points at configuration whose body the guard cannot read —

@@ -99,3 +99,71 @@ func TestHeredocBodyStartsDespiteTrailingListOperator(t *testing.T) {
 		t.Fatalf("an unterminated quote in command text must stay ErrUnparsableCommand")
 	}
 }
+
+// TestParenthesisedArithmeticIsNotAHeredoc pins the discriminator between a
+// shift and a here-document as the ENCLOSING CONTEXT, not the bytes that follow
+// the delimiter word. `$(( (1 << n) + 1 ))` closes its parenthesised
+// sub-expression with a SINGLE `)`, so a rule reading "arithmetic closes with
+// `))` right after the operand" took `n` for a delimiter word — and then a later
+// line equal to `n` swallowed every command between as document text (a silent
+// allow of a Tier-1 hazard), while with no such line an ordinary bit-mask script
+// blocked under heredoc-unterminated.
+//
+// A `<<` reached while an arithmetic context is open is a shift, always: bash is
+// inside `$((`/`((` and no redirection is possible there. A plain `(` is not an
+// arithmetic opener — `( cmd <<EOF )` is a genuine subshell here-document — and
+// a `$(`/backtick between the `<<` and an outer arithmetic frame starts a fresh
+// command string, where a here-document is possible again.
+func TestParenthesisedArithmeticIsNotAHeredoc(t *testing.T) {
+	cases := []struct {
+		name    string
+		line    string
+		verdict Verdict
+		entry   string
+	}{
+		{
+			"parenthesised shift with a later line equal to its operand",
+			"echo $(( (1 << n) + 1 ))\ngit push --force origin main\nn",
+			VerdictBlock, "git-push-force",
+		},
+		{
+			"parenthesised shift over a hazard with its operand below",
+			"x=$(( (a << b) | 1 ))\ngit clean -fd\nb",
+			VerdictWarn, "git-clean",
+		},
+		{
+			"an ordinary bit mask is not a document",
+			"mask=$(( (1 << n) - 1 ))\necho done",
+			VerdictAllow, "",
+		},
+		{
+			"parenthesised shift in the bare arithmetic command form",
+			"if (( (1 << n) > 4 )); then echo big; fi",
+			VerdictAllow, "",
+		},
+		{
+			"a here-document after a CLOSED arithmetic is still a document",
+			"echo $(( 1 << 2 ))\ncat <<EOF\ngit clean -fd\nEOF",
+			VerdictAllow, "",
+		},
+		{
+			"a here-document inside a command substitution inside arithmetic",
+			"echo $(( $(cat <<EOF) ))\ngit clean -fd\nEOF",
+			VerdictAllow, "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d, err := Defaults().Check(tc.line)
+			if err != nil {
+				t.Fatalf("Check(%q): %v — bash runs this line, so the guard must answer, not error", tc.line, err)
+			}
+			if d.Verdict != tc.verdict {
+				t.Fatalf("Check(%q).Verdict = %q via %q, want %q", tc.line, d.Verdict, d.EntryID, tc.verdict)
+			}
+			if d.EntryID != tc.entry {
+				t.Fatalf("Check(%q).EntryID = %q, want %q", tc.line, d.EntryID, tc.entry)
+			}
+		})
+	}
+}

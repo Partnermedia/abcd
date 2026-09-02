@@ -104,7 +104,31 @@ func tokenize(line string) ([]segment, error) {
 		// (`&&`, `||`, `|`), whose newline is a line continuation rather than a
 		// new command — `cd scratch &&\nrm -rf *` is one chain, not two.
 		lastList bool
+		// parens is the stack of grouping constructs still open at this point,
+		// innermost last. It exists for one question — whether a `<<` reached
+		// here is an arithmetic shift or a here-document redirection — and that
+		// question is answered by what ENCLOSES the operator, never by the bytes
+		// after it. See inArithmetic and the `<<` branch.
+		parens []parenFrame
 	)
+	// inArithmetic reports whether the innermost construct that can change how a
+	// `<<` reads is an arithmetic one. A plain `(` is skipped rather than
+	// answered on: inside `$(( … ))` it is sub-expression grouping, and at the
+	// top level it is a subshell, whose own enclosing context is what decides —
+	// either way the frame below it has the answer. A `$(` or a backtick stops
+	// the walk, because it starts a FRESH command string, where a here-document
+	// is possible again.
+	inArithmetic := func() bool {
+		for n := len(parens) - 1; n >= 0; n-- {
+			switch parens[n].kind {
+			case parenArithmetic:
+				return true
+			case parenCommandSub, parenBacktick:
+				return false
+			}
+		}
+		return false
+	}
 	flushToken := func() {
 		if hasCur {
 			toks = append(toks, string(cur))
@@ -247,44 +271,45 @@ func tokenize(line string) ([]segment, error) {
 			lastList = false
 			i += 3
 		case c == '<' && strings.HasPrefix(line[i:], "<<"):
-			// A heredoc redirection (`<<`, `<<-`) — but only when a delimiter
-			// word follows. `$((1<<20))` is an arithmetic shift, and taking it
-			// for a heredoc would swallow every later line as body text and
-			// silently unguard them.
+			// A heredoc redirection (`<<`, `<<-`) — but only when nothing
+			// arithmetic encloses the operator and a delimiter word follows.
+			// `$((1<<20))` is an arithmetic shift, and taking it for a heredoc
+			// would swallow every later line as body text and silently unguard
+			// them.
+			//
+			// WHAT ENCLOSES the `<<` is what tells the two apart. Inside an
+			// arithmetic context — a `$(( … ))` expansion or the bare `(( … ))`
+			// command — bash has no redirection at all, so a `<<` there is a
+			// shift, full stop; outside one, a delimiter-shaped word opens a
+			// document. Deciding instead on the bytes AFTER the delimiter word
+			// ("does a paren pair close right here?") reads only the flattest
+			// shift: `$(( (1 << n) + 1 ))` closes its sub-expression with a
+			// SINGLE `)`, so `n` was taken for a delimiter — and a later line
+			// equal to `n` then swallowed every command between the two with no
+			// signal at all, while a bit mask with no such line blocked as an
+			// unterminated document.
+			//
+			// The check comes BEFORE readHeredocDelim so an arithmetic
+			// expression can never reach that reader's unterminated-quote error,
+			// which the pre-tool-use hook maps to fail-OPEN. Where the enclosing
+			// context stays ambiguous — an arithmetic frame left open on an
+			// earlier construct, a `$(` in between — the reading falls to the
+			// here-document side, and skipHeredocBodies' fail-closed block below
+			// is the answer, never an error.
+			if inArithmetic() {
+				cur = append(cur, '<', '<')
+				hasCur = true
+				lastList = false
+				i += 2
+				continue
+			}
 			hd, next, err := readHeredocDelim(line, i+2)
 			if err != nil {
 				return nil, err
 			}
-			// A real heredoc delimiter is followed by its body and terminator
-			// line, so a paren right after the delimiter word is suspect:
-			// `$((expr<<ident))` produces exactly that shape -- readHeredocDelim
-			// reads the shift's right-hand identifier as if it were a delimiter
-			// and stops at the arithmetic expression's own closing paren.
-			// Catching this at classification time (rather than only an
-			// unterminated body, below) matters: without it, an attacker can
-			// supply a later line that happens to equal the misread "delimiter"
-			// and have it swallow real commands with no error at all.
-			//
-			// WHICH paren is what tells the two apart, and blanks before it are
-			// skipped because `$(( x << y ))` puts a space there. An arithmetic
-			// expansion or arithmetic command closes with `))` on the same line
-			// and has no body at all; a subshell closes with a single `)`, and
-			// `( cmd <<EOF )` is a genuine here-document every shell runs with
-			// the following lines as its document. Testing only for "a paren"
-			// read that subshell as arithmetic, so the document was tokenized as
-			// commands: one apostrophe in it became ErrUnparsableCommand, which
-			// the hook maps to fail-OPEN, and a document merely NAMING a hazard
-			// warned as if it ran one. A single paren therefore leaves the
-			// here-document reading in place; where that reading turns out to be
-			// wrong the body simply never terminates, and skipHeredocBodies'
-			// fail-closed block below is the answer -- never an error.
-			k := next
-			for k < len(line) && (line[k] == ' ' || line[k] == '\t') {
-				k++
-			}
-			arithmeticParen := (k < len(line) && line[k] == '(') ||
-				(k+1 < len(line) && line[k] == ')' && line[k+1] == ')')
-			if !hd.quoted && (!isDelimStart(hd.delim) || arithmeticParen) {
+			// A word that cannot start an unquoted delimiter — `20` in a
+			// `$((1<<20))` reached outside any paren — is not one.
+			if !hd.quoted && !isDelimStart(hd.delim) {
 				cur = append(cur, '<', '<')
 				hasCur = true
 				lastList = false
@@ -385,6 +410,36 @@ func tokenize(line string) ([]segment, error) {
 			// its `$( … )` twin blocked (gh-312). Inside single quotes the byte is
 			// literal and never reaches here, matching the shell.
 			flushSegment()
+			switch c {
+			case '(':
+				// `((` and `$((` — two parens with NOTHING between them — open
+				// an arithmetic context, which is how bash lexes them too;
+				// `( (cmd) )` and `$( (cmd) )`, which have a separator, do not.
+				// The inner paren converts the frame the outer one pushed, so
+				// both halves close it and `$(((a))` reads as arithmetic plus
+				// one ordinary group.
+				kind := parenGroup
+				if i > 0 && line[i-1] == '$' {
+					kind = parenCommandSub
+				}
+				if n := len(parens); n > 0 && parens[n-1].pos == i-1 && parens[n-1].kind != parenArithmetic {
+					parens[n-1].kind = parenArithmetic
+					kind = parenArithmetic
+				}
+				parens = append(parens, parenFrame{kind: kind, pos: i})
+			case ')':
+				if n := len(parens); n > 0 {
+					parens = parens[:n-1]
+				}
+			case '`':
+				// A backtick is its own closer, so it toggles: an open one on
+				// the stack is popped, anything else pushes a fresh frame.
+				if n := len(parens); n > 0 && parens[n-1].kind == parenBacktick {
+					parens = parens[:n-1]
+				} else {
+					parens = append(parens, parenFrame{kind: parenBacktick, pos: i})
+				}
+			}
 			if (c == '&' || c == '|') && i+1 < len(line) && line[i+1] == c {
 				lastList = true
 				i += 2
@@ -437,6 +492,31 @@ func tokenize(line string) ([]segment, error) {
 	}
 	flushSegment()
 	return segs, nil
+}
+
+// parenKind names what an unclosed `(` opened, to the one precision the
+// tokenizer needs: whether a `<<` inside it is an arithmetic shift.
+type parenKind uint8
+
+const (
+	// parenGroup is a plain `(`: a subshell at the top level, sub-expression
+	// grouping inside arithmetic. It decides nothing on its own.
+	parenGroup parenKind = iota
+	// parenCommandSub is the `(` of a `$( … )` — a fresh command string.
+	parenCommandSub
+	// parenBacktick is an open backtick: command substitution in its other
+	// spelling, and its own closer.
+	parenBacktick
+	// parenArithmetic is one half of a `((` or `$((` pair.
+	parenArithmetic
+)
+
+// parenFrame is one unclosed grouping construct: its kind, and the offset of the
+// byte that opened it — which is what lets the next `(` see that it is adjacent
+// and convert the pair into an arithmetic context.
+type parenFrame struct {
+	kind parenKind
+	pos  int
 }
 
 // globsOrNil returns the per-token glob record, or nil when no token in it is
