@@ -2448,27 +2448,13 @@ func loadForbiddenSynonyms(repoRoot, glossaryDir string) (map[string]bool, map[s
 }
 
 // parseYAMLStringList parses an inline YAML flow sequence of strings, e.g.
-// `["sprint", "milestone", "epic"]`, into its members. It is deliberately small —
-// the glossary frontmatter only ever uses the inline `[...]` form — and tolerates
-// quotes and surrounding whitespace.
-func parseYAMLStringList(v string) []string {
-	v = strings.TrimSpace(v)
-	v = strings.TrimPrefix(v, "[")
-	v = strings.TrimSuffix(v, "]")
-	if strings.TrimSpace(v) == "" {
-		return nil
-	}
-	var out []string
-	for _, part := range strings.Split(v, ",") {
-		part = strings.TrimSpace(part)
-		part = strings.Trim(part, `"'`)
-		part = strings.TrimSpace(part)
-		if part != "" {
-			out = append(out, part)
-		}
-	}
-	return out
-}
+// `["sprint", "milestone", "epic"]`, into its members.
+//
+// It is `frontmatter.StringList` under this package's own name: the glossary's
+// index reads the same `aliases`/`forbidden_synonyms` fields this rule reads,
+// and one reader of a field is how the two cannot come to disagree about what a
+// term declares.
+func parseYAMLStringList(v string) []string { return frontmatter.StringList(v) }
 
 // frontmatterOpen returns the index of the opening `---` frontmatter delimiter,
 // skipping leading blank lines and HTML comments (single- and multi-line); -1
