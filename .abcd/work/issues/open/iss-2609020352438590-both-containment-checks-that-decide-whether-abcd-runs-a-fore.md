@@ -26,3 +26,16 @@ absolutises it, finds the physical directory outside the working directory, and
 accepts it. The same fix — measuring containment against the repository root,
 and deciding what a relative PATH element means before the shell does — closes
 this with the other two.
+
+## Two further shapes from the second security review (2026-09-02)
+
+- The containment and world-writable tests judge the directory the PATH entry
+  lives in, not the binary it resolves to: a symlink in an ordinary directory
+  (`~/.local/bin/abcd -> <repo>/inside/abcd`) launders both refusals, because
+  `dd=${c%/*}` names the link's directory and `cd -P` resolves that, never the
+  target. docs/how-to/install.md states the accepted shape in terms of the
+  binary actually executed, which is false for this case.
+- dataDirHazard checks the data directory and its cache only: a world-writable
+  non-sticky ANCESTOR (rename-and-substitute) and a world-writable artefact file
+  inside a 0755 cache both pass.
+
