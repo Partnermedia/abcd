@@ -44,6 +44,12 @@ only format it:
 | `warn` | exit 0, warning rendered | exit 0, warning on stderr |
 | `block` | exit 1, why + successor rendered | the host's blocking status, why + successor as the message |
 
+The two front doors differ in how a verdict is REPORTED, never in the verdict
+itself. `guard check` trims a trailing newline off a candidate read on stdin, so
+the same command can reach the two doors one byte apart; a here-document left
+open takes the same block either way, because that state is resolved when the
+input ends and not only when it crosses a newline.
+
 Two verdicts have no registry entry behind them and are the guard's own voice,
 reported under reserved ids no entry may claim: a word the tokenizer cannot
 expand (`brace-expansion-unexpanded`) and a here-document whose delimiter line

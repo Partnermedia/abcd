@@ -254,3 +254,33 @@ func TestGuardHookIgnoresAncestorKillSwitch(t *testing.T) {
 		t.Errorf("the bundled blocker must still fire; stderr = %q", stderr)
 	}
 }
+
+// TestGuardCheckAndHookAgreeOnAHereDocumentLeftOpen pins the two front doors to
+// the same verdict for the same command. `guard check` trims the trailing
+// newline off a candidate read from stdin, and the tokenizer used to resolve a
+// pending here-document only when it crossed a newline — so `cat <<EOF` with its
+// newline intact took the fail-closed heredoc-unterminated block on the hook,
+// while the identical command reached `check` one byte shorter and was cleared.
+// A verdict belongs to the command, not to whether its last byte is a newline.
+func TestGuardCheckAndHookAgreeOnAHereDocumentLeftOpen(t *testing.T) {
+	for name, command := range map[string]string{
+		"with a trailing newline": "cat <<EOF\n",
+		"ending at the `<<` line": "cat <<EOF",
+	} {
+		t.Run(name, func(t *testing.T) {
+			dir := guardRepo(t)
+			_, stderr, code := runGuard(preToolUse(t, "Bash", command, dir), "guard", "hook")
+			if code != 2 {
+				t.Errorf("hook: an unterminated here-document must block: want exit 2, got %d (stderr %q)", code, stderr)
+			}
+			stdout, stderr, code := runGuard(command, "guard", "check")
+			if code != 1 {
+				t.Errorf("check on stdin: want the blocking exit 1, got %d (stdout %q stderr %q)", code, stdout, stderr)
+			}
+			stdout, stderr, code = runGuard("", "guard", "check", "--command", command)
+			if code != 1 {
+				t.Errorf("check --command: want the blocking exit 1, got %d (stdout %q stderr %q)", code, stdout, stderr)
+			}
+		})
+	}
+}

@@ -491,6 +491,17 @@ func tokenize(line string) ([]segment, error) {
 		}
 	}
 	flushSegment()
+	// A here-document still pending when the INPUT ends is in the same state as
+	// one whose delimiter line never came, and takes the same fail-closed
+	// verdict. Reaching the end of the input without ever crossing a newline
+	// dropped the pending document silently, which split the two front doors:
+	// `guard hook` sees the candidate as the host sent it (`cat <<EOF` and its
+	// newline) and blocked, while `guard check` trims a trailing newline off
+	// stdin and cleared the very same command. The verdict belongs to the
+	// command, not to whether its last byte is a newline.
+	if len(pending) > 0 {
+		markHeredocUnterminated(&segs, chain)
+	}
 	return segs, nil
 }
 

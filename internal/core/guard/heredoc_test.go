@@ -48,15 +48,23 @@ func TestSubshellHeredocIsNotArithmetic(t *testing.T) {
 		})
 	}
 	// Where the shape stays ambiguous the answer is the fail-closed
-	// heredoc-unterminated verdict, never an error the hook fails open on.
+	// heredoc-unterminated verdict, never an error the hook fails open on —
+	// and asserting only "no error" would let a silent allow pass for it. All
+	// four of these open a document whose delimiter line never comes, whether
+	// the input runs out at a newline or at its last byte, so all four block.
 	for _, line := range []string{
 		"( cat <<EOF ) | tee out",
 		"( cat <<EOF\t)",
 		"x=$(cat <<EOF )\nit's",
 		"x=$(cat <<EOF )",
 	} {
-		if _, err := Defaults().Check(line); err != nil {
+		d, err := Defaults().Check(line)
+		if err != nil {
 			t.Errorf("Check(%q): %v — an ambiguous `<<` must take a verdict, never an error", line, err)
+			continue
+		}
+		if d.Verdict != VerdictBlock || d.EntryID != heredocEntryID {
+			t.Errorf("Check(%q) = %q via %q, want the fail-closed block via %q", line, d.Verdict, d.EntryID, heredocEntryID)
 		}
 	}
 }
