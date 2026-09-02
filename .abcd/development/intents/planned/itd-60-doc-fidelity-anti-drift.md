@@ -1,8 +1,8 @@
 ---
 id: itd-60
 slug: doc-fidelity-anti-drift
-spec_id: null
-kind: null
+spec_id: spc-2609020903498198
+kind: standalone
 suggested_kind: standalone
 reclassification_history: []
 builds_on: [itd-73, itd-80]
@@ -96,6 +96,15 @@ commitments, not options.
   brief may carry a sentence the maintainer did not write until they read it.
 - **Sequenced as Phase 8**, the brief is the shipped state, with itd-147 as the
   other rung; standalone kind, its own spec.
+- **The gate can run fully autonomously (maintainer, 2026-09-02).** A flag
+  (the spec names it) lets an unattended run, an autonomous release cut for
+  one, execute both layers without waiting for a person: the deterministic
+  layer refuses on its own, the host-run reviewer is invoked by the routine
+  the way the changelog composer is, the brief edit is drafted and applied,
+  and every applied edit is listed for review after in the change the run
+  produces. Autonomy changes who waits, never what refuses: the gate still
+  refuses on what it can prove and still fails closed when the reviewer is
+  unavailable.
 
 ## What's In Scope
 
@@ -202,6 +211,11 @@ None stated.
 - **Given** a brief edited after a release was cut, **when** the next cut's gate
   runs, **then** the edit is treated as the legitimate lead and nothing between
   the cuts reported the brief as wrong for being ahead.
+- **Given** the gate is invoked with its autonomous flag inside an unattended
+  run, **when** it finds a lagging chapter, **then** it drafts and applies the
+  edit, lists every applied edit in the run's own output for review after, and
+  waits for nobody; it still refuses on an undocumented surface, on a confirmed
+  false sentence, and when the reviewer is unavailable.
 
 ## Open Questions
 
