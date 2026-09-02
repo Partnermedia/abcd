@@ -148,8 +148,9 @@ func (r *storeRedactor) redactText(text, label string) (string, int, error) {
 // write's to judge, and stays byte-identical — so a legacy registry carrying
 // a dirty cached citation is neither refused on re-ingest (the one verb that
 // repairs it) nor rewritten behind the operator's back; reporting it is the
-// lint's job. A nil current introduces every leaf. Keys are schema-fixed and
-// never walked; non-string scalars pass through untouched.
+// lint's job. A nil current introduces every leaf. An introduced KEY is judged
+// too, by judgeKey — keys are NOT schema-fixed, and a key carrying a secret is
+// refused rather than rewritten; non-string scalars pass through untouched.
 //
 // Mutating in place is the contract, not a shortcut: the map a RegistryMerge
 // returned IS what the store then writes, so a caller that kept hold of it —
@@ -161,8 +162,17 @@ func (r *storeRedactor) redactLeaves(current, target any, label string) error {
 		cm, _ := current.(map[string]any)
 		for k, item := range v {
 			var cv any
+			known := false
 			if cm != nil {
-				cv = cm[k]
+				cv, known = cm[k]
+			}
+			// A key the store does not already hold is this write's, exactly as
+			// a leaf is, and is judged before its value: the key is the one part
+			// of the shape a host controls that no value-side pass can see.
+			if !known {
+				if err := r.judgeKey(k, label); err != nil {
+					return err
+				}
 			}
 			if s, ok := item.(string); ok {
 				red, err := r.judgeLeaf(cv, s, label)
@@ -197,6 +207,27 @@ func (r *storeRedactor) redactLeaves(current, target any, label string) error {
 		}
 	}
 	return nil
+}
+
+// judgeKey is redactLeaves' one KEY rule. Keys are not schema-fixed:
+// validateSourceBlock rejects no unknown key in a page's source: block and the
+// frontmatter dumper admits any identifier-shaped key, a `ghp_`-prefixed token
+// among them, so a host distiller's page JSON can carry a credential as a YAML
+// key. It is refused, never rewritten — renaming a key renames the field the
+// reader looks up, and dropping it discards the value it names, so neither is a
+// redaction. The refusal names the label and the kinds and NEVER the key
+// itself: here the key IS the secret, and an error is the one artefact that
+// reaches the terminal and the run log unredacted.
+func (r *storeRedactor) judgeKey(key, label string) error {
+	resid := r.residue(key, label)
+	if len(resid) == 0 {
+		return nil
+	}
+	kinds := make([]string, 0, len(resid))
+	for _, f := range resid {
+		kinds = append(kinds, f.Kind)
+	}
+	return newIngestError("refusing to write: a map key in %s carries %d blocking span(s) [%s]; a key cannot be redacted without renaming the field it names, so repair the source", label, len(resid), strings.Join(kinds, ", "))
 }
 
 // judgeLeaf is redactLeaves' one leaf rule: unchanged from current, keep it;
