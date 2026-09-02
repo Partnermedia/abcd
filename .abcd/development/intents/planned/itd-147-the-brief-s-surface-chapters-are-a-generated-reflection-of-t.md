@@ -1,8 +1,8 @@
 ---
 id: itd-147
 slug: the-brief-s-surface-chapters-are-a-generated-reflection-of-t
-spec_id: null
-kind: null
+spec_id: spc-2609020906356450
+kind: standalone
 suggested_kind: null
 reclassification_history: []
 builds_on: []
