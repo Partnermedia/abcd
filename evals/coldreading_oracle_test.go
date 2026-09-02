@@ -401,7 +401,7 @@ func assemble(t *testing.T, f fixture, position string) assembled {
 	t.Helper()
 	outDir := filepath.Join(t.TempDir(), "run-"+position)
 	args := append(append([]string{}, assembleVerb...),
-		"--position", position, "--target", "HEAD", "--scope", evalScope, "--out", outDir, "--dry-run")
+		"--position", position, "--target", "HEAD", "--out", outDir, "--dry-run")
 	out, code := runIn(t, f.Root, []string{"HOME=" + f.Home}, args...)
 	if code != 0 {
 		t.Fatalf("`abcd %s` over the %s fixture exited %d\n%s",

@@ -26,16 +26,24 @@ assembly and diff the result.
 
 ## The invocation carries no free text
 
-`assemble` takes exactly three operands, every one closed in shape. It carries
-no prose: that is the property the 2026-08-28 rulings protected by closing the
-invocation at two, and [adr-58](../../decisions/adrs/0058-a-reading-is-commissioned-about-something-so-the-invocation-takes-a-scope.md) restates it as the rule that binds with a third
-operand admitted.
+`assemble` takes exactly two operands, both closed in shape: a position and a
+target state. It carries no prose, which is the property the 2026-08-28 rulings
+protected by closing the invocation at two.
+[adr-2609021016286571](../../decisions/adrs/2609021016286571-the-invocation-is-a-position-and-a-target-state-and-the-comm.md)
+supersedes [adr-58](../../decisions/adrs/0058-a-reading-is-commissioned-about-something-so-the-invocation-takes-a-scope.md),
+which had admitted a third: the operand goes, and the committed preset entry
+for the position supplies what the reading is handed.
 
 | Operand | Grammar |
 |---|---|
 | `--position` | one of `widening`, `entailment`, `comparative`, `detection` — though `comparative` does not assemble and refuses |
 | `--target` | `HEAD`, or a hexadecimal commit sha of 7 to 40 digits |
-| `--scope` | a record id (`itd-N`, `spc-N`), a material kind, or a committed preset |
+
+**What a run is handed is not an operand.** The assembler applies the committed
+entry for the invoked position, one file and one entry per position, and the
+manifest records the entry applied and its hash. Changing what a position reads
+is a commit to that file, reviewed and inside the dirty gate. There is no
+override at the invocation and nothing to stamp.
 
 **No repository path is accepted at the invocation.** A path may be named only
 inside the committed preset file, where it is reviewed, shape-validated and

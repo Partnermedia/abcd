@@ -13,6 +13,7 @@ package evals
 // record.
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -30,14 +31,19 @@ const (
 	posDetection   = "detection"
 )
 
-// evalScope is the preset the eval assembles under. It selects EVERY material
-// kind at every assembling position, deliberately: three of the read-block's
-// eleven carriers (main.go, fence.go, go.mod) are shipped-tree files, and
-// fence.go is the sole corpus behind the body-redaction row, so a preset that
-// dropped source would turn a live assertion into an undeclared gap without
-// failing anything. The eval asserts a firewall, and a firewall is asserted
-// over the whole corpus or not at all.
-const evalScope = "everything"
+// evalPresetName is the single committed preset the fixture repository carries,
+// applied by the assembler with no operand (adr-2609021016286571). It names
+// EVERY material kind at every assembling position, deliberately: three of the
+// read-block's eleven carriers (main.go, fence.go, go.mod) are shipped-tree
+// files, and fence.go is the sole corpus behind the body-redaction row, so an
+// entry that dropped source would turn a live assertion into an undeclared gap
+// without failing anything. The eval asserts a firewall, and a firewall is
+// asserted over the whole corpus or not at all.
+//
+// It is named here rather than passed anywhere: the invocation carries no
+// operand that could name it, and the constant exists so the fixture's own
+// preset file and this comment cannot drift apart unnoticed.
+const evalPresetName = "everything"
 
 // assemblingPositions is everyPosition minus comparative, which no longer
 // assembles: its object is the widening reading's pre-admission output, which
@@ -649,11 +655,56 @@ func materialise(t *testing.T, variant string, edits ...treeEdit) fixture {
 	for _, edit := range edits {
 		edit(t, f.Root)
 	}
+	requireFixturePreset(t, f.Root)
 	gitCommitFixture(t, f.Root)
 	f.RootSHA = rootCommit(t, f.Root)
 	copyTree(t, fixtureHomeDir, f.Home)
 	renamePlaceholder(t, f.Home, f.RootSHA)
 	return f
+}
+
+// requireFixturePreset holds the materialised corpus to the shape the
+// invocation now depends on: ONE committed preset, named as declared above, with
+// an entry at every assembling position.
+//
+// The eval invokes the assembler with a position and a target and nothing else,
+// so what it is handed is decided entirely by this file. A fixture that lost the
+// file, gained a second preset, or dropped a position would turn a firewall
+// assertion into a refusal or a narrower corpus — either of which reads as green
+// once the run that failed is the one that never assembled. It is read as raw
+// JSON rather than through the assembler's own loader, like everything else this
+// oracle checks: a fixture validated by the code under test confirms that code.
+func requireFixturePreset(t *testing.T, root string) {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join(root, ".abcd", "config", "reading-presets.json"))
+	if err != nil {
+		t.Fatalf("the fixture carries no committed preset file, so no position can assemble: %v", err)
+	}
+	var pf struct {
+		Presets map[string]struct {
+			Positions map[string]struct {
+				Kinds []string `json:"kinds"`
+			} `json:"positions"`
+		} `json:"presets"`
+	}
+	if err := json.Unmarshal(raw, &pf); err != nil {
+		t.Fatalf("the fixture's preset file does not decode: %v", err)
+	}
+	if len(pf.Presets) != 1 {
+		t.Fatalf("the fixture's preset file holds %d presets; the invocation names none, so one "+
+			"entry per position means one preset", len(pf.Presets))
+	}
+	entry, ok := pf.Presets[evalPresetName]
+	if !ok {
+		t.Fatalf("the fixture's preset is not named %q, which is the name this eval is written "+
+			"against", evalPresetName)
+	}
+	for _, p := range assemblingPositions {
+		if len(entry.Positions[p].Kinds) == 0 {
+			t.Fatalf("the fixture's preset names no kind at %s, so that position assembles "+
+				"nothing and every absence assertion there is vacuous", p)
+		}
+	}
 }
 
 // gitInit and the one commit. The identity is invented and its domain is

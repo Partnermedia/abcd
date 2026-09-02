@@ -12,6 +12,38 @@ over the brief's earlier `1.0.0`-at-close expectation). The four M6 synthesis
 agents below entered at `0.1.0`, wired to their `abcd disembark` verbs and
 unmeasured; `lifeboat-oracle` has since become `lifeboat-reviewer` at `0.1.1`.
 
+## 2026-09-02 (iss-2609021153261145 — the fourth condition takes the companion's sentence)
+
+The four cold-reading definitions share one blindness core, byte-identical
+across the four and held so by a test, so a change to it is one change to four
+prompts and it is recorded here as one entry. The fourth condition's first
+sentence said items come back unordered and unweighted; the readings companion's
+section 2 says items are returned in the order they arise in the object. On
+correction (7) of the maintainer's ruling of 2026-09-02 the condition takes the
+companion's sentence. The rest of the condition — no severity, no confidence
+score, no most-important-first, no top-N, and the reason an ordering is an
+argument about what matters — is unchanged, and so is every other condition.
+
+### cold-reading-widening 0.2.1
+
+PATCH: the blindness core's fourth condition takes the companion's sentence, as
+above. Nothing else in the definition moves. Unmeasured, as before.
+
+### cold-reading-entailment 0.1.1
+
+PATCH: the blindness core's fourth condition takes the companion's sentence, as
+above. Nothing else in the definition moves. Unmeasured, as before.
+
+### cold-reading-comparative 0.1.1
+
+PATCH: the blindness core's fourth condition takes the companion's sentence, as
+above. Nothing else in the definition moves. Unmeasured, as before.
+
+### cold-reading-detection 0.1.1
+
+PATCH: the blindness core's fourth condition takes the companion's sentence, as
+above. Nothing else in the definition moves. Unmeasured, as before.
+
 ## 0.2.0 — 2026-09-02 (iss-2608311518056854 — the gate reads no prose)
 
 ### cold-reading-widening 0.2.0

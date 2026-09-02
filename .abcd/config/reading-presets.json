@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "presets": {
-    "cold": {
+    "default": {
       "positions": {
         "widening": {
           "kinds": ["brief-section", "glossary-term", "discipline"],
@@ -17,26 +17,6 @@
           "kinds": ["brief-section", "discipline", "spec"],
           "records": [],
           "paths": []
-        }
-      }
-    },
-    "warm": {
-      "extends": "cold",
-      "positions": {
-        "widening": {
-          "kinds": ["doc"],
-          "records": [],
-          "paths": []
-        },
-        "entailment": {
-          "kinds": ["discipline"],
-          "records": [],
-          "paths": []
-        },
-        "detection": {
-          "kinds": ["doc", "config"],
-          "records": [],
-          "paths": ["internal/core/lint"]
         }
       }
     }

@@ -39,10 +39,6 @@ type AssembleRequest struct {
 	// and scrubPaths cannot redact the result when the working directory is not a
 	// prefix of it. Empty means OutDir is the operator's own spelling.
 	OutDirLabel string
-	// Scope names what this reading is ABOUT: a record id, a material kind, or
-	// a committed preset. It is required, and it is a closed form — the
-	// invocation carries no prose (adr-58).
-	Scope string
 	// DryRun writes nothing into the repository's own tiers. With OutDir set the
 	// artefacts still land there; with OutDir empty nothing is written at all
 	// and the result is rendered only.
@@ -60,17 +56,17 @@ type AssembleRequest struct {
 // operator's own string back on the result, so no absolute path nobody typed
 // reaches the success surface. Neither ARTEFACT carries an output path at all.
 type AssembleResult struct {
-	RunID            string     `json:"run_id"`
-	Position         Position   `json:"position"`
-	TargetCommit     string     `json:"target_commit"`
-	AssemblerVersion string     `json:"assembler_version"`
-	ItemCount        int        `json:"item_count"`
-	ManifestHash     string     `json:"manifest_hash"`
-	Scope            Scope      `json:"scope"`
-	Size             SizeReport `json:"size"`
-	OutDir           string     `json:"out_dir,omitempty"`
-	Artefacts        []string   `json:"artefacts"`
-	Written          bool       `json:"written"`
+	RunID            string        `json:"run_id"`
+	Position         Position      `json:"position"`
+	TargetCommit     string        `json:"target_commit"`
+	AssemblerVersion string        `json:"assembler_version"`
+	ItemCount        int           `json:"item_count"`
+	ManifestHash     string        `json:"manifest_hash"`
+	Preset           AppliedPreset `json:"preset"`
+	Size             SizeReport    `json:"size"`
+	OutDir           string        `json:"out_dir,omitempty"`
+	Artefacts        []string      `json:"artefacts"`
+	Written          bool          `json:"written"`
 
 	Bundle   Bundle   `json:"-"`
 	Manifest Manifest `json:"-"`
@@ -238,7 +234,7 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 	if position == PositionComparative {
 		return AssembleResult{}, fmt.Errorf("reading: the comparative position does not assemble. "+
 			"Its object is the widening reading's pre-admission output, which is not repository "+
-			"material and has no channel today, so there is no scope that is its object. It is "+
+			"material and has no channel today, so no committed entry is its object. It is "+
 			"refused rather than served the %s corpus, which is not what it is about",
 			PositionDetection)
 	}
@@ -247,7 +243,10 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 	if err != nil {
 		return AssembleResult{}, fmt.Errorf("reading: %w", err)
 	}
-	scope, err := ResolveScope(presets, position, req.Scope)
+	// The entry follows from the POSITION and from what is committed. No
+	// operand names it, so nothing an operator typed can change what this run
+	// is handed (adr-2609021016286571).
+	applied, err := PresetFor(presets, position)
 	if err != nil {
 		return AssembleResult{}, fmt.Errorf("reading: %w", err)
 	}
@@ -265,24 +264,25 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 		return AssembleResult{}, err
 	}
 
-	// The scope filter runs LAST, after the dirty gate and the exclusion
+	// The preset filter runs LAST, after the dirty gate and the exclusion
 	// assertion have both run over the unfiltered walk. That ordering is
 	// load-bearing rather than incidental: every structural property the
 	// assembler holds — the deny, the floor, the tracked-set intersection, the
-	// dirty gate — is a property of what the POSITION admits, and a scope must
-	// not be able to shrink the set those gates examine. A narrow scope
+	// dirty gate — is a property of what the POSITION admits, and an entry must
+	// not be able to shrink the set those gates examine. A narrow entry
 	// therefore cannot quiet a dirty-tree refusal or an exclusion breach that
 	// a wide one would have caught (spc-69).
 	scoped := make([]candidate, 0, len(cands))
 	for _, c := range cands {
-		if scope.selects(c) {
+		if applied.selects(c) {
 			scoped = append(scoped, c)
 		}
 	}
 	if len(scoped) == 0 {
-		return AssembleResult{}, fmt.Errorf("reading: the scope %q selects no item the %s "+
-			"position admits, so there is nothing to assemble; an empty assembly is a refusal "+
-			"rather than a bundle a reader would take for its whole object", scope.Source, position)
+		return AssembleResult{}, fmt.Errorf("reading: the committed entry for the %s position "+
+			"selects no item that position admits, so there is nothing to assemble; an empty "+
+			"assembly is a refusal rather than a bundle a reader would take for its whole object. "+
+			"Widen the entry in %s", position, PresetConfigPath)
 	}
 	cands = scoped
 
@@ -295,10 +295,10 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 		Type:          BundleType,
 		SchemaVersion: SchemaVersion,
 		Position:      position,
-		Scope:         bundleScope(scope),
+		Preset:        bundlePreset(applied),
 		Items:         make([]BundleItem, 0, len(cands)),
 	}
-	scopeHash, err := scope.Hash()
+	presetHash, err := applied.Hash()
 	if err != nil {
 		return AssembleResult{}, err
 	}
@@ -309,9 +309,8 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 		Position:         position,
 		TargetCommit:     target,
 		AssemblerVersion: AssemblerVersion(),
-		Scope:            scope,
-		ScopeHash:        scopeHash,
-		ScopeOverridden:  scope.Overridden,
+		Preset:           applied,
+		PresetHash:       presetHash,
 		Items:            make([]ManifestItem, 0, len(cands)),
 		Exclusions:       exclusions,
 	}
@@ -335,7 +334,7 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 		AssemblerVersion: AssemblerVersion(),
 		ItemCount:        len(bundle.Items),
 		ManifestHash:     hash,
-		Scope:            scope,
+		Preset:           applied,
 		Size:             sizeReport(cands),
 		Artefacts:        []string{},
 		Bundle:           bundle,

@@ -149,7 +149,7 @@ func TestTheAssemblersOwnOutputIsNeverItsInput(t *testing.T) {
 	gitCommitAll(t, root)
 
 	if _, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, DryRun: true,
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
 	}); err == nil {
 		t.Fatal("a prior run's assembled input committed under an admitted root was passed as config")
 	} else if !strings.Contains(err.Error(), "run-dir/bundle.json") {
@@ -165,7 +165,7 @@ func TestAssembleRefusesAnOutputDirectoryTheTableAdmits(t *testing.T) {
 	root := fixtureRepo(t)
 	for _, out := range []string{"run-dir", "./run-dir", "docs/runs", filepath.Join(root, "run-dir")} {
 		_, err := Assemble(AssembleRequest{
-			RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, OutDir: out,
+			RepoRoot: root, Position: PositionWidening, Target: "HEAD", OutDir: out,
 		})
 		if err == nil {
 			t.Errorf("--out %q was accepted; the table admits the artefacts it would write there", out)
@@ -173,7 +173,7 @@ func TestAssembleRefusesAnOutputDirectoryTheTableAdmits(t *testing.T) {
 	}
 	for _, out := range []string{DefaultRunDir + "/rdg-2608301200000001", filepath.Join(t.TempDir(), "run")} {
 		if _, err := Assemble(AssembleRequest{
-			RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: fixtureScopeName, OutDir: out,
+			RepoRoot: root, Position: PositionWidening, Target: "HEAD", OutDir: out,
 		}); err != nil {
 			t.Errorf("--out %q was refused: %v", out, err)
 		}

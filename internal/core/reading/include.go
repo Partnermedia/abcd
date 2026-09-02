@@ -29,7 +29,12 @@ import (
 // assertExclusions, so an added entry is an added PROMISE — a refusal a reader
 // can now check and previously could not — rather than a rewording of an
 // existing one (iss-2608311238236490).
-const AssemblerVersionCore = "1.3.0"
+// It goes 1.3.0 to 1.4.0 with the withdrawal of the scope operand: the bundle's
+// `scope` block becomes `preset` and the manifest's `scope`, `scope_hash` and
+// `scope_overridden` become `preset` and `preset_hash`, so the shape a reader
+// and an auditor are promised has moved and nothing about the previous shape
+// remains true (adr-2609021016286571, spc-2609021004075744).
+const AssemblerVersionCore = "1.4.0"
 
 // AssemblerVersion is the core semver with the rendered include table's digest
 // as semver build metadata. The digest is computed, not declared, so a table

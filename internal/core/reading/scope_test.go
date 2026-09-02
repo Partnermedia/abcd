@@ -12,37 +12,22 @@ import (
 	"github.com/intentdriven/abcd/internal/gittest"
 )
 
-// narrowPresets is a preset file that genuinely narrows, so a test can tell a
-// scope that works from one that selects everything by accident.
+// narrowPresets is a preset file that genuinely narrows, so a test can tell an
+// entry that works from one that selects everything by accident.
 //
-// It carries the fixture's all-selecting preset too, because the narrowing
-// tests need an UNSCOPED baseline to compare against and that baseline is
-// itself expressed as a scope. Writing this file over the fixture's own would
-// otherwise remove the very preset the baseline is measured with.
+// It holds ONE preset, because the invocation names none and a file holding two
+// has nothing to choose between them (adr-2609021016286571,
+// cond-2609021004074586). A test that wants an unnarrowed baseline assembles
+// under the fixture's own all-selecting file BEFORE writing this one over it.
 func narrowPresets() string {
 	return `{
   "schema_version": 1,
   "presets": {
-    "` + fixtureScopeName + `": {
-      "positions": {
-        "widening": {"kinds": ["brief-section", "glossary-term", "intent-projection", "discipline", "spec", "source", "test", "doc", "config"], "records": [], "paths": []},
-        "entailment": {"kinds": ["brief-section", "glossary-term", "intent-projection", "discipline", "spec", "source", "test", "doc", "config"], "records": [], "paths": []},
-        "detection": {"kinds": ["brief-section", "glossary-term", "intent-projection", "discipline", "spec", "source", "test", "doc", "config"], "records": [], "paths": []}
-      }
-    },
-    "cold": {
+    "default": {
       "positions": {
         "widening": {"kinds": ["brief-section"], "records": [], "paths": []},
         "entailment": {"kinds": ["intent-projection"], "records": [], "paths": []},
         "detection": {"kinds": ["spec"], "records": [], "paths": []}
-      }
-    },
-    "warm": {
-      "extends": "cold",
-      "positions": {
-        "widening": {"kinds": ["doc"], "records": [], "paths": []},
-        "entailment": {"kinds": ["spec"], "records": [], "paths": []},
-        "detection": {"kinds": ["doc"], "records": [], "paths": []}
       }
     }
   }
@@ -50,160 +35,125 @@ func narrowPresets() string {
 `
 }
 
-// TestScopeIsRequired is itd-199 ac-1.
-func TestScopeIsRequired(t *testing.T) {
+// TestThePresetNarrowsNeverWidens is the property the whole mechanism rests on:
+// the applied entry intersects what the position already admits and can only
+// narrow it.
+//
+// Proved against the unnarrowed set rather than against an expected list, so an
+// entry that somehow reached a row the table denies fails here rather than
+// quietly redefining what the test expects.
+func TestThePresetNarrowsNeverWidens(t *testing.T) {
 	root := fixtureRepo(t)
-	_, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
-	})
-	if err == nil {
-		t.Fatal("an assembly with no scope was accepted")
+
+	wide := map[Position]map[string]bool{}
+	for _, p := range AssemblingPositions() {
+		set := map[string]bool{}
+		for _, m := range assembleFixture(t, root, p).Manifest.Items {
+			set[m.Path] = true
+		}
+		wide[p] = set
 	}
-	for _, want := range []string{"record id", "kind", "preset"} {
+
+	writeFile(t, root, ".abcd/config/reading-presets.json", narrowPresets())
+	gitCommitAll(t, root)
+
+	for _, p := range AssemblingPositions() {
+		res, err := Assemble(AssembleRequest{
+			RepoRoot: root, Position: p, Target: "HEAD", DryRun: true,
+		})
+		if err != nil {
+			continue // an entry selecting nothing at this position refuses, which is its own test
+		}
+		for _, m := range res.Manifest.Items {
+			if !wide[p][m.Path] {
+				t.Errorf("position %s admitted %s, which the unnarrowed assembly did not: an entry "+
+					"must intersect the table's admission and only narrow it", p, m.Path)
+			}
+		}
+		if len(res.Manifest.Items) >= len(wide[p]) {
+			t.Errorf("position %s did not narrow at all (%d of %d items); the fixture is not "+
+				"exercising the filter", p, len(res.Manifest.Items), len(wide[p]))
+		}
+	}
+}
+
+// TestASecondNamedPresetIsRefused holds scope condition cond-2609021004074586:
+// a second named preset is not a concept this instrument keeps.
+//
+// Nothing at the invocation names a preset, so a file holding two has nothing
+// to choose between them, and whichever the loader picked would be a resolution
+// ORDER deciding silently — the failure this package refuses everywhere else it
+// can arise. A repository with two calibrations commits one and keeps the other
+// in the file's history.
+func TestASecondNamedPresetIsRefused(t *testing.T) {
+	root := fixtureRepo(t)
+	writeFile(t, root, ".abcd/config/reading-presets.json", `{
+  "schema_version": 1,
+  "presets": {
+    "cold": {"positions": {"widening": {"kinds": ["brief-section"], "records": [], "paths": []}}},
+    "warm": {"positions": {"widening": {"kinds": ["doc"], "records": [], "paths": []}}}
+  }
+}`)
+	_, err := LoadPresets(root)
+	if err == nil {
+		t.Fatal("a preset file naming two presets was accepted; the invocation names none, so " +
+			"there is nothing to choose between them")
+	}
+	for _, want := range []string{"cold", "warm"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Errorf("the refusal does not name %q: %v", want, err)
 		}
 	}
 }
 
-// TestScopeNarrowsNeverWidens is the property the whole mechanism rests on: a
-// scope intersects what the position already admits and can only narrow it.
+// TestPresetForRefusesAMissingPosition is spc-2609021004075744's rule for the
+// resolver: PresetFor returns the one committed entry for the position and
+// refuses when the file holds no entry for it.
 //
-// Proved against the unscoped set rather than against an expected list, so a
-// scope that somehow reached a row the table denies fails here rather than
-// quietly redefining what the test expects.
-func TestScopeNarrowsNeverWidens(t *testing.T) {
+// Refusing beats defaulting. A position served its whole corpus because its
+// entry was forgotten is exactly the silent widening the presets exist to
+// close, and it would arrive as a reading that is about the wrong thing with
+// every gate green.
+func TestPresetForRefusesAMissingPosition(t *testing.T) {
 	root := fixtureRepo(t)
-	writeFile(t, root, ".abcd/config/reading-presets.json", narrowPresets())
-	gitCommitAll(t, root)
-
-	for _, p := range AssemblingPositions() {
-		wide := map[string]bool{}
-		for _, m := range assembleFixture(t, root, p).Manifest.Items {
-			wide[m.Path] = true
-		}
-		for _, preset := range []string{"cold", "warm"} {
-			res, err := Assemble(AssembleRequest{
-				RepoRoot: root, Position: p, Target: "HEAD", Scope: preset, DryRun: true,
-			})
-			if err != nil {
-				continue // a preset selecting nothing at this position refuses, which is its own test
-			}
-			for _, m := range res.Manifest.Items {
-				if !wide[m.Path] {
-					t.Errorf("position %s preset %s admitted %s, which the unscoped assembly did not: "+
-						"a scope must intersect the table's admission and only narrow it", p, preset, m.Path)
-				}
-			}
-			if len(res.Manifest.Items) >= len(wide) {
-				t.Errorf("position %s preset %s did not narrow at all (%d of %d items); the fixture "+
-					"is not exercising the filter", p, preset, len(res.Manifest.Items), len(wide))
-			}
-		}
-	}
-}
-
-// TestWarmContainsCold is itd-199 ac-11, and it is the reason `extends` is a
-// union rather than a replacement: warm can never be narrower than cold, and a
-// scope added to cold appears in warm without anyone remembering to add it
-// twice.
-func TestWarmContainsCold(t *testing.T) {
-	root := fixtureRepo(t)
-	writeFile(t, root, ".abcd/config/reading-presets.json", narrowPresets())
+	writeFile(t, root, ".abcd/config/reading-presets.json", `{
+  "schema_version": 1,
+  "presets": {
+    "default": {"positions": {"widening": {"kinds": ["brief-section"], "records": [], "paths": []}}}
+  }
+}`)
 	pf, err := LoadPresets(root)
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	for _, p := range AssemblingPositions() {
-		cold := presetSelectors(pf, pf.Presets["cold"], p)
-		warm := presetSelectors(pf, pf.Presets["warm"], p)
-		have := make(map[Selector]bool, len(warm))
-		for _, s := range warm {
-			have[s] = true
-		}
-		for _, s := range cold {
-			if !have[s] {
-				t.Errorf("position %s: warm does not contain cold's selector %+v", p, s)
-			}
-		}
-		if len(warm) <= len(cold) {
-			t.Errorf("position %s: warm (%d) is not wider than cold (%d); the fixture does not "+
-				"exercise the delta", p, len(warm), len(cold))
-		}
+	if _, err := PresetFor(pf, PositionWidening); err != nil {
+		t.Fatalf("the entry the file names was refused: %v", err)
 	}
-}
-
-// TestExtendsIsAUnionNotAReplacement proves the guard above by MUTATION: a
-// warm entry that REPLACED cold's at a position would still pass a test that
-// only asserted warm is non-empty.
-func TestExtendsIsAUnionNotAReplacement(t *testing.T) {
-	root := fixtureRepo(t)
-	writeFile(t, root, ".abcd/config/reading-presets.json", narrowPresets())
-	pf, err := LoadPresets(root)
-	if err != nil {
-		t.Fatalf("load: %v", err)
+	_, err = PresetFor(pf, PositionDetection)
+	if err == nil {
+		t.Fatal("a position the file names no entry for resolved; a run there would assemble " +
+			"nothing, or everything, and neither is what the position is about")
 	}
-	warm := presetSelectors(pf, pf.Presets["warm"], PositionWidening)
-
-	// warm names doc at widening and cold names brief-section. A replacement
-	// would yield doc alone.
-	var sawCold, sawWarm bool
-	for _, s := range warm {
-		if s.Kind == KindBriefSection {
-			sawCold = true
-		}
-		if s.Kind == KindDoc {
-			sawWarm = true
-		}
+	if !strings.Contains(err.Error(), string(PositionDetection)) {
+		t.Errorf("the refusal does not name the position: %v", err)
 	}
-	if !sawCold {
-		t.Error("warm dropped cold's selector at widening; extends must union, never replace")
-	}
-	if !sawWarm {
-		t.Error("warm dropped its own selector at widening")
-	}
-}
-
-// TestPresetNameIsNotAnOverrideAndADirectScopeIs is itd-199 ac-7.
-func TestPresetNameIsNotAnOverrideAndADirectScopeIs(t *testing.T) {
-	root := fixtureRepo(t)
-	writeFile(t, root, ".abcd/config/reading-presets.json", narrowPresets())
-	gitCommitAll(t, root)
-
-	byPreset, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionDetection, Target: "HEAD", Scope: "cold", DryRun: true,
-	})
-	if err != nil {
-		t.Fatalf("preset scope: %v", err)
-	}
-	if byPreset.Manifest.ScopeOverridden {
-		t.Error("naming a committed preset was stamped as an override; running as reviewed is not a departure")
-	}
-
-	direct, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionDetection, Target: "HEAD", Scope: "spec", DryRun: true,
-	})
-	if err != nil {
-		t.Fatalf("direct scope: %v", err)
-	}
-	if !direct.Manifest.ScopeOverridden {
-		t.Error("naming a kind directly was not stamped as an override; the stamp exists to count " +
-			"departures from the committed presets")
+	if !strings.Contains(err.Error(), PresetConfigPath) {
+		t.Errorf("the refusal does not name the file to commit the entry in: %v", err)
 	}
 }
 
 // TestComparativeRefuses is itd-199 ac-10.
 func TestComparativeRefuses(t *testing.T) {
 	root := fixtureRepo(t)
-	// A KIND token, deliberately, not the fixture preset. A preset carries no
-	// comparative entry — validatePresets forbids one — so a preset-scoped
-	// invocation would be refused by scope resolution even with the position
-	// check gone, and this test would pass while proving nothing about the
-	// refusal it names. A kind resolves without touching the presets, so the
-	// position check is the only thing that can refuse here.
+	// The refusal must be the POSITION check and not the resolver's. A preset
+	// carries no comparative entry — validatePresets forbids one — so PresetFor
+	// would refuse there too, and a test that could not tell the two apart
+	// would pass while proving nothing about the refusal it names. The position
+	// check runs BEFORE the presets are loaded at all, which is what the
+	// refusal text below distinguishes: it names the missing channel, where the
+	// resolver's names the preset file.
 	_, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionComparative, Target: "HEAD",
-		Scope: string(KindSpec), DryRun: true,
+		RepoRoot: root, Position: PositionComparative, Target: "HEAD", DryRun: true,
 	})
 	if err == nil {
 		t.Fatal("the comparative position assembled; its object has no channel, so a bundle it " +
@@ -213,6 +163,10 @@ func TestComparativeRefuses(t *testing.T) {
 		if !strings.Contains(strings.ToLower(err.Error()), want) {
 			t.Errorf("the refusal does not name %q: %v", want, err)
 		}
+	}
+	if strings.Contains(err.Error(), PresetConfigPath) {
+		t.Errorf("the comparative position was refused by the preset resolver rather than by the "+
+			"position check, so this test proves nothing about the missing channel: %v", err)
 	}
 }
 
@@ -227,7 +181,7 @@ func TestThreePositionsCarryDistinctItemSets(t *testing.T) {
 	seen := map[string]Position{}
 	for _, p := range AssemblingPositions() {
 		res, err := Assemble(AssembleRequest{
-			RepoRoot: root, Position: p, Target: "HEAD", Scope: "cold", DryRun: true,
+			RepoRoot: root, Position: p, Target: "HEAD", DryRun: true,
 		})
 		if err != nil {
 			t.Fatalf("position %s: %v", p, err)
@@ -241,71 +195,87 @@ func TestThreePositionsCarryDistinctItemSets(t *testing.T) {
 	}
 }
 
-// TestScopeCannotReachTheLedgerTier is brief invariant 14, held against an
-// operator-written scope rather than only against the table.
-func TestScopeCannotReachTheLedgerTier(t *testing.T) {
+// TestThePresetCannotReachTheLedgerTier is brief invariant 14, held against the
+// applied entry rather than only against the table.
+//
+// The entries are the widest a committed file could name — every kind at every
+// assembling position — because an entry that narrowed would prove nothing
+// about the tier it never asked for.
+func TestThePresetCannotReachTheLedgerTier(t *testing.T) {
 	root := fixtureRepo(t)
-	for _, scope := range []string{fixtureScopeName, "doc", "config", "source"} {
+	for _, p := range AssemblingPositions() {
 		res, err := Assemble(AssembleRequest{
-			RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: scope, DryRun: true,
+			RepoRoot: root, Position: p, Target: "HEAD", DryRun: true,
 		})
 		if err != nil {
 			continue
 		}
 		for _, m := range res.Manifest.Items {
 			if strings.Contains(m.Path, ".work.local") || strings.HasPrefix(m.Path, ".abcd/work/") {
-				t.Errorf("scope %q admitted %s from the ledger tier", scope, m.Path)
+				t.Errorf("the entry at %s admitted %s from the ledger tier", p, m.Path)
 			}
 		}
 	}
 }
 
-// TestDraftsStayDeniedAtWidening is itd-199 ac-4: a scope intersects what the
+// TestDraftsStayDeniedAtWidening is itd-199 ac-4: an entry intersects what the
 // table admits at the position and never widens it, so the deliberate drafts
-// asymmetry survives a scope that names the intent kind.
+// asymmetry survives an entry that names the intent kind.
 func TestDraftsStayDeniedAtWidening(t *testing.T) {
 	root := fixtureRepo(t)
+	writeFile(t, root, ".abcd/config/reading-presets.json", `{
+  "schema_version": 1,
+  "presets": {
+    "default": {"positions": {"widening":
+      {"kinds": ["intent-projection"], "records": [], "paths": []}}}
+  }
+}`)
+	gitCommitAll(t, root)
+
 	res, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionWidening, Target: "HEAD",
-		Scope: string(KindIntentProjection), DryRun: true,
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
 	})
 	if err != nil {
 		t.Fatalf("assemble: %v", err)
 	}
 	for _, m := range res.Manifest.Items {
 		if strings.Contains(m.Path, "/drafts/") || strings.Contains(m.Path, "/planned/") {
-			t.Errorf("a scope naming the intent kind at widening admitted %s; a scope narrows the "+
+			t.Errorf("an entry naming the intent kind at widening admitted %s; an entry narrows the "+
 				"table's admission and never widens it", m.Path)
 		}
 	}
 	if text := bundleText(res.Bundle); strings.Contains(text, sentinelDraftBody) {
-		t.Error("the draft body reached a scoped widening assembly")
+		t.Error("the draft body reached a narrowed widening assembly")
 	}
 }
 
-// TestBundleCarriesTheScopeAndManifestCarriesItsHash is ac-5 and ac-6.
-func TestBundleCarriesTheScopeAndManifestCarriesItsHash(t *testing.T) {
+// TestBundleCarriesThePresetAndManifestCarriesItsHash is itd-199 ac-5 and ac-6,
+// carried forward onto the preset path: the bundle states what THIS run was
+// handed, and the manifest carries the applied entry's hash.
+func TestBundleCarriesThePresetAndManifestCarriesItsHash(t *testing.T) {
 	root := fixtureRepo(t)
 	res := assembleFixture(t, root, PositionWidening)
 
-	if len(res.Bundle.Scope.Kinds) == 0 && len(res.Bundle.Scope.Records) == 0 &&
-		res.Bundle.Scope.LocationNarrowings == 0 {
-		t.Error("the bundle states no scope; a reader told its object is the shipped tree and " +
-			"handed a subset reports the rest as a finding")
+	if len(res.Bundle.Preset.Kinds) == 0 && len(res.Bundle.Preset.Records) == 0 &&
+		res.Bundle.Preset.LocationNarrowings == 0 {
+		t.Error("the bundle states nothing about what it was handed; a reader told its object is " +
+			"the shipped tree and handed a subset reports the rest as a finding")
 	}
-	if res.Manifest.ScopeHash == "" {
-		t.Error("the manifest carries no scope hash")
+	if res.Manifest.PresetHash == "" {
+		t.Error("the manifest carries no preset hash")
 	}
-	want, err := res.Manifest.Scope.Hash()
+	want, err := res.Manifest.Preset.Hash()
 	if err != nil {
 		t.Fatalf("hash: %v", err)
 	}
-	if res.Manifest.ScopeHash != want {
-		t.Errorf("the manifest's scope hash is %q, want %q", res.Manifest.ScopeHash, want)
+	if res.Manifest.PresetHash != want {
+		t.Errorf("the manifest's preset hash is %q, want %q", res.Manifest.PresetHash, want)
 	}
-	// The bundle carries what the reading was given and NOT who asked for it.
+	// The bundle carries what the reading was given and NOT the auditor's
+	// account of it. There is no override stamp anywhere now, and the bundle is
+	// the artefact that must never have carried one.
 	if strings.Contains(string(mustEncodeBundle(t, res.Bundle)), "overridden") {
-		t.Error("the bundle carries the override stamp; that is the auditor's fact, not the reading's")
+		t.Error("the bundle carries an override stamp; nothing can be overridden")
 	}
 }
 
@@ -336,10 +306,11 @@ func TestPresetCollisionsAreRefused(t *testing.T) {
 			{"widening": {"kinds": [], "records": [], "paths": ["../elsewhere"]}}}}}`,
 		"a preset scoping the comparative position": `{"schema_version": 1, "presets": {"p": {"positions":
 			{"comparative": {"kinds": ["doc"], "records": [], "paths": []}}}}}`,
-		"a two-level extends chain": `{"schema_version": 1, "presets": {
-			"a": {"positions": {"widening": {"kinds": ["doc"], "records": [], "paths": []}}},
-			"b": {"extends": "a", "positions": {}},
-			"c": {"extends": "b", "positions": {}}}}`,
+		// `extends` retired with the second preset name, so a file still
+		// carrying it is an unknown field rather than a chain to walk.
+		"a preset naming extends": `{"schema_version": 1, "presets": {
+			"a": {"extends": "b", "positions": {"widening":
+				{"kinds": ["doc"], "records": [], "paths": []}}}}}`,
 		"a wrong schema version": `{"schema_version": 99, "presets": {"p": {"positions": {}}}}`,
 		"an unknown field":       `{"schema_version": 1, "presets": {}, "extra": true}`,
 	} {
@@ -358,7 +329,7 @@ func TestUncommittedPresetRefuses(t *testing.T) {
 	writeFile(t, root, ".abcd/config/reading-presets.json", narrowPresets())
 	// deliberately NOT committed
 	_, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: "cold",
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD",
 	})
 	if err == nil {
 		t.Fatal("an assembly ran against an uncommitted preset configuration")
@@ -368,23 +339,31 @@ func TestUncommittedPresetRefuses(t *testing.T) {
 	}
 }
 
-// TestAScopeSelectingNothingRefuses holds the choice of a refusal over an empty
-// bundle. A reader handed an empty assembly has no way to tell "nothing matched"
-// from "this object is empty", and would report the second.
-func TestAScopeSelectingNothingRefuses(t *testing.T) {
+// TestAPresetSelectingNothingRefuses holds the choice of a refusal over an
+// empty bundle. A reader handed an empty assembly has no way to tell "nothing
+// matched" from "this object is empty", and would report the second.
+func TestAPresetSelectingNothingRefuses(t *testing.T) {
 	root := fixtureRepo(t)
+	// A well-formed id of an admitted family that names no record in the
+	// fixture. It must be a selector the loader ACCEPTS, or this tests a
+	// validation refusal instead of the selects-nothing one.
+	writeFile(t, root, ".abcd/config/reading-presets.json", `{
+  "schema_version": 1,
+  "presets": {
+    "default": {"positions": {"widening":
+      {"kinds": [], "records": ["itd-9999"], "paths": []}}}
+  }
+}`)
+	gitCommitAll(t, root)
+
 	_, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionWidening, Target: "HEAD",
-		// A well-formed id of an admitted family that names no record in the
-		// fixture. It must be a token the grammar ACCEPTS, or this tests the
-		// unknown-token refusal instead of the selects-nothing one.
-		Scope: "itd-9999", DryRun: true,
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
 	})
 	if err == nil {
-		t.Fatal("a scope selecting no item assembled an empty bundle")
+		t.Fatal("an entry selecting no item assembled an empty bundle")
 	}
 	if !strings.Contains(err.Error(), "nothing to assemble") {
-		t.Errorf("the refusal does not say the scope selected nothing: %v", err)
+		t.Errorf("the refusal does not say the entry selected nothing: %v", err)
 	}
 }
 
@@ -402,12 +381,12 @@ func TestRecordSelectorDoesNotMatchByPrefix(t *testing.T) {
 	}
 }
 
-// TestScopeHashIsOrderIndependent holds the canonical ordering: two scopes
-// naming the same thing in a different order are one scope, so a manifest's
-// scope hash identifies WHAT was selected rather than how it was typed.
-func TestScopeHashIsOrderIndependent(t *testing.T) {
-	a := Scope{Selectors: canonicalise([]Selector{{Kind: KindDoc}, {Kind: KindSpec}})}
-	b := Scope{Selectors: canonicalise([]Selector{{Kind: KindSpec}, {Kind: KindDoc}, {Kind: KindDoc}})}
+// TestThePresetHashIsOrderIndependent holds the canonical ordering: two entries
+// naming the same thing in a different order are one entry, so a manifest's
+// preset hash identifies WHAT was selected rather than how the file spelled it.
+func TestThePresetHashIsOrderIndependent(t *testing.T) {
+	a := AppliedPreset{Selectors: canonicalise([]Selector{{Kind: KindDoc}, {Kind: KindSpec}})}
+	b := AppliedPreset{Selectors: canonicalise([]Selector{{Kind: KindSpec}, {Kind: KindDoc}, {Kind: KindDoc}})}
 	ha, err := a.Hash()
 	if err != nil {
 		t.Fatal(err)
@@ -417,30 +396,30 @@ func TestScopeHashIsOrderIndependent(t *testing.T) {
 		t.Fatal(err)
 	}
 	if ha != hb {
-		t.Errorf("two scopes naming the same selectors hashed differently: %s vs %s", ha, hb)
+		t.Errorf("two entries naming the same selectors hashed differently: %s vs %s", ha, hb)
 	}
 }
 
-// TestBundleScopeCarriesNoRepositoryPath is brief invariant 15 held against the
-// scope, and it exists because the obvious implementation broke it: writing one
-// Scope type into both artefacts put a preset's path selectors — which are
-// repository paths — into the reading's own working set
+// TestBundlePresetCarriesNoRepositoryPath is brief invariant 15 held against
+// the applied entry, and it exists because the obvious implementation broke it:
+// writing one type into both artefacts put a preset's path selectors — which
+// are repository paths — into the reading's own working set
 // (iss-2608312058244357).
 //
 // The manifest MAY carry paths; that is its job, and it is why the bundle can
-// be pathless and still checkable. The bundle may not, under any scope.
-func TestBundleScopeCarriesNoRepositoryPath(t *testing.T) {
+// be pathless and still checkable. The bundle may not, under any entry.
+func TestBundlePresetCarriesNoRepositoryPath(t *testing.T) {
 	root := fixtureRepo(t)
 	const secret = "internal/core/lint"
 	writeFile(t, root, ".abcd/config/reading-presets.json", `{
   "schema_version": 1,
-  "presets": {"pathy": {"positions": {"widening":
+  "presets": {"default": {"positions": {"widening":
     {"kinds": ["doc"], "records": [], "paths": ["`+secret+`"]}}}}
 }`)
 	gitCommitAll(t, root)
 
 	res, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionWidening, Target: "HEAD", Scope: "pathy", DryRun: true,
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
 	})
 	if err != nil {
 		t.Fatalf("assemble: %v", err)
@@ -449,7 +428,7 @@ func TestBundleScopeCarriesNoRepositoryPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encode: %v", err)
 	}
-	// Checked against the SCOPE BLOCK and the structural keys, not against the
+	// Checked against the PRESET BLOCK and the structural keys, not against the
 	// whole document. Item text legitimately contains path-like strings — a
 	// record's prose mentions packages, and Go source carries import paths —
 	// and that is pre-existing and inherent to carrying content at all. What
@@ -461,9 +440,9 @@ func TestBundleScopeCarriesNoRepositoryPath(t *testing.T) {
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if strings.Contains(string(doc["scope"]), secret) {
-		t.Errorf("the bundle's scope carries the repository path %q; the assembled input is the "+
-			"reading's whole working set and no repository path may enter its structure", secret)
+	if strings.Contains(string(doc["preset"]), secret) {
+		t.Errorf("the bundle's preset block carries the repository path %q; the assembled input is "+
+			"the reading's whole working set and no repository path may enter its structure", secret)
 	}
 	for key, val := range doc {
 		if key == "items" {
@@ -484,7 +463,7 @@ func TestBundleScopeCarriesNoRepositoryPath(t *testing.T) {
 	}
 	// The reading must still be TOLD it was narrowed, or it reports the absent
 	// material as a finding against the record.
-	if res.Bundle.Scope.LocationNarrowings == 0 {
+	if res.Bundle.Preset.LocationNarrowings == 0 {
 		t.Error("the bundle does not record that a narrowing by location applied, so the reading " +
 			"cannot tell it was handed a subset")
 	}
@@ -503,11 +482,11 @@ func mustEncodeManifest(t *testing.T, m Manifest) string {
 	return string(raw)
 }
 
-// TestNoBundleFieldIsAScopeSelector guards the shape rather than one path: a
+// TestNoBundleFieldIsAPresetSelector guards the shape rather than one path: a
 // future field added to Selector would flow into the bundle again unless the
-// projection is explicit, so the bundle's scope is pinned to the three keys it
-// is allowed to have.
-func TestNoBundleFieldIsAScopeSelector(t *testing.T) {
+// projection is explicit, so the bundle's preset block is pinned to the three
+// keys it is allowed to have.
+func TestNoBundleFieldIsAPresetSelector(t *testing.T) {
 	root := fixtureRepo(t)
 	res := assembleFixture(t, root, PositionWidening)
 	raw, err := EncodeBundle(res.Bundle)
@@ -515,19 +494,19 @@ func TestNoBundleFieldIsAScopeSelector(t *testing.T) {
 		t.Fatalf("encode: %v", err)
 	}
 	var doc struct {
-		Scope map[string]any `json:"scope"`
+		Preset map[string]any `json:"preset"`
 	}
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
 	allowed := map[string]bool{"kinds": true, "records": true, "location_narrowings": true}
-	for key := range doc.Scope {
+	for key := range doc.Preset {
 		if !allowed[key] {
-			t.Errorf("the bundle's scope carries the key %q; only a pathless projection may "+
+			t.Errorf("the bundle's preset block carries the key %q; only a pathless projection may "+
 				"reach a reading", key)
 		}
 	}
-	if _, leaked := doc.Scope["selectors"]; leaked {
+	if _, leaked := doc.Preset["selectors"]; leaked {
 		t.Error("the bundle carries raw selectors, which is the shape that leaked a path")
 	}
 }
@@ -535,59 +514,59 @@ func TestNoBundleFieldIsAScopeSelector(t *testing.T) {
 // TestGatesSeeTheUnfilteredWalk pins the pipeline's ORDER, which was a claim in
 // a comment and nothing more until this test existed.
 //
-// The scope filter must run AFTER the dirty gate and the exclusion assertion,
-// so a narrow scope cannot shrink the set those gates examine. Moving the
+// The preset filter must run AFTER the dirty gate and the exclusion assertion,
+// so a narrow entry cannot shrink the set those gates examine. Moving the
 // filter earlier passed the entire package before this test: the dirty gate's
 // predicate is a pure function of the position and so refuses under either
 // order, and the exclusion floor's paths are structurally denied so no
 // candidate can breach one. The property was real, load-bearing and
 // unfalsifiable — which is exactly the shape itd-195 says to make executable.
+//
+// The two runs are two COMMITTED files, because the entry is no longer
+// something an invocation can vary: the wide run goes first against the
+// fixture's all-selecting file, then the narrow file is committed over it.
 func TestGatesSeeTheUnfilteredWalk(t *testing.T) {
 	root := fixtureRepo(t)
-	writeFile(t, root, ".abcd/config/reading-presets.json", narrowPresets())
-	gitCommitAll(t, root)
 
 	var sawScoped, sawWide int
 	restore := assertExclusionsHook
 	t.Cleanup(func() { assertExclusionsHook = restore })
-	assertExclusionsHook = func(cands []candidate, ex []Exclusion) error {
-		sawScoped = len(cands)
-		return restore(cands, ex)
-	}
-	if _, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionDetection, Target: "HEAD", Scope: "cold", DryRun: true,
-	}); err != nil {
-		t.Fatalf("narrow assembly: %v", err)
-	}
 
 	assertExclusionsHook = func(cands []candidate, ex []Exclusion) error {
 		sawWide = len(cands)
 		return restore(cands, ex)
 	}
 	wide, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionDetection, Target: "HEAD",
-		Scope: fixtureScopeName, DryRun: true,
+		RepoRoot: root, Position: PositionDetection, Target: "HEAD", DryRun: true,
 	})
 	if err != nil {
 		t.Fatalf("wide assembly: %v", err)
 	}
 
-	if sawScoped != sawWide {
-		t.Errorf("the exclusion assertion saw %d candidates under a narrow scope and %d under a "+
-			"wide one; the gates must run over the unfiltered walk, or a narrow scope can quiet "+
-			"a breach a wide one would have caught", sawScoped, sawWide)
+	writeFile(t, root, ".abcd/config/reading-presets.json", narrowPresets())
+	gitCommitAll(t, root)
+
+	assertExclusionsHook = func(cands []candidate, ex []Exclusion) error {
+		sawScoped = len(cands)
+		return restore(cands, ex)
 	}
-	// And the guard must not be vacuous: the scope has to actually narrow, or
-	// the two counts would match for an uninteresting reason.
 	narrow, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionDetection, Target: "HEAD", Scope: "cold", DryRun: true,
+		RepoRoot: root, Position: PositionDetection, Target: "HEAD", DryRun: true,
 	})
 	if err != nil {
 		t.Fatalf("narrow assembly: %v", err)
 	}
+
+	if sawScoped != sawWide {
+		t.Errorf("the exclusion assertion saw %d candidates under a narrow entry and %d under a "+
+			"wide one; the gates must run over the unfiltered walk, or a narrow entry can quiet "+
+			"a breach a wide one would have caught", sawScoped, sawWide)
+	}
+	// And the guard must not be vacuous: the entry has to actually narrow, or
+	// the two counts would match for an uninteresting reason.
 	if len(narrow.Manifest.Items) >= len(wide.Manifest.Items) {
-		t.Fatalf("the narrow scope emitted %d items and the wide one %d; this test proves nothing "+
-			"unless the scope narrows", len(narrow.Manifest.Items), len(wide.Manifest.Items))
+		t.Fatalf("the narrow entry emitted %d items and the wide one %d; this test proves nothing "+
+			"unless the entry narrows", len(narrow.Manifest.Items), len(wide.Manifest.Items))
 	}
 	if sawScoped <= len(narrow.Manifest.Items) {
 		t.Errorf("the exclusion assertion saw %d candidates but the run emitted %d; the gate was "+
@@ -624,7 +603,7 @@ func TestAnUntrackedPresetRefuses(t *testing.T) {
 	}
 
 	_, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionDetection, Target: "HEAD", Scope: "cold", DryRun: true,
+		RepoRoot: root, Position: PositionDetection, Target: "HEAD", DryRun: true,
 	})
 	if err == nil {
 		t.Fatal("an assembly ran against an untracked, ignored preset; a preset is admitted at " +
@@ -658,7 +637,7 @@ func TestASymlinkedPresetRefuses(t *testing.T) {
 	gitCommitAll(t, root)
 
 	_, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionDetection, Target: "HEAD", Scope: "cold", DryRun: true,
+		RepoRoot: root, Position: PositionDetection, Target: "HEAD", DryRun: true,
 	})
 	if err == nil {
 		t.Fatal("an assembly ran from a preset symlinked out of the tree; what it resolves to " +
@@ -732,75 +711,53 @@ func gitStatusPorcelain(t *testing.T, root string) string {
 // This is the gap fidelity review called the largest in the change, and it was
 // exactly right: every other test in this file overwrites
 // .abcd/config/reading-presets.json with its own, so the file the whole
-// "committed, reviewed, shape-validated" argument rests on — the one adr-58
-// cites to admit a preset name at the invocation at all — was checked by
-// nothing. It could have shipped malformed, or with `cold` empty at a position,
-// and `make preflight` would have stayed green.
+// "committed, reviewed, shape-validated" argument rests on — the file the
+// assembler now applies with no operand at all — was checked by nothing. It
+// could have shipped malformed, or empty at a position, and `make preflight`
+// would have stayed green.
+//
+// One preset, and an entry for every position that assembles
+// (adr-2609021016286571). The entry CONTENTS are the preset-windows spec's, not
+// this test's; what is held here is the shape the invocation depends on.
 func TestTheShippedPresetFileIsValid(t *testing.T) {
 	root := repoRoot(t)
 	pf, err := LoadPresets(root)
 	if err != nil {
 		t.Fatalf("the committed preset file does not load: %v", err)
 	}
-	for _, want := range []string{"cold", "warm"} {
-		if _, ok := pf.Presets[want]; !ok {
-			t.Errorf("the committed presets do not name %q", want)
-		}
-	}
-}
-
-// TestTheShippedWarmContainsTheShippedCold holds ac-11 against the file that
-// ships, not against a fixture.
-//
-// The union is by construction, but the LINKAGE is by configuration: nothing in
-// validatePresets requires a preset named warm to extend cold, so deleting the
-// `extends` line would let warm be narrower than cold with every gate green.
-// This is the gate.
-func TestTheShippedWarmContainsTheShippedCold(t *testing.T) {
-	pf, err := LoadPresets(repoRoot(t))
-	if err != nil {
-		t.Fatalf("load: %v", err)
-	}
-	cold, warm := pf.Presets["cold"], pf.Presets["warm"]
-	if warm.Extends != "cold" {
-		t.Fatalf("the shipped warm preset extends %q, not cold; warm is cold plus a delta by "+
-			"construction, and that construction is the `extends` line", warm.Extends)
+	if len(pf.Presets) != 1 {
+		t.Fatalf("the committed file holds %d presets; one entry per position means one preset",
+			len(pf.Presets))
 	}
 	for _, p := range AssemblingPositions() {
-		c := presetSelectors(pf, cold, p)
-		w := presetSelectors(pf, warm, p)
-		have := make(map[Selector]bool, len(w))
-		for _, s := range w {
-			have[s] = true
-		}
-		for _, s := range c {
-			if !have[s] {
-				t.Errorf("position %s: the shipped warm does not contain cold's selector %+v", p, s)
-			}
+		if _, err := PresetFor(pf, p); err != nil {
+			t.Errorf("the committed file names no usable entry for %s, so a run there refuses: %v",
+				p, err)
 		}
 	}
 }
 
-// TestTheShippedColdScopesEveryAssemblingPositionDistinctly holds ac-9 against
-// the committed file. The measured finding this intent exists to fix is that
-// three positions received a byte-identical item set; a preset that scoped them
-// alike would reproduce it exactly, and only the shipped file can say.
-func TestTheShippedColdScopesEveryAssemblingPositionDistinctly(t *testing.T) {
+// TestTheShippedPresetScopesEveryAssemblingPositionDistinctly holds itd-199
+// ac-9 against the committed file. The measured finding that intent exists to
+// fix is that three positions received a byte-identical item set; an entry set
+// that scoped them alike would reproduce it exactly, and only the shipped file
+// can say.
+func TestTheShippedPresetScopesEveryAssemblingPositionDistinctly(t *testing.T) {
 	pf, err := LoadPresets(repoRoot(t))
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
 	seen := map[string]Position{}
 	for _, p := range AssemblingPositions() {
-		sels := presetSelectors(pf, pf.Presets["cold"], p)
-		if len(sels) == 0 {
-			t.Errorf("the shipped cold preset scopes nothing at %s, so that position cannot "+
-				"assemble at all", p)
+		applied, err := PresetFor(pf, p)
+		if err != nil {
+			t.Errorf("the committed file names no entry at %s, so that position cannot "+
+				"assemble at all: %v", p, err)
 			continue
 		}
-		key := fmt.Sprintf("%v", sels)
+		key := fmt.Sprintf("%v", applied.Selectors)
 		if other, dup := seen[key]; dup {
-			t.Errorf("the shipped cold preset gives %s and %s the same scope; a table that cannot "+
+			t.Errorf("the committed file gives %s and %s the same entry; a table that cannot "+
 				"say what a reading is about cannot distinguish readings about different things",
 				other, p)
 		}
@@ -808,41 +765,249 @@ func TestTheShippedColdScopesEveryAssemblingPositionDistinctly(t *testing.T) {
 	}
 }
 
-// TestARecordScopeAssemblesThatRecordsMaterial is itd-199 ac-2's POSITIVE half,
-// which nothing exercised.
+// TestARecordSelectorAssemblesThatRecordsMaterial is itd-199 ac-2's POSITIVE
+// half, which nothing exercised.
 //
 // Every preset — the generated fixture and the committed file alike — carries an
 // empty `records` list, and the one record-shaped assembly in the suite used an
 // id that selects nothing and asserted the refusal. So the selecting path was
 // held by reading the matcher, not by running it: `pathNamesRecord` was unit
 // tested, and no assembly ever passed a record's material through it.
-func TestARecordScopeAssemblesThatRecordsMaterial(t *testing.T) {
+func TestARecordSelectorAssemblesThatRecordsMaterial(t *testing.T) {
 	root := fixtureRepo(t)
+	wide := assembleFixture(t, root, PositionEntailment)
+
+	writeFile(t, root, ".abcd/config/reading-presets.json", `{
+  "schema_version": 1,
+  "presets": {
+    "default": {"positions": {"entailment":
+      {"kinds": [], "records": ["itd-1"], "paths": []}}}
+  }
+}`)
+	gitCommitAll(t, root)
+
 	res, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionEntailment, Target: "HEAD",
-		Scope: "itd-1", DryRun: true,
+		RepoRoot: root, Position: PositionEntailment, Target: "HEAD", DryRun: true,
 	})
 	if err != nil {
-		t.Fatalf("a record scope naming a record the fixture holds refused: %v", err)
+		t.Fatalf("a record selector naming a record the fixture holds refused: %v", err)
 	}
 	if len(res.Manifest.Items) == 0 {
-		t.Fatal("a record scope assembled nothing")
+		t.Fatal("a record selector assembled nothing")
 	}
 	for _, m := range res.Manifest.Items {
 		if !pathNamesRecord(m.Path, "itd-1") {
-			t.Errorf("the assembly passed %s, which the scope itd-1 does not name; a scope "+
-				"admits its own record's material and no other", m.Path)
+			t.Errorf("the assembly passed %s, which the selector itd-1 does not name; a record "+
+				"selector admits its own record's material and no other", m.Path)
 		}
 	}
 	// And it must be a genuine narrowing, or the assertion above is trivially
-	// satisfied by a scope that happened to select everything.
-	wide := assembleFixture(t, root, PositionEntailment)
+	// satisfied by an entry that happened to select everything.
 	if len(res.Manifest.Items) >= len(wide.Manifest.Items) {
-		t.Errorf("the record scope passed %d items and the unscoped assembly %d; this test "+
-			"proves nothing unless the scope narrows", len(res.Manifest.Items), len(wide.Manifest.Items))
+		t.Errorf("the record selector passed %d items and the unnarrowed assembly %d; this test "+
+			"proves nothing unless the entry narrows",
+			len(res.Manifest.Items), len(wide.Manifest.Items))
 	}
 	// The bundle must tell the reading which record it was given.
-	if len(res.Bundle.Scope.Records) != 1 || res.Bundle.Scope.Records[0] != "itd-1" {
-		t.Errorf("the bundle's scope records are %v, want [itd-1]", res.Bundle.Scope.Records)
+	if len(res.Bundle.Preset.Records) != 1 || res.Bundle.Preset.Records[0] != "itd-1" {
+		t.Errorf("the bundle's preset records are %v, want [itd-1]", res.Bundle.Preset.Records)
+	}
+}
+
+// onlyPreset returns the file's single committed preset. The invocation names
+// no preset, so a file holding more than one has nothing to choose between them
+// (cond-2609021004074586).
+func onlyPreset(t *testing.T, pf PresetFile) Preset {
+	t.Helper()
+	if len(pf.Presets) != 1 {
+		t.Fatalf("the preset file holds %d preset(s); one entry per position means one preset",
+			len(pf.Presets))
+	}
+	for _, p := range pf.Presets {
+		return p
+	}
+	return Preset{}
+}
+
+// decodedManifest decodes one run's manifest as a bare document, so a test can
+// assert about the KEYS a reader would find rather than about the struct the
+// writer happened to have.
+func decodedManifest(t *testing.T, m Manifest) map[string]json.RawMessage {
+	t.Helper()
+	raw, err := EncodeManifest(m)
+	if err != nil {
+		t.Fatalf("encode manifest: %v", err)
+	}
+	var doc map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatalf("decode manifest: %v", err)
+	}
+	return doc
+}
+
+// TestAssemblyAppliesTheCommittedPresetForThePosition is itd-2609021003095168
+// ac-2 (framework v4 section 8.2 and ruling M8; adr-2609021016286571).
+//
+// No operand names what a run is handed. The assembler applies the committed
+// entry for the position it was invoked at, and the bundle carries the
+// intersection of that entry with what the include table already admits there —
+// nothing outside the entry, and nothing the table denies. The manifest records
+// the entry applied and its hash, so a reader can say which commit's statement
+// of the object the run used.
+func TestAssemblyAppliesTheCommittedPresetForThePosition(t *testing.T) {
+	root := fixtureRepo(t)
+
+	// The whole admission at each position, before the entry narrows it. The
+	// fixture's own preset names every kind, so this IS the table's admission,
+	// and the intersection below is computed against it rather than declared.
+	whole := map[Position][]ManifestItem{}
+	for _, p := range AssemblingPositions() {
+		whole[p] = assembleFixture(t, root, p).Manifest.Items
+	}
+
+	writeFile(t, root, ".abcd/config/reading-presets.json", narrowPresets())
+	gitCommitAll(t, root)
+	pf, err := LoadPresets(root)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	entry := onlyPreset(t, pf)
+
+	for _, p := range AssemblingPositions() {
+		res, err := Assemble(AssembleRequest{
+			RepoRoot: root, Position: p, Target: "HEAD", DryRun: true,
+		})
+		if err != nil {
+			t.Fatalf("assemble at %s: %v", p, err)
+		}
+		kinds := map[Kind]bool{}
+		for _, k := range entry.Positions[string(p)].Kinds {
+			kinds[k] = true
+		}
+		want := map[string]bool{}
+		for _, m := range whole[p] {
+			if kinds[m.Kind] {
+				want[m.Path] = true
+			}
+		}
+		if len(want) == 0 {
+			t.Fatalf("the entry for %s selects nothing out of the table's admission, so this "+
+				"test proves nothing about the intersection", p)
+		}
+		if len(want) >= len(whole[p]) {
+			t.Fatalf("the entry for %s does not narrow the table's admission (%d of %d), so this "+
+				"test proves nothing", p, len(want), len(whole[p]))
+		}
+		got := map[string]bool{}
+		for _, m := range res.Manifest.Items {
+			got[m.Path] = true
+			if !kinds[m.Kind] {
+				t.Errorf("the assembly at %s passed %s of kind %s, which the committed entry does "+
+					"not name; nothing outside the entry travels", p, m.Path, m.Kind)
+			}
+		}
+		for path := range want {
+			if !got[path] {
+				t.Errorf("the assembly at %s omitted %s, which the entry names and the table "+
+					"admits; the bundle is the intersection of the two", p, path)
+			}
+		}
+
+		// And the manifest names the entry applied, with its hash.
+		doc := decodedManifest(t, res.Manifest)
+		var applied struct {
+			Selectors []Selector `json:"selectors"`
+		}
+		if err := json.Unmarshal(doc["preset"], &applied); err != nil {
+			t.Fatalf("the manifest at %s carries no preset block: %v", p, err)
+		}
+		wantSels := canonicalise(positionSelectors(entry, p))
+		if fmt.Sprintf("%v", applied.Selectors) != fmt.Sprintf("%v", wantSels) {
+			t.Errorf("the manifest at %s records the preset %v, want %v",
+				p, applied.Selectors, wantSels)
+		}
+		var hash string
+		if err := json.Unmarshal(doc["preset_hash"], &hash); err != nil || hash == "" {
+			t.Errorf("the manifest at %s carries no preset hash, so a reader cannot tell two runs "+
+				"apart by the entry they applied", p)
+		}
+	}
+}
+
+// TestManifestCarriesNoOverride is itd-2609021003095168 ac-4
+// (adr-2609021016286571: there is no override at invocation and nothing to
+// stamp).
+//
+// The stamp counted departures from the committed presets, which was worth
+// counting while an operand could depart from them. Nothing can now, so a
+// manifest carrying the stamp would assert a distinction that no longer exists.
+func TestManifestCarriesNoOverride(t *testing.T) {
+	root := fixtureRepo(t)
+	res, err := Assemble(AssembleRequest{
+		RepoRoot: root, Position: PositionWidening, Target: "HEAD", DryRun: true,
+	})
+	if err != nil {
+		t.Fatalf("assemble: %v", err)
+	}
+	doc := decodedManifest(t, res.Manifest)
+	for _, gone := range []string{"scope", "scope_hash", "scope_overridden"} {
+		if _, has := doc[gone]; has {
+			t.Errorf("the manifest carries the key %q; the scope operand and its override stamp "+
+				"are withdrawn, and a run is reproducible from the commit and the preset entry "+
+				"the manifest names", gone)
+		}
+	}
+	var applied map[string]json.RawMessage
+	if err := json.Unmarshal(doc["preset"], &applied); err != nil {
+		t.Fatalf("the manifest carries no preset block: %v", err)
+	}
+	for _, gone := range []string{"source", "overridden"} {
+		if _, has := applied[gone]; has {
+			t.Errorf("the manifest's preset block carries %q; there is no token an operator gave "+
+				"and no departure to stamp", gone)
+		}
+	}
+}
+
+// TestRunIsReproducibleFromCommitAndPreset is itd-2609021003095168 ac-4's
+// second half: the invocation carries nothing that could make two runs of one
+// commit differ, so two assemblies at one commit produce byte-identical
+// bundles. This is the amnesia eval's property, exercised here on the preset
+// path.
+func TestRunIsReproducibleFromCommitAndPreset(t *testing.T) {
+	root := fixtureRepo(t)
+	writeFile(t, root, ".abcd/config/reading-presets.json", narrowPresets())
+	gitCommitAll(t, root)
+
+	for _, p := range AssemblingPositions() {
+		first, err := Assemble(AssembleRequest{
+			RepoRoot: root, Position: p, Target: "HEAD", DryRun: true,
+		})
+		if err != nil {
+			t.Fatalf("first assembly at %s: %v", p, err)
+		}
+		second, err := Assemble(AssembleRequest{
+			RepoRoot: root, Position: p, Target: "HEAD", DryRun: true,
+		})
+		if err != nil {
+			t.Fatalf("second assembly at %s: %v", p, err)
+		}
+		a, b := mustEncodeBundle(t, first.Bundle), mustEncodeBundle(t, second.Bundle)
+		if string(a) != string(b) {
+			t.Errorf("two assemblies at %s of one commit produced different bundles; the "+
+				"invocation carries nothing a re-run could differ on", p)
+		}
+		// The manifests differ in the run id and in nothing else, so the entry
+		// applied and its hash are the same in both. Read as document keys
+		// rather than as struct fields, because what a reader reproduces the
+		// run from is the document.
+		h := decodedManifest(t, first.Manifest)["preset_hash"]
+		if len(h) == 0 {
+			t.Errorf("the manifest at %s records no preset hash, so a reader cannot say which "+
+				"commit's statement of the object the run applied", p)
+		}
+		if string(h) != string(decodedManifest(t, second.Manifest)["preset_hash"]) {
+			t.Errorf("two assemblies at %s recorded different preset hashes", p)
+		}
 	}
 }

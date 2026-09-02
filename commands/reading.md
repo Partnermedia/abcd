@@ -1,7 +1,7 @@
 ---
 name: reading
 description: Assemble the input a cold reading is handed and validate the output it returns, by invoking the abcd binary. Bare invocation is a read-only status render; assemble produces the assembled input and its hashed manifest, and ingest validates one reading's output and writes its records.
-argument-hint: "[] | assemble --position <widening|entailment|detection> --target <HEAD|sha> --scope <itd-N|spc-N|kind|preset> [--out <dir>] [--dry-run] | ingest --reading-json <path>"
+argument-hint: "[] | assemble --position <widening|entailment|detection> --target <HEAD|sha> [--out <dir>] [--dry-run] | ingest --reading-json <path>"
 ---
 
 # `/abcd:reading` — cold-reading input assembler
@@ -16,9 +16,9 @@ writes**.
 Two things this surface does not do. It never runs a reading: it produces the
 input a reading would be given, and dispatching that input to a reader is host
 work. And it carries no free text at any position — the operator supplies a
-position, a target state and a scope, each in a closed grammar, and the
-reading's object and question come from its definition, so there is no channel
-through which ledger content can travel in the framing of a request.
+position and a target state, each in a closed grammar, and the reading's object
+and question come from its definition, so there is no channel through which
+ledger content can travel in the framing of a request.
 
 ## Status (bare)
 
@@ -63,29 +63,31 @@ its records will be rolled back, because they will not be.
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/abcd" reading assemble \
-  --position widening --target HEAD --scope cold --json
+  --position widening --target HEAD --json
 ```
 
-`--position` takes one of four closed tokens — `widening`, `entailment`,
-`comparative`, `detection`. An unknown token is refused by name. **The
-comparative position does not assemble** and refuses, naming the channel it
-lacks: its object is the widening reading's pre-admission output, which is not
-repository material. `--target`
+**The invocation is two operands and nothing else.** `--position` takes one of
+four closed tokens — `widening`, `entailment`, `comparative`, `detection`. An
+unknown token is refused by name. **The comparative position does not assemble**
+and refuses, naming the channel it lacks: its object is the widening reading's
+pre-admission output, which is not repository material. `--target`
 takes `HEAD` or a hexadecimal commit sha of 7 to 40 digits; a branch name or a
 tag is refused, because it moves and the manifest's re-runnability rests on a
-reference that cannot.
+reference that cannot. Both are required, and any other operand is refused by
+name.
 
-`--scope` names what the reading is **about**, and is required. It takes one
-token in a closed grammar: a record id (`itd-N`, `spc-N`), a
-material kind, or the name of a preset committed in
-`.abcd/config/reading-presets.json`. **No repository path is accepted here** —
-a path may be named only inside the committed preset file, where it is
-reviewed, shape-validated and inside the dirty gate (adr-58). A scope
-intersects what the position already admits and can only narrow it.
+What the reading is **handed** comes from the committed preset entry for that
+position, in `.abcd/config/reading-presets.json`, applied by the assembler with
+no operand naming it. The entry intersects what the position already admits and
+can only narrow it. **No repository path is accepted at the invocation** — a
+path may be named only inside the committed preset file, where it is reviewed,
+shape-validated and inside the dirty gate (adr-2609021016286571, which
+supersedes adr-58).
 
-Naming a preset is running as reviewed. Naming a record or a kind directly is
-an override, and the manifest stamps it as one, so drift between the committed
-presets and what people actually run is countable.
+Changing what a position reads is a commit to that file, reviewed like any
+other change; there is no override at the invocation and nothing to stamp. One
+file, one entry per position: a repository that wants a wider reading commits a
+wider entry, and the manifest shows which entry a run applied.
 
 **The comparative position does not assemble.** Its object is the widening
 reading's pre-admission output, which is not repository material and has no
@@ -101,12 +103,13 @@ an unknown position, a missing operand, and any positional argument.
 Report from the JSON: `run_id`, `position`, `target_commit`, `item_count`,
 `manifest_hash`, and — where the run wrote — `out_dir` and `artefacts`.
 
-Report `scope` too: `scope.source`, the token the operator gave; `scope.selectors`,
-what it resolved to; and `scope.overridden` — true when the run named a record or
-a kind directly rather than a committed preset. (The written manifest spells that
-last one `scope_overridden`; the verb's own JSON nests it under `scope`.) Say plainly when a run was overridden, because
-a run nobody can tell departed from the reviewed presets is a run whose drift
-is invisible.
+Report `preset` too: `preset.selectors`, the committed entry the run applied,
+resolved to its clauses. The written manifest carries the same block under
+`preset`, beside `preset_hash`, the entry's content hash — which is what makes a
+run reproducible from the commit it names, and what lets a reader tell two runs
+apart by the entry they applied. There is **no** override stamp and no scope
+source: nothing at the invocation can depart from the committed entry, so there
+is no departure to report.
 
 Also report `size`, on every run including a dry run: the total `bytes` and
 `tokens_est`, and each row of `by_kind` (`kind`, `items`, `bytes`,
@@ -121,7 +124,7 @@ to dispatch it.
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/abcd" reading assemble \
-  --position entailment --target HEAD --scope cold \
+  --position entailment --target HEAD \
   --out .abcd/.work.local/scratch/reading-runs/manual --json
 ```
 

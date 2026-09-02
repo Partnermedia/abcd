@@ -101,7 +101,7 @@ reason) unchanged. The four `prompt_version` values move PATCH together, and
 the definitions and not to the bundle, so it moves neither `SchemaVersion`
 nor `AssemblerVersionCore`; the definition content hash in the run metadata
 moves by construction. This resolves
-[iss-2609021153261145](../../../work/issues/open/iss-2609021153261145-the-blindness-core-s-fourth-condition-says-items-come-back-u.md).
+[iss-2609021153261145](../../../work/issues/resolved/iss-2609021153261145-the-blindness-core-s-fourth-condition-says-items-come-back-u.md).
 
 ### Landing order
 

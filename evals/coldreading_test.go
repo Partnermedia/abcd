@@ -283,7 +283,7 @@ func TestTheAssemblerRefusesAnUnredactableShape(t *testing.T) {
 			for _, position := range assemblingPositions {
 				outDir := filepath.Join(t.TempDir(), "run-"+position)
 				args := append(append([]string{}, assembleVerb...),
-					"--position", position, "--target", "HEAD", "--scope", evalScope, "--out", outDir, "--dry-run")
+					"--position", position, "--target", "HEAD", "--out", outDir, "--dry-run")
 				out, code := runIn(t, f.Root, []string{"HOME=" + f.Home}, args...)
 				if code == 0 {
 					t.Errorf("the assembly at %s over the %s plant exited 0, %s; %s, so the "+
@@ -614,7 +614,7 @@ func TestComparativeRefusesToAssemble(t *testing.T) {
 	f := materialise(t, variantBaseline)
 	outDir := filepath.Join(t.TempDir(), "run-comparative")
 	args := append(append([]string{}, assembleVerb...),
-		"--position", posComparative, "--target", "HEAD", "--scope", evalScope,
+		"--position", posComparative, "--target", "HEAD",
 		"--out", outDir, "--dry-run")
 	out, code := runIn(t, f.Root, []string{"HOME=" + f.Home}, args...)
 

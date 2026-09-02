@@ -19,8 +19,12 @@ import (
 // length, so the shared constant restamps the bundle again. That is a known consequence of the
 // shared constant, accepted rather than fixed inside a change that needed only
 // one half of it — splitting the two is a larger change, and making the split
-// silently is how a shape version stops meaning anything (spc-68).
-const SchemaVersion = 4
+// silently is how a shape version stops meaning anything (spc-68). At version 5
+// BOTH shapes move again: the scope operand and its override stamp are
+// withdrawn, so the manifest's `scope`, `scope_hash` and `scope_overridden`
+// become `preset` and `preset_hash`, and the bundle's `scope` becomes `preset`
+// (adr-2609021016286571).
+const SchemaVersion = 5
 
 // The two artefact type tags. They are carried in the documents themselves so a
 // reader of a loose file can tell the two apart without its filename.
@@ -48,37 +52,37 @@ type Bundle struct {
 	Type          string   `json:"_type"`
 	SchemaVersion int      `json:"schema_version"`
 	Position      Position `json:"position"`
-	// Scope is what THIS run was given, and it is the reading's own fact
+	// Preset is what THIS run was given, and it is the reading's own fact
 	// rather than the auditor's. A reader told its object is the shipped tree
 	// and handed a tenth of it will report the missing nine tenths as a
 	// tension against the claim record, with every gate green.
 	//
-	// It carries NO repository path under any scope, and no provenance. See
-	// BundleScope: it is a projection rather than the resolved scope precisely
-	// because the obvious implementation carried a path, and which token the
-	// operator typed — and whether that departed from the presets — is the
-	// auditor's business and lives on the manifest.
-	Scope BundleScope  `json:"scope"`
-	Items []BundleItem `json:"items"`
+	// It carries NO repository path under any entry, and no provenance. See
+	// BundlePreset: it is a projection rather than the applied entry precisely
+	// because the obvious implementation carried a path, and which entry was
+	// applied and what it hashes to is the auditor's business and lives on the
+	// manifest.
+	Preset BundlePreset `json:"preset"`
+	Items  []BundleItem `json:"items"`
 }
 
-// BundleScope is the scope as a READING sees it, and it is deliberately NOT
-// the Scope the manifest carries.
+// BundlePreset is the applied entry as a READING sees it, and it is
+// deliberately NOT the AppliedPreset the manifest carries.
 //
 // The manifest may name repository paths; the bundle may not, by brief
 // invariant 15 — the assembled input is the reading's entire working set and
-// no repository path enters its context. A scope's Path selectors ARE
-// repository paths, so writing one Scope type into both artefacts put a path
+// no repository path enters its context. An entry's Path selectors ARE
+// repository paths, so writing one type into both artefacts put a path
 // into the reading's own working set. That is what this split exists to
 // prevent, and it was a live breach before it was caught
 // (iss-2608312058244357).
 //
 // A reading still has to know it was handed a subset: told its object is the
 // shipped tree and given a tenth of it, it reports the missing nine tenths as
-// a finding. So it is told the kinds and the records it was scoped to, and
+// a finding. So it is told the kinds and the records it was handed, and
 // that a narrowing by LOCATION applied — never where. That is enough to know
 // the bundle is not the whole object, and it carries no location.
-type BundleScope struct {
+type BundlePreset struct {
 	Kinds   []Kind   `json:"kinds,omitempty"`
 	Records []string `json:"records,omitempty"`
 	// LocationNarrowings counts the location-based narrowings applied. It is a
@@ -86,9 +90,9 @@ type BundleScope struct {
 	LocationNarrowings int `json:"location_narrowings,omitempty"`
 }
 
-// bundleScope projects a resolved scope down to what a reading may see.
-func bundleScope(s Scope) BundleScope {
-	var out BundleScope
+// bundlePreset projects the applied entry down to what a reading may see.
+func bundlePreset(s AppliedPreset) BundlePreset {
+	var out BundlePreset
 	for _, sel := range s.Selectors {
 		switch {
 		case sel.Kind != "":
@@ -143,19 +147,20 @@ type Manifest struct {
 	Position         Position `json:"position"`
 	TargetCommit     string   `json:"target_commit"`
 	AssemblerVersion string   `json:"assembler_version"`
-	// Scope, ScopeHash and ScopeOverridden are the auditor's account of what
-	// this run was about. The hash lets a reader tell two runs apart by their
-	// scope rather than by re-deriving it, and it means a preset edited later
-	// can never make a past run unreadable. ScopeOverridden is false when the
-	// operator named a committed preset — running as reviewed — and true when
-	// they named a record or a kind directly, so drift between what is
-	// committed and what people actually run is countable rather than
-	// invisible.
-	Scope           Scope          `json:"scope"`
-	ScopeHash       string         `json:"scope_hash"`
-	ScopeOverridden bool           `json:"scope_overridden"`
-	Items           []ManifestItem `json:"items"`
-	Exclusions      []Exclusion    `json:"exclusions"`
+	// Preset and PresetHash are the auditor's account of what this run was
+	// about: the committed entry for the invoked position, as selectors, and
+	// its content hash. The hash lets a reader tell two runs apart by the entry
+	// they applied rather than by re-deriving it, and it means a preset edited
+	// later can never make a past run unreadable.
+	//
+	// There is no override stamp. It counted departures from the committed
+	// presets, which was worth counting while an operand could depart from
+	// them; nothing can now, so a stamp would assert a distinction that does
+	// not exist (adr-2609021016286571).
+	Preset     AppliedPreset  `json:"preset"`
+	PresetHash string         `json:"preset_hash"`
+	Items      []ManifestItem `json:"items"`
+	Exclusions []Exclusion    `json:"exclusions"`
 }
 
 // encode is the one definition of canonical bytes for both artefacts: fixed

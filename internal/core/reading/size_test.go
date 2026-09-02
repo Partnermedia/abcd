@@ -199,7 +199,7 @@ func TestSizeReportRowsFollowTheVocabularyOrder(t *testing.T) {
 func TestDryRunCarriesTheSizeReport(t *testing.T) {
 	root := fixtureRepo(t)
 	res, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: PositionDetection, Target: "HEAD", Scope: fixtureScopeName, DryRun: true,
+		RepoRoot: root, Position: PositionDetection, Target: "HEAD", DryRun: true,
 	})
 	if err != nil {
 		t.Fatalf("assemble: %v", err)
@@ -254,13 +254,13 @@ func TestBundleGainsNoFieldFromTheReport(t *testing.T) {
 	if err := json.Unmarshal(raw, &top); err != nil {
 		t.Fatalf("decode bundle: %v", err)
 	}
-	// "scope" is expected: itd-199 puts what a run was GIVEN into the bundle
+	// "preset" is expected: itd-199 puts what a run was GIVEN into the bundle
 	// deliberately, because a reader told its object is the shipped tree and
 	// handed a tenth of it reports the missing nine tenths as a finding. What
 	// must stay out is the size report, which is the operator's fact and not
 	// the reading's.
 	want := map[string]bool{"_type": true, "schema_version": true, "position": true,
-		"scope": true, "items": true}
+		"preset": true, "items": true}
 	for key := range top {
 		if !want[key] {
 			t.Errorf("the bundle carries the top-level key %q; the report rides on the result alone", key)

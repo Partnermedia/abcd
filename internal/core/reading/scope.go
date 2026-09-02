@@ -8,16 +8,22 @@ package reading
 // positions receiving a byte-identical item set. An instrument that cannot be
 // pointed at anything cannot be given to a reader.
 //
-// A scope NARROWS and never widens. It intersects what the include table
-// already admits at the position, so no scope reaches a row the table denies
+// A preset entry NARROWS and never widens. It intersects what the include table
+// already admits at the position, so no entry reaches a row the table denies
 // there, and the structural deny, the exclusion floor and the dirty gate all
 // run over the unfiltered walk before this filter is applied (itd-199, spc-69).
 //
-// The invocation carries no prose. adr-58 supersedes the 2026-08-28 M8 ruling
-// to admit this third operand and no more, on the property M8 was protecting:
-// every token is a shape-validated closed form, and a repository path is never
-// accepted at the invocation. A path may be named only inside a committed
-// preset, where it is reviewed, shape-validated and inside the dirty gate.
+// WHICH entry applies is not an operand. The design fixes the invocation at a
+// position and a target state (framework v4 section 8.2 and ruling M8;
+// companion v4 section 4.1), and adr-2609021016286571 supersedes adr-58
+// accordingly: itd-199's scope operand is withdrawn, and the assembler applies
+// the committed entry for the position it was invoked at. What the operand did
+// is not lost — the presets already map each position to what it reads, and a
+// preset is a record fact the repository supplies rather than something typed.
+// Changing what a position reads is a commit to the preset file, reviewed and
+// inside the dirty gate. There is no override at invocation and nothing to
+// stamp, and no repository path is accepted at the invocation: a path may be
+// named only inside a committed preset.
 
 import (
 	"encoding/json"
@@ -71,23 +77,22 @@ type Selector struct {
 	Path string `json:"path,omitempty"`
 }
 
-// Scope is what one run was about: the resolved selectors, and how they were
-// named. The Source and Overridden fields are provenance, not selection.
-type Scope struct {
-	// Source is the token the operator gave, echoed so an artefact says what it
-	// was asked for and not only what that resolved to.
-	Source string `json:"source"`
-	// Selectors are the resolved clauses, in a canonical order so one scope
+// AppliedPreset is what one run was about: the committed entry for the invoked
+// position, resolved to selectors.
+//
+// It carries no source token and no override stamp, and that absence is the
+// point. Both were provenance about a CHOICE the operator made at the
+// invocation, and there is no such choice: the entry is settled by the position
+// and by what is committed (adr-2609021016286571). A run is reproducible from
+// the commit the manifest names and the entry it records.
+type AppliedPreset struct {
+	// Selectors are the resolved clauses, in a canonical order so one entry
 	// hashes to one value.
 	Selectors []Selector `json:"selectors"`
-	// Overridden records that the run departed from the committed presets.
-	// Naming a preset is running as reviewed; naming a record or a kind
-	// directly is the departure worth counting.
-	Overridden bool `json:"overridden"`
 }
 
-// selects reports whether one collected candidate is in scope.
-func (s Scope) selects(c candidate) bool {
+// selects reports whether one collected candidate is in the applied entry.
+func (s AppliedPreset) selects(c candidate) bool {
 	for _, sel := range s.Selectors {
 		switch {
 		case sel.Kind != "" && c.kind == sel.Kind:
@@ -122,8 +127,8 @@ func underPath(rel, dir string) bool {
 	return rel == dir || strings.HasPrefix(rel, dir+"/")
 }
 
-// canonicalise sorts a scope's selectors and drops duplicates, so two scopes
-// naming the same thing in a different order are one scope and hash alike.
+// canonicalise sorts an entry's selectors and drops duplicates, so two entries
+// naming the same thing in a different order are one entry and hash alike.
 func canonicalise(sels []Selector) []Selector {
 	seen := make(map[Selector]bool, len(sels))
 	out := make([]Selector, 0, len(sels))
@@ -147,14 +152,16 @@ func canonicalise(sels []Selector) []Selector {
 	return out
 }
 
-// Hash is the scope's content hash, so a manifest can name the scope a run
-// actually had and a reader can tell two runs apart by it.
-func (s Scope) Hash() (string, error) {
+// Hash is the applied entry's content hash, so a manifest can name the entry a
+// run actually had and a reader can tell two runs apart by it. It also means a
+// preset edited later can never make a past run unreadable: the run names the
+// entry it applied, not the file as it stands now.
+func (s AppliedPreset) Hash() (string, error) {
 	data, err := json.Marshal(struct {
 		Selectors []Selector `json:"selectors"`
 	}{Selectors: s.Selectors})
 	if err != nil {
-		return "", fmt.Errorf("hashing reading scope: %w", err)
+		return "", fmt.Errorf("hashing the applied reading preset: %w", err)
 	}
 	return sha256Hex(data), nil
 }
@@ -166,17 +173,17 @@ type PositionScope struct {
 	Paths   []string `json:"paths"`
 }
 
-// Preset is one committed, named scope per position.
+// Preset holds the committed entries, one per position.
+//
+// `extends` retired with the second preset name. It existed to make "warm is
+// cold plus a delta" a property rather than a review note, and there is no
+// second name for it to relate: one entry per position stands, and a repository
+// that wants a wider reading commits a wider entry (adr-2609021016286571).
 type Preset struct {
-	// Extends names the preset this one adds to. It is a UNION and never a
-	// replacement, which is what makes "warm is cold plus a delta" a property
-	// rather than a review note: a scope added to cold appears in warm without
-	// anyone remembering to add it twice, and warm can never be narrower.
-	Extends string `json:"extends,omitempty"`
-	// Positions maps a position token to its scope. A preset carries a scope
-	// PER POSITION rather than one scope every position shares, because the
-	// finding this exists to fix is that three of the four positions received
-	// a byte-identical item set, and one scope over four near-identical
+	// Positions maps a position token to its entry. A preset carries an entry
+	// PER POSITION rather than one every position shares, because the finding
+	// this exists to fix is that three of the four positions received a
+	// byte-identical item set, and one entry over four near-identical
 	// admissions reproduces it exactly.
 	Positions map[string]PositionScope `json:"positions"`
 }
@@ -255,6 +262,18 @@ func LoadPresets(repoRoot string) (PresetFile, error) {
 	if len(pf.Presets) == 0 {
 		return PresetFile{}, fmt.Errorf("%s names no preset", PresetConfigPath)
 	}
+	// One preset file, one entry per position (adr-2609021016286571). Nothing
+	// at the invocation names a preset any more, so a file holding two has
+	// nothing to choose between them: whichever the loader picked would be a
+	// resolution ORDER deciding silently, which is the failure this package
+	// refuses everywhere else it can arise. A repository with two calibrations
+	// commits one and records the other in its history
+	// (cond-2609021004074586).
+	if len(pf.Presets) > 1 {
+		return PresetFile{}, fmt.Errorf("%s names %d presets (%s); the invocation names none, so "+
+			"there is nothing to choose between them. Commit one entry per position and keep the "+
+			"other in the file's history", PresetConfigPath, len(pf.Presets), joinPresets(pf))
+	}
 	if err := validatePresets(pf); err != nil {
 		return PresetFile{}, err
 	}
@@ -321,9 +340,13 @@ func validatePresets(pf PresetFile) error {
 		kinds[k] = true
 	}
 	for name, p := range pf.Presets {
-		// A collision is refused rather than resolved by precedence. A preset
-		// named for a kind or shaped like a record id would make one token mean
-		// two things, and a resolution ORDER would decide which silently.
+		// The name is no longer a token anything resolves — nothing at the
+		// invocation names a preset — so these three refusals are now about the
+		// FILE rather than about resolution: a key named for a material kind or
+		// shaped like a record id reads, to a reviewer, as the thing it is
+		// named after rather than as the entry set, and the one file whose
+		// whole safety argument is that a human reviewed it is the last place
+		// to leave a name that means two things.
 		if !presetNameRe.MatchString(name) {
 			return fmt.Errorf("%s: preset %q is not a valid name", PresetConfigPath, name)
 		}
@@ -334,27 +357,13 @@ func validatePresets(pf PresetFile) error {
 		if recordIDRe.MatchString(name) {
 			return fmt.Errorf("%s: preset %q is shaped like a record id", PresetConfigPath, name)
 		}
-		if p.Extends != "" {
-			parent, ok := pf.Presets[p.Extends]
-			if !ok {
-				return fmt.Errorf("%s: preset %q extends %q, which does not exist",
-					PresetConfigPath, name, p.Extends)
-			}
-			// One level only. The containment guarantee is checkable at one
-			// level and an argument at two, and an argument is what this
-			// mechanism exists to replace.
-			if parent.Extends != "" {
-				return fmt.Errorf("%s: preset %q extends %q, which itself extends %q; "+
-					"one level of extension only", PresetConfigPath, name, p.Extends, parent.Extends)
-			}
-		}
 		for pos, ps := range p.Positions {
 			position, err := ParsePosition(pos)
 			if err != nil {
 				return fmt.Errorf("%s: preset %q: %w", PresetConfigPath, name, err)
 			}
-			// The comparative position refuses before a scope is resolved, so
-			// a scope for it would describe a run that cannot happen.
+			// The comparative position refuses before the presets are loaded at
+			// all, so an entry for it would describe a run that cannot happen.
 			if position == PositionComparative {
 				return fmt.Errorf("%s: preset %q names a scope for the comparative position, "+
 					"which does not assemble: its object is the widening run's pre-admission "+
@@ -427,61 +436,40 @@ func validPresetPath(raw string) error {
 	return nil
 }
 
-// ResolveScope turns one invocation token into the scope a run had.
+// PresetFor returns the committed entry for one position.
 //
-// The three token forms are tried in a fixed order, but the order is belt and
-// braces rather than the rule: validatePresets refuses a preset whose name
-// collides with a kind or a record-id shape, so at most one form can match.
-func ResolveScope(pf PresetFile, position Position, token string) (Scope, error) {
-	switch {
-	case token == "":
-		return Scope{}, fmt.Errorf("no scope named: a reading is commissioned ABOUT something. " +
-			"Name a record id (itd-N, spc-N), a material kind, or a committed preset")
-
-	case recordIDRe.MatchString(token):
-		return Scope{
-			Source:     token,
-			Selectors:  canonicalise([]Selector{{Record: token}}),
-			Overridden: true,
-		}, nil
-
-	case isKnownKind(token):
-		return Scope{
-			Source:     token,
-			Selectors:  canonicalise([]Selector{{Kind: Kind(token)}}),
-			Overridden: true,
-		}, nil
+// It takes no token, because there is none to take: the invocation is a
+// position and a target state, and which entry applies follows from the
+// position alone (adr-2609021016286571). A file naming no entry for the
+// position refuses rather than defaulting to everything — a position served the
+// whole corpus because its entry was forgotten is exactly the silent widening
+// the presets exist to close.
+func PresetFor(pf PresetFile, position Position) (AppliedPreset, error) {
+	preset, err := solePreset(pf)
+	if err != nil {
+		return AppliedPreset{}, err
 	}
-
-	preset, ok := pf.Presets[token]
-	if !ok {
-		return Scope{}, fmt.Errorf("unknown scope %q: name a record id (itd-N, spc-N), a "+
-			"material kind (%s), or a committed preset (%s)",
-			token, joinKinds(), joinPresets(pf))
-	}
-
-	sels := presetSelectors(pf, preset, position)
+	sels := canonicalise(positionSelectors(preset, position))
 	if len(sels) == 0 {
-		return Scope{}, fmt.Errorf("preset %q names no scope at the %s position, so it would "+
-			"assemble nothing; a scope that selects nothing is a refusal rather than an empty bundle",
-			token, position)
+		return AppliedPreset{}, fmt.Errorf("%s names no entry for the %s position, so a run there "+
+			"would assemble nothing; an entry that selects nothing is a refusal rather than an "+
+			"empty bundle. Commit an entry for %s", PresetConfigPath, position, position)
 	}
-	// Naming a committed preset is running as reviewed, so it is not an
-	// override. The stamp counts departures from what was reviewed.
-	return Scope{Source: token, Selectors: sels, Overridden: false}, nil
+	return AppliedPreset{Selectors: sels}, nil
 }
 
-// presetSelectors resolves one preset at one position, unioning the parent it
-// extends. The union is the whole of the warm-contains-cold guarantee.
-func presetSelectors(pf PresetFile, p Preset, position Position) []Selector {
-	var sels []Selector
-	if p.Extends != "" {
-		if parent, ok := pf.Presets[p.Extends]; ok {
-			sels = append(sels, positionSelectors(parent, position)...)
-		}
+// solePreset returns the file's one preset. LoadPresets already refuses a file
+// holding none or more than one, so this is the reader's half of that rule and
+// never the place the count is decided.
+func solePreset(pf PresetFile) (Preset, error) {
+	if len(pf.Presets) != 1 {
+		return Preset{}, fmt.Errorf("%s holds %d presets; one entry per position means one preset",
+			PresetConfigPath, len(pf.Presets))
 	}
-	sels = append(sels, positionSelectors(p, position)...)
-	return canonicalise(sels)
+	for _, p := range pf.Presets {
+		return p, nil
+	}
+	return Preset{}, fmt.Errorf("%s holds no preset", PresetConfigPath)
 }
 
 // positionSelectors flattens one preset's own entry at one position.
@@ -503,26 +491,8 @@ func positionSelectors(p Preset, position Position) []Selector {
 	return out
 }
 
-// isKnownKind reports whether a token is a material kind.
-func isKnownKind(token string) bool {
-	for _, k := range Kinds() {
-		if string(k) == token {
-			return true
-		}
-	}
-	return false
-}
-
-// joinKinds and joinPresets render the closed sets a refusal names, so an
-// operator is told what IS accepted rather than only what was not.
-func joinKinds() string {
-	out := make([]string, 0, len(Kinds()))
-	for _, k := range Kinds() {
-		out = append(out, string(k))
-	}
-	return strings.Join(out, ", ")
-}
-
+// joinPresets renders the preset names a refusal reports, so a file holding
+// more than one says which ones rather than only how many.
 func joinPresets(pf PresetFile) string {
 	out := make([]string, 0, len(pf.Presets))
 	for name := range pf.Presets {

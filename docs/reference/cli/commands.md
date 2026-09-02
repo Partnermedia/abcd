@@ -814,17 +814,21 @@ Bare `abcd reading` renders the assembler's state and writes nothing.
 
 Assemble one reading's input and its manifest
 
-**Usage:** `abcd reading assemble --position <position> --target <HEAD|sha> --scope <itd-N|spc-N|kind|preset> [flags]`
+**Usage:** `abcd reading assemble --position <position> --target <HEAD|sha> [flags]`
 
 Walk the repository under the include table at one reading position and write two
 artefacts: the assembled input, which carries no repository path, and the manifest,
 which maps every passed item back to its path, its field and its hash.
 
-The invocation carries no free text. --position takes one of four closed tokens;
---target takes HEAD or a hexadecimal commit sha of 7 to 40 digits, because a branch
-or a tag moves and the manifest's re-runnability rests on a reference that cannot;
---scope names what the reading is about, as a record id (itd-N or spc-N), a material
-kind, or a preset named in .abcd/config/reading-presets.json. All three are required.
+The invocation is a position and a target state, and nothing else. --position takes
+one of four closed tokens; --target takes HEAD or a hexadecimal commit sha of 7 to 40
+digits, because a branch or a tag moves and the manifest's re-runnability rests on a
+reference that cannot. Both are required.
+
+What the reading is handed comes from the committed preset entry for the position, in
+.abcd/config/reading-presets.json, applied with no operand. Changing it is a commit to
+that file, reviewed and inside the dirty gate; the manifest records the entry applied
+and its hash, so a run is reproducible from the commit it names.
 
 **Flags:**
 
@@ -835,16 +839,14 @@ kind, or a preset named in .abcd/config/reading-presets.json. All three are requ
       --position string   the reading position: widening, entailment, comparative, detection
                           (comparative does not assemble: its object is the widening reading's
                           pre-admission output, which no channel supplies, so it refuses)
-      --scope string      what the reading is about: a record id (itd-N, spc-N), a material kind,
-                          or a committed preset. No repository path is accepted here; a preset is where one may be named
       --target string     the commit the assembly describes: HEAD, or a hexadecimal sha of 7 to 40 digits
 ```
 
 **Example:**
 
 ```
-abcd reading assemble --position widening --target HEAD --scope cold --dry-run
-  abcd reading assemble --position entailment --target HEAD --scope cold \
+abcd reading assemble --position widening --target HEAD --dry-run
+  abcd reading assemble --position entailment --target HEAD \
     --out .abcd/.work.local/scratch/reading-runs/manual --json
 ```
 

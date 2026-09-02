@@ -163,7 +163,7 @@ func headOf(t *testing.T, root string) string {
 func assembleFixture(t *testing.T, root string, p Position) AssembleResult {
 	t.Helper()
 	res, err := Assemble(AssembleRequest{
-		RepoRoot: root, Position: p, Target: "HEAD", Scope: fixtureScopeName, DryRun: true,
+		RepoRoot: root, Position: p, Target: "HEAD", DryRun: true,
 	})
 	if err != nil {
 		t.Fatalf("assemble at %s: %v", p, err)

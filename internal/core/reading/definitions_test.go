@@ -643,3 +643,75 @@ func TestLoadDefinitionReadsInsideTheRepositoryOnly(t *testing.T) {
 		t.Fatalf("an in-repository definition was refused: %v", err)
 	}
 }
+
+// promptVersionRe reads a definition's declared prompt version out of its
+// frontmatter.
+var promptVersionRe = regexp.MustCompile(`(?m)^prompt_version:\s*(\S+)\s*$`)
+
+// fourthConditionSentence is the companion's own wording, taken verbatim.
+//
+// The readings companion's section 2 says items are returned in the order they
+// arise in the object; the blindness core's fourth condition said they come
+// back unordered and unweighted, which is a different claim about the same
+// thing (iss-2609021153261145, correction (7) of the 2026-09-02 ruling).
+const fourthConditionSentence = "Items are returned in the order they arise in the object"
+
+// retiredFourthConditionSentence is what the condition used to say. It is
+// spelled out so the test fails on a definition that carries BOTH — a partial
+// edit that added the new sentence beside the old one would satisfy a
+// presence-only assertion.
+const retiredFourthConditionSentence = "Items come back unordered and unweighted"
+
+// promptVersions pins each definition's prompt version after the PATCH bump the
+// fourth-condition correction makes. It is a declaration rather than a
+// derivation: a version read out of the file it is checking would agree with it
+// by construction and could only confirm it.
+var promptVersions = map[Position]string{
+	PositionWidening:    "0.2.1",
+	PositionEntailment:  "0.1.1",
+	PositionComparative: "0.1.1",
+	PositionDetection:   "0.1.1",
+}
+
+// TestTheFourthConditionTakesTheCompanionsSentence is itd-2609021003095168 ac-7
+// (companion v4 section 2, condition 4; spc-2609021004075744 "The blindness
+// core's fourth condition").
+//
+// The rest of the condition — no severity, no confidence score, no
+// most-important-first, no top-N, and the reason — is unchanged, and is held
+// unchanged here so the edit cannot quietly take the rest of the condition with
+// it. Byte-identity across the four is TestBlindnessCoreIsByteIdenticalAcross-
+// Definitions' job and is not restated.
+func TestTheFourthConditionTakesTheCompanionsSentence(t *testing.T) {
+	root := repoRoot(t)
+	for _, p := range Positions() {
+		text := definitionText(t, root, p)
+		span := coreSpan(t, p, text)
+		if !strings.Contains(flatten(span), fourthConditionSentence) {
+			t.Errorf("the %s definition's blindness core does not say %q; the companion's "+
+				"section 2 says items are returned in the order they arise in the object",
+				p, fourthConditionSentence)
+		}
+		if strings.Contains(flatten(span), retiredFourthConditionSentence) {
+			t.Errorf("the %s definition's blindness core still says %q", p, retiredFourthConditionSentence)
+		}
+		for _, keep := range []string{
+			"**No ranking or prioritisation.**",
+			"no severity, no confidence score, no most-important-first, no top-N",
+			"An ordering is an argument about what matters",
+		} {
+			if !strings.Contains(flatten(span), flatten(keep)) {
+				t.Errorf("the %s definition's fourth condition lost %q; only the first sentence moves",
+					p, keep)
+			}
+		}
+		m := promptVersionRe.FindStringSubmatch(text)
+		if m == nil {
+			t.Fatalf("the %s definition declares no prompt_version", p)
+		}
+		if want := promptVersions[p]; m[1] != want {
+			t.Errorf("the %s definition declares prompt_version %s, want %s: the four move PATCH "+
+				"together with the sentence they share", p, m[1], want)
+		}
+	}
+}

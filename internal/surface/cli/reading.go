@@ -3,14 +3,18 @@ package cli
 // reading.go is the front door onto internal/core/reading — the cold-reading
 // input assembler (itd-183, spc-61).
 //
-// The verb's whole interface is three closed operands. A position selects the
-// reading's object from the include table; a target names the commit the
-// assembly describes; a scope names what the reading is ABOUT, so an assembly
-// passes the intersection of the two rather than a position's whole corpus
-// (itd-199, admitted by adr-58). There is no free-text argument anywhere,
-// because a prose operand is a channel ledger content could travel down in the
-// framing of a request, and the point of the assembler is that no such channel
-// exists (ruling (5) of 2026-08-28).
+// The verb's whole interface is two closed operands, as the design specifies
+// it (framework v4 section 8.2 and ruling M8; companion v4 section 4.1). A
+// position selects the reading's object from the include table; a target names
+// the commit the assembly describes. What the reading is HANDED comes from the
+// committed preset entry for that position, applied by the assembler with no
+// operand naming it, so an assembly passes the intersection of the entry and
+// the table rather than a position's whole corpus (itd-199's presets, kept;
+// its scope operand, withdrawn by adr-2609021016286571, which supersedes
+// adr-58). There is no free-text argument anywhere, because a prose operand is
+// a channel ledger content could travel down in the framing of a request, and
+// the point of the assembler is that no such channel exists (ruling (5) of
+// 2026-08-28).
 //
 // Nothing here runs a reading. The verb produces the input a reading would be
 // given and the manifest an auditor checks it by; dispatching it to a reader is
@@ -58,32 +62,35 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 		},
 	}
 
-	var position, target, outDir, scope string
+	var position, target, outDir string
 	var dryRun bool
 	assembleCmd := &cobra.Command{
-		Use:   "assemble --position <position> --target <HEAD|sha> --scope <itd-N|spc-N|kind|preset>",
+		Use:   "assemble --position <position> --target <HEAD|sha>",
 		Short: "Assemble one reading's input and its manifest",
 		Long: "Walk the repository under the include table at one reading position and write two\n" +
 			"artefacts: the assembled input, which carries no repository path, and the manifest,\n" +
 			"which maps every passed item back to its path, its field and its hash.\n\n" +
-			"The invocation carries no free text. --position takes one of four closed tokens;\n" +
-			"--target takes HEAD or a hexadecimal commit sha of 7 to 40 digits, because a branch\n" +
-			"or a tag moves and the manifest's re-runnability rests on a reference that cannot;\n" +
-			"--scope names what the reading is about, as a record id (itd-N or spc-N), a material\n" +
-			"kind, or a preset named in .abcd/config/reading-presets.json. All three are required.",
-		Example: "  abcd reading assemble --position widening --target HEAD --scope cold --dry-run\n" +
-			"  abcd reading assemble --position entailment --target HEAD --scope cold \\\n" +
+			"The invocation is a position and a target state, and nothing else. --position takes\n" +
+			"one of four closed tokens; --target takes HEAD or a hexadecimal commit sha of 7 to 40\n" +
+			"digits, because a branch or a tag moves and the manifest's re-runnability rests on a\n" +
+			"reference that cannot. Both are required.\n\n" +
+			"What the reading is handed comes from the committed preset entry for the position, in\n" +
+			".abcd/config/reading-presets.json, applied with no operand. Changing it is a commit to\n" +
+			"that file, reviewed and inside the dirty gate; the manifest records the entry applied\n" +
+			"and its hash, so a run is reproducible from the commit it names.",
+		Example: "  abcd reading assemble --position widening --target HEAD --dry-run\n" +
+			"  abcd reading assemble --position entailment --target HEAD \\\n" +
 			"    --out .abcd/.work.local/scratch/reading-runs/manual --json",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) > 0 {
 				return &exitError{Code: 2, Msg: "reading assemble: this verb takes no positional argument; " +
 					"a reading's object and question come from its definition, and the invocation " +
-					"carries a position, a target state and a scope, and nothing else"}
+					"carries --position and --target, and nothing else"}
 			}
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			// All three operands are required rather than defaulted. A defaulted
+			// Both operands are required rather than defaulted. A defaulted
 			// position would pick a reading's object on the operator's behalf, and
 			// a defaulted target would let the manifest name a commit nobody chose.
 			if position == "" {
@@ -93,15 +100,6 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 			if target == "" {
 				return &exitError{Code: 2, Msg: "reading assemble: --target is required: HEAD, " +
 					"or a hexadecimal commit sha of 7 to 40 digits"}
-			}
-			// Required for the same reason the other two are: a reading is
-			// commissioned ABOUT something, and a defaulted scope would pick
-			// that on the operator's behalf. It is a closed form, never prose
-			// and never a path (adr-58).
-			if scope == "" {
-				return &exitError{Code: 2, Msg: "reading assemble: --scope is required: a record id " +
-					"(itd-N, spc-N), a material kind, or a committed preset named in " +
-					reading.PresetConfigPath}
 			}
 			pos, err := reading.ParsePosition(position)
 			if err != nil {
@@ -122,7 +120,6 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 				RepoRoot:    captureRoot(cwd),
 				Position:    pos,
 				Target:      target,
-				Scope:       scope,
 				OutDir:      resolvedOut,
 				OutDirLabel: outDir,
 				DryRun:      dryRun,
@@ -148,9 +145,6 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 			"pre-admission output, which no channel supplies, so it refuses)")
 	assembleCmd.Flags().StringVar(&target, "target", "",
 		"the commit the assembly describes: HEAD, or a hexadecimal sha of 7 to 40 digits")
-	assembleCmd.Flags().StringVar(&scope, "scope", "",
-		"what the reading is about: a record id (itd-N, spc-N), a material kind,\n"+
-			"or a committed preset. No repository path is accepted here; a preset is where one may be named")
 	assembleCmd.Flags().StringVar(&outDir, "out", "",
 		"an empty or absent directory the assembled input and the manifest are written to\n"+
 			"(default: the local-tier run directory)")
@@ -244,6 +238,38 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 	return readingCmd
 }
 
+// applyReadingFlagErrors installs readingAssembleFlagError on the assemble
+// verb. It runs after the tree-wide usage tagging, which sets a FlagErrorFunc on
+// every command and would otherwise replace this one.
+func applyReadingFlagErrors(root *cobra.Command) {
+	for _, cmd := range root.Commands() {
+		if cmd.Name() != "reading" {
+			continue
+		}
+		for _, sub := range cmd.Commands() {
+			if sub.Name() == "assemble" {
+				sub.SetFlagErrorFunc(readingAssembleFlagError)
+			}
+		}
+	}
+}
+
+// readingAssembleFlagError renders a flag-parse failure on the assemble verb so
+// that it names the two operands the design admits.
+//
+// The generic handler reports cobra's own message and stops, which for an
+// operand this verb used to take — `--scope`, withdrawn by
+// adr-2609021016286571 — reads as a typo rather than as a design decision. An
+// operator refused an operand and told only "unknown flag" is not told what the
+// invocation IS, and their first move is to doubt their own spelling of a flag
+// that no longer exists (itd-2609021003095168 ac-1).
+func readingAssembleFlagError(_ *cobra.Command, err error) error {
+	return &exitError{Code: 2, Msg: "reading assemble: " + err.Error() +
+		". The invocation is --position and --target, and nothing else: a reading's object and " +
+		"question come from its definition, and what it is handed comes from the committed preset " +
+		"entry for the position, in " + reading.PresetConfigPath}
+}
+
 // positionTokens renders the closed position set for a flag description and a
 // refusal message, composed from the core rather than spelled twice.
 func positionTokens() string {
@@ -307,7 +333,7 @@ func renderAssembleResult(w io.Writer, res reading.AssembleResult) {
 	fmt.Fprintf(w, "%s: %d item(s) assembled at the %s position of %s\n",
 		res.RunID, res.ItemCount, res.Position, shortSha(res.TargetCommit))
 	fmt.Fprintf(w, "  manifest hash: %s\n", res.ManifestHash)
-	renderScope(w, res.Scope)
+	renderPreset(w, res.Position, res.Preset)
 	renderSizeReport(w, res.Size)
 	if !res.Written {
 		fmt.Fprintln(w, "  written:       nothing (dry run; name --out to write the two artefacts)")
@@ -317,11 +343,12 @@ func renderAssembleResult(w io.Writer, res reading.AssembleResult) {
 		reading.BundleFileName, reading.ManifestFileName, res.OutDir)
 }
 
-// renderScope writes what the reading was commissioned about, and says plainly
-// when the run departed from the committed presets — a run nobody can tell was
-// an override is a run whose drift from the reviewed configuration is
-// invisible.
-func renderScope(w io.Writer, s reading.Scope) {
+// renderPreset writes the committed entry this run applied.
+//
+// There is no source token and no override note, because there is no operand:
+// the entry follows from the position, and what a reader wants to know is what
+// it selected (adr-2609021016286571).
+func renderPreset(w io.Writer, position reading.Position, s reading.AppliedPreset) {
 	clauses := make([]string, 0, len(s.Selectors))
 	for _, sel := range s.Selectors {
 		switch {
@@ -333,16 +360,11 @@ func renderScope(w io.Writer, s reading.Scope) {
 			clauses = append(clauses, sel.Path+"/")
 		}
 	}
-	note := ""
-	if s.Overridden {
-		note = " (overridden at invocation, not a committed preset)"
-	}
-	// Sanitised because these are runtime-read strings: the source token comes
-	// from the operator and the path clauses come from a file on disk, and
-	// invariant 13 holds every such string to being termsafe before it joins a
-	// rendered line. This is the first render site in this file that emits file
-	// content, so it is the first that needs it.
-	fmt.Fprintf(w, "  scope:         %s%s\n", termsafe.Sanitize(s.Source), note)
+	// Sanitised because these are runtime-read strings: the clauses come from a
+	// file on disk, and invariant 13 holds every such string to being termsafe
+	// before it joins a rendered line. This is the first render site in this
+	// file that emits file content, so it is the first that needs it.
+	fmt.Fprintf(w, "  preset:        the committed entry for the %s position\n", position)
 	fmt.Fprintf(w, "    selects:     %s\n", termsafe.Sanitize(strings.Join(clauses, ", ")))
 }
 
