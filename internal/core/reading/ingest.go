@@ -255,6 +255,10 @@ type IngestResult struct {
 	// that is refused — or that fails before the sweep — reports the orphans
 	// it saw and leaves them for the next one that validates. A sweep that
 	// skipped something says so.
+	//
+	// LEFT IN PLACE is the whole of it: a stage this invocation cleared is not
+	// on this list, whichever path cleared it — the sweep's, or the single
+	// rollback a refusal makes on its own run id.
 	PendingStages []string `json:"pending_stages,omitempty"`
 	Redacted      int      `json:"redacted,omitempty"`
 	Degraded      string   `json:"redaction_degraded,omitempty"`
@@ -494,10 +498,11 @@ func ingestUnderLock(root *os.Root, repoRoot string, req IngestRequest, res *Ing
 	return write(root, repoRoot, res, out, manifest, def, items)
 }
 
-// leftPending is the orphans found minus the stages the sweep cleared: what a
-// later invocation will find again. Both lists are sorted, and the cleared list
-// is a prefix of the found one in sweep order, but the subtraction does not
-// rest on either.
+// leftPending is the orphans found minus the stages that were cleared: what a
+// later invocation will find again. Both lists are sorted where the sweep is the
+// caller, and there the cleared list is a prefix of the found one in sweep
+// order, but the subtraction rests on neither — the refusal path subtracts a
+// single id from a list it does not otherwise touch.
 func leftPending(found, cleared []string) []string {
 	if len(cleared) == 0 {
 		return found
@@ -789,6 +794,14 @@ func refuse(root *os.Root, res *IngestResult, out Output, m Manifest, def Defini
 // rollbackThisRun removes one run's half-landed records and its stage, and says
 // on the result what it removed. It is the sweep's rollback applied to a single
 // named run rather than to whatever the stage directory happens to hold.
+//
+// It also drops the stage it cleared from PendingStages, which is the one place
+// that subtraction can live for the refusal path. The orphan probe runs before
+// anything is refused, so a run whose OWN earlier attempt left a stage finds
+// itself in that list — and the refusal below then clears it. Left unsubtracted
+// the disclosure named a stage that no longer existed, wrong by one entry in
+// exactly the case it exists to describe (iss-2609020848468450). Pending means
+// STILL STANDING: it is read against the tree, so the two have to agree.
 func rollbackThisRun(root *os.Root, res *IngestResult, runID string) error {
 	removed, err := rollbackRun(root, runID)
 	res.RolledBack = append(res.RolledBack, removed...)
@@ -806,6 +819,7 @@ func rollbackThisRun(root *os.Root, res *IngestResult, runID string) error {
 		return fmt.Errorf("reading: clearing the stage of refused run %s: %w", runID, err)
 	}
 	res.ClearedStages = append(res.ClearedStages, runID)
+	res.PendingStages = leftPending(res.PendingStages, []string{runID})
 	return nil
 }
 
