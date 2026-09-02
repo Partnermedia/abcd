@@ -1314,3 +1314,38 @@ Per hand-run, append:
   they should say they are instances of it. Three consecutive hand-runs have now
   turned on "is the home already occupied" — twice yes, once no — which is
   becoming the table's most load-bearing question rather than an afterthought.
+
+### 2026-09-02 — the Iteration 2 cold-reading intents (hand-run at filing, eight proposals)
+
+- **Proposal:** the eight capabilities the design documents require before
+  Iteration 2 can open: the comparative channel, the admission and surprise
+  verbs, the scribe verbs, the reading-occasioned origin, the calibrated
+  presets, the reframe record, the knowledge-record extension, and the
+  condition disposition from a reading run.
+- **Initial routing:** one intent each, with every part named as capability.
+- **Confirmed routing:** the record-discipline adversarial review, run before
+  the interview under the maintainer's instruction to plan the eight into
+  specs, split two trust rules, one ruling, one record-architecture decision
+  and one piece of brief plumbing out of the intents: the
+  comparative channel's positional exception to the prior-run exhaust (ADR plus
+  brief invariant), the two-sessions property behind the scribe (ADR plus brief
+  invariant, with the bundle-shape change as brief plumbing), the rule over
+  every construal rewrite (ADR refining adr-55, or a discipline), and the
+  principles family becoming a declared record store (ADR on the adr-30
+  pattern). Each is captured as an issue in the same change and flagged in the
+  intent it left. The scanner fix for absence as a class was routed out of the
+  admission intent to its two existing issue records, which is a consolidation
+  on the pattern of the three preceding runs rather than a split, so the
+  admission intent counts as filed as-is. The maintainer confirmed
+  the routing by instruction to file and plan; the reversal flags (itd-199's
+  comparative-preset refusal withdrawn, itd-186's exhaust rule gaining an
+  exception, adr-55 refined) stay advisory until adopted.
+- **Verdict:** SPLIT on four of eight (comparative, scribe, reframe,
+  knowledge); FILE-AS-IS on the other four (admission, origin, presets,
+  condition), each with typed `refines` links to the record it extends.
+- **Notes:** every split was the same shape, a trust rule riding inside a
+  capability, which is the failure the table exists to catch and the first
+  time it has caught four in one run. None of the eight found its home already
+  occupied, unlike the three preceding runs; the record has no comparable
+  capability for any of them, which is consistent with the design documents
+  having scheduled them for a later iteration.
