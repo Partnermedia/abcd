@@ -968,6 +968,110 @@ func TestCapturePromoteReadingItemNeedsNoGrounds(t *testing.T) {
 	}
 }
 
+// TestCapturePromoteReadingItemStampsTheOriginPair — framework 11.3 (linkage),
+// through the front door: the JSON's `intent_path` names a file whose `origin`
+// line carries the run and the item, so the CLI is shown executing the core
+// change rather than assumed to. Framework 7.1 keeps the value out of every
+// flag: it is derived from which command ran.
+func TestCapturePromoteReadingItemStampsTheOriginPair(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+	const run, item = "rdg-2608300000000001", "rdi-2608300000000002"
+	writeReadingFixture(t, repo, run, item)
+	runCLI(t, "capture", "disposition", item,
+		"--state", "accepted", "--grounds", "the tension is real and worth acting on")
+
+	out := runCLI(t, "capture", "promote", item, "--json")
+	var r struct {
+		IntentPath   string `json:"intent_path"`
+		BackEdgeKept string `json:"back_edge_kept"`
+	}
+	if err := json.Unmarshal(out, &r); err != nil {
+		t.Fatalf("promote output not JSON: %v\n%s", err, out)
+	}
+	if r.BackEdgeKept != "" {
+		t.Errorf("a minted draft keeps no prior back-edge, got %q", r.BackEdgeKept)
+	}
+	data, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(r.IntentPath)))
+	if err != nil {
+		t.Fatalf("reading the minted draft at %s: %v", r.IntentPath, err)
+	}
+	want := "\norigin: contributed-by-reading " + run + "/" + item + "\n"
+	if !strings.Contains(string(data), want) {
+		t.Fatalf("the minted draft carries no %q:\n%s", strings.TrimSpace(want), data)
+	}
+	if !strings.Contains(string(data), "\npromoted_from: "+item+"\n") {
+		t.Fatalf("the minted draft carries no back-edge naming %s:\n%s", item, data)
+	}
+	// The seed names no item: the Press Release is projected to the entailment
+	// reading, and no reading sees another's output (companion 8.3).
+	press, _, _ := strings.Cut(after(t, string(data), "## Press Release"), "\n## ")
+	if strings.Contains(press, "rdi-") {
+		t.Fatalf("the promoted draft's Press Release names a reading item:\n%s", press)
+	}
+}
+
+// TestCapturePromoteReadingItemLinkReportsAKeptBackEdge — the first scope
+// condition, on the surface: a draft already promoted from another item keeps
+// that edge, and BOTH renderings say which record stayed.
+func TestCapturePromoteReadingItemLinkReportsAKeptBackEdge(t *testing.T) {
+	repo := t.TempDir()
+	t.Chdir(repo)
+	const run, first, second = "rdg-2608300000000001", "rdi-2608300000000002", "rdi-2608300000000003"
+	const third = "rdi-2608300000000004"
+	writeReadingFixture(t, repo, run, first)
+	writeReadingFixture(t, repo, run, second)
+	writeReadingFixture(t, repo, run, third)
+	for _, item := range []string{first, second, third} {
+		runCLI(t, "capture", "disposition", item,
+			"--state", "accepted", "--grounds", "the tension is real and worth acting on")
+	}
+
+	firstOut := runCLI(t, "capture", "promote", first, "--json")
+	var minted struct {
+		IntentID string `json:"intent_id"`
+	}
+	if err := json.Unmarshal(firstOut, &minted); err != nil {
+		t.Fatalf("promote output not JSON: %v\n%s", err, firstOut)
+	}
+
+	out := runCLI(t, "capture", "promote", second, "--intent", minted.IntentID, "--json")
+	var linked struct {
+		BackEdgeKept string `json:"back_edge_kept"`
+	}
+	if err := json.Unmarshal(out, &linked); err != nil {
+		t.Fatalf("link output not JSON: %v\n%s", err, out)
+	}
+	if linked.BackEdgeKept != first {
+		t.Fatalf("the JSON rendering reports back_edge_kept %q, want %q", linked.BackEdgeKept, first)
+	}
+	// The item still points forward even though the draft's one back-edge stayed.
+	itemPath := filepath.Join(repo, ".abcd", "work", "issues", "readings", run, second+".md")
+	data, err := os.ReadFile(itemPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), minted.IntentID) {
+		t.Fatalf("the second item was not stamped forward:\n%s", data)
+	}
+
+	// The human rendering carries the same report.
+	line := string(runCLI(t, "capture", "promote", third, "--intent", minted.IntentID))
+	if !strings.Contains(line, "back_edge: kept "+first) {
+		t.Fatalf("the human rendering does not report the kept back-edge:\n%s", line)
+	}
+}
+
+// after returns the text following heading in doc, for a section-level read.
+func after(t *testing.T, doc, heading string) string {
+	t.Helper()
+	_, rest, ok := strings.Cut(doc, heading+"\n")
+	if !ok {
+		t.Fatalf("the record carries no %q section:\n%s", heading, doc)
+	}
+	return rest
+}
+
 // TestCapturePromoteReadingItemRefusesGrounds is the other half of the exemption
 // above: the reading route does not merely stop REQUIRING the flag, it refuses a
 // value handed to it. Nothing on this route writes grounds, so accepting one

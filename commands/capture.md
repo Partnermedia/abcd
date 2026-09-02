@@ -63,10 +63,12 @@ other families — a disposition, for one — carry neither.
 
 `origin` is **derived from which command ran** and has no flag at all:
 `researcher-authored` for a verb a person invoked, `extracted-from-record` for
-`capture promote` — the one verb that derives a record from another record — and
-`contributed-by-reading <rdg-N>/<rdi-N>`, which only the reading-ingest verb
-mints. It is stamped when the record is minted and never rewritten: where a
-record came from does not change when it is resolved.
+`capture promote <iss-N>` — an issue is something a person noticed — and
+`contributed-by-reading <rdg-N>/<rdi-N>`, which `capture promote <rdi-N>` mints
+when it derives a draft from an accepted reading item, naming the item's run and
+id. It is stamped when the record is minted and never rewritten: where a record
+came from does not change when it is resolved, and linking an existing draft
+with `--intent` leaves its `origin` alone.
 
 `production_mode` is the closed choice `--production-mode` carries:
 `hand-written`, `dictated-and-formatted`, or `scribe-transcribed`. Any other
@@ -86,8 +88,10 @@ nothing backfills it.
 
 The `record_provenance` record-lint rule reports a record carrying the pair in a
 shape no write path produces: a value outside its set, one key without the
-other, `extracted-from-record` with no `promoted_from` back-edge, or a reading
-pointer that resolves to no reading record. A hand edit that types a legal value
+other, `extracted-from-record` with no `promoted_from` back-edge, a reading
+pointer that resolves to no reading record, or a reading pointer whose item and
+`promoted_from` back-edge name different records — the two are one join written
+twice, and the rule reads it from both ends. A hand edit that types a legal value
 in a legal combination is byte-identical to a command's write, so the rule
 catches implausible hand edits, not all of them.
 
@@ -301,6 +305,14 @@ would settle by action exactly what the hold left open. Where the answer needs t
 change, supersede it: `capture disposition <rdi-N> --state accepted --grounds
 "…" --supersedes <dsp-N>`. Nothing is minted when the promote is refused.
 
+The draft a reading item mints carries `origin: contributed-by-reading
+<rdg-N>/<rdi-N>`, naming the run the item sits in and the item itself, beside the
+`promoted_from: rdi-N` back-edge — so the join reads from both ends, and the
+record shows what a reading caused as well as whether a reading occasioned an
+intent. Its Press Release seed names no item ("Seeded by promotion from a reading
+item"): that section is projected to a later reading, and no reading sees
+another's output. The item's own text stays in the reading record.
+
 For a reading item the JSON's `issue_status` carries the **standing
 disposition's state** (`accepted`), not a status folder: that family's status
 signal is the keyed disposition, and it has no folder to name.
@@ -311,6 +323,15 @@ names the orphan draft and this exact remedy, the promotion's own `--grounds`
 included, so it runs as printed), and the path for "I already
 filed the intent by hand; link them". Report the `issue_id`, the minted (or
 linked) `intent_id`, and both paths from the JSON.
+
+On the reading route `--intent` writes both edges: `promoted_from` on the draft
+and `promoted_to` on the item. It never touches the draft's `origin`, which was
+stamped at mint — a draft filed by hand stays `researcher-authored` and says so.
+A draft whose `promoted_from` already names another record keeps it: an intent
+occasioned by several items is promoted from one and joined to the rest by their
+own `promoted_to`, so the item is still stamped forward and the result reports
+`back_edge_kept` (`back_edge: kept <rdi-N>` in the plain rendering). Report that
+line when it is present.
 
 **Binary resolution.** Run `"${CLAUDE_PLUGIN_ROOT}/abcd"` — a plugin install
 provisions the binary into the plugin root, so this is the rung that fires for a

@@ -76,6 +76,18 @@ var fullyAsserted = assemblingPositions
 // warm location class that leaked rather than reading as ordinary prose.
 const sentinelPrefix = "ABCD-EVAL-SENTINEL-"
 
+// promotedFixtureItem is the reading item the promoted draft in the corpus was
+// graduated from, and it is NOT a sentinel class: it is an identifier that must
+// reach no bundle at any position, not a warm span with a home to count.
+//
+// A promoted draft carries the join in `origin` and `promoted_from` — two
+// frontmatter keys the intent projection does not name — and names the item once
+// more under Why This Matters, which the projection does not name either. The
+// seed in its Press Release, which IS projected, says "a reading item" and no
+// more. That is the readings companion's rule made falsifiable: no reading sees
+// another's output (companion 8.3), and a draft is admitted at entailment.
+const promotedFixtureItem = "rdi-2609020000000009"
+
 // sentinelClass is one warm location class: its token, every home the corpus
 // plants it in, and the positions (if any) at which it may legitimately reach a
 // reading.
@@ -337,12 +349,18 @@ var sentinelClasses = []sentinelClass{
 			"component spelling a denied namespace in another case is the denied namespace",
 	},
 	{
-		Name:   "DRAFT-BODY",
-		Homes:  []string{"repo:.abcd/development/intents/drafts/itd-2-a-draft-intent.md"},
-		Count:  1,
+		Name: "DRAFT-BODY",
+		Homes: []string{
+			"repo:.abcd/development/intents/drafts/itd-2-a-draft-intent.md",
+			"repo:.abcd/development/intents/drafts/itd-5-a-promoted-draft.md",
+		},
+		Count:  2,
 		ColdAt: []string{posEntailment},
 		Why: "itd-183's drafts asymmetry: articulation precedes selection, so entailment " +
-			"reads the candidate set and the reading asked to widen it does not",
+			"reads the candidate set and the reading asked to widen it does not. The second " +
+			"home is a PROMOTED draft, minted in the reading route's shape " +
+			"(itd-2609020625400169): same asymmetry, and the plant sits in the seed a " +
+			"promotion writes rather than in a hand-typed press release",
 	},
 	{
 		Name:  "DRAFT-ORIGIN",

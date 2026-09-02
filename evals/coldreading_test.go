@@ -34,10 +34,24 @@ func TestReadBlockBaselineIsClean(t *testing.T) {
 	f := materialise(t, variantBaseline)
 	for _, position := range fullyAsserted {
 		t.Run(position, func(t *testing.T) {
-			vs := checkReadBlock(assemble(t, f, position))
+			a := assemble(t, f, position)
+			vs := checkReadBlock(a)
 			if len(vs) > 0 {
 				t.Fatalf("the read-block leaked %d time(s) at the %s position:\n%s",
 					len(vs), position, reportViolations(vs))
+			}
+			// The companion assertion over the promoted draft: its plant is COLD at
+			// entailment, because the candidate set is what an entailment reading
+			// reads — but the ITEM IT WAS GRADUATED FROM is a prior reading's
+			// output, and no reading sees another's output (companion 8.3). The
+			// join lives in `origin`, `promoted_from` and the Why This Matters line,
+			// none of which the intent projection names, so the identifier must
+			// reach no bundle at any position, the one that reads the draft
+			// included.
+			if bytes.Contains(a.BundleRaw, []byte(promotedFixtureItem)) {
+				t.Fatalf("the promoted draft's source item %s reached the %s position; a draft is "+
+					"admitted at entailment and a prior reading's output must not travel inside it",
+					promotedFixtureItem, position)
 			}
 		})
 	}

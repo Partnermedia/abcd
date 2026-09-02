@@ -82,8 +82,13 @@ commands that mint them, and no flag carries either as free text. Records of
 other families carry neither.
 
 `origin` is **derived from which command ran** and has no flag at all. A draft
-filed from quoted text is `researcher-authored`; a draft `abcd capture promote`
-mints is `extracted-from-record`. It is stamped at mint and never rewritten.
+filed from quoted text is `researcher-authored`; a draft `abcd capture promote
+<iss-N>` mints is `extracted-from-record`; a draft `abcd capture promote <rdi-N>`
+mints from an accepted reading item is `contributed-by-reading <rdg-N>/<rdi-N>`,
+naming the item's run and id, because a reading item is something an instrument
+returned rather than something a person noticed. It is stamped at mint and never
+rewritten — linking an existing draft with `capture promote --intent` writes the
+`promoted_from` back-edge and leaves the `origin` where it was.
 
 `production_mode` is the closed choice `--production-mode` carries:
 `hand-written`, `dictated-and-formatted`, or `scribe-transcribed`. Any other

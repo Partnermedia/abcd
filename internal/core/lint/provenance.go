@@ -5,7 +5,7 @@ package lint
 //
 // The two keys (`origin`, `production_mode`) are written by commands. This rule
 // is what makes that claim checkable on committed bytes, and it is deliberately
-// narrow: it reports the four states a command could not have written, and
+// narrow: it reports the six states a command could not have written, and
 // nothing else.
 //
 //   - a value outside its closed set — every writer validates before it writes;
@@ -13,7 +13,12 @@ package lint
 //   - origin: extracted-from-record on a record with no promoted_from back-edge —
 //     promote writes the back-edge and the origin in one act;
 //   - origin: contributed-by-reading whose run and item identifiers resolve to no
-//     reading record.
+//     reading record;
+//   - origin: contributed-by-reading beside no promoted_from back-edge, or one
+//     naming a different item — promote writes the origin and the back-edge in
+//     one act, and the two are one join written twice;
+//   - origin: contributed-by-reading naming an item whose own promoted_to names
+//     some other record, which is the same join read from the item's end.
 //
 // THE RESIDUAL, stated rather than hidden: a hand edit that types a LEGAL value
 // in a LEGAL combination is byte-identical to a command's write, and no lint over
@@ -43,7 +48,7 @@ const ruleRecordProvenance = "record_provenance"
 const handEditResidual = " (this rule reports what no write path could have produced; " +
 	"a legal value typed by hand is byte-identical to a command's write, so it catches implausible hand edits, not all of them)"
 
-// checkRecordProvenance walks the configured record stores and reports the four
+// checkRecordProvenance walks the configured record stores and reports the
 // states above.
 //
 // It reads the record_schema scan — the one canonical walk of the stores, the
@@ -71,26 +76,34 @@ func checkRecordProvenance(repoRoot string, cfg Config, rc RuleConfig) ([]Findin
 		return nil, err
 	}
 
-	// Which run each reading item sits in. The item's bucket IS its run
-	// directory (readings/<run-id>/rdi-N.md), so the PAIR resolves in one lookup:
-	// an item that exists under a different run does not answer a pointer naming
-	// this one.
+	// Which run each reading item sits in, and what it points forward at. The
+	// item's bucket IS its run directory (readings/<run-id>/rdi-N.md), so the PAIR
+	// resolves in one lookup: an item that exists under a different run does not
+	// answer a pointer naming this one. The forward stamp is read alongside it
+	// because the join is redundant by design — the item names the record it
+	// produced and the record names the item — so the gate can check it from both
+	// ends rather than from the draft's side alone.
 	runOf := map[string]string{}
+	promotedTo := map[string]string{}
 	for _, r := range records {
-		if r.store.prefix == issueschema.ReadingItemFamily {
-			runOf[r.handle()] = r.bucket
+		if r.store.prefix != issueschema.ReadingItemFamily {
+			continue
+		}
+		runOf[r.handle()] = r.bucket
+		if v, _, ok := provenanceValue(r, "promoted_to"); ok {
+			promotedTo[r.handle()] = v
 		}
 	}
 
 	var out []Finding
 	for _, r := range records {
-		out = append(out, provenanceFindings(r, runOf, rc.Severity)...)
+		out = append(out, provenanceFindings(r, runOf, promotedTo, rc.Severity)...)
 	}
 	return out, nil
 }
 
 // provenanceFindings judges ONE record.
-func provenanceFindings(r schemaRecord, runOf map[string]string, severity string) []Finding {
+func provenanceFindings(r schemaRecord, runOf, promotedTo map[string]string, severity string) []Finding {
 	origin, originLine, hasOrigin := provenanceValue(r, provenance.KeyOrigin)
 	mode, modeLine, hasMode := provenanceValue(r, provenance.KeyProductionMode)
 	if !hasOrigin && !hasMode {
@@ -144,6 +157,32 @@ func provenanceFindings(r schemaRecord, runOf map[string]string, severity string
 			out = append(out, finding(originLine,
 				"`"+provenance.KeyOrigin+"` names "+o.Run+"/"+o.Item+", but "+o.Item+" is an item of "+run+
 					"; the run and the item resolve as a pair, never separately"))
+		}
+		// The join is written twice, and the two spellings are checked against each
+		// other. Promote writes the back-edge and the origin in one act, so a
+		// record carrying the origin alone — or the two naming different items — is
+		// a state no promote produced, on the same footing as an
+		// extracted-from-record with no back-edge.
+		back, _, hasBack := provenanceValue(r, "promoted_from")
+		switch {
+		case !hasBack:
+			out = append(out, finding(originLine,
+				"`"+provenance.KeyOrigin+": "+string(provenance.KindContributedByReading)+
+					"` on a record carrying no `promoted_from` back-edge; promote writes the back-edge and the origin in one act, so no promote could have written this"))
+		case back != o.Item:
+			out = append(out, finding(originLine,
+				"`"+provenance.KeyOrigin+"` names reading item "+o.Item+" while `promoted_from` names "+back+
+					"; the two are one join written twice, so no command wrote them apart"))
+		}
+		// And from the item's end: the item this origin names points forward at
+		// some OTHER record. Reported once, here on the record whose origin makes
+		// the claim. The reverse direction is deliberately silent — an item whose
+		// `promoted_to` names a researcher-authored draft is link mode working as
+		// designed, and so is a draft promoted from one of several items.
+		if forward, ok := promotedTo[o.Item]; ok && forward != r.handle() {
+			out = append(out, finding(originLine,
+				"`"+provenance.KeyOrigin+"` names reading item "+o.Item+", whose `promoted_to` names "+forward+
+					" rather than "+r.handle()+"; the item and the record it occasioned name each other"))
 		}
 	}
 	return out

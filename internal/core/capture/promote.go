@@ -1,6 +1,7 @@
 package capture
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -50,6 +51,13 @@ type PromoteResult struct {
 	IntentID    string `json:"intent_id"`
 	IntentPath  string `json:"intent_path"`
 	Linked      bool   `json:"linked"`
+	// BackEdgeKept names the record a linked draft's `promoted_from` ALREADY
+	// carried, when this call left it there. An intent occasioned by several
+	// reading items is promoted from one and joined to the others by their own
+	// `promoted_to`, so a taken back-edge is reported rather than refused or
+	// overwritten (itd-2609020625400169, first scope condition). Empty on every
+	// other outcome, the mint included.
+	BackEdgeKept string `json:"back_edge_kept,omitempty"`
 	// Redacted / Degraded mirror TransitionResult: the grounds text is free prose
 	// written to the same committed ledger, so it goes through the same redactor
 	// and reports the same way. Rewriting somebody's reasoning in silence is worse
@@ -195,7 +203,10 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 			SeedBody:     seed,
 			PromotedFrom: req.ID,
 			// The one arrival path a command derives from what it did (itd-178).
-			Origin:         provenance.KindExtractedFromRecord,
+			// An issue is something a PERSON noticed, so promoting one keeps
+			// saying extracted-from-record; the reading route below is the one
+			// that names a run and an item.
+			Origin:         provenance.Origin{Kind: provenance.KindExtractedFromRecord},
 			ProductionMode: req.ProductionMode,
 		})
 		if err != nil {
@@ -354,6 +365,18 @@ func promoteReadingItem(repoRoot, issuesRoot string, req PromoteRequest) (Promot
 	if existing := asString(fm["promoted_to"]); existing != "" {
 		return PromoteResult{}, fmt.Errorf("%s is already promoted to %s; refusing to promote twice", req.ID, existing)
 	}
+	// The run half of the origin pair, taken from WHERE THE ITEM WAS FOUND: the
+	// item's bucket IS its run directory, which is the same join the provenance
+	// lint performs, so the value this path stamps resolves by construction. Belt
+	// and braces, the record's own mandatory `run` must agree with the directory
+	// it sits in; a disagreement is a ledger fault rather than a choice between
+	// two answers, and it refuses before anything is minted.
+	run := filepath.Base(filepath.Dir(src))
+	if declared := asString(fm["run"]); declared != run {
+		return PromoteResult{}, fmt.Errorf(
+			"%w: %s sits in run %s but its record names %s; nothing minted",
+			ErrInvariantViolation, req.ID, run, declared)
+	}
 
 	standing, err := standingDispositions(filepath.Join(issuesRoot, issueschema.DispositionsDir, req.ID))
 	if err != nil {
@@ -364,7 +387,7 @@ func promoteReadingItem(repoRoot, issuesRoot string, req PromoteRequest) (Promot
 	}
 	state := issueschema.DispositionAccepted
 
-	var itdID, intentPath string
+	var itdID, intentPath, backEdgeKept string
 	linked := req.LinkIntent != ""
 	if linked {
 		if !reItdID.MatchString(req.LinkIntent) {
@@ -375,6 +398,22 @@ func promoteReadingItem(repoRoot, issuesRoot string, req PromoteRequest) (Promot
 			return PromoteResult{}, fmt.Errorf("%s not found in the intent store; nothing stamped", req.LinkIntent)
 		}
 		itdID, intentPath = req.LinkIntent, rel
+		// The draft half of the join. It runs after the pre-flight and BEFORE the
+		// ledger-locked stamp, so a failure between the two leaves a draft naming
+		// the item and an item not yet naming the draft; re-running the same
+		// command completes it, because this write is idempotent and the stamp is
+		// the step that was missing.
+		//
+		// A back-edge already naming another record is not a refusal here: an
+		// intent occasioned by several items is promoted from one, and the others
+		// are joined by their own `promoted_to`. The existing edge stays, the
+		// forward stamp is still written, and the kept record is reported.
+		switch it, err := intent.SetPromotedFrom(repoRoot, req.LinkIntent, req.ID); {
+		case errors.Is(err, intent.ErrBackEdgeTaken):
+			backEdgeKept = it.PromotedFrom
+		case err != nil:
+			return PromoteResult{}, err
+		}
 	} else {
 		// The pattern named is the item's one durable one-liner and the only body
 		// field every position carries, so it is what the draft is titled and
@@ -392,8 +431,13 @@ func promoteReadingItem(repoRoot, issuesRoot string, req PromoteRequest) (Promot
 			Title:        title,
 			SeedBody:     seed,
 			PromotedFrom: req.ID,
-			// The one arrival path a command derives from what it did (itd-178).
-			Origin:         provenance.KindExtractedFromRecord,
+			// The third arrival path, and the one this command is the sole minter
+			// of (itd-178's `contributed-by-reading`): the run and the item are
+			// the pair read off `readings/<run>/<item>.md` above, so the value
+			// resolves back to the record that occasioned the draft.
+			Origin: provenance.Origin{
+				Kind: provenance.KindContributedByReading, Run: run, Item: req.ID,
+			},
 			ProductionMode: req.ProductionMode,
 		})
 		if err != nil {
@@ -457,12 +501,13 @@ func promoteReadingItem(repoRoot, issuesRoot string, req PromoteRequest) (Promot
 	}
 
 	return PromoteResult{
-		IssueID:     req.ID,
-		IssueStatus: State(state),
-		IssuePath:   fsutil.RepoRel(repoRoot, src),
-		IntentID:    itdID,
-		IntentPath:  intentPath,
-		Linked:      linked,
+		IssueID:      req.ID,
+		IssueStatus:  State(state),
+		IssuePath:    fsutil.RepoRel(repoRoot, src),
+		IntentID:     itdID,
+		IntentPath:   intentPath,
+		Linked:       linked,
+		BackEdgeKept: backEdgeKept,
 	}, nil
 }
 

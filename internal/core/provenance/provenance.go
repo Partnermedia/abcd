@@ -44,8 +44,10 @@ const (
 	// that derives a record from another record.
 	KindExtractedFromRecord Kind = "extracted-from-record"
 	// KindContributedByReading carries the run and item identifiers that resolve
-	// to a reading record. It is minted only by the reading-ingest verb, which
-	// carries both ids already and never asks an operator for them.
+	// to a reading record. It is minted only by `capture promote <rdi-N>`, the one
+	// command that moves an accepted reading item toward an intent: it reads the
+	// item out of the readings store, so it holds both ids already and never asks
+	// an operator for them (itd-2609020625400169).
 	KindContributedByReading Kind = "contributed-by-reading"
 )
 
@@ -165,20 +167,19 @@ type Stamp struct {
 }
 
 // NewStamp validates a kind and a possibly-empty production mode, and is the
-// only constructor a write path uses.
+// constructor every write path but the reading route uses.
 //
-// It refuses KindContributedByReading outright. That value carries a pointer to
-// a reading record, and the reading-ingest verb that holds those identifiers does
-// not exist in this repository yet — so nothing here can supply them, and a
-// constructor that accepted the kind would let a caller mint a dangling pointer.
-// The lint's resolution check for the value is exercised by fixture until the
-// verb ships (spc-56, stated rather than discovered later).
+// It refuses KindContributedByReading outright, and goes on refusing it. That
+// value carries a pointer to a reading record, and this constructor has no
+// argument for one — so a stamp of that kind built here would be a dangling
+// pointer by construction. The kind has exactly one door, NewReadingStamp below,
+// which takes the pair and refuses it unshaped.
 func NewStamp(kind Kind, mode string) (Stamp, error) {
 	switch kind {
 	case KindResearcherAuthored, KindExtractedFromRecord:
 	case KindContributedByReading:
 		return Stamp{}, fmt.Errorf(
-			"origin %s is minted only by the reading-ingest verb, which carries the run and item identifiers; no write path in this repository can supply them", kind)
+			"origin %s carries a run and an item identifier, and this constructor takes neither; mint it through NewReadingStamp, which takes the pair", kind)
 	default:
 		return Stamp{}, fmt.Errorf("unknown origin kind %q: want %s or %s",
 			kind, KindResearcherAuthored, KindExtractedFromRecord)
@@ -188,6 +189,34 @@ func NewStamp(kind Kind, mode string) (Stamp, error) {
 		return Stamp{}, err
 	}
 	return Stamp{Origin: Origin{Kind: kind}, Mode: m}, nil
+}
+
+// NewReadingStamp is the ONE constructor of a contributed-by-reading stamp. The
+// run and the item are the pointer the value carries; a stamp without them is
+// unrepresentable, which is why NewStamp refuses the kind.
+//
+// It judges SHAPE and nothing else, because this package is a leaf with no
+// filesystem: no value can be built without a well-formed pair, and whether that
+// pair RESOLVES to a record in the readings store is the promote path's
+// question, answered by the store read it performs before it mints
+// (capture.promoteReadingItem). The two halves are stated here so neither is
+// mistaken for the other (itd-2609020625400169, criterion 4).
+func NewReadingStamp(run, item, mode string) (Stamp, error) {
+	if !readingRunRe.MatchString(run) {
+		return Stamp{}, fmt.Errorf(
+			"origin %s needs a run identifier spelled <%s-N>, and %q is not one; the run and the item resolve as a pair, never separately",
+			KindContributedByReading, issueschema.ReadingRunFamily, run)
+	}
+	if !readingItemRe.MatchString(item) {
+		return Stamp{}, fmt.Errorf(
+			"origin %s needs an item identifier spelled <%s-N>, and %q is not one; the run and the item resolve as a pair, never separately",
+			KindContributedByReading, issueschema.ReadingItemFamily, item)
+	}
+	m, err := ModeOrDefault(mode)
+	if err != nil {
+		return Stamp{}, err
+	}
+	return Stamp{Origin: Origin{Kind: KindContributedByReading, Run: run, Item: item}, Mode: m}, nil
 }
 
 // OriginValue and ModeValue render the two frontmatter values. Writers ask the

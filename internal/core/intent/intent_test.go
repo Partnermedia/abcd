@@ -1,6 +1,7 @@
 package intent
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -667,4 +668,122 @@ func TestLinkResolvesSpecByNumber(t *testing.T) {
 	if _, err := Link(root, "itd-10", "spc-1-alpha"); err == nil {
 		t.Fatal("Link must keep the strict ^spc-[0-9]+$ grammar for its argument")
 	}
+}
+
+// TestSetPromotedFromWritesOnlyTheBackEdge — framework 7.1: `origin` is stamped
+// at mint and never rewritten, so linking an existing draft to a reading item
+// writes the back-edge and touches nothing else. A hand-filed draft linked to a
+// reading item stays researcher-authored and says so.
+func TestSetPromotedFromWritesOnlyTheBackEdge(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, plannedDir+"/itd-10-alpha.md",
+		"---\nid: itd-10\nslug: alpha\nspec_id: null\nkind: standalone\n"+
+			"origin: researcher-authored\nproduction_mode: hand-written\n---\n# alpha\n")
+	before, err := os.ReadFile(filepath.Join(root, plannedDir, "itd-10-alpha.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := SetPromotedFrom(root, "itd-10", "rdi-17"); err != nil {
+		t.Fatalf("SetPromotedFrom: %v", err)
+	}
+	after, err := os.ReadFile(filepath.Join(root, plannedDir, "itd-10-alpha.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fields := frontmatter.Fields(strings.Split(string(after), "\n"))
+	if got := fields["promoted_from"].Value; got != "rdi-17" {
+		t.Fatalf("promoted_from = %q, want rdi-17\n%s", got, after)
+	}
+	// Every other frontmatter line is byte-identical: the disclosure pair above
+	// all, which is what "the origin is unchanged" rests on.
+	wantLines := frontmatterLines(t, string(before))
+	gotLines := frontmatterLines(t, string(after))
+	for _, line := range wantLines {
+		if !containsLine(gotLines, line) {
+			t.Errorf("SetPromotedFrom rewrote the frontmatter line %q", line)
+		}
+	}
+	for _, line := range gotLines {
+		if containsLine(wantLines, line) || line == "promoted_from: rdi-17" {
+			continue
+		}
+		t.Errorf("SetPromotedFrom wrote an unexpected frontmatter line %q", line)
+	}
+
+	// An unknown intent and a source outside the two graduating families are
+	// refused, and nothing is written.
+	if _, err := SetPromotedFrom(root, "itd-99", "rdi-17"); err == nil {
+		t.Error("SetPromotedFrom on an intent in no bucket must be refused")
+	}
+	if _, err := SetPromotedFrom(root, "itd-10", "adr-4"); err == nil {
+		t.Error("SetPromotedFrom with a source outside ^(iss|rdi)-[0-9]+$ must be refused")
+	}
+}
+
+// TestSetPromotedFromReportsATakenBackEdgeAndIsIdempotentOnTheSame — the first
+// scope condition of itd-2609020625400169: an intent occasioned by several items
+// is promoted from ONE, so a draft already naming another source keeps it and
+// the caller is told, rather than the back-edge being silently overwritten.
+func TestSetPromotedFromReportsATakenBackEdgeAndIsIdempotentOnTheSame(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, draftsDir+"/itd-11-beta.md",
+		"---\nid: itd-11\nslug: beta\nspec_id: null\nkind: null\npromoted_from: rdi-17\n"+
+			"origin: contributed-by-reading rdg-3/rdi-17\nproduction_mode: hand-written\n---\n# beta\n")
+	before, err := os.ReadFile(filepath.Join(root, draftsDir, "itd-11-beta.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A different source: refused as a typed error naming the record already
+	// there, and nothing is written.
+	_, err = SetPromotedFrom(root, "itd-11", "rdi-18")
+	if !errors.Is(err, ErrBackEdgeTaken) {
+		t.Fatalf("SetPromotedFrom over a taken back-edge err = %v, want ErrBackEdgeTaken", err)
+	}
+	if !strings.Contains(err.Error(), "rdi-17") {
+		t.Errorf("the refusal must name the record already there; got %v", err)
+	}
+	after, err := os.ReadFile(filepath.Join(root, draftsDir, "itd-11-beta.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Errorf("a refused SetPromotedFrom rewrote the record:\n%s", after)
+	}
+
+	// The SAME source is a no-op that reports the record unchanged.
+	if _, err := SetPromotedFrom(root, "itd-11", "rdi-17"); err != nil {
+		t.Fatalf("SetPromotedFrom with the source already there must be a no-op: %v", err)
+	}
+	again, err := os.ReadFile(filepath.Join(root, draftsDir, "itd-11-beta.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(again) != string(before) {
+		t.Errorf("an idempotent SetPromotedFrom rewrote the record:\n%s", again)
+	}
+}
+
+// frontmatterLines returns the record's frontmatter block, line by line.
+func frontmatterLines(t *testing.T, doc string) []string {
+	t.Helper()
+	_, rest, ok := strings.Cut(doc, "---\n")
+	if !ok {
+		t.Fatalf("the record carries no frontmatter block:\n%s", doc)
+	}
+	block, _, ok := strings.Cut(rest, "\n---")
+	if !ok {
+		t.Fatalf("the record's frontmatter block is unterminated:\n%s", doc)
+	}
+	return strings.Split(block, "\n")
+}
+
+func containsLine(lines []string, want string) bool {
+	for _, line := range lines {
+		if line == want {
+			return true
+		}
+	}
+	return false
 }

@@ -2797,6 +2797,12 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 				fmt.Fprintf(w, "%s (%s, %s) promoted — %s %s — %s\n",
 					res.IssueID, res.IssueStatus, termsafe.Sanitize(res.IssuePath),
 					verb, res.IntentID, termsafe.Sanitize(res.IntentPath))
+				// The draft's ONE back-edge stayed where it was: an intent
+				// occasioned by several reading items is promoted from one, and
+				// the item this call linked still points forward.
+				if res.BackEdgeKept != "" {
+					fmt.Fprintf(w, "back_edge: kept %s\n", termsafe.Sanitize(res.BackEdgeKept))
+				}
 				emitRedactionNote(w, res.Redacted, res.Degraded)
 			})
 		},

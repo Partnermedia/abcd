@@ -412,6 +412,67 @@ func Link(repoRoot, intentID, specID string) (LinkResult, error) {
 	return LinkResult{Intent: it, Spec: sp}, nil
 }
 
+// ErrBackEdgeTaken reports a draft whose `promoted_from` already names a
+// DIFFERENT record. It is a typed error rather than a plain refusal because the
+// reading route does not treat it as one: an intent occasioned by several items
+// is promoted from ONE, and the others are joined by their own `promoted_to`
+// (itd-2609020625400169, first scope condition).
+var ErrBackEdgeTaken = fmt.Errorf("intent: the promote back-edge is already taken")
+
+// SetPromotedFrom writes the `promoted_from` back-edge on an existing intent, in
+// any bucket. It is the draft half of link mode: `capture promote <rdi-N>
+// --intent <itd-N>` stamps the item's `promoted_to` and this writes the edge
+// pointing back, so the join reads from both ends.
+//
+// It writes that one key and NOTHING else. It never reads or rewrites `origin`
+// or `production_mode`, which is what "the origin is unchanged" rests on: an
+// origin is stamped at mint and never rewritten, so a hand-filed draft linked to
+// a reading item stays researcher-authored and says so.
+//
+// A back-edge already naming this source is a no-op that reports the record
+// unchanged; one naming a different record returns ErrBackEdgeTaken, naming the
+// record already there, and writes nothing. The intent it returns beside that
+// error carries the edge it kept, so a caller that treats the case as a report
+// rather than a refusal does not have to re-read the record to say which.
+func SetPromotedFrom(repoRoot, intentID, source string) (Intent, error) {
+	if !recordid.ValidIntentID(intentID) {
+		return Intent{}, fmt.Errorf("intent: id %q must match ^itd-[0-9]+$", intentID)
+	}
+	if !promotedFromRe.MatchString(source) {
+		return Intent{}, fmt.Errorf("intent: promoted_from %q must match ^(iss|rdi)-[0-9]+$", source)
+	}
+	corpus, err := Load(repoRoot)
+	if err != nil {
+		return Intent{}, err
+	}
+	it, ok := corpus.Lookup(intentID)
+	if !ok {
+		return Intent{}, fmt.Errorf("intent: %s not found in any bucket", intentID)
+	}
+	switch existing := it.PromotedFrom; {
+	case existing == source:
+		return it, nil // already joined; the write would change no byte
+	case existing != "":
+		return it, fmt.Errorf("%w: %s is promoted from %s, not %s", ErrBackEdgeTaken, intentID, existing, source)
+	}
+
+	rel := it.Path
+	abs := filepath.Join(repoRoot, rel)
+	data, err := readRepoFile(abs, rel)
+	if err != nil {
+		return Intent{}, err
+	}
+	updated, err := setFrontmatterFields(string(data), map[string]string{"promoted_from": source})
+	if err != nil {
+		return Intent{}, err
+	}
+	if err := writeIntentFile(abs, rel, updated); err != nil {
+		return Intent{}, err
+	}
+	it.PromotedFrom = source
+	return it, nil
+}
+
 // Reconcile is the deterministic half of `abcd spec close`: it advances the
 // intent a spec realises, then closes the spec, so one command marks the spec
 // done AND ships its linked intent.

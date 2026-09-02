@@ -10,7 +10,7 @@ production_mode: dictated-and-formatted
 ## Summary
 
 spc-2609020626042168 delivers
-[itd-2609020625400169](../../intents/planned/itd-2609020625400169-an-intent-that-a-reading-occasioned-says-so-in-its-origin-wi.md).
+[itd-2609020625400169](../../intents/shipped/itd-2609020625400169-an-intent-that-a-reading-occasioned-says-so-in-its-origin-wi.md).
 Today `capture promote <rdi-N>` mints a draft whose `origin` reads
 `extracted-from-record`: `promoteReadingItem` in `internal/core/capture/promote.go`
 passes `provenance.KindExtractedFromRecord` into `intent.CreateDraft` exactly as

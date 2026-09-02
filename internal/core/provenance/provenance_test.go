@@ -1,6 +1,7 @@
 package provenance
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/intentdriven/abcd/internal/core/issueschema"
@@ -86,7 +87,7 @@ func TestProductionModeVocabularyIsClosed(t *testing.T) {
 	}
 }
 
-func TestNewStampRefusesTheUnmintableOrigin(t *testing.T) {
+func TestNewStampRefusesTheReadingKindWithoutAPointer(t *testing.T) {
 	s, err := NewStamp(KindResearcherAuthored, "")
 	if err != nil {
 		t.Fatalf("NewStamp: unexpected error %v", err)
@@ -94,10 +95,15 @@ func TestNewStampRefusesTheUnmintableOrigin(t *testing.T) {
 	if s.OriginValue() != "researcher-authored" || s.ModeValue() != string(DefaultMode) {
 		t.Errorf("NewStamp defaulted to %q/%q", s.OriginValue(), s.ModeValue())
 	}
-	// contributed-by-reading carries a pointer no command in this repository can
-	// supply yet, so no write path may mint it.
-	if _, err := NewStamp(KindContributedByReading, "hand-written"); err == nil {
-		t.Error("NewStamp(KindContributedByReading): want a refusal")
+	// contributed-by-reading carries a pointer this constructor has no argument
+	// for, so a stamp without one is unrepresentable and the door stays shut. The
+	// message names the constructor that does take the pair (framework 11.3).
+	_, err = NewStamp(KindContributedByReading, "hand-written")
+	if err == nil {
+		t.Fatal("NewStamp(KindContributedByReading): want a refusal")
+	}
+	if !strings.Contains(err.Error(), "NewReadingStamp") {
+		t.Errorf("the refusal must name the one constructor of the kind; got %v", err)
 	}
 	if _, err := NewStamp("invented", "hand-written"); err == nil {
 		t.Error("NewStamp(invented): want a refusal")
@@ -118,5 +124,78 @@ func TestKeysAreKnownToTheIssueSchema(t *testing.T) {
 		if !issueschema.Known[key] {
 			t.Errorf("issueschema.Known is missing %q; the ledger reader refuses a record carrying it", key)
 		}
+	}
+}
+
+// TestNewReadingStampCarriesTheJoin — framework 11.3 (linkage): the intent a
+// reading occasioned carries the run and the item that occasioned it, so the
+// join is readable from the record rather than from the commit history.
+func TestNewReadingStampCarriesTheJoin(t *testing.T) {
+	s, err := NewReadingStamp("rdg-3", "rdi-17", "dictated-and-formatted")
+	if err != nil {
+		t.Fatalf("NewReadingStamp: unexpected error %v", err)
+	}
+	if got, want := s.OriginValue(), "contributed-by-reading rdg-3/rdi-17"; got != want {
+		t.Errorf("OriginValue() = %q, want %q", got, want)
+	}
+	if got, want := s.ModeValue(), "dictated-and-formatted"; got != want {
+		t.Errorf("ModeValue() = %q, want %q", got, want)
+	}
+	// An unset mode defaults through the one defaulting door, exactly as it does
+	// for the other two kinds.
+	d, err := NewReadingStamp("rdg-3", "rdi-17", "")
+	if err != nil {
+		t.Fatalf("NewReadingStamp with an unset mode: %v", err)
+	}
+	if d.ModeValue() != string(DefaultMode) {
+		t.Errorf("NewReadingStamp defaulted the mode to %q, want %q", d.ModeValue(), DefaultMode)
+	}
+}
+
+// TestReadingStampRoundTripsThroughParseOrigin — framework 7.1: `origin` is warm
+// and never passed to a reading, so the value is read only by the record's own
+// readers; render and parse must agree byte for byte, or the lint resolves a
+// different pair from the one the mint wrote.
+func TestReadingStampRoundTripsThroughParseOrigin(t *testing.T) {
+	s, err := NewReadingStamp("rdg-2609020000000001", "rdi-2609020000000002", "hand-written")
+	if err != nil {
+		t.Fatalf("NewReadingStamp: %v", err)
+	}
+	got, err := ParseOrigin(s.OriginValue())
+	if err != nil {
+		t.Fatalf("ParseOrigin(%q): %v", s.OriginValue(), err)
+	}
+	if got != s.Origin {
+		t.Errorf("round trip gave %+v, want %+v", got, s.Origin)
+	}
+	if got.String() != s.OriginValue() {
+		t.Errorf("re-render gave %q, want %q", got.String(), s.OriginValue())
+	}
+}
+
+// TestNewReadingStampRefusesAnUnshapedPair — framework 11.3: the pointer's whole
+// job is to resolve to a reading record, so a pair that could not resolve is
+// refused at the constructor, and nothing is defaulted.
+func TestNewReadingStampRefusesAnUnshapedPair(t *testing.T) {
+	for _, tc := range []struct{ run, item string }{
+		{"", "rdi-17"},
+		{"rdg-3", ""},
+		{"", ""},
+		{"iss-4", "rdi-17"},
+		{"rdi-17", "rdi-18"},
+		{"rdg-3", "rdg-4"},
+		{"rdg-3", "iss-4"},
+		{" rdg-3", "rdi-17"},
+		{"rdg-3 ", "rdi-17"},
+		{"rdg-3", " rdi-17"},
+		{"rdg-x", "rdi-17"},
+		{"rdg-3", "rdi-"},
+	} {
+		if got, err := NewReadingStamp(tc.run, tc.item, "hand-written"); err == nil {
+			t.Errorf("NewReadingStamp(%q, %q) = %+v, want a refusal", tc.run, tc.item, got)
+		}
+	}
+	if _, err := NewReadingStamp("rdg-3", "rdi-17", "typed"); err == nil {
+		t.Error("NewReadingStamp with an out-of-vocabulary mode: want a refusal")
 	}
 }
