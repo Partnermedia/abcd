@@ -226,7 +226,13 @@ Steps, run in parallel where independent:
    non-SessionStart shims attempt `hooks/bootstrap.sh` when the plugin-root
    binary is missing (throttled by a `.bootstrap.attempt` marker within a
    10-minute window), then fall back to a PATH-resolved `abcd` before failing
-   loudly. A missing or
+   loudly. The PATH rung accepts only an absolute resolution out of a
+   directory that is neither under the shim's working directory nor
+   world-writable — the shapes the documented install never produces — and
+   says in one line which binary it ignored and why before degrading
+   (iss-2609012039117381); whether a PATH binary should have to be vouched
+   for by `~/.abcd/path-entry` at all is the open question in
+   GHSA-gx3m-3224-qqcv. A missing or
    malformed manifest surfaces as a non-resolvable `plugin-owned` diagnostic
    gap. Neither install nor uninstall ever mutates `hooks.json` — the manifest
    is plugin-static per spc-14 T7.
@@ -382,7 +388,14 @@ closes stdin and pre-answers: `abcd ahoy install --yes --refuse-adopt
    per-repo `<root-sha>/meta.json` (`root_commit`, `name`, `github`, and a
    `corpus` block pointing at `transcripts/`), and register the repo in
    `index.json` by its immutable `root_commit`, refreshing the entry's mutable
-   `path` if the repo moved. The history `index.json` is the
+   `path` if the repo moved. A remote URL recorded in either file carries no
+   credential: it is scrubbed where the identity is derived, the index is
+   scrubbed again as it is LOADED — so every rewrite drops a credential from
+   every entry, not only from the one being registered — and a `meta.json`,
+   which is otherwise written once and never revisited, is rewritten in place
+   when it holds one. A store that already holds a credential raises
+   `history.credential_at_rest`, so an otherwise up-to-date repo does not
+   short-circuit past the heal. The history `index.json` is the
    **sole user-scope registry** — there is no `workspaces.json`. Transcript
    capture is native — no external tool and no per-repo redirect shim.
 8. **Marker block** (`plugin-owned`) — inject/refresh the block between
@@ -467,8 +480,11 @@ reports the guard-hook health: `plugin_root_resolved`, `hook_installed`,
 names `abcd ahoy install` for anything actionable.
 
 **Doctor (`/abcd:ahoy doctor`):** runs the detection pass plus a read-only
-audit pass. The text render shows two counts — detection gaps and audit gaps.
-The JSON envelope (`{detection, audit_gaps}`) carries full per-gap detail: the
+audit pass. The text render shows two counts — detection gaps and audit gaps —
+and then names, one line each, every required gap that is NOT resolvable: those
+are the ones no later `install` will clear (a `config.json` abcd refuses to touch
+until a human repairs it is the case that matters), so a bare count of them
+would be a number the reader cannot act on. The JSON envelope (`{detection, audit_gaps}`) carries full per-gap detail: the
 detection gaps cover user-state checks (the history store exists and is
 writable, the `index.json` entry matches this root SHA, the PATH symlink and
 hook manifest are intact), while the audit pass reconciles the registered
