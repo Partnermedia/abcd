@@ -221,6 +221,30 @@ func shellFamilyGlob(pattern string) (string, bool) {
 	return "", false
 }
 
+// shellNameGuessed reports whether the execute-a-string reading of this segment
+// rests on expanding a GLOBBED command name — `* -c <words>`, `s? -c <words>`.
+// Such a reading is a guess about which program runs: the pattern can expand to
+// `sh`, and it can equally expand to a program nothing here names. Reading the
+// payload on that guess is worth doing, but only IN ADDITION to Tier 2: the
+// unrecognised-launcher warn is what adr-42 decision 2 keeps loud when the guard
+// cannot say what runs the rest of the line, and letting the guess satisfy
+// speculate's carriesPayload gate dropped it — `* -c gh api -X DELETE
+// repos/owner/repo` went from a warn to a silent allow, because `sh -c` reads
+// only `gh` as the payload and the operands after it become the payload's own
+// positional parameters.
+func shellNameGuessed(s segment) bool {
+	ci, noglob := commandIndex(s)
+	if ci < 0 || noglob || !s.globAt(ci) {
+		return false
+	}
+	cmd, _ := commandOf(s)
+	if isShellFamily(cmd) || cmd == "eval" {
+		return false // the literal name is already an interpreter: no guess
+	}
+	_, ok := shellFamilyGlob(cmd)
+	return ok
+}
+
 // singleStringLaunchers run a command handed to them as a single operand by
 // passing it to `sh -c`: `watch '<cmd>'`, GNU `parallel '<cmd>' ::: args`. They
 // are not shells (isShellFamily misses them) and not wrappers (their operand is a
@@ -307,7 +331,9 @@ func classifySegment(s segment) (kind int, family, payload string, trailing []st
 	// bash expands it before exec, and a payload behind a name this lookup
 	// does not open is one opaque token nothing else reaches — a SILENT
 	// allow, unlike a globbed wrapper name, which Tier 2 still warns on.
-	if ci, noglob := commandIndex(s); ci >= 0 && !noglob && s.globAt(ci) {
+	// This reading is a GUESS about which program runs, so speculate takes it
+	// IN ADDITION to Tier 2, never instead of it (shellNameGuessed).
+	if shellNameGuessed(s) {
 		if name, ok := shellFamilyGlob(cmd); ok {
 			cmd = name
 		}

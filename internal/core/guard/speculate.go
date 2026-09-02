@@ -133,7 +133,14 @@ func (r Registry) speculate(segs []segment, matched []bool, ids []string) []payl
 		// the shell family, its payload becomes segments of its own, and those carry
 		// the verdict — speculating on the parent as well would report the same
 		// hazard twice, once as a precise entry and once as a guess about it.
-		if _, _, _, _, carriesPayload := classifySegment(s); carriesPayload {
+		//
+		// A payload the guard reached only by GUESSING at a globbed command
+		// name is the exception: there the reading is "this pattern can expand
+		// to sh", not "this is sh", so it is taken in addition to the warn and
+		// not instead of it. Dropping the warn there turned a hazard behind an
+		// unknown launcher into a silent allow, which is exactly what adr-42
+		// decision 2 says is never dropped.
+		if _, _, _, _, carriesPayload := classifySegment(s); carriesPayload && !shellNameGuessed(s) {
 			continue
 		}
 		if sig, ok := r.speculateSegment(segs[:i], s, ids, &budget); ok {
