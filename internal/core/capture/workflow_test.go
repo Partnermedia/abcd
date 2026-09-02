@@ -1181,3 +1181,70 @@ func TestScanLedgerRefusesNonRegularOversizeAndSymlinkedRecords(t *testing.T) {
 		}
 	})
 }
+
+// TestASkippedOpenRecordStillBlocksItsDependents pins the blocked_by projection
+// to the whole of open/, not to the part of it the reader could parse. A record
+// the guarded reader refuses — a FIFO, a body over the read cap, a symlinked
+// leaf — is still IN open/: being unreadable says nothing about whether it was
+// resolved. Dropping it from the predicate rendered every dependent unblocked
+// and sorted them to the top of the board, while their own blocked_by went on
+// naming it. The unreadable case resolves toward still-blocking: understating
+// progress is recoverable, inviting work whose blocker nobody can read is not.
+func TestASkippedOpenRecordStillBlocksItsDependents(t *testing.T) {
+	repo, ir := ledger(t)
+	blocker, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir, Text: "the blocker", Severity: SeverityMinor,
+		Category: "bug", Source: "manual-test", Slug: "blocker", FoundDuring: "t",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dependent, err := Capture(CaptureRequest{
+		RepoRoot: repo, IssuesRoot: ir, Text: "the dependent", Severity: SeverityMinor,
+		Category: "bug", Source: "manual-test", Slug: "dependent", FoundDuring: "t",
+		BlockedBy: []string{blocker.ID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The blocker becomes unreadable in place, under its own name: an oversize
+	// body is the deterministic member of the class (a FIFO would hang a reader
+	// that had no guard, which is a different test).
+	path, _, err := findIssue(ir, blocker.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(strings.Repeat("x", issueschema.RecordReadLimit+1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	blockedOpen := func(t *testing.T, issues []Issue) []string {
+		t.Helper()
+		for _, iss := range issues {
+			if iss.ID == dependent.ID {
+				return iss.BlockedByOpen
+			}
+		}
+		t.Fatalf("the dependent %s is not in the result: %+v", dependent.ID, issues)
+		return nil
+	}
+
+	list, err := List(ListRequest{RepoRoot: repo, IssuesRoot: ir, State: StateOpen})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Skipped) != 1 {
+		t.Fatalf("the unreadable blocker must be reported as skipped, got %+v", list.Skipped)
+	}
+	if got := blockedOpen(t, list.Issues); len(got) != 1 || got[0] != blocker.ID {
+		t.Fatalf("List: dependent's blocked_by_open = %v, want [%s] — a skipped open record still blocks", got, blocker.ID)
+	}
+
+	status, err := Status(StatusRequest{RepoRoot: repo, IssuesRoot: ir})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := blockedOpen(t, status.RecentOpen); len(got) != 1 || got[0] != blocker.ID {
+		t.Fatalf("Status: dependent's blocked_by_open = %v, want [%s] — a skipped open record still blocks", got, blocker.ID)
+	}
+}

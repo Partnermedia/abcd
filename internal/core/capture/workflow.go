@@ -654,7 +654,9 @@ func Status(req StatusRequest) (StatusResult, error) {
 	res.WontfixCount = len(wontfix)
 	res.Skipped = append(append(append([]SkipRecord{}, skOpen...), skRes...), skWf...)
 
-	openIDs := idSet(open)
+	// The same predicate List uses, over the scan already in hand: skOpen carries
+	// the records open/ holds and the reader refused, and they block too.
+	openIDs := openBlockingIDs(open, skOpen)
 	// Newest first: higher N is newer (ids are monotonic with creation).
 	sort.SliceStable(open, func(i, j int) bool { return issNumber(open[i].ID) > issNumber(open[j].ID) })
 	if len(open) > 10 {
@@ -704,8 +706,39 @@ func prioritise(issues []Issue, openIDs map[string]bool) {
 // openIDSet returns the set of ids currently in open/ — the predicate a
 // blocked_by target must satisfy to still count as blocking. Read-only.
 func openIDSet(issuesRoot string) map[string]bool {
-	open, _ := scanLedger(issuesRoot, StateOpen)
-	return idSet(open)
+	return openBlockingIDs(scanLedger(issuesRoot, StateOpen))
+}
+
+// openBlockingIDs is that predicate over ONE scan of open/: the ids that listed,
+// PLUS the ids of the records the scan had to skip. A record the guarded reader
+// refused — a FIFO, a body over the read cap, a symlinked leaf — is still in
+// open/, and being unreadable says nothing about whether it was resolved.
+// Counting only what parsed rendered every dependent unblocked and sorted it to
+// the top of the board while its own blocked_by went on naming the record. The
+// unreadable case resolves toward still-blocking: a board that understates
+// progress is recoverable, one that invites work whose blocker nobody can read
+// is not — and the skip is reported alongside, so the cause is never silent.
+func openBlockingIDs(open []Issue, skipped []SkipRecord) map[string]bool {
+	set := idSet(open)
+	for _, sk := range skipped {
+		if id := skippedRecordID(sk.Path); id != "" {
+			set[id] = true
+		}
+	}
+	return set
+}
+
+// skippedRecordID recovers the id a skipped file's NAME claims, through
+// issFileNumRe — the one detection grammar the scan, the resolver and
+// record-lint share, so a file the scan counted as a record contributes the id
+// that same grammar reads. A name too malformed to carry an ordinal claims no
+// id and contributes none: there is nothing to be blocked by.
+func skippedRecordID(path string) string {
+	m := issFileNumRe.FindStringSubmatch(filepath.Base(path))
+	if m == nil {
+		return ""
+	}
+	return issFamily + "-" + m[1]
 }
 
 // idSet collects the ids of a slice of issues into a set.

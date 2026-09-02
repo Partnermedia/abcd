@@ -98,7 +98,10 @@ containing a space is not automatically safe.
 
 Priority is **derived, never stored**: an issue is ranked lower while any of its
 `--blocked-by` targets is still open, and `blocked_by` records the dependency in
-one direction only (the inverse is computed).
+one direction only (the inverse is computed). A target the reader had to skip
+counts as open — it is still in `open/`, and being unreadable says nothing about
+whether it was resolved — so it goes on blocking, with the skip reported in the
+same result.
 
 ## Query the ledger
 
