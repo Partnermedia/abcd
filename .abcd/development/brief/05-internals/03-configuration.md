@@ -403,7 +403,7 @@ external plug-in — so this brief does not restate it here.
 │   │   └── superseded/                 # retired intents (moved by hand)
 │   ├── principles/                     # distilled cross-cutting design principles (the lifeboat packs these)
 │   ├── decisions/                      # ratified architecture decisions (MADR)
-│   │   ├── adrs/                        # NNNN-<slug>.md (e.g. 0001-three-layer-mental-model.md)
+│   │   ├── adrs/                        # <N>-<slug>.md — the ordinals 0001-0058, then minted stamps (`abcd decide`)
 │   │   └── notes/
 │   ├── roadmap/
 │   │   ├── README.md                   # status dashboard
