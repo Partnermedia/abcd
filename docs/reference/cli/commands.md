@@ -840,25 +840,26 @@ Validate the JSON a cold reading returned and write its reading records.
 
 The verb checks what the reading was LICENSED to produce, not only what it saw: the
 supply regime is read from the position's definition and compared with the output's own
-claim, and the reserved names a regime declares are refused with the licence stated (the
-generative position declares none). A registry of named signatures watches for prose that
-ranks, settles or proposes without the field; those signatures are observed rather than
-enforcing, at every position, so a hit raises a review flag on the run record and the item
-lands.
+claim, and an item carrying a reserved name as one of its own fields is refused with the
+licence stated. The reserved-name table is read at the run's own regime, one row per
+regime, and the generative regime has no row: no name is reserved at the generative
+position.
 
 Item identifiers are minted here. The payload carries none, so a supplied one is refused
 as an unknown field. A refusal becomes DURABLE once the run's identity is proven — the run
 id resolving to a parked manifest whose content hash matches — and from there a list-level
-refusal writes refusal.json under the run's directory; before that point nothing is written
-anywhere. Nothing durable is written or DELETED until the whole payload validates: a refusal
-after the run is proven leaves its refusal record and nothing else. The reading records land
-as one batch and the run metadata is written last as the commit marker: a run without one
-never happened.
+refusal writes refusal.json under the run's directory; before that point nothing durable is
+written anywhere. No OTHER run's durable state is touched until the whole payload validates:
+a refusal after the run is proven writes its refusal record and nothing else, and the one
+delete it makes is on its OWN run id — the records of an earlier attempt at it that never
+committed. The reading records land as one batch and the run metadata is written last as the
+commit marker: a run without one never happened.
 
 An ingest interrupted before that marker leaves an orphaned stage, and every invocation names
-it. Only the next one whose payload validates sweeps it: it ROLLS THAT RUN'S READING RECORDS
-OUT OF THE COMMITTED LEDGER because the run never happened, and clears the stage. A refused
-run reports the orphans it left in place, and the ids a sweep removed are reported as
+it. Only the next one whose payload validates sweeps it: where the run reached no commit
+marker the sweep ROLLS THAT RUN'S READING RECORDS OUT OF THE COMMITTED LEDGER, because the
+run never happened; where the marker is there the run stands and only the stage goes. A
+refused run reports the orphans it left in place, and the ids a sweep removed are reported as
 rolled_back_records on every exit, including a failing one.
 
 **Flags:**
