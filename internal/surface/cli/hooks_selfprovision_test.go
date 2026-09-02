@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -370,9 +371,30 @@ func pathStub(t *testing.T, dir string) {
 	}
 }
 
+// pathRefusalReasons is every reason the PATH rung can print. A test names the
+// one (or, where the shell decides, the ones) it expects; the helper then proves
+// no OTHER reason fired, which is what turns "it refused" into "it refused for
+// the reason this test is about".
+var pathRefusalReasons = []string{
+	"it lives inside the working tree",
+	"it did not resolve to an absolute path",
+	"its directory could not be resolved",
+	"its directory is world-writable",
+}
+
 // assertPathBinaryRefused: the stub never ran, the shim still failed loudly with
-// its own remedy line, and one line names the ignored PATH binary.
-func assertPathBinaryRefused(t *testing.T, h binaryHook, root, stderr string, code int) {
+// its own remedy line, and one line names the ignored PATH binary AND the reason
+// it was ignored.
+//
+// Both are asserted, and the reason is asserted exclusively — the fired reason
+// must be in wantReasons and no other known reason may appear. The generic
+// prefix alone cannot tell the refusals apart: a stub reached through a relative
+// PATH element is also inside the working tree, so a test that checked only
+// "ignoring the abcd found on PATH" passes on whichever branch happens to fire
+// and keeps passing after the branch it names stops existing. The binary is
+// asserted because that is what the operator needs in order to go and look at
+// it, and docs/how-to/install.md promises the line names it.
+func assertPathBinaryRefused(t *testing.T, h binaryHook, root, stderr string, code int, wantBinaries, wantReasons []string) {
 	t.Helper()
 	if log := callLog(t, filepath.Join(root, "calls.log")); log != "" {
 		t.Fatalf("%s executed the untrusted PATH binary: %q", h.event, log)
@@ -383,12 +405,36 @@ func assertPathBinaryRefused(t *testing.T, h binaryHook, root, stderr string, co
 	if !strings.Contains(stderr, "ignoring the abcd found on PATH") {
 		t.Fatalf("%s did not say that it ignored the PATH binary or why; stderr: %s", h.event, stderr)
 	}
+	if !containsAny(stderr, wantBinaries) {
+		t.Fatalf("%s did not name the ignored binary (want one of %q); stderr: %s", h.event, wantBinaries, stderr)
+	}
+	if !containsAny(stderr, wantReasons) {
+		t.Fatalf("%s refused for the wrong reason (want one of %q); stderr: %s", h.event, wantReasons, stderr)
+	}
+	for _, r := range pathRefusalReasons {
+		if slices.Contains(wantReasons, r) {
+			continue
+		}
+		if strings.Contains(stderr, r) {
+			t.Fatalf("%s refused with an unexpected reason %q; stderr: %s", h.event, r, stderr)
+		}
+	}
 	if !strings.Contains(stderr, "#install") {
 		t.Fatalf("%s dropped its own degraded line; stderr: %s", h.event, stderr)
 	}
 	if h.event == "PreToolUse" && !strings.Contains(stderr, "UNGUARDED") {
 		t.Fatalf("PreToolUse must still say UNGUARDED when it refuses the PATH binary; stderr: %s", stderr)
 	}
+}
+
+// containsAny reports whether s contains any of the candidates.
+func containsAny(s string, candidates []string) bool {
+	for _, c := range candidates {
+		if strings.Contains(s, c) {
+			return true
+		}
+	}
+	return false
 }
 
 // TestBinaryHooksRefuseAPathBinaryInsideTheWorkingTree: a PATH entry under the
@@ -405,13 +451,24 @@ func TestBinaryHooksRefuseAPathBinaryInsideTheWorkingTree(t *testing.T) {
 			}
 			pathStub(t, pathDir)
 			_, stderr, code := hookRunIn(t, h.event, root, pathDir, work)
-			assertPathBinaryRefused(t, h, root, stderr, code)
+			assertPathBinaryRefused(t, h, root, stderr, code,
+				[]string{filepath.Join(pathDir, "abcd")},
+				[]string{"it lives inside the working tree"})
 		})
 	}
 }
 
 // TestBinaryHooksRefuseARelativePathEntry: a `.` (or empty) PATH element
 // resolves `abcd` against whatever directory the hook happens to run in.
+//
+// Which of two reasons fires is the SHELL's choice, not the shim's, and both are
+// the same refusal for the same cause. dash — /bin/sh on the Linux CI leg —
+// yields `command -v abcd` = "./abcd" verbatim, so the rung refuses it for not
+// being absolute. bash in sh mode — /bin/sh on macOS — resolves a relative PATH
+// element against $PWD before answering, so the rung gets an absolute path whose
+// directory IS the working directory and refuses it as inside the working tree.
+// Both are named here; a world-writable or unresolvable-directory refusal would
+// mean the rung reached the wrong branch, and the helper fails on either.
 func TestBinaryHooksRefuseARelativePathEntry(t *testing.T) {
 	for _, h := range binaryHooks {
 		t.Run(h.event, func(t *testing.T) {
@@ -419,7 +476,9 @@ func TestBinaryHooksRefuseARelativePathEntry(t *testing.T) {
 			work := t.TempDir()
 			pathStub(t, work)
 			_, stderr, code := hookRunIn(t, h.event, root, ".", work)
-			assertPathBinaryRefused(t, h, root, stderr, code)
+			assertPathBinaryRefused(t, h, root, stderr, code,
+				[]string{"./abcd", filepath.Join(work, "abcd")},
+				[]string{"it did not resolve to an absolute path", "it lives inside the working tree"})
 		})
 	}
 }
@@ -437,7 +496,9 @@ func TestBinaryHooksRefuseAWorldWritablePathBinary(t *testing.T) {
 				t.Fatal(err)
 			}
 			_, stderr, code := hookRunIn(t, h.event, root, pathDir, t.TempDir())
-			assertPathBinaryRefused(t, h, root, stderr, code)
+			assertPathBinaryRefused(t, h, root, stderr, code,
+				[]string{filepath.Join(pathDir, "abcd")},
+				[]string{"its directory is world-writable"})
 		})
 	}
 }
