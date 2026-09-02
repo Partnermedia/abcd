@@ -280,8 +280,9 @@ func Validate(r Registry) error {
 			if strings.TrimSpace(prefix) == "" {
 				return fmt.Errorf("%w: entry %s argument prefix %d is empty and would match every argument", ErrInvalidEntry, id, i)
 			}
-			// A prefix constrains an OPERAND, and `operands` never returns a
-			// token that starts with a dash — it reads those as flags. A dashed
+			// A prefix constrains an OPERAND, and `operandIndexes` never
+			// returns a token that starts with a dash — it reads those as
+			// flags. A dashed
 			// prefix therefore describes an argument nothing can be: the silent
 			// defang again, one field along. A flag belongs in Flags.
 			if strings.HasPrefix(prefix, "-") {

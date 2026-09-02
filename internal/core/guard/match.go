@@ -374,21 +374,13 @@ func matchSegment(p Pattern, s segment) bool {
 	return true
 }
 
-// operands returns the segment's non-flag arguments in order, stepping over the
-// value of any flag listed in valueFlags (`git -C /repo push` is a push). An
-// unknown value-taking flag is not stepped over — the miss is a non-match, never
-// a false block. The subcommand is operand 0.
-func operands(args []string, valueFlags []string) []string {
-	idx := operandIndexes(args, valueFlags)
-	ops := make([]string, len(idx))
-	for n, i := range idx {
-		ops[n] = args[i]
-	}
-	return ops
-}
-
-// operandIndexes is operands by INDEX into args, so a caller can pair each
-// operand with its token's glob record.
+// operandIndexes returns the INDEXES into args of the segment's non-flag
+// arguments, in order, stepping over the value of any flag listed in valueFlags
+// (`git -C /repo push` is a push). An unknown value-taking flag is not stepped
+// over — the miss is a non-match, never a false block. The subcommand is operand
+// 0. Indexes rather than the words themselves is what lets every caller pair an
+// operand with its token's glob record, which decides whether the compare is
+// literal or a pattern match.
 func operandIndexes(args []string, valueFlags []string) []int {
 	var idx []int
 	for i := 0; i < len(args); i++ {
@@ -405,15 +397,6 @@ func operandIndexes(args []string, valueFlags []string) []int {
 		}
 	}
 	return idx
-}
-
-// operandAt returns the n-th operand, or "" when the command line has no such
-// argument.
-func operandAt(ops []string, n int) string {
-	if n < 0 || n >= len(ops) {
-		return ""
-	}
-	return ops[n]
 }
 
 // operandMatches reports whether the n-th operand is want — literally, or as a
