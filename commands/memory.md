@@ -57,7 +57,10 @@ Report the `answer` and, if present, the `file_back` result.
 ## Lint
 
 Full-store curator health-check — per-page quotation budgets, cumulative source
-coverage, source-class and licence advisories:
+coverage, source-class and licence advisories, and secret or identity residue
+in stored text (`MR001`, a blocker: the store's write-time redactor run over
+every page, the sources registry and each text kept-original; the finding names
+the kind and the line, never the span, and lint never rewrites the store):
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/abcd" memory lint --json

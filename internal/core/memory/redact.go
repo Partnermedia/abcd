@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"fmt"
 	"strings"
 	"unicode/utf8"
 
@@ -43,21 +44,67 @@ type storeRedactor struct {
 	home string
 }
 
-// newStoreRedactor builds the shared scanner for repoRoot and refuses when it is
-// degraded. ScanText/Redact cannot signal the unavailable state in-band (only
-// ScanBundle does), so a caller that skipped this check would sanitise with a
-// silently weakened pattern set — the exact fail-open this closes. Refusing the
-// whole ingest on a broken per-repo pii.json matches history's posture: a
-// committed store must never be written with a detector known to be weakened.
-func newStoreRedactor(repoRoot string) (*storeRedactor, error) {
+// openStoreRedactor builds the shared scanner for repoRoot and says, as a plain
+// error, why it cannot be trusted: init failed, or the per-repo pii.json left
+// it degraded. ScanText/Redact cannot signal the unavailable state in-band
+// (only ScanBundle does), so a caller that skipped this check would sanitise
+// with a silently weakened pattern set — the exact fail-open this closes. The
+// write side (newStoreRedactor) turns that error into a refusal; the lint
+// (GHSA-xj89-cc2c-wgwr) turns it into a blocker finding, because its contract
+// is to always crawl and write its report.
+func openStoreRedactor(repoRoot string) (*storeRedactor, error) {
 	sc, err := scanner.New(repoRoot)
 	if err != nil {
-		return nil, newIngestError("refusing to ingest: scanner init failed: %v", err)
+		return nil, fmt.Errorf("scanner init failed: %v", err)
 	}
 	if unavail, reason := sc.Unavailable(); unavail {
-		return nil, newIngestError("refusing to ingest with a degraded scanner: %s", reason)
+		return nil, fmt.Errorf("degraded scanner: %s", reason)
 	}
 	return &storeRedactor{sc: sc, home: scanner.CallerHome()}, nil
+}
+
+// newStoreRedactor is the write side of openStoreRedactor: it refuses the whole
+// ingest on a broken per-repo pii.json, matching history's posture — a
+// committed store must never be written with a detector known to be weakened.
+func newStoreRedactor(repoRoot string) (*storeRedactor, error) {
+	r, err := openStoreRedactor(repoRoot)
+	if err != nil {
+		return nil, newIngestError("refusing to ingest: %v", err)
+	}
+	return r, nil
+}
+
+// residueHomeKind labels the literal-home backstop's finding. It mirrors the
+// scanner's own kind for the caller's home, so a report reads the same
+// whichever detector saw the path.
+const residueHomeKind = "home_path_self"
+
+// residue is the read side of redactText, for text ALREADY in the store: the
+// spans the write side would refuse or rewrite — every blocking finding of the
+// canonical scanner (a hard_fail secret, any identity or network span whatever
+// its severity) plus the deterministic literal-home backstop, reported per
+// line and deduplicated against a scanner finding of the same kind on that
+// line. It rewrites nothing: the lint reports and the operator repairs
+// (GHSA-xj89-cc2c-wgwr). A finding carries the kind and the line; the caller
+// must never put its Matched span into free text.
+func (r *storeRedactor) residue(text, label string) []scanner.Finding {
+	out := scanner.BlockingResidual(r.sc.ScanText(text, label))
+	if r.home == "" {
+		return out
+	}
+	seen := map[int]bool{}
+	for _, f := range out {
+		if f.Kind == residueHomeKind {
+			seen[f.Line] = true
+		}
+	}
+	for i, line := range strings.Split(text, "\n") {
+		if seen[i+1] || scanner.SweepCallerHome(line, r.home) == line {
+			continue
+		}
+		out = append(out, scanner.Finding{File: label, Line: i + 1, Kind: residueHomeKind, Matched: "~"})
+	}
+	return out
 }
 
 // redactText sanitises one free-text blob bound for the store. label is the
