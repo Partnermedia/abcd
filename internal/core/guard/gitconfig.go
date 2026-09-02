@@ -71,6 +71,13 @@ func (r Registry) expandGitAliases(segs []segment) ([]segment, []payloadSignal) 
 	var signals []payloadSignal
 	var bang []segment
 
+	// chainMax is the running maximum chain number across everything handed out
+	// so far — the input segments, then each bang body as it is inspected. A
+	// bang body is a separate command string, so it is offset into a disjoint
+	// range for the same reason expandPayloads offsets a payload's: an
+	// `after_cd` entry must not read across the boundary. One shared offset for
+	// every body was not enough, because each body's own tokenize numbers its
+	// chains from 0, so two bodies on one line collided on chain 0.
 	chainMax := 0
 	for _, s := range segs {
 		if s.chain > chainMax {
@@ -119,6 +126,19 @@ func (r Registry) expandGitAliases(segs []segment) ([]segment, []payloadSignal) 
 			// a fresh command string, not a deeper wrapping of this one.
 			psegs, psigs := expandPayloads(psegs)
 			signals = append(signals, psigs...)
+			// Each body gets its OWN disjoint chain range, the way
+			// expandPayloads gives each payload one: a body is a separate
+			// command string, so a `cd` in one must not read as preceding an
+			// `rm` in the next. chainMax is the running maximum, so the range
+			// this body takes is never handed out again.
+			for i := range psegs {
+				psegs[i].chain += chainMax + 1
+			}
+			for _, ps := range psegs {
+				if ps.chain > chainMax {
+					chainMax = ps.chain
+				}
+			}
 			bang = append(bang, psegs...)
 			continue
 		}
@@ -138,13 +158,6 @@ func (r Registry) expandGitAliases(segs []segment) ([]segment, []payloadSignal) 
 		out = append(out, next)
 	}
 
-	// A bang body is a separate command string, so its chains are offset into a
-	// disjoint range for the same reason expandPayloads offsets a payload's: an
-	// `after_cd` entry must not read across the boundary.
-	offset := chainMax + 1
-	for i := range bang {
-		bang[i].chain += offset
-	}
 	return append(out, bang...), signals
 }
 

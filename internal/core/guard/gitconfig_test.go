@@ -143,3 +143,49 @@ func TestGitOrdinaryWorkIsUnaffectedByTheAliasPrePass(t *testing.T) {
 		})
 	}
 }
+
+// TestEachBangAliasBodyGetsItsOwnChainRange pins the chain boundary between two
+// `!`-alias bodies on one command line. A bang body is a separate command string
+// — git hands it to a fresh shell — so a `cd` in one body does not precede an
+// `rm` in another, exactly as it does not across two `sh -c` payloads.
+//
+// Every body was offset into the SAME range once, after the collection loop, and
+// each body's own tokenize numbers its chains from 0: body A's chain 0 and body
+// B's chain 0 landed on the same number, so the `after_cd` entry read across the
+// boundary. Over-block only — but a guard that blocks what it cannot justify
+// teaches the session to route around it.
+func TestEachBangAliasBodyGetsItsOwnChainRange(t *testing.T) {
+	cases := []struct {
+		name    string
+		line    string
+		verdict Verdict
+		entry   string
+	}{
+		{
+			"a cd in one bang body does not reach an rm in another",
+			`git -c alias.a='!cd /tmp' a && git -c alias.b='!rm -rf .' b`,
+			VerdictAllow, "",
+		},
+		{
+			"the sh -c twin, which already read it that way",
+			`sh -c 'cd /tmp' && sh -c 'rm -rf .'`,
+			VerdictAllow, "",
+		},
+		{
+			"a cd and an rm in the SAME bang body still chain",
+			`git -c alias.a='!cd /tmp && rm -rf .' a`,
+			VerdictBlock, "rm-rf-after-cd-chain",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d, err := Defaults().Check(tc.line)
+			if err != nil {
+				t.Fatalf("Check(%q): %v", tc.line, err)
+			}
+			if d.Verdict != tc.verdict || d.EntryID != tc.entry {
+				t.Fatalf("Check(%q) = %q via %q, want %q via %q", tc.line, d.Verdict, d.EntryID, tc.verdict, tc.entry)
+			}
+		})
+	}
+}
