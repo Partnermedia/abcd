@@ -980,3 +980,68 @@ func TestTheStatusRenderTellsALeftoverStageFromAnOrphan(t *testing.T) {
 		t.Error("commands/reading.md does not name leftover_stages, so a host is never told to report it")
 	}
 }
+
+// TestBothPlanesReportWhichPileAPositionAssemblesFrom is the reporting half of
+// the 2026-09-01 ruling, on both planes: which pile a position draws from must
+// be readable off the bare verb and off an assembly, in text and in JSON.
+func TestBothPlanesReportWhichPileAPositionAssemblesFrom(t *testing.T) {
+	repo := readingRepo(t)
+	t.Chdir(repo)
+
+	text := string(runCLI(t, "reading"))
+	if !strings.Contains(text, "one shared assembly at every position") {
+		t.Errorf("the bare render does not say the positions share one assembly:\n%s", text)
+	}
+	var status reading.Status
+	if err := json.Unmarshal(runCLI(t, "reading", "--json"), &status); err != nil {
+		t.Fatalf("the --json status does not decode: %v", err)
+	}
+	if len(status.Piles) != len(reading.Positions()) {
+		t.Fatalf("the status reports %d pile(s) for %d position(s)",
+			len(status.Piles), len(reading.Positions()))
+	}
+	for _, p := range status.Piles {
+		if p.Pile != reading.PileShared {
+			t.Errorf("position %s reports the %q pile with none declared", p.Position, p.Pile)
+		}
+		if p.Hash == "" {
+			t.Errorf("position %s reports no pile hash, so two runs cannot be told apart by it", p.Position)
+		}
+	}
+
+	out := runCLI(t, "reading", "assemble", "--position", "widening",
+		"--target", "HEAD", "--scope", "everything", "--dry-run", "--json")
+	var res reading.AssembleResult
+	if err := json.Unmarshal(out, &res); err != nil {
+		t.Fatalf("the --json assembly does not decode: %v\n%s", err, out)
+	}
+	if res.Pile.Source != reading.PileShared || res.Pile.Hash == "" {
+		t.Errorf("the assembly reports pile %+v; nothing is declared, so it is the shared table", res.Pile)
+	}
+	plain := string(runCLI(t, "reading", "assemble", "--position", "widening",
+		"--target", "HEAD", "--scope", "everything", "--dry-run"))
+	if !strings.Contains(plain, "pile:") || !strings.Contains(plain, string(reading.PileShared)) {
+		t.Errorf("the text render does not say which pile the run drew from:\n%s", plain)
+	}
+}
+
+// TestTheStatusRenderNamesAPositionGivenItsOwnPile holds the other half of the
+// same render: an own pile is reported by name, with the rule that says why the
+// position is handed its own object.
+func TestTheStatusRenderNamesAPositionGivenItsOwnPile(t *testing.T) {
+	var buf bytes.Buffer
+	renderPiles(&buf, []reading.PositionPileStatus{
+		{Position: reading.PositionWidening, Pile: reading.PileShared, Rows: 12, Hash: "aa"},
+		{Position: reading.PositionComparative, Pile: reading.PileOwn, Rows: 1, Hash: "bb",
+			Rule: "it reads the widening run's admitted output"},
+	})
+	out := buf.String()
+	for _, want := range []string{"comparative", "1 row(s)", "admitted output", "shares one assembly"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the pile render omits %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "one shared assembly at every position") {
+		t.Errorf("the render claims every position shares one assembly although one has its own:\n%s", out)
+	}
+}

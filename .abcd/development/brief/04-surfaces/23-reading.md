@@ -69,6 +69,33 @@ the readings family's charter under a test holding the two to each other. The
 exclusion floor rides in every manifest, each entry with the signal by which a
 reader detects it.
 
+## One pile, and a position given its own
+
+The positions share one assembly by default, so widening, comparative and
+detection receive a byte-identical item set and only entailment differs, by the
+drafts asymmetry above. That is the default rather than an oversight: the
+readers' definitions already tell each position what to attend to, and a shared
+pile keeps the four readings comparable.
+
+A position can be handed its own. The include table carries a per-position
+section declaring rows that **replace** the shared pile at one position, with
+the rule saying why that position is handed its own object. A position absent
+from the section assembles from the shared table, byte for byte; declaring a
+pile for one position moves that position's assembly and no other's. An own
+pile is validated by the same function the shared table is, so rule 1 and rule
+2 bind it identically, and it is validated before anything is walked.
+
+Every manifest carries a `pile` stamp — `shared` or `own`, with the hash of the
+rows it drew from — so a run is reproducible and a closing-run comparison can
+tell a shared assembly from a narrowed one. `abcd reading` reports the same for
+all four positions without running an assembly.
+
+The comparative position is the case the section exists for and the one it
+cannot yet carry: its object is the widening reading's admitted output, which
+lives inside a record family the table may not name and inside the namespace
+the structural deny refuses. The charter carries the shape that entry would
+take as an example, and the position goes on refusing to assemble.
+
 ## Two artefacts, and where they land
 
 `assemble` writes the assembled input (`bundle.json`) and the manifest

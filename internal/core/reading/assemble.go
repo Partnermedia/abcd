@@ -60,17 +60,20 @@ type AssembleRequest struct {
 // operator's own string back on the result, so no absolute path nobody typed
 // reaches the success surface. Neither ARTEFACT carries an output path at all.
 type AssembleResult struct {
-	RunID            string     `json:"run_id"`
-	Position         Position   `json:"position"`
-	TargetCommit     string     `json:"target_commit"`
-	AssemblerVersion string     `json:"assembler_version"`
-	ItemCount        int        `json:"item_count"`
-	ManifestHash     string     `json:"manifest_hash"`
-	Scope            Scope      `json:"scope"`
-	Size             SizeReport `json:"size"`
-	OutDir           string     `json:"out_dir,omitempty"`
-	Artefacts        []string   `json:"artefacts"`
-	Written          bool       `json:"written"`
+	RunID            string   `json:"run_id"`
+	Position         Position `json:"position"`
+	TargetCommit     string   `json:"target_commit"`
+	AssemblerVersion string   `json:"assembler_version"`
+	ItemCount        int      `json:"item_count"`
+	ManifestHash     string   `json:"manifest_hash"`
+	// Pile is which pile this position assembled from and its hash, echoed off
+	// the manifest so an operator sees it without opening the artefact.
+	Pile      Pile       `json:"pile"`
+	Scope     Scope      `json:"scope"`
+	Size      SizeReport `json:"size"`
+	OutDir    string     `json:"out_dir,omitempty"`
+	Artefacts []string   `json:"artefacts"`
+	Written   bool       `json:"written"`
 
 	Bundle   Bundle   `json:"-"`
 	Manifest Manifest `json:"-"`
@@ -243,6 +246,17 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 			PositionDetection)
 	}
 
+	// The pile is validated before anything is walked. itd-194's rules are
+	// properties of the table rather than of the tree, so a pile that breaks
+	// one breaks it at declaration, and refusing here rather than after a walk
+	// is the difference between a refusal that names the row and a run that
+	// quietly assembled the wrong object.
+	if err := ValidatePile(position); err != nil {
+		return AssembleResult{}, fmt.Errorf("reading: %w", err)
+	}
+	rows, pileSource := RowsFor(position)
+	pile := Pile{Source: pileSource, Hash: PileHashOf(rows)}
+
 	presets, err := LoadPresets(req.RepoRoot)
 	if err != nil {
 		return AssembleResult{}, fmt.Errorf("reading: %w", err)
@@ -309,6 +323,7 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 		Position:         position,
 		TargetCommit:     target,
 		AssemblerVersion: AssemblerVersion(),
+		Pile:             pile,
 		Scope:            scope,
 		ScopeHash:        scopeHash,
 		ScopeOverridden:  scope.Overridden,
@@ -335,6 +350,7 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 		AssemblerVersion: AssemblerVersion(),
 		ItemCount:        len(bundle.Items),
 		ManifestHash:     hash,
+		Pile:             pile,
 		Scope:            scope,
 		Size:             sizeReport(cands),
 		Artefacts:        []string{},
@@ -677,7 +693,8 @@ func collect(repoRoot string, position Position) ([]candidate, error) {
 	var out []candidate
 
 	exclusions := ExclusionsFor(position)
-	for _, row := range Table {
+	rows, _ := RowsFor(position)
+	for _, row := range rows {
 		if !row.AdmittedAt(position) {
 			continue
 		}
@@ -788,7 +805,7 @@ func ownArtefactError(rel, tag string) error {
 // scan, and a row enumerating nothing is a hole the run would not report.
 func requireConfiguredStores(repoRoot string, cfg lint.Config) error {
 	configured := cfg.Rules[lintRecordSchemaRule].RecordStores
-	for _, row := range Table {
+	for _, row := range everyDeclaredRow() {
 		if row.Store == "" {
 			continue
 		}

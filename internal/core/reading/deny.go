@@ -130,10 +130,13 @@ func (r Row) Reaches(rel string) bool {
 	return r.matches(path.Base(rel))
 }
 
-// Admits reports whether any row of the table admits rel at position p. It is
-// the whole of the assembler's answer to "may a reading see this file".
+// Admits reports whether any row of the pile p assembles from admits rel. It is
+// the whole of the assembler's answer to "may a reading see this file", and it
+// asks RowsFor rather than Table so a position given its own pile is answered
+// about the pile it actually draws from.
 func Admits(p Position, rel string) bool {
-	for _, row := range Table {
+	rows, _ := RowsFor(p)
+	for _, row := range rows {
 		if row.AdmittedAt(p) && row.Reaches(rel) {
 			return true
 		}

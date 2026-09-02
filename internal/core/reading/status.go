@@ -30,7 +30,12 @@ type Status struct {
 	Positions        []Position `json:"positions"`
 	IncludeRows      int        `json:"include_rows"`
 	ExclusionRows    int        `json:"exclusion_rows"`
-	Definitions      []string   `json:"definitions"`
+	// Piles reports, for every position, which pile it assembles from and the
+	// hash of that pile. It names all four rather than only the positions given
+	// their own, because "shared" is the fact a reader needs stated: a listing
+	// of the exceptions alone leaves a reader inferring the rule.
+	Piles       []PositionPileStatus `json:"piles"`
+	Definitions []string             `json:"definitions"`
 	// StagedRuns is what an ASSEMBLY parked. It is not filtered by whether the
 	// run was ingested: nothing removes an assembly's directory afterwards, so a
 	// committed run and an unread one appear alike (iss captured separately).
@@ -54,6 +59,34 @@ type Status struct {
 	LeftoverStages []string `json:"leftover_stages"`
 }
 
+// PositionPileStatus is one position's pile as the bare verb reports it.
+type PositionPileStatus struct {
+	Position Position   `json:"position"`
+	Pile     PileSource `json:"pile"`
+	Rows     int        `json:"rows"`
+	Hash     string     `json:"hash"`
+	// Rule is why the position was handed its own object, empty for a position
+	// on the shared pile — a shared assembly is the default and states no rule
+	// of its own.
+	Rule string `json:"rule,omitempty"`
+}
+
+// positionPiles reports which pile each position assembles from.
+func positionPiles() []PositionPileStatus {
+	out := make([]PositionPileStatus, 0, len(Positions()))
+	for _, p := range Positions() {
+		rows, src := RowsFor(p)
+		out = append(out, PositionPileStatus{
+			Position: p,
+			Pile:     src,
+			Rows:     len(rows),
+			Hash:     PileHashOf(rows),
+			Rule:     PositionTables[p].Rule,
+		})
+	}
+	return out
+}
+
 // Describe reports the assembler's state over a repository. It writes nothing.
 func Describe(repoRoot string) (Status, error) {
 	s := Status{
@@ -63,6 +96,7 @@ func Describe(repoRoot string) (Status, error) {
 		Positions:        Positions(),
 		IncludeRows:      len(Table),
 		ExclusionRows:    len(Exclusions),
+		Piles:            positionPiles(),
 		Definitions:      []string{},
 		StagedRuns:       []string{},
 		OrphanedIngests:  []string{},

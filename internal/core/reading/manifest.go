@@ -20,7 +20,17 @@ import (
 // shared constant, accepted rather than fixed inside a change that needed only
 // one half of it — splitting the two is a larger change, and making the split
 // silently is how a shape version stops meaning anything (spc-68).
-const SchemaVersion = 4
+//
+// At version 5 the manifest gained the pile stamp, so the bundle is restamped
+// once more for the same reason. The stamp could have been made omitempty to
+// leave a shared assembly's bytes exactly where they were; it is not, because
+// a manifest that omits which pile it drew from cannot tell a shared assembly
+// from a stamp nobody wrote, and telling those two apart is the whole point of
+// the field (ruled 2026-09-01, iss-2608311501240566). What is unchanged by
+// construction is the ITEM SET: a position with no own pile assembles exactly
+// what it assembled at version 4, and pile_test.go holds that against the
+// digests recorded before the section existed.
+const SchemaVersion = 5
 
 // The two artefact type tags. They are carried in the documents themselves so a
 // reader of a loose file can tell the two apart without its filename.
@@ -143,6 +153,15 @@ type Manifest struct {
 	Position         Position `json:"position"`
 	TargetCommit     string   `json:"target_commit"`
 	AssemblerVersion string   `json:"assembler_version"`
+	// Pile is which pile this position was assembled from and its hash.
+	//
+	// The assembler version already digests the whole table, own piles
+	// included, so it moves when any pile changes. It cannot say which pile
+	// THIS run drew from, and that is the fact the closing-run comparison turns
+	// on: three positions receiving a byte-identical item set is a finding only
+	// if a reader can tell a shared assembly from a narrowed one without
+	// re-deriving it (iss-2608311501240566).
+	Pile Pile `json:"pile"`
 	// Scope, ScopeHash and ScopeOverridden are the auditor's account of what
 	// this run was about. The hash lets a reader tell two runs apart by their
 	// scope rather than by re-deriving it, and it means a preset edited later
@@ -156,6 +175,19 @@ type Manifest struct {
 	ScopeOverridden bool           `json:"scope_overridden"`
 	Items           []ManifestItem `json:"items"`
 	Exclusions      []Exclusion    `json:"exclusions"`
+}
+
+// Pile records which pile an assembly drew from and hashes it, so a run is
+// reproducible from the manifest alone and two runs can be told apart by the
+// pile they used rather than by re-deriving one.
+//
+// Neither field is omitempty, on the reasoning ManifestItem.Kind carries: a
+// shape that can omit a fact cannot distinguish a well-formed document from a
+// defective one, and DecodeManifest refuses both an absent source and an
+// absent hash rather than defaulting either.
+type Pile struct {
+	Source PileSource `json:"source"`
+	Hash   string     `json:"hash"`
 }
 
 // encode is the one definition of canonical bytes for both artefacts: fixed
@@ -212,6 +244,18 @@ func DecodeManifest(data []byte) (Manifest, error) {
 	// true of what the binary writes and false of what it reads — an
 	// attestation asserting more than its examination establishes, which brief
 	// invariant 16 forbids.
+	// The pile stamp is refused when absent for the same reason an item's kind
+	// is. A manifest whose stamp decoded to the zero value would read as a
+	// shared assembly, which is the ONE answer a missing stamp must not be
+	// allowed to give: it is the answer a forgotten field and a truthful one
+	// would both produce.
+	if _, err := ParsePileSource(string(m.Pile.Source)); err != nil {
+		return Manifest{}, fmt.Errorf("decoding reading manifest: the pile stamp: %w", err)
+	}
+	if m.Pile.Hash == "" {
+		return Manifest{}, fmt.Errorf("decoding reading manifest: the pile stamp carries no hash, " +
+			"so the pile it names cannot be checked")
+	}
 	known := make(map[Kind]bool, len(Kinds()))
 	for _, k := range Kinds() {
 		known[k] = true

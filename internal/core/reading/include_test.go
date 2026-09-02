@@ -29,16 +29,11 @@ func repoRoot(t *testing.T) string {
 	}
 }
 
-// recordFamilyRoots are the directories that hold a record family. Assembler
-// rule 1 is stated against this list: no include may name a directory that
-// CONTAINS one of them.
-var recordFamilyRoots = []string{
-	".abcd/development/decisions",
-	".abcd/development/intents",
-	".abcd/development/specs",
-	".abcd/development/readings",
-	".abcd/work/issues",
-}
+// recordFamilyRoots is the list the assembler's own validator is stated
+// against. It is an alias rather than a second spelling: two copies of the
+// families rule 1 binds is exactly how a family added to one and not the other
+// stops being bound.
+var recordFamilyRoots = RecordFamilyRoots
 
 // TestReadingsCharterCarriesTheRenderedIncludeTable is the anti-drift detector:
 // the charter and the Go table are one contract, and the code is its source of

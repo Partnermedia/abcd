@@ -29,10 +29,19 @@ To render the assembler's state:
 ```
 
 Summarise the JSON for the user: `assembler_version`, `include_rows` and
-`exclusion_rows` (what the table admits and what it refuses), `definitions`
+`exclusion_rows` (what the table admits and what it refuses), `piles` (which
+pile each position assembles from), `definitions`
 (the reading definitions present under `agents/`), `staged_runs` (runs an
 assembly has parked in the local tier), `orphaned_ingests`, and
 `leftover_stages`. Zero writes.
+
+**`piles` says which positions share one assembly and which have their own.**
+Each row carries `position`, `pile` (`shared` or `own`), `rows`, `hash` and,
+for an own pile, the `rule` saying why that position is handed its own object.
+The positions share one assembly by default, so the ordinary answer is `shared`
+at all four. Report a position on its own pile explicitly, with its rule: a
+reading assembled from a narrower pile is not comparable with the others in the
+way a shared assembly is.
 
 **`orphaned_ingests` is not routine.** Each name is a run whose ingest reached
 the ledger and never reached its commit marker, so its reading records are
@@ -77,7 +86,10 @@ presets and what people actually run is countable.
 **The comparative position does not assemble.** Its object is the widening
 reading's pre-admission output, which is not repository material and has no
 channel today. It refuses and names that, rather than returning the detection
-position's corpus and reporting success.
+position's corpus and reporting success. A per-position pile does not change
+that: the admitted output it would name sits inside a record family the include
+table may not reach, so the charter carries that entry as an example of the
+shape and not as a declaration.
 
 Assembly reads the working tree, so it refuses unless HEAD resolves to the
 target **and** no included path is uncommitted. The preset configuration is in
@@ -87,6 +99,12 @@ an unknown position, a missing operand, and any positional argument.
 
 Report from the JSON: `run_id`, `position`, `target_commit`, `item_count`,
 `manifest_hash`, and — where the run wrote — `out_dir` and `artefacts`.
+
+Report `pile` too: `pile.source` is `shared` or `own`, and `pile.hash` is the
+hash of the rows the run assembled from. Say plainly when a run drew from a
+position's own pile, because a reading narrowed to its own object is not
+comparable with the others in the way a shared assembly is. The written
+manifest carries the same stamp under `pile`.
 
 Report `scope` too: `scope.source`, the token the operator gave; `scope.selectors`,
 what it resolved to; and `scope.overridden` — true when the run named a record or

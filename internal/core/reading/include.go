@@ -24,7 +24,14 @@ import (
 // a rewritten rule text moves the rendering without changing what the
 // assembler promises, and a projection change alters the promise without
 // touching the table (spc-61, ruling (12); spc-68).
-const AssemblerVersionCore = "1.2.0"
+//
+// It goes 1.2.0 to 1.3.0 with the per-position pile: the manifest shape gained
+// the pile stamp, which is an addition to the contract rather than a change to
+// what an existing field means, and the include table gained a section the
+// digest cannot see while it is empty. The digest alone would therefore have
+// left the version standing still across a contract that moved — which is the
+// case this hand-set half exists for (ruled 2026-09-01).
+const AssemblerVersionCore = "1.3.0"
 
 // AssemblerVersion is the core semver with the rendered include table's digest
 // as semver build metadata. The digest is computed, not declared, so a table
@@ -337,6 +344,300 @@ var Table = []Row{
 	},
 }
 
+// PileSource names which pile an assembly drew its rows from. The set is
+// closed, and a manifest carries one of the two: an absent value is refused
+// rather than read as "shared", because a stamp that can be forgotten and a
+// stamp that says "shared" are then the same bytes.
+type PileSource string
+
+const (
+	// PileShared is the one assembly every position draws from by default.
+	PileShared PileSource = "shared"
+	// PileOwn is a position's own pile, declared in PositionTables.
+	PileOwn PileSource = "own"
+)
+
+// ParsePileSource resolves a token to a pile source, refusing anything else.
+func ParsePileSource(s string) (PileSource, error) {
+	switch PileSource(s) {
+	case PileShared, PileOwn:
+		return PileSource(s), nil
+	}
+	return "", fmt.Errorf("unknown pile source %q; the set is closed: %s, %s", s, PileShared, PileOwn)
+}
+
+// PositionPile is one position's OWN pile: the rows that REPLACE the shared
+// table when this position assembles, and the rule that says why the position
+// is handed its own object rather than the shared one.
+//
+// The default is deliberately no pile at all. The four readers' definitions
+// already tell each position what to attend to, and a shared assembly keeps the
+// four readings comparable, so one pile is what the positions get unless a run
+// needs otherwise — the comparative position handed only the widening reading's
+// output, for instance (ruled 2026-09-01, iss-2608311501240566).
+//
+// A pile is part of the assembly CONTRACT and lives here rather than in a
+// configuration file for the reason the shared table does: the table is the
+// whole of what a reading may see, it is rendered into the charter under a test
+// that holds the two to each other, and its digest is the stamped assembler
+// version. A runtime file that could add a row would be a channel for widening
+// what a reading sees that no committed record had to pass through.
+type PositionPile struct {
+	// Rows replace the shared table at this position. They are Row values, so
+	// every rule the shared table is held to holds here through the same
+	// predicate and the same validator, never a copy of either.
+	Rows []Row
+	// Rule states why the position is handed its own object. It is required for
+	// the same reason a row's is: a pile with no stated rule is a narrowing
+	// nobody can audit.
+	Rule string
+}
+
+// PositionTables is the include table's per-position section: the positions
+// that have been handed their own pile.
+//
+// It is EMPTY, and that is the ruling rather than an omission. A position
+// absent here assembles from the shared Table, byte for byte as it did before
+// this section existed. Adding an entry replaces that position's pile and
+// nothing else — no other position's assembly moves.
+//
+// The comparative position is the case the section was built for and the one
+// entry it cannot yet carry. Its object is the widening reading's admitted
+// output, which lands at .abcd/work/issues/admissions/<run-id>/adm-N.md: inside
+// the .abcd namespace the structural deny refuses at every depth, and inside a
+// record family no include may name from above. Both refusals are correct and
+// neither is a bug to route around here — the assembler has no channel for a
+// prior run's output, which is why the position refuses to assemble at all
+// (itd-199). The charter carries the shape that entry would take, as an example
+// and not as a declaration.
+var PositionTables = map[Position]PositionPile{}
+
+// RowsFor returns the rows a position assembles from and which pile they are.
+// It is the one place the shared table and an own pile are chosen between, so
+// no caller can read Table directly and miss a declared pile.
+func RowsFor(p Position) ([]Row, PileSource) {
+	if pile, ok := PositionTables[p]; ok {
+		return pile.Rows, PileOwn
+	}
+	return Table, PileShared
+}
+
+// PileHashOf is a pile's content hash, over the same rendering the charter
+// carries and the assembler version digests. Two runs can therefore be told
+// apart by the pile they drew from rather than by re-deriving it, and a pile
+// edited later can never make a past run unreadable — the idiom the scope hash
+// already carries (spc-69).
+func PileHashOf(rows []Row) string {
+	sum := sha256.Sum256([]byte(renderRows(rows)))
+	return hex.EncodeToString(sum[:])
+}
+
+// everyDeclaredRow is every row this binary can assemble from: the shared table
+// and every declared own pile. A check that walks it — the record-store check
+// does — asks about the whole contract rather than about the shared half of it,
+// so a pile naming an unconfigured store cannot enumerate nothing in silence.
+func everyDeclaredRow() []Row {
+	out := append([]Row{}, Table...)
+	for _, p := range Positions() {
+		if pile, ok := PositionTables[p]; ok {
+			out = append(out, pile.Rows...)
+		}
+	}
+	return out
+}
+
+// RecordFamilyRoots are the directories that hold a record family. Assembler
+// rule 1 is stated against this list: no include may name a directory that
+// CONTAINS one of them. It lives beside the table rather than in a test,
+// because the validator that enforces it is what the assembler runs.
+var RecordFamilyRoots = []string{
+	".abcd/development/decisions",
+	".abcd/development/intents",
+	".abcd/development/specs",
+	".abcd/development/readings",
+	".abcd/work/issues",
+}
+
+// ValidatePile validates the rows the position will actually assemble from,
+// whichever pile they are. The assembler calls it before it walks anything, so
+// a pile that does not validate refuses at the door rather than one walk later.
+func ValidatePile(p Position) error {
+	rows, src := RowsFor(p)
+	if err := ValidateRows(p, rows); err != nil {
+		return fmt.Errorf("the %s pile of the %s position: %w", src, p, err)
+	}
+	if src != PileOwn {
+		return nil
+	}
+	if PositionTables[p].Rule == "" {
+		return fmt.Errorf("the own pile of the %s position states no rule; a position handed its "+
+			"own object says why", p)
+	}
+	// The one rule a PILE has that a row does not. A pile is assembled at the
+	// position it is declared for, so a row that does not admit there is a row
+	// declared and never read — a narrowing whose rendering says one thing and
+	// whose walk does another.
+	for _, row := range rows {
+		if !row.AdmittedAt(p) {
+			return fmt.Errorf("the own pile of the %s position carries the row %q, which is not "+
+				"admitted at %s; a pile is assembled at the position it is given to", p, row.Source, p)
+		}
+	}
+	return nil
+}
+
+// ValidateRows is the include table's validation, and it is ONE function: the
+// shared table and a position's own pile are checked by it identically, so a
+// pile cannot be the shape through which a rule the shared table is held to
+// stops being held (itd-194).
+//
+// It checks the rules that are properties of the table rather than of the tree:
+// the two closed vocabularies, positive selection at every grain, a stated
+// admitting rule, a known record store, assembler rule 1 (no include names a
+// directory containing a record family), and assembler rule 2 as the exclusion
+// floor states it (a reading's object excludes what it exists to change).
+func ValidateRows(p Position, rows []Row) error {
+	if _, err := ParsePosition(string(p)); err != nil {
+		return err
+	}
+	if len(rows) == 0 {
+		return fmt.Errorf("admits nothing; a reading with no input is not a blind reading")
+	}
+	kinds := make(map[Kind]bool, len(Kinds()))
+	for _, k := range Kinds() {
+		kinds[k] = true
+	}
+	for _, row := range rows {
+		if !kinds[row.Kind] {
+			return fmt.Errorf("the row %q carries kind %q, which is not in the closed vocabulary",
+				row.Source, row.Kind)
+		}
+		if len(row.Positions) == 0 {
+			return fmt.Errorf("the row %q is admitted at no position", row.Source)
+		}
+		for _, q := range row.Positions {
+			if _, err := ParsePosition(string(q)); err != nil {
+				return fmt.Errorf("the row %q: %w", row.Source, err)
+			}
+		}
+		if row.Rule == "" {
+			return fmt.Errorf("the row %q states no admitting rule", row.Source)
+		}
+		if len(row.Match) == 0 && len(row.MatchSuffix) == 0 {
+			return fmt.Errorf("the row %q matches every file; inclusion is positive at every grain",
+				row.Source)
+		}
+		if row.Store != "" {
+			if _, ok := storeNodeType[row.Store]; !ok {
+				return fmt.Errorf("the row %q names the unknown record store %q", row.Source, row.Store)
+			}
+		}
+		// A row must be able to admit SOMETHING. The structural deny is
+		// measured from a row's own Source DOWNWARD, so a Source lying at or
+		// beneath a denied prefix — the assembler's own package is the whole of
+		// that list — admits nothing at any depth and enumerates in silence.
+		// That is the same hole the walk-row existence check refuses one level
+		// out, refused here at declaration instead of at the far end of a walk
+		// that found nothing.
+		if !rowAdmitsAnything(row) {
+			return fmt.Errorf("the row %q is structurally denied and would admit nothing at any "+
+				"depth; an include that enumerates nothing is a hole rather than a narrowing",
+				row.Source)
+		}
+		if err := rowRespectsFamilies(row); err != nil {
+			return err
+		}
+		if !row.AdmittedAt(p) {
+			continue // it contributes nothing here, so the floor has nothing to say about it
+		}
+		if err := rowRespectsFloor(p, row); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// rowAdmitsAnything reports whether the row can admit any file under its own
+// source, probed with the row's own match forms.
+func rowAdmitsAnything(row Row) bool {
+	for _, probe := range familyProbes(row, strings.TrimSuffix(row.Source, "/")) {
+		if row.Reaches(probe) {
+			return true
+		}
+	}
+	return false
+}
+
+// rowRespectsFamilies is assembler rule 1: a row may name a family's own bucket
+// individually, and may not reach into a family from above.
+func rowRespectsFamilies(row Row) error {
+	for _, family := range RecordFamilyRoots {
+		src := strings.TrimSuffix(row.Source, "/")
+		if src == family || strings.HasPrefix(src+"/", family+"/") {
+			continue // named individually, which rule 1 permits
+		}
+		for _, probe := range familyProbes(row, family) {
+			if row.Reaches(probe) {
+				return fmt.Errorf("the row %q reaches %s: no include names a directory containing "+
+					"a record family", row.Source, probe)
+			}
+		}
+	}
+	return nil
+}
+
+// rowRespectsFloor is assembler rule 2 as the floor states it: a row admitted
+// at p may not reach anything the floor refuses at p. It is what stops an own
+// pile handing a position the material that reading exists to change.
+func rowRespectsFloor(p Position, row Row) error {
+	for _, e := range ExclusionsFor(p) {
+		if e.Signal != "directory" && e.Signal != "file" {
+			continue
+		}
+		if e.Signal == "file" {
+			if row.Reaches(e.Detail) {
+				return fmt.Errorf("the row %q reaches the excluded file %s, which the manifest "+
+					"asserts was refused", row.Source, e.Detail)
+			}
+			continue
+		}
+		for _, probe := range familyProbes(row, e.Detail) {
+			if row.Reaches(probe) {
+				return fmt.Errorf("the row %q reaches %s under the excluded directory %s: %s",
+					row.Source, probe, e.Detail, e.Rule)
+			}
+		}
+	}
+	return nil
+}
+
+// familyProbes composes the paths a row would admit inside dir, if it admits
+// anything there at all. A single "probe.md" would answer only for rows that
+// match markdown, so the probe is built from the row's OWN match forms: a
+// validator that cannot see a row reaching a denied place is a validator that
+// passes it.
+func familyProbes(row Row, dir string) []string {
+	bases := []string{}
+	for _, m := range row.Match {
+		if strings.HasPrefix(m, ".") {
+			bases = append(bases, "probe"+m)
+			continue
+		}
+		bases = append(bases, m)
+	}
+	for _, s := range row.MatchSuffix {
+		bases = append(bases, "probe"+s)
+	}
+	if len(bases) == 0 {
+		bases = append(bases, "probe")
+	}
+	out := make([]string, 0, len(bases)*2)
+	for _, b := range bases {
+		out = append(out, dir+"/"+b, dir+"/bucket/"+b)
+	}
+	return out
+}
+
 // Exclusions is the exclusion floor: every field, heading and directory the
 // assembler refuses, each with the signal by which a reader detects it. It is
 // asserted into every manifest so a reader can check the exclusions rather than
@@ -427,9 +728,29 @@ const CharterPath = ".abcd/development/readings/README.md"
 func Render() string {
 	var b strings.Builder
 	b.WriteString("### Include table\n\n")
+	b.WriteString(renderRows(Table))
+	b.WriteString(renderOwnPiles())
+	b.WriteString("\n### Exclusion floor\n\n")
+	b.WriteString("| Detail | Signal | Rule | Positions |\n")
+	b.WriteString("| --- | --- | --- | --- |\n")
+	for _, e := range Exclusions {
+		positions := "every position"
+		if len(e.Positions) > 0 {
+			positions = sortedPositions(e.Positions)
+		}
+		fmt.Fprintf(&b, "| `%s` | %s | %s | %s |\n", e.Detail, e.Signal, e.Rule, positions)
+	}
+	return b.String()
+}
+
+// renderRows renders one pile of rows as the charter's table. It is the one
+// rendering of a row set in this package, so the shared table, an own pile and
+// the hash computed over either are all the same bytes by construction.
+func renderRows(rows []Row) string {
+	var b strings.Builder
 	b.WriteString("| Positions | Source | Matches | Suffixes | Fields | Store | Bucket | Kind | Admitting rule |\n")
 	b.WriteString("| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n")
-	for _, row := range Table {
+	for _, row := range rows {
 		fmt.Fprintf(&b, "| %s | `%s` | %s | %s | %s | %s | %s | `%s` | %s |\n",
 			sortedPositions(row.Positions),
 			row.Source,
@@ -441,15 +762,32 @@ func Render() string {
 			row.Kind,
 			row.Rule)
 	}
-	b.WriteString("\n### Exclusion floor\n\n")
-	b.WriteString("| Detail | Signal | Rule | Positions |\n")
-	b.WriteString("| --- | --- | --- | --- |\n")
-	for _, e := range Exclusions {
-		positions := "every position"
-		if len(e.Positions) > 0 {
-			positions = sortedPositions(e.Positions)
+	return b.String()
+}
+
+// renderOwnPiles renders the per-position section, and renders NOTHING when no
+// position has been given its own pile. That is what keeps the default
+// assembly's stamped version, and the charter it is held to, exactly where they
+// were before the section existed: a mechanism nobody has used changes no bytes.
+func renderOwnPiles() string {
+	declared := make([]Position, 0, len(PositionTables))
+	for _, p := range Positions() {
+		if _, ok := PositionTables[p]; ok {
+			declared = append(declared, p)
 		}
-		fmt.Fprintf(&b, "| `%s` | %s | %s | %s |\n", e.Detail, e.Signal, e.Rule, positions)
+	}
+	if len(declared) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\n### Own piles\n\n")
+	b.WriteString("A position named here is assembled from its own rows instead of the shared " +
+		"table above. Every other position keeps the shared pile unchanged, and the exclusion " +
+		"floor below binds an own pile exactly as it binds the shared one.\n")
+	for _, p := range declared {
+		pile := PositionTables[p]
+		fmt.Fprintf(&b, "\n#### %s\n\n%s\n\n", p, pile.Rule)
+		b.WriteString(renderRows(pile.Rows))
 	}
 	return b.String()
 }

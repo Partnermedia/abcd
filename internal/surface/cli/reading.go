@@ -269,6 +269,7 @@ func renderReadingStatus(w io.Writer, s reading.Status) {
 	fmt.Fprintf(w, "  include rows:   %d across %d positions (%s)\n",
 		s.IncludeRows, len(s.Positions), positionTokens())
 	fmt.Fprintf(w, "  exclusion rows: %d, asserted into every manifest\n", s.ExclusionRows)
+	renderPiles(w, s.Piles)
 	fmt.Fprintf(w, "  charter:        %s\n", s.CharterPath)
 	if len(s.Definitions) == 0 {
 		fmt.Fprintf(w, "  definitions:    none found under %s/\n", reading.DefinitionsDir)
@@ -301,11 +302,44 @@ func renderReadingStatus(w io.Writer, s reading.Status) {
 	}
 }
 
+// renderPiles writes which pile each position assembles from.
+//
+// The shared case is stated rather than left implied. Positions sharing one
+// pile is the DEFAULT and the thing the closing-run comparison has to be able
+// to read off a run: a render that named only the exceptions would leave a
+// reader inferring the rule from a silence (ruled 2026-09-01).
+func renderPiles(w io.Writer, piles []reading.PositionPileStatus) {
+	own := make([]string, 0, len(piles))
+	for _, p := range piles {
+		if p.Pile == reading.PileOwn {
+			own = append(own, fmt.Sprintf("%s (%d row(s))", p.Position, p.Rows))
+		}
+	}
+	if len(own) == 0 {
+		fmt.Fprintf(w, "  piles:          one shared assembly at every position\n")
+		return
+	}
+	fmt.Fprintf(w, "  piles:          own pile at %s; every other position shares one assembly\n",
+		strings.Join(own, ", "))
+	for _, p := range piles {
+		if p.Pile != reading.PileOwn {
+			continue
+		}
+		// Sanitised: a pile's rule is author-written prose that reaches a
+		// rendered line, which invariant 13 holds to being termsafe.
+		fmt.Fprintf(w, "    %-12s %s\n", p.Position+":", termsafe.Sanitize(p.Rule))
+	}
+}
+
 // renderAssembleResult writes one assembly's text render.
 func renderAssembleResult(w io.Writer, res reading.AssembleResult) {
 	fmt.Fprintf(w, "%s: %d item(s) assembled at the %s position of %s\n",
 		res.RunID, res.ItemCount, res.Position, shortSha(res.TargetCommit))
 	fmt.Fprintf(w, "  manifest hash: %s\n", res.ManifestHash)
+	// Which pile the run drew from, on the line above the scope, because the
+	// two answer different questions: the pile is what the POSITION may see and
+	// the scope is what this run was about.
+	fmt.Fprintf(w, "  pile:          %s, %s\n", res.Pile.Source, res.Pile.Hash)
 	renderScope(w, res.Scope)
 	renderSizeReport(w, res.Size)
 	if !res.Written {

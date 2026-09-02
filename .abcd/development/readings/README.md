@@ -41,6 +41,71 @@ Two rules bind the table itself (ruled 2026-08-28):
    change. The drafts asymmetry and the Audit Notes exclusion are its two
    instances, which is what makes the table derivable rather than remembered.
 
+## One pile, and a position given its own
+
+The four positions share **one assembly** by default. Three of them — widening,
+comparative and detection — therefore receive a byte-identical item set, and
+only entailment differs, by the drafts asymmetry rule 2 above states. That is
+the default rather than an accident: the readers' definitions already tell each
+position what to attend to, and a shared pile keeps the four readings
+comparable (ruled 2026-09-01, `iss-2608311501240566`).
+
+A position can be handed its own. The table's per-position section,
+`PositionTables` beside the shared `Table`, declares a set of rows that
+**replaces** the shared pile at one position, together with the rule saying why
+that position is handed its own object. A position absent from the section
+assembles from the shared table, byte for byte. Declaring a pile for one
+position moves that position's assembly and no other's.
+
+An own pile is held to everything the shared table is held to, through the same
+validator rather than a copy of it: the two closed vocabularies, positive
+selection at every grain, a stated admitting rule, rule 1 and rule 2 as the
+exclusion floor states them. It has one rule of its own — every row must be
+admitted at the position the pile is given to, because a pile is assembled at
+that position and a row admitted elsewhere would be declared and never read.
+The assembler validates the pile before it walks anything.
+
+Each run says which pile it drew from. The manifest carries a `pile` stamp —
+`shared` or `own`, with the hash of the rows — so a closing-run comparison can
+tell a shared assembly from a narrowed one without re-deriving either, and
+`abcd reading` reports the same for all four positions before any run happens.
+The stamp is required rather than omitted when shared: a manifest that omits
+it cannot distinguish a shared assembly from a stamp nobody wrote.
+
+The section is Go data for the reason the shared table is. The table is the
+whole of what a reading may see, its rendering is digested into the stamped
+assembler version, and a test holds it against the rendering below. A runtime
+configuration file able to add a row would be a channel for widening what a
+reading sees that no committed record had to pass through.
+
+**The comparative position is the case the section exists for, and the one
+entry it cannot yet carry.** Its natural own pile is the widening reading's
+admitted output, which lands at
+`.abcd/work/issues/admissions/<run-id>/adm-N.md`. Two of the table's own rules
+refuse that path, and both refuse it correctly: it sits inside the `.abcd`
+namespace the structural deny refuses at every depth, and inside a record
+family no include may name from above. The assembler has no channel for a prior
+run's output at all, which is why the position refuses to assemble rather than
+being served a corpus that is not its object (itd-199). So the entry below is
+an **example of the shape**, not a declaration, and it does not assemble today:
+
+```go
+PositionComparative: {
+    Rule: "the comparative position reads the widening run's admitted output, " +
+        "not the shipped tree",
+    Rows: []Row{{
+        Positions: []Position{PositionComparative},
+        Source:    ".abcd/work/issues/admissions", // refused: inside a record family
+        Match:     []string{".md"},
+        Kind:      KindIntentProjection,
+        Rule:      "the candidate set is the prior reading's admitted output",
+    }},
+},
+```
+
+Supplying that object needs a channel for a prior run's output, which is a
+separate change and not one an include row can make.
+
 A row's field list is a contract rather than a census, and the two differ by
 position today. The intent projection names five fields. `Scope Conditions` and
 `Mechanism` are headings no shipped intent carries, so the shipped rows yield
