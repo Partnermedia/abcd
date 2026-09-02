@@ -300,6 +300,11 @@ gate that will refuse the move mechanically is a recorded seed until built.
    or infer consent. It mints the spec stub, links both sides, stamps an
    identity onto every unmarked scope condition, and moves the intent
    `drafts/ → planned/`.
+
+   **"Plan" means this act and nothing else here.** The build plan the phase
+   docs hold, a dated design plan, and a session's planning brief are three
+   other senses — see the glossary entry
+   [`plan`](../.abcd/development/brief/glossary/core/plan.md).
 11. **Spec build:** replace the minted spec body's `_Draft:` placeholder with
     the real design record — scope, approach, and how it satisfies each
     acceptance criterion.
