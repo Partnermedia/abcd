@@ -98,7 +98,10 @@ containing a space is not automatically safe.
 
 Priority is **derived, never stored**: an issue is ranked lower while any of its
 `--blocked-by` targets is still open, and `blocked_by` records the dependency in
-one direction only (the inverse is computed).
+one direction only (the inverse is computed). A target the reader had to skip
+counts as open — it is still in `open/`, and being unreadable says nothing about
+whether it was resolved — so it goes on blocking, with the skip reported in the
+same result.
 
 ## Query the ledger
 
@@ -304,7 +307,8 @@ signal is the keyed disposition, and it has no folder to name.
 
 `--intent <itd-N>` is the stamp-only mode: it links an *existing* draft instead
 of minting — the repair path when a stamp failed after the mint (the error
-names the orphan draft and this exact remedy), and the path for "I already
+names the orphan draft and this exact remedy, the promotion's own `--grounds`
+included, so it runs as printed), and the path for "I already
 filed the intent by hand; link them". Report the `issue_id`, the minted (or
 linked) `intent_id`, and both paths from the JSON.
 

@@ -84,19 +84,22 @@ var beforeStampHook func()
 // is attempted — the ledger lock alone guards the stamp, exactly as transition
 // does — so a failure after the mint leaves an orphan draft; the returned
 // error names the draft and the stamp-only remedy
-// (`capture promote <iss-N> --intent <itd-N>`).
+// (`capture promote <iss-N> --intent <itd-N> --grounds '...'`), carrying the
+// promotion's own grounds, single-quoted, so the remedy runs as printed in any
+// shell — an interactive one included.
 //
 // Every refusal that can be established from the bytes in hand is therefore
-// raised BEFORE the mint: the grounds text, and whether the record can take the
-// append at all. What is left to the stamp is what only a write under the lock
-// can discover, which is the residue the remedy above is for — never a
+// raised BEFORE the mint: the grounds text, whether the record is one the
+// validators would let the stamp write at all, and whether it can take the
+// append. What is left to the stamp is what only a write under the lock can
+// discover, which is the residue the remedy above is for — never a
 // deterministic refusal that would leak one draft per attempt.
 func Promote(req PromoteRequest) (PromoteResult, error) {
 	repoRoot, issuesRoot, err := resolveRoots(req.RepoRoot, req.IssuesRoot)
 	if err != nil {
 		return PromoteResult{}, err
 	}
-	if err := mutationPreamble(issuesRoot); err != nil {
+	if err := mutationPreamble(repoRoot, issuesRoot); err != nil {
 		return PromoteResult{}, err
 	}
 	// The reading item is a DIFFERENT route with its own recorded reasoning: its
@@ -117,7 +120,7 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 
 	// Pre-flight outside the lock: locate and read the issue, refuse a
 	// double-promote early (re-checked under the lock at stamp time).
-	src, _, err := findIssue(issuesRoot, req.ID)
+	src, status, err := findIssue(issuesRoot, req.ID)
 	if err != nil {
 		return PromoteResult{}, err
 	}
@@ -127,6 +130,19 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 	}
 	fm, body, err := parseFrontmatterAndBody(content)
 	if err != nil {
+		return PromoteResult{}, err
+	}
+	// The validators run on the pre-flight bytes, not only under the lock after
+	// the mint. A record the stamp could never validate — a frontmatter slug that
+	// disagrees with its filename, a value outside an enum — used to reach the
+	// mint anyway, fail the stamp on the invariant, and leave one orphan draft
+	// per attempt with a repair verb that refused on the same invariant
+	// (GHSA-cxmf-gw6r-2pf5). The stamp-step checks stay: they judge the
+	// post-append bytes under the lock, which these cannot.
+	if err := validateStrict(fm); err != nil {
+		return PromoteResult{}, err
+	}
+	if err := validateInvariants(fm, status, src); err != nil {
 		return PromoteResult{}, err
 	}
 	if existing := asString(fm["promoted_to"]); existing != "" {
@@ -195,7 +211,7 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 		path   string
 		status State
 	}
-	stampErr := withLedgerLock(issuesRoot, func() error {
+	stampErr := withLedgerLock(repoRoot, issuesRoot, func() error {
 		src, status, err := findIssue(issuesRoot, req.ID)
 		if err != nil {
 			return err
@@ -244,10 +260,14 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 	})
 	if stampErr != nil {
 		if !linked {
-			// The mint already happened; report the orphan and the repair verb.
+			// The mint already happened; report the orphan and the repair verb. The
+			// remedy carries the grounds this call was given: the issue route refuses
+			// without them, so a remedy that named only --intent refused on its own
+			// text for every orphan (iss-2609012037130181), and the repair stamps
+			// the same conjecture the failed promotion was pursuing.
 			return PromoteResult{}, fmt.Errorf(
-				"%w — the minted draft %s (%s) is orphaned; complete the link with `abcd capture promote %s --intent %s`",
-				stampErr, itdID, intentPath, req.ID, itdID)
+				"%w — the minted draft %s (%s) is orphaned; complete the link with `abcd capture promote %s --intent %s --grounds %s`",
+				stampErr, itdID, intentPath, req.ID, itdID, shellQuoted(g.String()))
 		}
 		return PromoteResult{}, stampErr
 	}
@@ -262,6 +282,21 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 		Redacted:    gRedacted,
 		Degraded:    gDegraded,
 	}, nil
+}
+
+// shellQuoted wraps s in SINGLE quotes for the shell a remedy is pasted into,
+// spelling an embedded quote the only way single quoting can ('\”: close,
+// escaped quote, reopen). It exists so the orphan remedy runs as printed: a
+// repair command a person has to re-quote by hand is a remedy that fails on its
+// own text.
+//
+// Single, not double: inside double quotes a POSIX shell still interprets four
+// characters, which can be escaped one by one — but an INTERACTIVE bash or zsh
+// also expands `!word` history there, and that one cannot be escaped by the
+// writer of the string. Inside single quotes a shell interprets nothing at all,
+// so the grounds arrive as one literal argument whatever they carry.
+func shellQuoted(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // issueTitleLine derives the minted draft's title — the issue's one-line
@@ -370,7 +405,7 @@ func promoteReadingItem(repoRoot, issuesRoot string, req PromoteRequest) (Promot
 	if beforeStampHook != nil {
 		beforeStampHook()
 	}
-	stampErr := withLedgerLock(issuesRoot, func() error {
+	stampErr := withLedgerLock(repoRoot, issuesRoot, func() error {
 		src, err := findReadingItem(issuesRoot, req.ID)
 		if err != nil {
 			return err
