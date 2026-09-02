@@ -932,3 +932,87 @@ func TestAhoyDoctorResolvesCentralLocationFromIndex(t *testing.T) {
 		t.Fatalf("doctor did not resolve the central location from index.json (no history.path_stale): %+v", stale.AuditGaps)
 	}
 }
+
+// TestAhoyDoctorJSONCarriesNoHomePrefix is the surface pin for
+// GHSA-m8pg-chhv-hxvq: a stale registered path under the home directory must
+// reach doctor's JSON in tilde form, never as the raw absolute path.
+func TestAhoyDoctorJSONCarriesNoHomePrefix(t *testing.T) {
+	_, _ = hermeticGitRepo(t)
+	runCLI(t, "ahoy", "install", "--yes", "--adopt",
+		"--visibility", "private", "--docs-target", "both",
+		"--oracle-backend", "host-delegated", "--scan-deep", "false", "--json")
+
+	home := os.Getenv("HOME")
+	indexPath := filepath.Join(home, ".abcd", "history", "index.json")
+	data, err := os.ReadFile(indexPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(data, &raw); err != nil {
+		t.Fatal(err)
+	}
+	repos := raw["repos"].([]any)
+	repos[0].(map[string]any)["path"] = filepath.Join(home, "elsewhere", "repo")
+	patched, _ := json.MarshalIndent(raw, "", "  ")
+	if err := os.WriteFile(indexPath, patched, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out := runCLI(t, "ahoy", "doctor", "--json")
+	var report struct {
+		AuditGaps []struct {
+			ID     string `json:"id"`
+			Detail string `json:"detail"`
+		} `json:"audit_gaps"`
+	}
+	if err := json.Unmarshal(out, &report); err != nil {
+		t.Fatalf("doctor output not JSON: %v\n%s", err, out)
+	}
+	found := false
+	for _, g := range report.AuditGaps {
+		if g.ID != "history.path_stale" {
+			continue
+		}
+		found = true
+		if strings.Contains(g.Detail, home) {
+			t.Fatalf("path_stale detail leaks the home directory: %q", g.Detail)
+		}
+		if !strings.Contains(g.Detail, "~/elsewhere/repo") {
+			t.Fatalf("path_stale detail = %q, want the registered path in tilde form", g.Detail)
+		}
+	}
+	if !found {
+		t.Fatalf("doctor reported no history.path_stale: %+v", report.AuditGaps)
+	}
+	if strings.Contains(string(out), home) {
+		t.Fatalf("doctor --json carries the home directory somewhere in its output:\n%s", out)
+	}
+}
+
+// TestAhoyDoctorNamesTheDiagnosticsNoInstallCanFix: doctor's text render is the
+// read-only surface an operator reaches for when something is wrong, and it
+// printed two integers. A required gap that is deliberately NOT resolvable —
+// config.malformed is the case that matters, since abcd will never touch the
+// file again until a human repairs it — is exactly the one no later `install`
+// will clear, so a count that cannot be acted on is the wrong report. Name each
+// such diagnostic and its detail.
+func TestAhoyDoctorNamesTheDiagnosticsNoInstallCanFix(t *testing.T) {
+	repo, _ := hermeticGitRepo(t)
+	runCLI(t, "ahoy", "install", "--yes", "--adopt",
+		"--visibility", "private", "--docs-target", "both",
+		"--oracle-backend", "host-delegated", "--scan-deep", "false", "--json")
+
+	cfg := filepath.Join(repo, ".abcd", "config.json")
+	if err := os.WriteFile(cfg, []byte("{\"repo\":{\"visibility\":\"private\"}\n<<<<<<<\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out := string(runCLI(t, "ahoy", "doctor"))
+	if !strings.Contains(out, "config.malformed") {
+		t.Fatalf("doctor did not name the diagnostic no install can fix:\n%s", out)
+	}
+	if !strings.Contains(out, "could not be parsed") {
+		t.Fatalf("doctor named the gap but not what is wrong with it:\n%s", out)
+	}
+}
