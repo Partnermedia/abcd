@@ -25,7 +25,7 @@ func verdictWithRationale(rcp, rationale string) string {
 		"_type":      "abcd/intent-fidelity-verdict/v1",
 		"receipt_id": rcp,
 		"verifier":   map[string]any{"id": "intent-fidelity-reviewer", "version": "claude-opus-4-8"},
-		"policy":     map[string]any{"rubric_hash": "sha256:aa", "prompt_hash": "sha256:bb"},
+		"policy":     map[string]any{"rubric_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "prompt_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
 		"criteria": []any{
 			map[string]any{
 				"criterion_id": "ac-1",

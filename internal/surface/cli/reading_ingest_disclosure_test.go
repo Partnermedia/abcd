@@ -45,7 +45,7 @@ func plantOrphanedStage(t *testing.T, repo, runID, itemID string) (string, []byt
 // be repo.
 func parkDetectionRun(t *testing.T, srcRoot, repo string) map[string]any {
 	t.Helper()
-	out := runCLI(t, "reading", "assemble", "--scope", "everything", "--position", "detection", "--target", "HEAD", "--json")
+	out := runCLI(t, "reading", "assemble", "--position", "detection", "--target", "HEAD", "--json")
 	var assembled struct {
 		RunID        string `json:"run_id"`
 		ManifestHash string `json:"manifest_hash"`

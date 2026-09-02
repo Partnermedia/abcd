@@ -355,6 +355,10 @@ func NewRootCommand() *cobra.Command {
 	// them the token may be a private pattern. Applied here rather than in the verb
 	// so the ordering is explicit — the generic pass would otherwise overwrite it.
 	applyBanlistFlagErrors(root)
+	// Also after the generic tagging: the assemble verb's flag refusal names the
+	// two operands the design admits, because the operand it most often refuses
+	// is one it used to take (adr-2609021016286571).
+	applyReadingFlagErrors(root)
 	// Also after the generic tagging, and last: on the hook plane exit 2 is the
 	// host's instruction to BLOCK, so every usage error a hook can provoke refuses
 	// at exit 1 instead (iss-269).
@@ -2793,6 +2797,12 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 				fmt.Fprintf(w, "%s (%s, %s) promoted — %s %s — %s\n",
 					res.IssueID, res.IssueStatus, termsafe.Sanitize(res.IssuePath),
 					verb, res.IntentID, termsafe.Sanitize(res.IntentPath))
+				// The draft's ONE back-edge stayed where it was: an intent
+				// occasioned by several reading items is promoted from one, and
+				// the item this call linked still points forward.
+				if res.BackEdgeKept != "" {
+					fmt.Fprintf(w, "back_edge: kept %s\n", termsafe.Sanitize(res.BackEdgeKept))
+				}
 				emitRedactionNote(w, res.Redacted, res.Degraded)
 			})
 		},

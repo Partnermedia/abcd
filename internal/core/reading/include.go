@@ -16,6 +16,9 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/intentdriven/abcd/internal/core/capture"
+	"github.com/intentdriven/abcd/internal/core/issueschema"
 )
 
 // AssemblerVersionCore is the hand-set semver of the assembly contract: the
@@ -24,7 +27,40 @@ import (
 // a rewritten rule text moves the rendering without changing what the
 // assembler promises, and a projection change alters the promise without
 // touching the table (spc-61, ruling (12); spc-68).
-const AssemblerVersionCore = "1.2.0"
+// It goes 1.2.0 to 1.3.0 with the local ledger tier's entry in the exclusion
+// floor: the floor is asserted into every manifest and enforced by
+// assertExclusions, so an added entry is an added PROMISE — a refusal a reader
+// can now check and previously could not — rather than a rewording of an
+// existing one (iss-2608311238236490).
+// It goes 1.3.0 to 1.4.0 with the withdrawal of the scope operand: the bundle's
+// `scope` block becomes `preset` and the manifest's `scope`, `scope_hash` and
+// `scope_overridden` become `preset` and `preset_hash`, so the shape a reader
+// and an auditor are promised has moved and nothing about the previous shape
+// remains true (adr-2609021016286571, spc-2609021004075744).
+// It goes 1.4.0 to 1.5.0 with itd-194: Table gains a Scan declaration per row
+// and four brief-chapter rows, the shipped row withdraws from widening,
+// Exclusions gains the widening-scoped shipped entry, the rendering gains a
+// Floor column and the manifest item gains its scan mark. Every one of those is
+// a change to what a reader and an auditor are PROMISED about what was
+// examined, and the digest moves with the rendering by construction
+// (adr-56 as refined 2026-09-02, spc-2609021003136831).
+// It goes 1.5.0 to 1.6.0 with the comparative channel: Table gains the candidate
+// row, Kinds() gains `candidate`, Exclusions gains the comparative position's
+// derived ledger rows and narrows the `.abcd/work/issues` row to the three other
+// positions, and the bundle item gains `candidate` and `field`. Every one of
+// those moves what a reader and an auditor are PROMISED — a source admitted at
+// one position, a vocabulary member, refusals a reader can now check — which is
+// MINOR by this constant's own rule (adr-2609021016272867,
+// spc-2609020626039834).
+// It goes 1.6.0 to 1.7.0 with the reading of "at the target" DeriveCandidateRun
+// states: a committed widening run at an ancestor of the target qualifies when
+// only the readings store and the issue ledger changed between the two, the
+// refusal listing gains the run whose object set moved and the path that moved
+// it, and the manifest gains `candidate_run_target`. The selection rule and the
+// manifest shape are both what a reader and an auditor are PROMISED, which is
+// MINOR by this constant's own rule (adr-2609021016272867 as read there;
+// iss-2609021833302981, iss-2609021857343626).
+const AssemblerVersionCore = "1.7.0"
 
 // AssemblerVersion is the core semver with the rendered include table's digest
 // as semver build metadata. The digest is computed, not declared, so a table
@@ -75,21 +111,20 @@ func Positions() []Position {
 
 // AssemblingPositions lists the positions an assembly can run at.
 //
-// It is Positions() minus comparative, whose object is the widening reading's
-// pre-admission output — not repository material, and with no channel supplying
-// it. That position refuses rather than being served a corpus that is not what
-// it is about (itd-199). The two lists are deliberately separate: comparative
-// is still a position, still has a definition and still keys a supply regime;
-// it is only assembly it cannot do.
+// It is now every position. It was Positions() minus comparative, whose object
+// is the widening reading's pre-admission output: itd-199 refused that position
+// rather than serving it a corpus that was not what it is about, and scoped the
+// channel out as a separate intent. adr-2609021016272867 is that channel — one
+// derived widening run's candidates, two body fields each, at the comparative
+// position and no other — so the refusal is withdrawn and the two lists are one.
+//
+// The function stays, rather than every caller moving to Positions(). The
+// distinction it names is a real one and could return: a position with a
+// definition, a regime and no assembly is a shape this design has already had
+// once, and a caller asking "which positions assemble" should keep asking that
+// question rather than assuming the answer.
 func AssemblingPositions() []Position {
-	out := make([]Position, 0, len(Positions())-1)
-	for _, p := range Positions() {
-		if p == PositionComparative {
-			continue
-		}
-		out = append(out, p)
-	}
-	return out
+	return Positions()
 }
 
 // ParsePosition resolves a token to a position, refusing anything else by name.
@@ -124,12 +159,44 @@ const (
 	KindTest             Kind = "test"
 	KindDoc              Kind = "doc"
 	KindConfig           Kind = "config"
+	// KindCandidate is one projected field of one item of the derived widening
+	// run: the configuration, or what admits it. It is the comparative
+	// position's whole object beside the criteria discipline, and it is the ONE
+	// member of this vocabulary a committed preset entry may not name — an entry
+	// selects repository material, and a candidate is selected by the derived
+	// run (adr-2609021016272867; validatePresets refuses it by name).
+	KindCandidate Kind = "candidate"
 )
 
 // Kinds lists the closed material-class vocabulary.
 func Kinds() []Kind {
 	return []Kind{KindBriefSection, KindGlossaryTerm, KindIntentProjection,
-		KindDiscipline, KindSpec, KindSource, KindTest, KindDoc, KindConfig}
+		KindDiscipline, KindSpec, KindSource, KindTest, KindDoc, KindConfig,
+		KindCandidate}
+}
+
+// Scan says whether the exclusion floor examined an item, and it is ONE word
+// used in two places: on a Row it is the table's promise that the floor parses
+// what the row admits, and on a ManifestItem it is the fact of whether the floor
+// did. Spelling the promise and the fact differently is how the two came to
+// disagree in the first place — the include table admitted by container shape
+// and the floor examined by file extension, and nothing downstream was told
+// which items the examination had reached (adr-56; brief invariant 16).
+type Scan string
+
+const (
+	// ScanParsed: the floor read this item's frontmatter keys and headings, so
+	// the manifest's key and heading exclusions are asserted for it.
+	ScanParsed Scan = "parsed"
+	// ScanUnscanned: the floor did not examine this item. It travels whole, and
+	// the manifest says so per item rather than leaving a reader to infer from a
+	// clean run that a scan ran (the 2026-09-02 refinement of adr-56).
+	ScanUnscanned Scan = "unscanned"
+)
+
+// Scans lists the closed scan vocabulary, in the order the charter renders it.
+func Scans() []Scan {
+	return []Scan{ScanParsed, ScanUnscanned}
 }
 
 // Row is one include-table row: which positions admit this source, what is
@@ -178,6 +245,15 @@ type Row struct {
 	Bucket string
 	// Kind is the material class every item from this row carries.
 	Kind Kind
+	// Scan declares whether the exclusion floor parses what this row admits. It
+	// is the table's own statement of the narrowing it performs, so admission
+	// and examination are ONE declaration rather than a row on one side and an
+	// extension test inside the floor on the other — the undeclared scope
+	// decision underneath the whole container-shape class
+	// (iss-2608301450065320, adr-56 rule 3). collect reads it: a ScanParsed row
+	// goes through redactExcluded, a ScanUnscanned row's document travels
+	// untouched and every item it yields is marked unscanned in the manifest.
+	Scan Scan
 	// Rule is the rule that admits the row, quoted in the charter.
 	Rule string
 }
@@ -216,6 +292,38 @@ var intentProjection = []string{
 // allPositions is the shared floor's position set.
 var allPositions = []Position{PositionWidening, PositionEntailment, PositionComparative, PositionDetection}
 
+// coldPositions is every position EXCEPT comparative, and it is the position set
+// of every include row but two.
+//
+// At the comparative position the include table is the whole account of what the
+// reading sees, and the readings companion (section 7.2, ratified position R3)
+// admits no source there but the candidates and the declared criteria. So every
+// row reaching ordinary repository material withdraws from that position: the six
+// brief chapters and the glossary, the shipped intents, the specs, and the four
+// shipped-tree rows. What remains is the disciplines row — narrowed at assembly
+// to CriteriaDiscipline, so no committed entry can widen it — and the candidate
+// row (spc-2609020626039834, "Every other row withdraws"; divergence register 22).
+//
+// The consequence is deliberate rather than incidental: a committed entry naming
+// a path or a record at the comparative position selects nothing outside the
+// criteria discipline, because there is nothing else there for it to reach.
+var coldPositions = []Position{PositionWidening, PositionEntailment, PositionDetection}
+
+// CandidateSource is the ledger directory the candidate row reaches: the working
+// tier's readings store, one directory per run. It is the leaf bucket the
+// readings family keys on, which is what assembler rule 1 permits an include row
+// to name (ruling (18)).
+const CandidateSource = capture.LedgerRelPath + "/" + issueschema.ReadingsDir
+
+// CandidateFields are the two widening body fields a candidate travels as: the
+// configuration the widening reading returned, and what admits it. The item's
+// pattern, its manifest reference, its regime and every other field of the record
+// have no row here and therefore no item — provenance is the ENVELOPE's and not
+// the candidate's, and widening the projection by one field would be a manifest
+// change and a recorded one (the intent's third scope condition; divergence
+// register 23).
+var CandidateFields = []string{"configuration", "what_admits_it"}
+
 // Table is the include table: the single source of truth for what a cold
 // reading may see. It is rendered into the readings charter under a test
 // asserting the two agree, on the idiom internal/core/lifeboat/mapping.go
@@ -225,56 +333,117 @@ var allPositions = []Position{PositionWidening, PositionEntailment, PositionComp
 // admit: the first row that reaches a path owns the projection applied to it.
 var Table = []Row{
 	{
-		Positions: allPositions,
+		Positions: coldPositions,
 		Source:    ".abcd/development/brief/01-product",
 		Match:     []string{".md"},
 		Kind:      KindBriefSection,
+		Scan:      ScanParsed,
 		Rule: "adr-55: the construal as it presently stands is committed record, " +
 			"admissible to every reader including a cold reading",
 	},
 	{
-		Positions: allPositions,
+		Positions: coldPositions,
 		Source:    ".abcd/development/brief/02-constraints",
 		Match:     []string{".md"},
 		Kind:      KindBriefSection,
+		Scan:      ScanParsed,
 		Rule: "The constraints chapter states the platform, the dependency stance, " +
 			"the invariants and the naming a reading reads against",
 	},
 	{
-		Positions: allPositions,
+		Positions: coldPositions,
+		Source:    ".abcd/development/brief/04-surfaces",
+		Match:     []string{".md"},
+		Kind:      KindBriefSection,
+		Scan:      ScanParsed,
+		Rule: "The surfaces chapter is brief current text, which both design documents " +
+			"name as a reading's object",
+	},
+	{
+		Positions: coldPositions,
+		Source:    ".abcd/development/brief/05-internals",
+		Match:     []string{".md"},
+		Kind:      KindBriefSection,
+		Scan:      ScanParsed,
+		Rule: "The internals chapter is brief current text, which both design documents " +
+			"name as a reading's object",
+	},
+	{
+		Positions: coldPositions,
+		Source:    ".abcd/development/brief/06-delivery",
+		Match:     []string{".md"},
+		Kind:      KindBriefSection,
+		Scan:      ScanParsed,
+		Rule: "The delivery chapter is brief current text, which both design documents " +
+			"name as a reading's object",
+	},
+	{
+		Positions: coldPositions,
 		Source:    ".abcd/development/brief/glossary",
 		Match:     []string{".md"},
 		Kind:      KindGlossaryTerm,
+		Scan:      ScanParsed,
 		Rule: "adr-55: the glossary's committed terms are committed record; " +
 			"superseded terms and the reasoning that settled them are not",
 	},
 	{
+		// The meta chapter is one file at the brief's root, so this row's source
+		// is the brief directory and its Match is that exact basename: the row
+		// reaches 00-meta.md and nothing beside it. The six chapters are named
+		// individually rather than by naming `brief/` whole because assembler
+		// rule 1 forbids naming a directory that contains a record family, and
+		// this one contains the glossary — which keeps its own row above.
+		Positions: coldPositions,
+		Source:    ".abcd/development/brief",
+		Match:     []string{"00-meta.md"},
+		Kind:      KindBriefSection,
+		Scan:      ScanParsed,
+		Rule: "The meta chapter is brief current text, which both design documents " +
+			"name as a reading's object; it is one file at the brief's root",
+	},
+	{
+		// The one repository row that keeps the comparative position. At that
+		// position the assembler narrows this row's enumeration to
+		// CriteriaDiscipline before the committed entry is applied, so the
+		// declared criteria travel beside the candidates and nothing else does
+		// (spc-2609020626039834; itd-191).
 		Positions: allPositions,
 		Source:    ".abcd/development/intents/disciplines",
 		Match:     []string{".md"},
 		Store:     "itd",
 		Bucket:    "disciplines",
 		Kind:      KindDiscipline,
+		Scan:      ScanParsed,
 		Rule: "A discipline is a standing commitment the record already holds, " +
 			"named individually inside the intent family",
 	},
 	{
-		Positions: allPositions,
+		// Not at widening. The design framework's widening object and the
+		// readings companion's section 5.2 both state that object without the
+		// shipped intents, and the maintainer ruled on 2026-09-02 that the row
+		// follows the documents (iss-2609012259587904). The withdrawal is
+		// asserted in the exclusion floor below, so a reader checks it rather
+		// than inferring it from a row's silence.
+		Positions: []Position{PositionEntailment, PositionDetection},
 		Source:    ".abcd/development/intents/shipped",
 		Match:     []string{".md"},
 		Store:     "itd",
 		Bucket:    "shipped",
 		Fields:    intentProjection,
 		Kind:      KindIntentProjection,
+		Scan:      ScanParsed,
 		Rule: "Assembler rule 2: a shipped intent travels as its claim record, " +
-			"so the Audit Notes and dispositions it also carries stay behind",
+			"so the Audit Notes and dispositions it also carries stay behind; not at " +
+			"widening, whose object neither design document states with them in it " +
+			"(ruled 2026-09-02, iss-2609012259587904)",
 	},
 	{
-		Positions: allPositions,
+		Positions: coldPositions,
 		Source:    ".abcd/development/specs",
 		Match:     []string{".md"},
 		Store:     "spc",
 		Kind:      KindSpec,
+		Scan:      ScanParsed,
 		Rule:      "The design record a capability was built against",
 	},
 	{
@@ -285,6 +454,7 @@ var Table = []Row{
 		Bucket:    "drafts",
 		Fields:    intentProjection,
 		Kind:      KindIntentProjection,
+		Scan:      ScanParsed,
 		Rule: "Assembler rule 2: articulation precedes selection, so entailment sees " +
 			"the candidate set and the reading asked to widen it does not",
 	},
@@ -296,6 +466,7 @@ var Table = []Row{
 		Bucket:    "planned",
 		Fields:    intentProjection,
 		Kind:      KindIntentProjection,
+		Scan:      ScanParsed,
 		Rule: "Assembler rule 2: articulation precedes selection, so entailment sees " +
 			"the candidate set and the reading asked to widen it does not",
 	},
@@ -304,36 +475,76 @@ var Table = []Row{
 		// ".go", so the source row would otherwise claim every test file, and
 		// the first row that reaches a path owns it. Both rows admit — this
 		// row narrows nothing and widens nothing, it only labels.
-		Positions:   allPositions,
+		Positions:   coldPositions,
 		Source:      ".",
 		MatchSuffix: []string{"_test.go"},
 		Kind:        KindTest,
-		Rule: "Assembler rule 1: the shipped tree is source and tests, counted apart " +
-			"because tests are the largest single class and admitted identically",
+		Scan:        ScanUnscanned,
+		Rule: "Admitted where a committed preset entry names this kind, and never examined: " +
+			"an item admitted here travels whole and marked `unscanned` in the manifest, " +
+			"because the exclusion floor's key and heading signals are record shapes only a " +
+			"markdown file carries",
 	},
 	{
-		Positions: allPositions,
+		Positions: coldPositions,
 		Source:    ".",
 		Match:     []string{".go"},
 		Kind:      KindSource,
-		Rule: "Assembler rule 1: the shipped tree is source and tests, with the record, " +
-			"the definitions, the evals and the assembler's own package denied structurally",
+		Scan:      ScanUnscanned,
+		Rule: "Admitted where a committed preset entry names this kind, and never examined: " +
+			"an item admitted here travels whole and marked `unscanned` in the manifest, " +
+			"because the exclusion floor's key and heading signals are record shapes only a " +
+			"markdown file carries",
 	},
 	{
-		Positions: allPositions,
+		Positions: coldPositions,
 		Source:    ".",
 		Match:     []string{".md"},
 		Kind:      KindDoc,
+		Scan:      ScanParsed,
 		Rule: "Assembler rule 1: the shipped tree is the delivered documentation and the " +
 			"root prose, with the record denied structurally",
 	},
 	{
-		Positions: allPositions,
+		Positions: coldPositions,
 		Source:    ".",
 		Match:     []string{".json", ".yml", ".yaml", ".toml", ".mod", ".sum", "Makefile"},
 		Kind:      KindConfig,
-		Rule: "Assembler rule 1: the shipped tree is the delivered configuration and build " +
-			"files, with the record denied structurally",
+		Scan:      ScanUnscanned,
+		Rule: "Admitted where a committed preset entry names this kind, and never examined: " +
+			"an item admitted here travels whole and marked `unscanned` in the manifest, " +
+			"because the exclusion floor's key and heading signals are record shapes only a " +
+			"markdown file carries",
+	},
+	{
+		// The candidate channel, and the one positional exception to the
+		// prior-run exhaust (adr-2609021016272867).
+		//
+		// It is a TABLE ROW rather than a second mechanism, and the rest follows
+		// from that without anything else being written: Admits answers for the
+		// derived run's records at this position and nowhere else, Render carries
+		// the row so the charter names the channel and AssemblerVersion digests
+		// it, the dirty gate refuses an uncommitted candidate because the path is
+		// admitted, and the comparative definition's source list is regenerated
+		// from the table like every other position's.
+		//
+		// The row reaches the FAMILY; the assembly narrows it to one run by
+		// setting Bucket to the derived run id before the walk, the way a record
+		// in an entry's object set narrows a record row. The rdi store's bucket
+		// IS the run directory, so the narrowing needs no second selector.
+		Positions: []Position{PositionComparative},
+		Source:    CandidateSource,
+		Match:     []string{".md"},
+		Store:     issueschema.ReadingItemFamily,
+		Fields:    CandidateFields,
+		Kind:      KindCandidate,
+		Scan:      ScanParsed,
+		Rule: "adr-2609021016272867: at the comparative position, and at no other, two body " +
+			"fields of one DERIVED widening run's items are admitted as that reading's " +
+			"candidate set — the candidate text is cold, and its fate is warm. Everything " +
+			"else in the readings store stays excluded: the run's manifest, the items' " +
+			"envelopes and patterns, every disposition, admission and surprise, and every " +
+			"other run",
 	},
 }
 
@@ -345,6 +556,16 @@ var Table = []Row{
 // The floor is a DECLARATION a reader checks, and the assembler additionally
 // refuses to emit an item under any path-shaped entry, so the two cannot part
 // company (see assertExclusions).
+//
+// What each entry asserts, and over WHICH items, is fixed here rather than left
+// to a reader: an entry whose Signal is `frontmatter key` or `heading` is
+// asserted for the items the manifest marks `parsed` and for no other, because
+// those two signals are read by a scan and a scan that did not run establishes
+// nothing; an entry whose Signal is `directory`, `file` or `unreachable path`
+// is asserted for EVERY item, because assertExclusions enforces those by path
+// and a path needs no parse. That is brief invariant 16 made a property of the
+// artefact rather than of the run: a scan that ran and a scan that never ran no
+// longer produce the same attestation (adr-56 as refined 2026-09-02).
 var Exclusions = []Exclusion{
 	{Rule: "field projection", Signal: "frontmatter key", Detail: "origin"},
 	{Rule: "field projection", Signal: "frontmatter key", Detail: "production_mode"},
@@ -352,14 +573,41 @@ var Exclusions = []Exclusion{
 	{Rule: "field projection", Signal: "heading", Detail: "Open Questions"},
 	{Rule: "field projection", Signal: "heading", Detail: "Why This Matters"},
 	{Rule: "a reading's object excludes what it exists to change", Signal: "heading", Detail: "Scope Condition Dispositions"},
-	{Rule: "absent from the positive walk", Signal: "directory", Detail: ".abcd/development/brief/03-evidence"},
+	// The one brief chapter the brief rows do not reach, and the ground is the
+	// framework's own: 7.1 excludes a record's Audit Notes because a prior
+	// verdict is revision history, and the evidence chapter is that material at
+	// chapter grain. Stating the ground here rather than in the floor's code
+	// means the charter says why the chapter is left out (iss-2609021153264023).
+	{Rule: "verdict material: a prior verdict is revision history, the ground the Audit Notes exclusion rests on",
+		Signal: "directory", Detail: ".abcd/development/brief/03-evidence"},
 	{Rule: "absent from the positive walk", Signal: "directory", Detail: ".abcd/development/decisions"},
 	{Rule: "absent from the positive walk", Signal: "directory", Detail: ".abcd/development/roadmap/rfcs"},
 	{Rule: "absent from the positive walk", Signal: "directory", Detail: ".abcd/development/intents/superseded"},
 	{Rule: "absent from the positive walk", Signal: "directory", Detail: ".abcd/development/plans"},
 	{Rule: "absent from the positive walk", Signal: "directory", Detail: ".abcd/development/research/notes"},
-	{Rule: "no include names a directory containing a record family", Signal: "directory", Detail: ".abcd/work/issues"},
+	// Not at comparative. The candidate row reaches one leaf bucket inside this
+	// directory, so an exclusion binding here would contradict the row that
+	// admits it. What replaces it at that position is NARROWER and asserted per
+	// family rather than at the container: comparativeExclusions below names
+	// every ledger family individually, so the withdrawal buys a reader more
+	// than it costs them (adr-2609021016272867; spc-2609020626039834).
+	{
+		Rule:      "no include names a directory containing a record family",
+		Signal:    "directory",
+		Detail:    capture.LedgerRelPath,
+		Positions: coldPositions,
+	},
 	{Rule: "absent from the positive walk", Signal: "file", Detail: ".abcd/work/DECISIONS.md"},
+	// The local ledger tier. It was excluded from the first day and asserted by
+	// nothing: absent from the positive walk, denied by the `.abcd` segment, and
+	// named in no row here — so every manifest was silent about the one tier
+	// brief invariant 14 exists to keep out, and assertExclusions had nothing to
+	// enforce there. A reader checking the asserted exclusions could not tell
+	// that the framing traces and declined construals had been refused, which is
+	// brief invariant 16 in its less-than direction: an attestation never states
+	// less than the examination behind it establishes (iss-2608311238236490).
+	{Rule: "no reading consumes the local ledger side, unconditionally and under no flag (brief invariant 14)",
+		Signal: "directory", Detail: ".abcd/.work.local"},
 	{Rule: "absent from the positive walk", Signal: "record type in a denied path", Detail: "the lapse log"},
 	{Rule: "absent from the positive walk", Signal: "record type in a denied path", Detail: "admission and selection grounds"},
 	{Rule: "the instrument's own output is never its input", Signal: "directory", Detail: ".abcd/development/readings"},
@@ -379,6 +627,59 @@ var Exclusions = []Exclusion{
 		Detail:    ".abcd/development/intents/planned",
 		Positions: []Position{PositionWidening, PositionComparative, PositionDetection},
 	},
+	{
+		Rule:      "the widening object as the design documents state it",
+		Signal:    "directory",
+		Detail:    ".abcd/development/intents/shipped",
+		Positions: []Position{PositionWidening},
+	},
+}
+
+// comparativeExclusions is what replaces the container row at the comparative
+// position: one entry per ledger family, DERIVED from the ledger's own directory
+// list rather than listed here.
+//
+// The derivation is the point. A family the ledger adds later is excluded at
+// this position the day its constant is declared, and the scribe's allow list in
+// spc-2609020626045177 derives from the same function — so the two instruments
+// describe one set rather than two lists that agree today. Hand-listing them
+// here would be the shape brief invariant 16 forbids: an attestation whose
+// coverage nobody can check against the thing it claims to cover.
+//
+// The readings family gets a SIGNAL row rather than a directory row, because a
+// directory row would be false: one run's items do travel. What it asserts is
+// the narrower thing the row actually promises, and assertCandidateProjection is
+// its fail-closed half — a directory row is enforced by path, and this one is
+// enforced by refusing to emit a candidate outside the derived run and the two
+// fields (adr-56: an exclusion control asserts only what it can prove).
+func comparativeExclusions() []Exclusion {
+	out := make([]Exclusion, 0, len(issueschema.LedgerDirs()))
+	for _, dir := range issueschema.LedgerDirs() {
+		if dir == issueschema.ReadingsDir {
+			out = append(out, Exclusion{
+				Rule: "the instrument's own output is never its input, but for the one derived " +
+					"widening run adr-2609021016272867 admits",
+				Signal: "readings store",
+				Detail: "every run other than the candidate run, and every field of the named " +
+					"run's items other than " + strings.Join(CandidateFields, " and "),
+				Positions: []Position{PositionComparative},
+			})
+			continue
+		}
+		out = append(out, Exclusion{
+			Rule: "the comparative reading receives candidates and never their fate: the " +
+				"ledger's other families are excluded family by family, derived from the " +
+				"ledger's own directory list",
+			Signal:    "directory",
+			Detail:    capture.LedgerRelPath + "/" + dir,
+			Positions: []Position{PositionComparative},
+		})
+	}
+	return out
+}
+
+func init() {
+	Exclusions = append(Exclusions, comparativeExclusions()...)
 }
 
 // Exclusion is one refused source and the signal that detects it.
@@ -427,10 +728,10 @@ const CharterPath = ".abcd/development/readings/README.md"
 func Render() string {
 	var b strings.Builder
 	b.WriteString("### Include table\n\n")
-	b.WriteString("| Positions | Source | Matches | Suffixes | Fields | Store | Bucket | Kind | Admitting rule |\n")
-	b.WriteString("| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n")
+	b.WriteString("| Positions | Source | Matches | Suffixes | Fields | Store | Bucket | Kind | Floor | Admitting rule |\n")
+	b.WriteString("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n")
 	for _, row := range Table {
-		fmt.Fprintf(&b, "| %s | `%s` | %s | %s | %s | %s | %s | `%s` | %s |\n",
+		fmt.Fprintf(&b, "| %s | `%s` | %s | %s | %s | %s | %s | `%s` | `%s` | %s |\n",
 			sortedPositions(row.Positions),
 			row.Source,
 			matchList(row),
@@ -439,6 +740,7 @@ func Render() string {
 			routeField(row.Store),
 			routeField(row.Bucket),
 			row.Kind,
+			row.Scan,
 			row.Rule)
 	}
 	b.WriteString("\n### Exclusion floor\n\n")

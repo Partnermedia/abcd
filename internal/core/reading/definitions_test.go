@@ -366,6 +366,15 @@ func TestEntailmentDefinitionIncludesThem(t *testing.T) {
 // TestComparativeObjectIsTheWideningPreAdmissionOutput pins the settled reading
 // of the object the two intents disagreed about, so the disagreement cannot be
 // reintroduced by an edit that reads plausibly.
+//
+// It now pins the CHANNEL as well as the object (adr-2609021016272867;
+// spc-2609020626039834, "The comparative definition"). The object was always the
+// widening reading's pre-admission output; what moved is that the definition can
+// say how the reading receives it, and the two halves the exception rests on
+// have to be in the definition's own words: the candidate set is ONE derived
+// run's items, and what has happened to them since is withheld. A definition
+// stating the first without the second would describe a channel wider than the
+// one the ADR admits.
 func TestComparativeObjectIsTheWideningPreAdmissionOutput(t *testing.T) {
 	root := repoRoot(t)
 	object := flatten(section(t, PositionComparative, definitionText(t, root, PositionComparative), "Object"))
@@ -373,7 +382,10 @@ func TestComparativeObjectIsTheWideningPreAdmissionOutput(t *testing.T) {
 		"widening reading's pre-admission output",
 		"before admission",
 		"never supplied at invocation",
-		"no prior run's stored output is readable",
+		// The exception's limit, stated where the reading reads it.
+		"one committed widening run at the target whose items carry no disposition and no admission",
+		"no other prior run's stored output is readable",
+		"withheld from you",
 	} {
 		if !strings.Contains(object, want) {
 			t.Errorf("the comparative definition's object does not state %q", want)
@@ -641,5 +653,87 @@ func TestLoadDefinitionReadsInsideTheRepositoryOnly(t *testing.T) {
 	writeDefinition(t, root, PositionDetection, "position: detection\nregime: registrative\n")
 	if _, err := LoadDefinition(root, PositionDetection); err != nil {
 		t.Fatalf("an in-repository definition was refused: %v", err)
+	}
+}
+
+// promptVersionRe reads a definition's declared prompt version out of its
+// frontmatter.
+var promptVersionRe = regexp.MustCompile(`(?m)^prompt_version:\s*(\S+)\s*$`)
+
+// fourthConditionSentence is the companion's own wording, taken verbatim.
+//
+// The readings companion's section 2 says items are returned in the order they
+// arise in the object; the blindness core's fourth condition said they come
+// back unordered and unweighted, which is a different claim about the same
+// thing (iss-2609021153261145, correction (7) of the 2026-09-02 ruling).
+const fourthConditionSentence = "Items are returned in the order they arise in the object"
+
+// retiredFourthConditionSentence is what the condition used to say. It is
+// spelled out so the test fails on a definition that carries BOTH — a partial
+// edit that added the new sentence beside the old one would satisfy a
+// presence-only assertion.
+const retiredFourthConditionSentence = "Items come back unordered and unweighted"
+
+// promptVersions pins each definition's prompt version. It is a declaration
+// rather than a derivation: a version read out of the file it is checking would
+// agree with it by construction and could only confirm it.
+//
+// The four moved PATCH together with the fourth-condition correction, and PATCH
+// again with itd-194, which is a change to the object's source list rather than
+// to the blindness core: all four gain the brief's surfaces, internals,
+// delivery and meta chapters, and widening loses the shipped intents.
+//
+// The comparative definition is one PATCH ahead of the other three from
+// iss-2609021833302981, which moved nothing they share: its object section
+// states the derivation rule — the only one of the four that has one to state —
+// and the rule now reaches a widening run at an ancestor of the target. A shared
+// edit still moves all four together; this one was not shared.
+var promptVersions = map[Position]string{
+	PositionWidening:    "0.2.2",
+	PositionEntailment:  "0.1.2",
+	PositionComparative: "0.1.3",
+	PositionDetection:   "0.1.2",
+}
+
+// TestTheFourthConditionTakesTheCompanionsSentence is itd-2609021003095168 ac-7
+// (companion v4 section 2, condition 4; spc-2609021004075744 "The blindness
+// core's fourth condition").
+//
+// The rest of the condition — no severity, no confidence score, no
+// most-important-first, no top-N, and the reason — is unchanged, and is held
+// unchanged here so the edit cannot quietly take the rest of the condition with
+// it. Byte-identity across the four is TestBlindnessCoreIsByteIdenticalAcross-
+// Definitions' job and is not restated.
+func TestTheFourthConditionTakesTheCompanionsSentence(t *testing.T) {
+	root := repoRoot(t)
+	for _, p := range Positions() {
+		text := definitionText(t, root, p)
+		span := coreSpan(t, p, text)
+		if !strings.Contains(flatten(span), fourthConditionSentence) {
+			t.Errorf("the %s definition's blindness core does not say %q; the companion's "+
+				"section 2 says items are returned in the order they arise in the object",
+				p, fourthConditionSentence)
+		}
+		if strings.Contains(flatten(span), retiredFourthConditionSentence) {
+			t.Errorf("the %s definition's blindness core still says %q", p, retiredFourthConditionSentence)
+		}
+		for _, keep := range []string{
+			"**No ranking or prioritisation.**",
+			"no severity, no confidence score, no most-important-first, no top-N",
+			"An ordering is an argument about what matters",
+		} {
+			if !strings.Contains(flatten(span), flatten(keep)) {
+				t.Errorf("the %s definition's fourth condition lost %q; only the first sentence moves",
+					p, keep)
+			}
+		}
+		m := promptVersionRe.FindStringSubmatch(text)
+		if m == nil {
+			t.Fatalf("the %s definition declares no prompt_version", p)
+		}
+		if want := promptVersions[p]; m[1] != want {
+			t.Errorf("the %s definition declares prompt_version %s, want %s: the four move PATCH "+
+				"together with the sentence they share", p, m[1], want)
+		}
 	}
 }

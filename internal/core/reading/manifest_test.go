@@ -38,9 +38,12 @@ func TestManifestCoversEveryBundleItem(t *testing.T) {
 
 // TestManifestNamesTheFieldWhereProjectionOccurred holds the other half of the
 // same criterion: a projected item says which field it is.
+//
+// At detection, because itd-194 withdrew the shipped row from widening and the
+// shipped intent is the fixture's projected record.
 func TestManifestNamesTheFieldWhereProjectionOccurred(t *testing.T) {
 	root := fixtureRepo(t)
-	res := assembleFixture(t, root, PositionWidening)
+	res := assembleFixture(t, root, PositionDetection)
 	projected, whole := 0, 0
 	for _, m := range res.Manifest.Items {
 		if strings.HasPrefix(m.Path, ".abcd/development/intents/shipped/") {

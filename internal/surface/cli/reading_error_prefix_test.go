@@ -61,7 +61,7 @@ func readingRefusalRepo(t *testing.T, verb string) (root string, args []string) 
 		// repository material (itd-199, adr-58).
 		return readingRepo(t), []string{
 			"reading", "assemble",
-			"--position", "comparative", "--target", "HEAD", "--scope", "everything",
+			"--position", "comparative", "--target", "HEAD",
 		}
 	case "reading ingest":
 		root = t.TempDir()

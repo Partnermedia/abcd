@@ -23,13 +23,13 @@ production_mode: hand-written
 ## Why This Matters
 
 The four positions were ruled as four objects and every one of them is corpus-shaped: the whole brief against the whole shipped tree, the whole claim record against the whole constraint set. That ruling was right and this intent does not disturb it. What nobody computed is what those objects weigh. Measured, the answer is about 2.3 million estimated tokens at every position, of which the records are 210 thousand and the rest is code
-([iss-2608311501186646](../../../work/issues/open/iss-2608311501186646-the-assembled-input-for-a-real-reading-of-this-repository-is.md)).
+([iss-2608311501186646](../../../work/issues/resolved/iss-2608311501186646-the-assembled-input-for-a-real-reading-of-this-repository-is.md)).
 No selection between those two figures both fits a reader and preserves a position's stated object, which is why this is a redesign and not a filter.
 
 The originating intent, [itd-86](../drafts/itd-86-cold-reading-surface.md), scoped a cold reading to "exactly one target document ... the constraints visible in that document alone". The shipped verb's `--target` names a commit, not a document, and the word survived while its referent changed. That is not a reversal of anything ruled — the four corpus-shaped objects follow from a ruling that stands — but it does mean the instrument lost the ability to be pointed at something, and the size is the consequence.
 
 The second finding is the same root seen from the other side: three of the four positions receive a byte-identical item set
-([iss-2608311501240566](../../../work/issues/open/iss-2608311501240566-three-of-the-four-reading-positions-receive-a-byte-identical.md)).
+([iss-2608311501240566](../../../work/issues/resolved/iss-2608311501240566-three-of-the-four-reading-positions-receive-a-byte-identical.md)).
 A table that cannot say what a reading is about cannot distinguish four readings that are about different things.
 
 ## What's In Scope

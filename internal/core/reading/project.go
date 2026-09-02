@@ -3,7 +3,6 @@ package reading
 import (
 	"fmt"
 	"html"
-	"path"
 	"regexp"
 	"slices"
 	"strings"
@@ -48,15 +47,15 @@ func trimBlankEdges(lines []string) string {
 // it would ride along inside them. The floor names those keys and headings
 // precisely so the signal is mechanical, and this is where the signal is read.
 func redactExcluded(rel, doc string, exclusions []Exclusion) (string, error) {
-	// Both signals are RECORD shapes, and only a markdown file can carry one. A
-	// Go file has no frontmatter and no Audit Notes heading; what it can have is
-	// a raw string literal opening a fence at the left margin, which the section
-	// scan rightly refuses as an unterminated block — and refusing it there would
-	// let one unrelated source file stop every assembly the repository can run.
-	// The scope of the signal is the scope of the parse.
-	if !strings.EqualFold(path.Ext(rel), ".md") {
-		return doc, nil
-	}
+	// There is no file-extension test here any more, and its absence is the
+	// point. Both signals are RECORD shapes only a markdown file carries, and
+	// that fact used to be asserted twice: the include table admitted by
+	// container shape and this function decided, separately, what to examine.
+	// The two described different sets, which is the space every leak in
+	// itd-194's evidence set lived in. The DECLARATION now lives on the row —
+	// Row.Scan — and collect calls this function for a ScanParsed row and for
+	// no other, so admission and examination cannot part company
+	// (adr-56 rule 3; iss-2608301450065320).
 	keys := map[string]bool{}
 	headings := map[string]bool{}
 	for _, e := range exclusions {
@@ -194,7 +193,20 @@ var (
 	// element name is CAPTURED so one static pattern serves every element — the
 	// alternative was a pattern compiled per element name and cached forever
 	// under a key the document chooses, which is a store an input can grow.
-	rawHeadingBoundRe = regexp.MustCompile(`(?is)</([a-z][a-z0-9-]*)\s*>|<h[1-6](?:\s[^>]*)?/?>|\n[ \t]*\n`)
+	// The blank-line alternative admits a carriage return: a CRLF document's
+	// blank line is "\n\r\n", and `[ \t]*` did not match the `\r`, so the sole
+	// bound an unclosed element has was missing there and the title was read
+	// past the blank line into whatever followed (iss-2608301421380392).
+	rawHeadingBoundRe = regexp.MustCompile(`(?is)</([a-z][a-z0-9-]*)\s*>|<h[1-6](?:\s[^>]*)?/?>|\n[ \t\r]*\n`)
+	// nestedMappingRe matches a block-sequence entry whose item opens a mapping:
+	// `- key:` at any indent, bare or quoted. A key nested that way is invisible
+	// to a reader anchored to the line, and the fix the records ask for is to
+	// refuse the NESTING rather than to learn one more spelling of the key
+	// (iss-2608301237450573, iss-2608301251398360).
+	nestedMappingRe = regexp.MustCompile(`^\s*-\s+(?:"[^"]*"|'[^']*'|[A-Za-z_][A-Za-z0-9_-]*)\s*:(\s|$)`)
+	// flowExplicitKeyRe matches YAML's explicit-key indicator inside a flow
+	// mapping: a `?` following `{` or `,`. Same class, same answer.
+	flowExplicitKeyRe = regexp.MustCompile(`[{,]\s*\?`)
 )
 
 // Two shapes this floor does NOT see, disclosed rather than claimed. A heading
@@ -282,27 +294,23 @@ func normaliseHeadingTitle(title string) string {
 	return strings.TrimSpace(atxCloseRe.ReplaceAllString(strings.TrimSpace(title), ""))
 }
 
-// fenceMask reports, per line, whether that line sits inside a fenced code
-// block. It answers a LINE-level question the section scan does not expose —
-// that scan reports where the headings are, having already skipped the fences —
-// and the two scans share one fence rule so they cannot disagree about it.
+// unfencedBody joins the document with every fenced line BLANKED rather than
+// dropped, for a scan that reads the whole text at once instead of filtering its
+// matches by line the way rawHTMLHeading does.
 //
-// It is what keeps this floor from firing on a document that merely SHOWS the
-// record template: a fenced example carries frontmatter and headings that are
-// examples, not fields, and refusing them would stop every assembly the
-// repository can run.
-func fenceMask(lines []string) []bool {
-	mask := make([]bool, len(lines))
-	inside := false
+// Blanked rather than dropped, because both properties are needed: the fenced
+// example must say nothing to the scan, and a match's offset must still count
+// the document's own newlines, or the line a refusal names would be the line of
+// some shorter text nobody holds.
+func unfencedBody(lines []string, fenced []bool) string {
+	out := make([]string, len(lines))
 	for i, line := range lines {
-		if fenceOpenRe.MatchString(line) {
-			inside = !inside
-			mask[i] = true // the delimiter itself belongs to the block
+		if i < len(fenced) && fenced[i] {
 			continue
 		}
-		mask[i] = inside
+		out[i] = line
 	}
-	return mask
+	return strings.Join(out, "\n")
 }
 
 // verifyRedaction is the key-and-heading half of the exclusion floor made
@@ -322,7 +330,17 @@ func fenceMask(lines []string) []bool {
 // carries an excluded shape after redaction refuses the run and names the shape.
 func verifyRedaction(rel, original, redacted string, keys, headings map[string]bool) error {
 	lines := strings.Split(redacted, "\n")
-	fenced := fenceMask(lines)
+
+	// The block is located BEFORE any mask is computed, and the fence mask then
+	// starts after the block closes. The previous order let a fence delimiter
+	// written inside the frontmatter toggle the mask, which switched off the
+	// excluded-key scan over the rest of the block — the set's only critical
+	// (iss-2608301350533102). Nothing inside the block can toggle the mask now,
+	// and the delimiter itself is refused below as a shape this floor cannot
+	// resolve.
+	unmasked := make([]bool, len(lines))
+	fmOpen, fmClose, hasBlock := firstBlockRange(lines, unmasked)
+	fenced := bodyFenceMask(lines, hasBlock, fmClose)
 
 	if len(keys) > 0 {
 		for _, dup := range frontmatter.Duplicates(strings.Split(original, "\n")) {
@@ -330,6 +348,14 @@ func verifyRedaction(rel, original, redacted string, keys, headings map[string]b
 				return fmt.Errorf("reading: %s declares the excluded key %q more than once (line %d); "+
 					"only the first occurrence is redactable, so the rest would travel", rel, dup.Key, dup.Line)
 			}
+		}
+		// A block this binary reads as prose and a reader of the bundle reads as
+		// frontmatter. Refused before the block-shape scan, which looks at line 0
+		// and would find nothing to say about it (iss-2608301237456350).
+		if line, shape, ok := displacedFrontmatter(lines); ok {
+			return fmt.Errorf("reading: %s carries %s at line %d; a reader of the bundle reads it "+
+				"as frontmatter and this package reads what precedes it as prose, so the block's "+
+				"keys are refused rather than read two ways", rel, shape, line)
 		}
 		if line, shape, ok := unresolvableFrontmatterShape(lines, fenced); ok {
 			return fmt.Errorf("reading: %s uses the YAML construction %q at line %d in its frontmatter, "+
@@ -391,6 +417,25 @@ func verifyRedaction(rel, original, redacted string, keys, headings map[string]b
 		}
 	}
 
+	// The markup mask declines silently on one shape, and it is refused before
+	// the heading scan that depends on the mask runs: a value whose opening
+	// quote sits on the line after its equals sign. The skip after `=` is space
+	// and tab, so it lands on the newline, the quote is never found and the
+	// brackets inside the value are read as structure — at which point a heading
+	// every browser renders as the excluded one is judged as something else.
+	// Resolving the shape means taking HTML's own whitespace rule, which is
+	// comprehension the 2026-08-30 ruling declined (iss-2608301350534164).
+	//
+	// The scan reads the UNFENCED BODY, the way the raw-HTML scan below reads it
+	// and for the same reason: a code block showing the shape is an example, not
+	// markup the bundle carries, and reading the joined document made any
+	// admitted markdown file holding one refuse every assembly at every position
+	// — a floor refusing the corpus it exists to pass.
+	if shape := markupShapeOf(unfencedBody(lines, fenced)); shape != "" {
+		return fmt.Errorf("reading: %s carries %s; the markup mask cannot bound the value, and "+
+			"a mask that declines silently is how a heading written past it travelled", rel, shape)
+	}
+
 	// A raw HTML heading is refused on the same ground: the site's page reader
 	// REFUSES a raw HTML block rather than admitting one, so a heading spelled
 	// that way is a heading to every other reader of the file and nothing at all
@@ -407,6 +452,17 @@ func verifyRedaction(rel, original, redacted string, keys, headings map[string]b
 		}
 	}
 
+	// An opener that reaches the end of the document with neither a hard nor a
+	// soft bound has its title read over the whole remainder, which is the shape
+	// that admitted the heading sitting under it. The refusal removes the
+	// shape's admission and claims nothing about the scan's COST, which stays
+	// with iss-2608301421382564 (iss-2608301421380392).
+	if line, ok := unboundedRawHeading(lines, fenced, offset); ok {
+		return fmt.Errorf("reading: %s opens a raw heading element that is never closed at line "+
+			"%d, and nothing bounds its title short of the end of the document; the title is "+
+			"refused rather than read over the remainder", rel, line)
+	}
+
 	// Setext headings are a refusal rather than a redaction. The section scan
 	// does not model them, so there is no span to delete, and inventing a second
 	// heading scanner here to compute one is the second parser this package
@@ -417,7 +473,6 @@ func verifyRedaction(rel, original, redacted string, keys, headings map[string]b
 	// can overshoot; skipping by shape instead needs no offset at all, and still
 	// keeps a block scalar's last line — always indented — from being read as an
 	// underlined heading.
-	fmOpen, fmClose, hasBlock := firstBlockRange(lines, fenced)
 	inFirstBlock := func(i int) bool {
 		return hasBlock && i > fmOpen && (fmClose < 0 || i < fmClose)
 	}
@@ -654,7 +709,12 @@ func escapedQuotedKey(line string) (string, bool) {
 // first hard one, is quadratic with a large constant: a committed markdown file
 // of repeated openers up to the size cap this package sets did not finish, and a
 // silent hang is the one staging a fail-closed floor cannot afford.
-func rawHeadingTitleEnds(rest, name string) []int {
+// The second return says whether ANY bound was found. An opener with neither a
+// hard nor a soft bound has its title read over the whole remainder of the
+// document, which is the shape that admitted the heading sitting under it; the
+// caller refuses it rather than reading the remainder as a title
+// (iss-2608301421380392).
+func rawHeadingTitleEnds(rest, name string) ([]int, bool) {
 	hard, soft := -1, -1
 	for off := 0; off < len(rest); {
 		m := rawHeadingBoundRe.FindStringSubmatchIndex(rest[off:])
@@ -678,6 +738,7 @@ func rawHeadingTitleEnds(rest, name string) []int {
 		hard = at
 		break
 	}
+	bounded := hard >= 0 || soft >= 0
 	if hard < 0 {
 		hard = len(rest)
 	}
@@ -685,7 +746,7 @@ func rawHeadingTitleEnds(rest, name string) []int {
 	if soft >= 0 && soft < hard {
 		ends = append(ends, soft)
 	}
-	return ends
+	return ends, bounded
 }
 
 // maskMarkupData blanks, length-preservingly, the angle brackets that stand
@@ -723,7 +784,15 @@ func rawHeadingTitleEnds(rest, name string) []int {
 // reading names an excluded one: masking can add a reading and can never take
 // one away. Substituting one of these maskings for the other, rather than adding
 // it, is precisely how the line-bounded reading arrived carrying a leak.
-func maskMarkupData(s string, lineBound bool) string {
+// The second return names the one shape the mask cannot bound: an attribute
+// value whose opening quote sits on the line AFTER its equals sign. The skip
+// after `=` is space and tab, so it lands on the newline and no quote is found
+// — the mask then declines silently, and the brackets inside the value are read
+// as structure. Taking HTML's own whitespace class here would resolve the
+// shape, and resolving is comprehension the 2026-08-30 ruling declined, so the
+// shape is reported and the caller refuses it (iss-2608301350534164).
+func maskMarkupData(s string, lineBound bool) (string, string) {
+	shape := ""
 	out := []byte(s)
 	// A MONOTONE cursor onto the next newline, because the walk's own offsets
 	// only ever advance. Searching the whole remainder for one per attribute
@@ -762,6 +831,12 @@ func maskMarkupData(s string, lineBound bool) string {
 				continue
 			}
 			q := skipBlanks(s, i+1)
+			if q < len(s) && s[q] == '\n' {
+				if next := skipSpaceAndNewlines(s, q); next < len(s) &&
+					(s[next] == '"' || s[next] == '\'') {
+					shape = "an attribute value that opens on the line after its equals sign"
+				}
+			}
 			if q >= len(s) || (s[q] != '"' && s[q] != '\'') {
 				i++
 				continue
@@ -780,7 +855,18 @@ func maskMarkupData(s string, lineBound bool) string {
 		}
 		i++
 	}
-	return string(out)
+	return string(out), shape
+}
+
+// skipSpaceAndNewlines advances over whitespace INCLUDING line breaks. It is
+// used only to decide whether the byte a declined attribute value would have
+// opened at is a quote, so the shape report names a real value rather than any
+// equals sign followed by a newline.
+func skipSpaceAndNewlines(s string, i int) int {
+	for i < len(s) && (s[i] == ' ' || s[i] == '\t' || s[i] == '\r' || s[i] == '\f' || s[i] == '\n') {
+		i++
+	}
+	return i
 }
 
 // opensTag reports whether s[i] begins an HTML tag, on htmlTagRe's own rule: a
@@ -834,8 +920,10 @@ func maskAngles(out []byte, from, to int) {
 // stands, and the masked text can only add more.
 func rawHTMLHeading(lines []string, fenced []bool, offset int, headings map[string]bool) (int, string, bool) {
 	raw := strings.Join(lines, "\n")
+	lineBounded, _ := maskMarkupData(raw, true)
+	unbounded, _ := maskMarkupData(raw, false)
 	readings := []string{raw}
-	for _, masked := range []string{maskMarkupData(raw, true), maskMarkupData(raw, false)} {
+	for _, masked := range []string{lineBounded, unbounded} {
 		if !slices.Contains(readings, masked) {
 			readings = append(readings, masked)
 		}
@@ -879,7 +967,8 @@ func rawHTMLHeading(lines []string, fenced []bool, offset int, headings map[stri
 func excludedRawTitle(rests []string, name string, headings map[string]bool) (string, bool) {
 	seen := map[int]bool{}
 	for _, bound := range rests {
-		for _, end := range rawHeadingTitleEnds(bound, name) {
+		ends, _ := rawHeadingTitleEnds(bound, name)
+		for _, end := range ends {
 			if seen[end] {
 				continue
 			}
@@ -934,15 +1023,159 @@ func unresolvableFrontmatterShape(lines []string, fenced []bool) (int, string, b
 		}
 		trimmed := strings.TrimLeft(lines[i], " \t")
 		switch {
+		// The fence delimiter is first because it is the shape that used to
+		// switch the rest of this scan off. It can no longer do so — the mask
+		// starts after the block closes — and it is refused rather than
+		// tolerated, because a delimiter inside a frontmatter block is a
+		// document this binary and a reader of the bundle read differently
+		// (iss-2608301350533102).
+		case fenceOpenRe.MatchString(lines[i]):
+			return i + 1, "a fence delimiter inside the frontmatter block", true
 		case strings.HasPrefix(trimmed, "!"):
 			return i + 1, "a YAML tag", true
 		case strings.HasPrefix(trimmed, "&"):
 			return i + 1, "a YAML anchor", true
+		case nestedMappingRe.MatchString(lines[i]):
+			return i + 1, "a mapping nested in a block sequence", true
+		case flowExplicitKeyRe.MatchString(lines[i]):
+			return i + 1, "an explicit key in a flow mapping", true
 		case questionLineRe.MatchString(lines[i]) && !explicitYAMLKeyRe.MatchString(lines[i]):
 			return i + 1, "an explicit key this package cannot read", true
 		}
 	}
 	return 0, "", false
+}
+
+// bodyFenceMask reports, per line, whether that line sits inside a fenced code
+// block in the document's BODY — the region after the frontmatter block closes.
+//
+// It exists because the mask and the block bounds used to be computed in the
+// wrong order. The mask ran over the whole document, so a fence delimiter
+// written inside the frontmatter toggled the mask and every line after it in
+// the block was reported as fenced; excludedKeyInFirstBlock skips fenced lines,
+// so the key scan was switched off from inside the very block it exists to read
+// (iss-2608301350533102). The block is located first, over an unmasked
+// document, and the toggle starts after it — so a document cannot decide
+// whether its own frontmatter is scanned.
+//
+// A document with no frontmatter block is masked from line 0, exactly as before.
+// A block that never closes leaves no body to mask, and the never-closed shape
+// is itself refused.
+func bodyFenceMask(lines []string, hasBlock bool, closeAt int) []bool {
+	start := 0
+	if hasBlock {
+		if closeAt < 0 {
+			start = len(lines)
+		} else {
+			start = closeAt + 1
+		}
+	}
+	mask := make([]bool, len(lines))
+	inside := false
+	for i := start; i < len(lines); i++ {
+		if fenceOpenRe.MatchString(lines[i]) {
+			inside = !inside
+			mask[i] = true // the delimiter itself belongs to the block
+			continue
+		}
+		mask[i] = inside
+	}
+	return mask
+}
+
+// displacedFrontmatter reports a delimited block that does not open at line 0
+// but opens one to a reader of the bundle, because only blank lines,
+// whitespace, a byte-order mark or an HTML comment precede it.
+//
+// firstBlockRange recognises a block at line 0 alone, and rightly: reading the
+// first `---` found anywhere made a thematic break in an ordinary documentation
+// page open a phantom block. But the rule has a gap on the other side. A
+// document whose first content is a `---` after two blank lines is frontmatter
+// to every YAML-aware reader and prose to this binary, so its keys were never
+// scanned and its excluded fields travelled under a manifest asserting their
+// refusal (iss-2608301237456350).
+//
+// A delimiter after REAL prose is a thematic break to every reader and opens
+// nothing, so it is not this shape and the false-refusal class the line-0 rule
+// closed stays closed. What is refused is exactly the document the two readers
+// disagree about.
+func displacedFrontmatter(lines []string) (int, string, bool) {
+	inComment := false
+	for i, raw := range lines {
+		line := raw
+		if i == 0 {
+			line = frontmatter.TrimBOM(line)
+		}
+		trimmed := strings.TrimSpace(line)
+		if inComment {
+			if idx := strings.Index(trimmed, "-->"); idx >= 0 {
+				inComment = false
+				trimmed = strings.TrimSpace(trimmed[idx+len("-->"):])
+			} else {
+				continue
+			}
+		}
+		for strings.HasPrefix(trimmed, "<!--") {
+			idx := strings.Index(trimmed, "-->")
+			if idx < 0 {
+				inComment = true
+				trimmed = ""
+				break
+			}
+			trimmed = strings.TrimSpace(trimmed[idx+len("-->"):])
+		}
+		if trimmed == "" {
+			continue
+		}
+		if i == 0 || !strings.HasPrefix(trimmed, "---") {
+			// Either the block opens where this package already reads it, or the
+			// document's first content is not a delimiter and there is nothing
+			// here two readers can disagree about.
+			return 0, "", false
+		}
+		return i + 1, fmt.Sprintf("a frontmatter block displaced from line 0 by %d line(s)", i), true
+	}
+	return 0, "", false
+}
+
+// unboundedRawHeading reports a raw heading opener whose title reaches the end
+// of the document with neither a hard nor a soft bound.
+//
+// It reads the UNMASKED document alone. The mask exists to stop a comment's or
+// an attribute value's brackets from being read as structure, and a bound it
+// erases was never a bound; a mask that could manufacture this refusal would be
+// a mask deciding, which is what every other reading here refuses to let it do.
+func unboundedRawHeading(lines []string, fenced []bool, offset int) (int, bool) {
+	text := strings.Join(lines, "\n")
+	for _, open := range rawHeadingOpenRe.FindAllStringSubmatchIndex(text, -1) {
+		line := strings.Count(text[:open[0]], "\n")
+		if line < offset || (line < len(fenced) && fenced[line]) {
+			continue
+		}
+		name := ""
+		for _, g := range [][2]int{{open[2], open[3]}, {open[4], open[5]}} {
+			if g[0] >= 0 {
+				name = text[g[0]:g[1]]
+			}
+		}
+		if name == "" {
+			continue
+		}
+		if _, bounded := rawHeadingTitleEnds(text[open[1]:], name); !bounded {
+			return line + 1, true
+		}
+	}
+	return 0, false
+}
+
+// markupShapeOf reports the one markup shape the mask cannot bound, or "" when
+// the document carries none. See the maskMarkupData return it reads.
+func markupShapeOf(s string) string {
+	if _, shape := maskMarkupData(s, true); shape != "" {
+		return shape
+	}
+	_, shape := maskMarkupData(s, false)
+	return shape
 }
 
 // firstBlockRange locates the document's first delimiter-fenced region: the line

@@ -477,6 +477,16 @@ jobs:
   # record-only pull request. The target selects by build tag, so a second
   # cold-reading eval joins this lane by carrying `//go:build smoke ||
   # coldreading` and needs no edit here.
+  #
+  # It IS a required status check — the ruleset mirror at
+  # `.abcd/work/rulesets/main-protection.json` names its context, and
+  # TestColdReadingEvalsIsARequiredStatusCheck holds the three parts of that
+  # together (iss-2608311051046981). An always-run lane whose check cannot block
+  # a merge reports a conclusion and stops nothing, which is the position the
+  # eval exists to make impossible: a record-only pull request reaching main with
+  # warm content in included material. Requiring it is safe precisely because it
+  # stands down on no event — a `paths:` filter or an `inert` condition here
+  # would leave the context permanently pending and wedge the queue.
   cold-reading-evals:
     timeout-minutes: 10
     runs-on: ubuntu-latest

@@ -78,8 +78,72 @@ func (f *ingestFixture) parkRun(runID string, pos Position, assemblerVersion str
 		Type: ManifestType, SchemaVersion: SchemaVersion, RunID: runID, Position: pos,
 		TargetCommit:     "0123456789abcdef0123456789abcdef01234567",
 		AssemblerVersion: assemblerVersion,
-		Items:            []ManifestItem{{ItemKey: "i1", Path: "README.md", Kind: KindDoc, SHA256: sha256Hex([]byte("x"))}},
+		Items:            []ManifestItem{{ItemKey: "i1", Path: "README.md", Kind: KindDoc, Scan: ScanParsed, SHA256: sha256Hex([]byte("x"))}},
 		Exclusions:       []Exclusion{},
+	}
+	// A COMPARATIVE manifest carries what the comparative ingest checks against:
+	// the derived widening run, its candidates, and the slate parsed off the
+	// criteria discipline. A parked manifest without them would make every legal
+	// comparative payload refuse, so the fixture's manifest is what an assembly
+	// at that position actually writes (spc-2609020626039834).
+	if pos == PositionComparative {
+		exercised := true
+		m.CandidateRun = fixtureIngestCandidateRun
+		m.Candidates = len(fixtureIngestCandidates)
+		m.Exercised = &exercised
+		m.CandidateFields = append([]string{}, CandidateFields...)
+		m.Criteria = append([]string{}, fixtureIngestCriteria...)
+		m.Items = nil
+		for _, id := range fixtureIngestCandidates {
+			for _, field := range CandidateFields {
+				m.Items = append(m.Items, ManifestItem{
+					ItemKey:   "i-" + id + "-" + field,
+					Path:      CandidateSource + "/" + fixtureIngestCandidateRun + "/" + id + ".md",
+					Field:     field,
+					Candidate: id,
+					Kind:      KindCandidate,
+					Scan:      ScanParsed,
+					SHA256:    sha256Hex([]byte(id + field)),
+				})
+			}
+		}
+	}
+	raw, err := EncodeManifest(m)
+	if err != nil {
+		f.t.Fatalf("encode the parked manifest: %v", err)
+	}
+	f.write(DefaultRunDir+"/"+runID+"/"+ManifestFileName, raw)
+	f.manifestHashes[runID] = sha256Hex(raw)
+	if runID == f.runID {
+		f.manifestHash = sha256Hex(raw)
+	}
+}
+
+// parkComparative re-parks one run's manifest with a caller-chosen candidate
+// count and exercised flag, for the staged EMPTY comparative run: a manifest
+// naming the derived run, its own item count, and `exercised: false`.
+//
+// It overwrites the manifest parkRun already wrote, so the caller re-reads the
+// hash: the reference an output cites is the manifest's own content hash, and a
+// re-park is a different manifest.
+func (f *ingestFixture) parkComparative(runID, candidateRun string, candidates int,
+	exercised *bool, items []ManifestItem) {
+	f.t.Helper()
+	m := Manifest{
+		Type: ManifestType, SchemaVersion: SchemaVersion, RunID: runID,
+		Position:         PositionComparative,
+		TargetCommit:     "0123456789abcdef0123456789abcdef01234567",
+		AssemblerVersion: AssemblerVersion(),
+		CandidateRun:     candidateRun,
+		Candidates:       candidates,
+		Exercised:        exercised,
+		CandidateFields:  append([]string{}, CandidateFields...),
+		Criteria:         append([]string{}, fixtureIngestCriteria...),
+		Items:            items,
+		Exclusions:       []Exclusion{},
+	}
+	if m.Items == nil {
+		m.Items = []ManifestItem{}
 	}
 	raw, err := EncodeManifest(m)
 	if err != nil {
@@ -169,11 +233,30 @@ func (f *ingestFixture) body() map[string]any {
 	return out
 }
 
+// The comparative fixture's derived run, its candidates and its declared
+// criteria. They are the values the parked manifest records, so a legal payload
+// at that position names a candidate of the run and a criterion the discipline
+// declares — which is exactly what the two comparative ingest checks compare
+// against (spc-2609020626039834).
+const fixtureIngestCandidateRun = "rdg-2608301200000009"
+
+var (
+	fixtureIngestCandidates = []string{"rdi-1", "rdi-2", "rdi-3"}
+	fixtureIngestCriteria   = []string{"Plausibility", "Generativity", "Cost"}
+)
+
 // fieldText is plain prose for one body field. `claim_type` takes one of its
-// three tokens; everything else takes a sentence that trips no detector.
+// three tokens, `candidate_id` and `criterion` take values the parked
+// comparative manifest records, and everything else takes a sentence that trips
+// no detector.
 func fieldText(field string, i int) string {
-	if field == "claim_type" {
+	switch field {
+	case "claim_type":
 		return "criterion"
+	case "candidate_id":
+		return fixtureIngestCandidates[0]
+	case "criterion":
+		return fixtureIngestCriteria[0]
 	}
 	return "the passed material carries this, stated at ordinal " + string(rune('a'+i))
 }

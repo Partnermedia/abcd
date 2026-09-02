@@ -1,7 +1,7 @@
 ---
 name: reading
 description: Assemble the input a cold reading is handed and validate the output it returns, by invoking the abcd binary. Bare invocation is a read-only status render; assemble produces the assembled input and its hashed manifest, and ingest validates one reading's output and writes its records.
-argument-hint: "[] | assemble --position <widening|entailment|detection> --target <HEAD|sha> --scope <itd-N|spc-N|kind|preset> [--out <dir>] [--dry-run] | ingest --reading-json <path>"
+argument-hint: "[] | assemble --position <widening|entailment|detection> --target <HEAD|sha> [--out <dir>] [--dry-run] | ingest --reading-json <path>"
 ---
 
 # `/abcd:reading` — cold-reading input assembler
@@ -16,9 +16,9 @@ writes**.
 Two things this surface does not do. It never runs a reading: it produces the
 input a reading would be given, and dispatching that input to a reader is host
 work. And it carries no free text at any position — the operator supplies a
-position, a target state and a scope, each in a closed grammar, and the
-reading's object and question come from its definition, so there is no channel
-through which ledger content can travel in the framing of a request.
+position and a target state, each in a closed grammar, and the reading's object
+and question come from its definition, so there is no channel through which
+ledger content can travel in the framing of a request.
 
 ## Status (bare)
 
@@ -30,9 +30,22 @@ To render the assembler's state:
 
 Summarise the JSON for the user: `assembler_version`, `include_rows` and
 `exclusion_rows` (what the table admits and what it refuses), `definitions`
-(the reading definitions present under `agents/`), `staged_runs` (runs an
+(the reading definitions the locator RESOLVED), `staged_runs` (runs an
 assembly has parked in the local tier), `orphaned_ingests`, and
 `leftover_stages`. Zero writes.
+
+**`definitions` is what resolved, not what is present.** A definition is
+resolved by the position its filename holds, and it must state that same
+position and the regime that position carries — the regime is the definition's
+property, which is why nothing an operator types can set one. So a
+`cold-reading-<name>.md` naming no closed position is not an instrument and is
+invisible here. A definition that IS at a position and is silent about its
+position or its regime, states a position its filename does not hold, or states
+another position's regime, is worse than an absent one: it reports an instrument
+that is not there. That refuses **the whole verb with exit 2**, naming the file
+and what it got wrong, rather than being listed or quietly skipped — so a short
+list is a repository with fewer definitions, and a malformed one renders no
+status at all.
 
 **`orphaned_ingests` is not routine.** Each name is a run whose ingest reached
 the ledger and never reached its commit marker, so its reading records are
@@ -50,34 +63,98 @@ its records will be rolled back, because they will not be.
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/abcd" reading assemble \
-  --position widening --target HEAD --scope cold --json
+  --position widening --target HEAD --json
 ```
 
-`--position` takes one of four closed tokens — `widening`, `entailment`,
-`comparative`, `detection`. An unknown token is refused by name. **The
-comparative position does not assemble** and refuses, naming the channel it
-lacks: its object is the widening reading's pre-admission output, which is not
-repository material. `--target`
+**The invocation is two operands and nothing else.** `--position` takes one of
+four closed tokens — `widening`, `entailment`, `comparative`, `detection`. An
+unknown token is refused by name. `--target`
 takes `HEAD` or a hexadecimal commit sha of 7 to 40 digits; a branch name or a
 tag is refused, because it moves and the manifest's re-runnability rests on a
-reference that cannot.
+reference that cannot. Both are required, and any other operand is refused by
+name.
 
-`--scope` names what the reading is **about**, and is required. It takes one
-token in a closed grammar: a record id (`itd-N`, `spc-N`), a
-material kind, or the name of a preset committed in
-`.abcd/config/reading-presets.json`. **No repository path is accepted here** —
-a path may be named only inside the committed preset file, where it is
-reviewed, shape-validated and inside the dirty gate (adr-58). A scope
-intersects what the position already admits and can only narrow it.
+What the reading is **handed** comes from the committed preset entry for that
+position, in `.abcd/config/reading-presets.json`, applied by the assembler with
+no operand naming it. The entry intersects what the position already admits and
+can only narrow it. **No repository path is accepted at the invocation** — a
+path may be named only inside the committed preset file, where it is reviewed,
+shape-validated and inside the dirty gate (adr-2609021016286571, which
+supersedes adr-58).
 
-Naming a preset is running as reviewed. Naming a record or a kind directly is
-an override, and the manifest stamps it as one, so drift between the committed
-presets and what people actually run is countable.
+Changing what a position reads is a commit to that file, reviewed like any
+other change; there is no override at the invocation and nothing to stamp. One
+file, one entry per position: a repository that wants a wider reading commits a
+wider entry, and the manifest shows which entry a run applied.
 
-**The comparative position does not assemble.** Its object is the widening
-reading's pre-admission output, which is not repository material and has no
-channel today. It refuses and names that, rather than returning the detection
-position's corpus and reporting success.
+**At entailment, a draft or planned intent travels only when the entry names
+it.** The drafts and planned rows are admitted at that position alone, and they
+narrow by the entry's object-set record list exactly as the shipped row does —
+so the reading is handed the object set's drafts and planned intents and no
+others. The readings companion's section 6.2 makes them *admissible* there, and
+admissible is a permission rather than a scope: an entry that wants the
+permission whole declares `"admit_drafts_and_planned": true`, which hands every
+draft and planned intent in the repository. The key defaults to off, means
+nothing at any other position, and is refused at load if an entry for one
+declares it (ruled 2026-09-02).
+
+**The comparative position derives its candidate set from the record.** Its
+object is the widening reading's pre-admission output, and the run that supplied
+it is not named by any operand: the assembler selects **the one committed
+widening run at the target whose items carry no disposition and no admission**
+(adr-2609021016272867). A run is **at the target** when the commit its own record
+names *is* the target, or is an **ancestor** of it across which nothing changed
+outside the readings store and the issue ledger's own record families. That is
+what lets the loop run: `reading ingest` leaves a widening run's reading records
+uncommitted, the candidate row below reaches them, so the next assembly refuses
+until they are committed — and committing them moves HEAD off the commit the run
+read. A commit that moved only the instrument's own record leaves the object set
+where it was, which is what the run was about. A run whose target is not an
+ancestor is not a run at this target and is not listed; a run across which
+anything else changed is listed and refused, naming the first path that moved.
+The manifest records both commits — `candidate_run_target` beside
+`target_commit` — so a reader can diff them. *This reading of "at the target" is
+an interpretation, and the maintainer's ruling is owed* (iss-2609021857343626).
+That run's items travel projected to two body fields —
+the configuration and what admits it — keyed by the item identifier the
+comparative body cites, and nothing else from the readings store travels with
+them: no disposition, no admission, no surprise, no other run, no manifest. The
+committed entry for the position names the repository material passed beside the
+candidates, which at this position is the criteria discipline and nothing else.
+
+Two refusals, and both **list the widening runs at the target** with each run's
+item count and the fate of its items, so the operator can see what to
+disposition:
+
+- **None qualifies.** No committed widening run at the target has every item
+  free of a disposition and an admission — because there is none at all, because
+  one never reached its commit marker, because one is already answered, or
+  because the object set moved between the commit a run read and this target.
+  The candidate set is defined as pre-admission, and a candidate whose fate is
+  recorded is not one.
+- **More than one qualifies.** Nothing names which, and the remedy is the act
+  the design places after the comparative reading in any case: disposition one
+  run's items, and the selection is unambiguous.
+
+**Fewer than two candidates is the interpretation fixed in advance.** A widening
+run that returned one configuration leaves the comparative reading nothing to
+compare, so the position is **not exercised** — and that outcome is recorded
+rather than left unstated. The verb refuses, names the interpretation, and still
+stages a run whose bundle carries no candidate item and whose manifest carries
+`candidate_run`, `candidates` (the derived run's own item count) and
+`exercised: false`. Ingest that run and it commits a comparative run with an
+empty item set naming the widening run, so the outcome of a widening run is one
+shape either way.
+
+Report from the JSON at this position: `candidate_run`, `candidates`,
+`not_exercised`, and — on either derivation refusal — `widening_runs`.
+
+**The loop, at this position.** Assemble at widening, dispatch, ingest, then
+**commit what the ingest wrote** — the reading records under
+`.abcd/work/issues/readings/<run>/` and the run's own artefacts under
+`.abcd/development/readings/<run>/` — and then assemble at comparative. The
+commit is the step between the two readings, and without it the assembly refuses
+on the dirty gate naming the ingest's own records.
 
 Assembly reads the working tree, so it refuses unless HEAD resolves to the
 target **and** no included path is uncommitted. The preset configuration is in
@@ -88,27 +165,53 @@ an unknown position, a missing operand, and any positional argument.
 Report from the JSON: `run_id`, `position`, `target_commit`, `item_count`,
 `manifest_hash`, and — where the run wrote — `out_dir` and `artefacts`.
 
-Report `scope` too: `scope.source`, the token the operator gave; `scope.selectors`,
-what it resolved to; and `scope.overridden` — true when the run named a record or
-a kind directly rather than a committed preset. (The written manifest spells that
-last one `scope_overridden`; the verb's own JSON nests it under `scope`.) Say plainly when a run was overridden, because
-a run nobody can tell departed from the reviewed presets is a run whose drift
-is invisible.
+Report `preset` too: `preset.selectors`, the committed entry the run applied,
+resolved to its clauses. The written manifest carries the same block under
+`preset`, beside `preset_hash`, the entry's content hash — which is what makes a
+run reproducible from the commit it names, and what lets a reader tell two runs
+apart by the entry they applied. There is **no** override stamp and no scope
+source: nothing at the invocation can depart from the committed entry, so there
+is no departure to report.
 
 Also report `size`, on every run including a dry run: the total `bytes` and
 `tokens_est`, and each row of `by_kind` (`kind`, `items`, `bytes`,
-`tokens_est`). Report `tokens_est` as an estimate and say so, quoting the
+`tokens_est`). Report `size.unscanned` too when it is above zero: it is how many
+of the run's items the exclusion floor did not examine. The include table
+declares, per row, whether the floor parses what the row admits; a row it does
+not parse — source, tests and configuration — hands each item over whole, and
+every manifest item carries a `scan` mark saying `parsed` or `unscanned`. The
+manifest's key and heading exclusions are asserted for the items marked `parsed`
+and for no other, so `unscanned` is a disclosure rather than a warning: it is
+what an operator weighs before dispatching a bundle. Report `tokens_est` as an
+estimate and say so, quoting the
 report's own `basis` — it is bytes over a measured constant, not a tokenizer's
 count, and it mis-states each kind by a few per cent in directions spc-68
 records. There is no budget and no threshold: the assembler cannot know what a
 given reader accepts, so it reports the weight and the operator decides whether
 to dispatch it.
 
+Report `size.window` and `size.exceeds_window` beside those figures. The
+committed entry for the position declares the estimated-token window it was
+calibrated for, together with the figure it measured (`measured_tokens_est`,
+`measured_bytes`) and the commit it measured on (`measured_at`). A file at
+preset schema version 1 declares none, and the report says so rather than
+showing a zero. Nothing is refused for either: `exceeds_window` is what the
+cold-reading eval lane fails on, and the operator is told here. Report
+`size.over_target` too when it is true — the total is over the two hundred
+thousand estimated tokens an entry aims at, which is a target and not a limit,
+and the reader's window decides whether it is acceptable.
+
+At the **entailment** position only, report `size.mechanism`: `stated`,
+`none_stated` and `absent` over `intents`, the projected intent files this run
+carried. It is the yield bound stated beside the findings — how many of the
+intents the reading is about carry a causal claim, how many state none, and how
+many carry neither. No other position's report has the field.
+
 ### Where the artefacts land
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/abcd" reading assemble \
-  --position entailment --target HEAD --scope cold \
+  --position entailment --target HEAD \
   --out .abcd/.work.local/scratch/reading-runs/manual --json
 ```
 
@@ -135,8 +238,9 @@ bundle.
 ### The host obligation this binary cannot discharge
 
 The assembled input carries no repository path: each item is an ordinal key, a
-material class and its text, and only the manifest maps a key back to a path
-and a field. That is the half of the isolation the binary enforces.
+material class and its text, and only the manifest maps a key back to a path,
+a field and its `scan` mark. That is the half of the isolation the binary
+enforces.
 
 The other half is yours. When you dispatch an assembled input to a reader,
 grant that reader **no repository access** — no file tools, no path, no working
@@ -181,7 +285,11 @@ at one.
 
 An **item-level** violation refuses that item and lands the rest: an empty or
 absent `pattern` at any position, a field the position's body does not declare,
-or a reserved name carried as one of the item's own keys. A **list-level**
+or a reserved name carried as one of the item's own keys. At the **comparative**
+position two more, both checked against the run's own manifest rather than
+against the payload's account of itself: a `candidate_id` naming an item the
+recorded widening run does not hold (`unknown-candidate`), and a `criterion` the
+criteria discipline does not declare (`undeclared-criterion`). A **list-level**
 violation refuses the whole run: a wrong `_type`, a run id that resolves to no
 parked manifest, a manifest hash that disagrees, a position whose definition
 does not resolve (absent, malformed, or stating another position's licence), an
@@ -208,6 +316,16 @@ record against.
 **A rerun is a new run with a new run id, never an amendment.** Once a run id
 has an outcome — a commit marker or a refusal record — ingesting it again is
 refused. Assemble again, and ingest the run that assembly parked.
+
+**A run that returned NO items is committed, at every position.** An empty item
+list is the clean-run idiom the design framework's section 13 fixes: the null
+result is recorded as a run with an empty item set, never refused, and refusal
+is reserved for a malformed payload. The comparative position's not-exercised
+outcome is one instance of that rule — its run record carries `candidate_run`,
+`candidates` and `exercised: false` — and an empty output at widening,
+entailment or detection commits the same way. A run whose every item was refused
+is a different fact and is still a list-level refusal: recording it as a run
+that returned nothing would lose what happened.
 
 ### The supply regime is the definition's
 

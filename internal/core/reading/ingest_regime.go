@@ -79,13 +79,13 @@ var regimeLicence = map[string]string{
 // the definition's, never trusted. A disagreement refuses the RUN, not an item —
 // a run read under the wrong licence is wrong in whole, and which items it would
 // have been wrong about is not a question worth asking.
-func checkRegime(out Output, def Definition) error {
+func checkRegime(out Output, def Definition, free payloadField) error {
 	if out.Regime == def.Regime {
 		return nil
 	}
 	return fmt.Errorf("the output declares the %s regime and %s states %s; the regime is the "+
 		"definition's property, resolved from the run's position, and a self-declared regime that "+
-		"disagrees with it refuses the run", echo(out.Regime), def.Path, def.Regime)
+		"disagrees with it refuses the run", free(out.Regime), def.Path, def.Regime)
 }
 
 // checkInstrument closes the instrument identity against the two things that can
@@ -96,15 +96,15 @@ func checkRegime(out Output, def Definition) error {
 // happens here is the part presence cannot do: a claim is compared with the
 // artefact it is a claim about, so "two runs claiming the same instrument are
 // provably the same" is a proof rather than a convention.
-func checkInstrument(out Output, def Definition, m Manifest) error {
+func checkInstrument(out Output, def Definition, m Manifest, free payloadField) error {
 	if out.Instrument.DefinitionSHA256 != def.SHA256 {
 		return fmt.Errorf("the instrument claims definition_sha256 %s and %s hashes to %s; the "+
 			"definition's content hash is half of the instrument's identity, and it is recomputed here",
-			echo(out.Instrument.DefinitionSHA256), def.Path, def.SHA256)
+			free(out.Instrument.DefinitionSHA256), def.Path, def.SHA256)
 	}
 	if out.Instrument.AssemblerVersion != m.AssemblerVersion {
 		return fmt.Errorf("the instrument claims assembler_version %s and the manifest of run %s "+
-			"carries %s", echo(out.Instrument.AssemblerVersion), echo(m.RunID), echo(m.AssemblerVersion))
+			"carries %s", free(out.Instrument.AssemblerVersion), echo(m.RunID), echo(m.AssemblerVersion))
 	}
 	return nil
 }
@@ -115,12 +115,20 @@ func checkInstrument(out Output, def Definition, m Manifest) error {
 // in which nothing survives becomes a list-level refusal, because a run with no
 // items is not a run with an empty item set — it is a run whose every finding
 // was refused, and recording it as the former would lose that.
-func validateItems(out Output, def Definition) ([]capture.ReadingItem, []ItemRefusal, int, error) {
+// It takes the MANIFEST as well as the definition, because the comparative
+// position's two checks are against the manifest and not against the payload: an
+// item names a candidate of the run the manifest records, and a criterion the
+// manifest's parsed slate declares. The function was handed none, and a check
+// that cannot see what the assembly selected can only take the reading's word
+// for what it was given (spc-2609020626039834, "Ingest at the comparative
+// position").
+func validateItems(out Output, m Manifest, def Definition, free payloadField) ([]capture.ReadingItem, []ItemRefusal, int, error) {
 	bodyFields := issueschema.ReadingBodyFields[string(def.Position)]
 	allowed := map[string]bool{PatternField: true}
 	for _, f := range bodyFields {
 		allowed[f] = true
 	}
+	candidates, criteria := manifestCandidates(m), manifestCriteria(m)
 
 	var items []capture.ReadingItem
 	refusals := []ItemRefusal{}
@@ -136,6 +144,7 @@ func validateItems(out Output, def Definition) ([]capture.ReadingItem, []ItemRef
 		// about the licence. The contract defines no nested object, so a key
 		// inside one is the reader's own field and is judged as one.
 		if named := reservedKeysIn(raw, ReservedNames[def.Regime]); len(named) > 0 {
+			named = freeAll(free, named)
 			refusals = append(refusals, ItemRefusal{Ordinal: ordinal, Rule: "reserved-name",
 				Field: strings.Join(named, ", "),
 				Detail: fmt.Sprintf("item %d carries the reserved %s field %s: %s",
@@ -143,13 +152,21 @@ func validateItems(out Output, def Definition) ([]capture.ReadingItem, []ItemRef
 			continue
 		}
 
-		fields, err := decodeItemFields(raw)
+		fields, err := decodeItemFields(raw, free)
 		if err != nil {
 			refusals = append(refusals, ItemRefusal{Ordinal: ordinal, Rule: "item-shape",
-				Detail: fmt.Sprintf("item %d: %s", ordinal, echo(err.Error()))})
+				Detail: fmt.Sprintf("item %d: %s", ordinal, free(err.Error()))})
 			continue
 		}
-		if r := checkItem(ordinal, fields, def, allowed, bodyFields); r != nil {
+		if r := checkItem(ordinal, fields, def, allowed, bodyFields, free); r != nil {
+			refusals = append(refusals, *r)
+			continue
+		}
+		// The two comparative checks, AFTER checkItem so an item missing its
+		// body is refused for that rather than for naming nothing. They run at
+		// the comparative position alone, because the manifest carries a
+		// candidate set and a slate at no other.
+		if r := checkComparativeItem(ordinal, fields, def, candidates, criteria, m, free); r != nil {
 			refusals = append(refusals, *r)
 			continue
 		}
@@ -197,11 +214,80 @@ func validateItems(out Output, def Definition) ([]capture.ReadingItem, []ItemRef
 
 	total := len(refusals)
 	refusals = boundedRefusals(refusals)
-	if len(items) == 0 {
+	// A payload that CARRIED items and lost every one of them is a run whose
+	// every finding was refused, which is a different fact from a run that
+	// returned nothing, and recording the first as the second would lose it. A
+	// payload that carried none is the clean run the framework's section 13
+	// fixes, and it commits with an empty item list (iss-2609021153269181).
+	if len(items) == 0 && len(out.Items) > 0 {
 		return nil, refusals, total, fmt.Errorf("every one of the %d item(s) was refused, so the "+
 			"run carries nothing to record: %s", len(out.Items), renderRefusals(refusals))
 	}
 	return items, refusals, total, nil
+}
+
+// The two comparative refusal rules, named where they are raised so a literal
+// never drifts out of the message that quotes it.
+const (
+	ruleUnknownCandidate    = "unknown-candidate"
+	ruleUndeclaredCriterion = "undeclared-criterion"
+)
+
+// checkComparativeItem holds the comparative body to the assembly that produced
+// it: the candidate it names must be one of the run the manifest records, and
+// the criterion must be one the discipline declares.
+//
+// Both are checks against the MANIFEST rather than against the payload's own
+// account of itself, which is the same argument the regime check rests on: a
+// reading's claim about what it was given establishes nothing, and the manifest
+// is the artefact that does. An item naming a candidate outside the run is
+// characterising something the reading was not handed; an item naming a
+// criterion the discipline does not declare is characterising against a
+// criterion nobody committed (itd-191's gate).
+func checkComparativeItem(ordinal int, fields map[string]string, def Definition,
+	candidates map[string]bool, criteria map[string]string, m Manifest, free payloadField) *ItemRefusal {
+
+	if def.Position != PositionComparative {
+		return nil
+	}
+	id := fields["candidate_id"]
+	if !candidates[id] {
+		return &ItemRefusal{Ordinal: ordinal, Rule: ruleUnknownCandidate, Field: "candidate_id",
+			Detail: fmt.Sprintf("item %d names the candidate %s, which is not an item of the "+
+				"widening run %s the manifest records; a comparative reading characterises the "+
+				"candidates it was handed and no others", ordinal, free(id), echo(m.CandidateRun))}
+	}
+	if _, ok := criteria[foldForMatching(fields["criterion"])]; !ok {
+		return &ItemRefusal{Ordinal: ordinal, Rule: ruleUndeclaredCriterion, Field: "criterion",
+			Detail: fmt.Sprintf("item %d states the criterion %s, which %s does not declare; the "+
+				"criteria are a declared, recorded discipline and a reading never authors one "+
+				"(itd-191). The declared criteria are: %s", ordinal, free(fields["criterion"]),
+				CriteriaDiscipline, strings.Join(echoAll(boundedNames(m.Criteria)), ", "))}
+	}
+	return nil
+}
+
+// manifestCandidates is the candidate set the assembly recorded, as a lookup.
+func manifestCandidates(m Manifest) map[string]bool {
+	out := make(map[string]bool, len(m.Items))
+	for _, it := range m.Items {
+		if it.Candidate != "" {
+			out[it.Candidate] = true
+		}
+	}
+	return out
+}
+
+// manifestCriteria is the declared slate as a lookup, keyed on the matching
+// fold — the same fold the reserved-name check uses — so a criterion respelled
+// in code points that render identically is the same criterion, and case and
+// surrounding space do not decide whether a reading quoted the record correctly.
+func manifestCriteria(m Manifest) map[string]string {
+	out := make(map[string]string, len(m.Criteria))
+	for _, name := range m.Criteria {
+		out[foldForMatching(name)] = name
+	}
+	return out
 }
 
 // boundedRefusals caps how many item refusals are carried into a message and a
@@ -235,7 +321,7 @@ func boundedRefusals(refusals []ItemRefusal) []ItemRefusal {
 // condition every regime shares. Then the body's own key set, and then the
 // values the definitions close.
 func checkItem(ordinal int, fields map[string]string, def Definition,
-	allowed map[string]bool, bodyFields []string) *ItemRefusal {
+	allowed map[string]bool, bodyFields []string, free payloadField) *ItemRefusal {
 
 	// Blankness is judged on the FOLDED text. strings.TrimSpace does not treat a
 	// zero-width rune as space, so a pattern of one U+200B was accepted at all
@@ -262,7 +348,7 @@ func checkItem(ordinal int, fields map[string]string, def Definition,
 		// goes through the same cleaner and the same caps — per name, and on the
 		// number of names.
 		sort.Strings(unknown)
-		unknown = echoAll(boundedNames(unknown))
+		unknown = freeAll(free, boundedNames(unknown))
 		return &ItemRefusal{Ordinal: ordinal, Rule: "unknown-field", Field: strings.Join(unknown, ", "),
 			Detail: fmt.Sprintf("item %d carries %s, which the %s body does not declare (%s); the item "+
 				"identity is the verb's to mint and the envelope is the verb's to compose, so neither has "+
@@ -286,7 +372,7 @@ func checkItem(ordinal int, fields map[string]string, def Definition,
 	if field, want, ok := closedVocabulary(fields, bodyFields); !ok {
 		return &ItemRefusal{Ordinal: ordinal, Rule: "closed-vocabulary", Field: field,
 			Detail: fmt.Sprintf("item %d states %s %s; the set is closed: %s",
-				ordinal, field, echo(fields[field]), strings.Join(want, ", "))}
+				ordinal, field, free(fields[field]), strings.Join(want, ", "))}
 	}
 
 	return nil
@@ -521,12 +607,12 @@ func renderFields(names []string) string {
 // decodeItemFields decodes one item's values as strings. A non-string value is
 // refused naming its field: an item is a flat map of text, as every definition's
 // item shape instructs.
-func decodeItemFields(raw map[string]json.RawMessage) (map[string]string, error) {
+func decodeItemFields(raw map[string]json.RawMessage, free payloadField) (map[string]string, error) {
 	out := make(map[string]string, len(raw))
 	for _, k := range sortedKeys(raw) {
 		var s string
 		if err := json.Unmarshal(raw[k], &s); err != nil {
-			return nil, fmt.Errorf("the field %q is not text; an item is a flat map of text fields", echo(k))
+			return nil, fmt.Errorf("the field %q is not text; an item is a flat map of text fields", free(k))
 		}
 		out[k] = s
 	}

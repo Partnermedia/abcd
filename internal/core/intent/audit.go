@@ -102,6 +102,12 @@ var (
 	auditPlaceholderRe = regexp.MustCompile(`^\s*[_<]Empty\b.*[_>]\s*$`)
 	// criterionIDRe validates a criterion id shape before it is positionally bounded.
 	criterionIDRe = regexp.MustCompile(`^ac-([0-9]+)$`)
+	// sha256FieldRe is the shape the auditor's contract publishes for the two
+	// policy hashes and for an attestation digest: `sha256:<64 lowercase hex>`.
+	// A field is a validated shape only where a validator says so — the
+	// alternative is free text under a structural name, which is how a home path
+	// arrived in a field the record called a hash (iss-2609022002241168).
+	sha256FieldRe = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 )
 
 // ---------------------------------------------------------------------------
@@ -389,15 +395,24 @@ func IngestVerdict(repoRoot, verdictPath string) (IngestVerdictResult, error) {
 		return IngestVerdictResult{Status: "noop", ReceiptID: rcp, IntentID: it.ID}, nil
 	}
 
+	// The free-text renderer for this write, built ONCE and before anything is
+	// composed. Both paths below persist agent-produced prose into a committed
+	// record, so a degraded detector has to stop the write here rather than
+	// halfway through the block it was about to render.
+	free, err := newVerdictProse(repoRoot)
+	if err != nil {
+		return IngestVerdictResult{}, err
+	}
+
 	// Full schema + semantic validation. Any failure with a resolvable receipt
 	// quarantines the payload rather than corrupting the record.
 	v, verr := validateVerdict(raw, rcp, content)
 	if verr != nil {
-		return deadLetter(repoRoot, it, content, rcp, raw, verr.Error())
+		return deadLetter(repoRoot, it, content, rcp, raw, verr.Error(), free)
 	}
 
 	rollup := countVerdicts(v)
-	block := ingestedBlock(rcp, v, rollup)
+	block := ingestedBlock(rcp, v, rollup, free)
 	updated := upsertReviewBlock(content, rcp, block)
 	if err := writeIntentFile(filepath.Join(repoRoot, it.Path), it.Path, updated); err != nil {
 		return IngestVerdictResult{}, err
@@ -454,6 +469,31 @@ func validateVerdict(raw []byte, rcp, intentContent string) (verdict, error) {
 	// VSA-shaped verdict rather than an unverifiable opinion; require both.
 	if strings.TrimSpace(v.Policy.RubricHash) == "" || strings.TrimSpace(v.Policy.PromptHash) == "" {
 		return verdict{}, fmt.Errorf("policy.rubric_hash and policy.prompt_hash are both required")
+	}
+	// And both must be the shape the contract publishes. Presence alone left the
+	// two fields as free text under a structural name: the block renders them
+	// unredacted on the stated ground that a hash is a validated shape, and
+	// nothing was validating them.
+	for _, h := range [][2]string{
+		{"policy.rubric_hash", v.Policy.RubricHash},
+		{"policy.prompt_hash", v.Policy.PromptHash},
+	} {
+		if !sha256FieldRe.MatchString(h[1]) {
+			return verdict{}, fmt.Errorf("%s %q is not a sha256 digest (want sha256:<64 lowercase hex>)", h[0], h[1])
+		}
+	}
+	// An attestation digest is `sha256:<if-known>` in the contract, so ABSENCE is
+	// legitimate and a present-but-wrong shape is not. `kind` and `ref` carry no
+	// declared shape — a real ref is a commit range with prose beside it — so
+	// they are free text and are redacted at render rather than validated here.
+	for i, a := range v.InputAttestations {
+		if strings.TrimSpace(a.Digest) == "" {
+			continue
+		}
+		if !sha256FieldRe.MatchString(a.Digest) {
+			return verdict{}, fmt.Errorf("input_attestations[%d].digest %q is not a sha256 digest "+
+				"(want sha256:<64 lowercase hex>, or empty where the digest is not known)", i, a.Digest)
+		}
 	}
 	if len(v.Criteria) == 0 {
 		return verdict{}, fmt.Errorf("criteria is empty")
@@ -600,7 +640,7 @@ func validateConditionDispositions(v verdict, intentContent string) error {
 // deadLetter quarantines a bad-but-resolvable verdict: it retains the raw payload
 // under the ephemeral reviews dir and replaces the parked marker with a
 // DEAD_LETTER block recording all criteria INCONCLUSIVE. Never partial.
-func deadLetter(repoRoot string, it Intent, content, rcp string, raw []byte, reason string) (IngestVerdictResult, error) {
+func deadLetter(repoRoot string, it Intent, content, rcp string, raw []byte, reason string, free proseField) (IngestVerdictResult, error) {
 	if !rcpIDRe.MatchString(rcp) {
 		return IngestVerdictResult{}, fmt.Errorf("intent: receipt id %q is malformed; refusing to dead-letter", rcp)
 	}
@@ -613,7 +653,7 @@ func deadLetter(repoRoot string, it Intent, content, rcp string, raw []byte, rea
 		return IngestVerdictResult{}, fmt.Errorf("intent: retaining dead-letter payload %s: %w", dlRel, err)
 	}
 	untested := untestedDispositions(content)
-	block := deadLetterBlock(rcp, reason, dlRel, untested)
+	block := deadLetterBlock(rcp, reason, dlRel, untested, free)
 	updated := upsertReviewBlock(content, rcp, block)
 	if err := writeIntentFile(filepath.Join(repoRoot, it.Path), it.Path, updated); err != nil {
 		return IngestVerdictResult{}, err
@@ -778,14 +818,15 @@ func owedBlock(rcp string) string {
 // already says INCONCLUSIVE here, and the disposition vocabulary's word for the
 // same state is `untested`, so the quarantine stays honest in both without
 // inventing a fifth value.
-func deadLetterBlock(rcp, reason, dlRel string, conds []verdictCondition) string {
+func deadLetterBlock(rcp, reason, dlRel string, conds []verdictCondition, free proseField) string {
 	var b strings.Builder
-	// reason is derived from untrusted payload content (e.g. an out-of-enum token),
-	// so it is sanitised before it lands in the committed record.
+	// reason is derived from untrusted payload content (e.g. an out-of-enum token
+	// quoted back), so it is free text and goes through the same redact-then-
+	// neutralise path as the rest: a quarantine that leaks is still a leak.
 	fmt.Fprintf(&b, "<!-- abcd-review: DEAD_LETTER receipt=%s -->\n"+
 		"Fidelity review DEAD_LETTER (receipt %s): %s. Raw payload retained at %s. "+
-		"All criteria recorded INCONCLUSIVE.\n", rcp, rcp, oneLine(reason), dlRel)
-	renderDispositions(&b, conds)
+		"All criteria recorded INCONCLUSIVE.\n", rcp, rcp, free(reason), dlRel)
+	renderDispositions(&b, conds, free)
 	return strings.TrimRight(b.String(), "\n")
 }
 
@@ -804,21 +845,26 @@ func untestedDispositions(intentContent string) []verdictCondition {
 	return out
 }
 
-func ingestedBlock(rcp string, v verdict, rollup map[string]int) string {
+func ingestedBlock(rcp string, v verdict, rollup map[string]int, free proseField) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "<!-- abcd-review: INGESTED receipt=%s -->\n", rcp)
 	fmt.Fprintf(&b, "Fidelity review — receipt %s (verifier %s %s).\n\n",
-		rcp, orDash(v.Verifier.ID), orDash(v.Verifier.Version))
+		rcp, orFree(v.Verifier.ID, free), orFree(v.Verifier.Version, free))
 	// Pinned provenance: the verifier identity, the policy hashes it attested to,
-	// and every input attestation. All fields are untrusted, so route each through
-	// the oneLine neutraliser before it lands in the committed record.
+	// and every input attestation. All of it is untrusted, and the split is by
+	// whether the contract gives the field a SHAPE. The two hashes and a digest
+	// are validated `sha256:<64 hex>` by the time this runs, so they carry
+	// nothing to redact and keep oneLine alone. The verifier identity, its
+	// version, and an attestation's kind and ref have no declared shape — a real
+	// ref is a commit range with prose beside it — so they are free text and go
+	// through the same redact-then-neutralise path the rationales use.
 	fmt.Fprintf(&b, "Provenance: %s@%s · rubric_hash %s · prompt_hash %s\n",
-		orDash(v.Verifier.ID), orDash(v.Verifier.Version),
+		orFree(v.Verifier.ID, free), orFree(v.Verifier.Version, free),
 		orDash(v.Policy.RubricHash), orDash(v.Policy.PromptHash))
 	if len(v.InputAttestations) > 0 {
 		b.WriteString("Input attestations:")
 		for _, a := range v.InputAttestations {
-			fmt.Fprintf(&b, " %s:%s@%s;", orDash(a.Kind), orDash(a.Ref), orDash(a.Digest))
+			fmt.Fprintf(&b, " %s:%s@%s;", orFree(a.Kind, free), orFree(a.Ref, free), orDash(a.Digest))
 		}
 		b.WriteString("\n")
 	}
@@ -828,16 +874,16 @@ func ingestedBlock(rcp string, v verdict, rollup map[string]int) string {
 
 	b.WriteString("Per-criterion verdicts:\n")
 	for _, c := range v.Criteria {
-		fmt.Fprintf(&b, "- %s — %s: %s\n", c.CriterionID, c.Verdict, oneLine(c.Rationale))
+		fmt.Fprintf(&b, "- %s — %s: %s\n", c.CriterionID, c.Verdict, free(c.Rationale))
 		for _, e := range c.Evidence {
-			fmt.Fprintf(&b, "  evidence: %s\n", renderEvidence(e))
+			fmt.Fprintf(&b, "  evidence: %s\n", renderEvidence(e, free))
 		}
 	}
 	b.WriteString("\nGap audit:\n")
-	renderBucket(&b, "honoured", v.GapAudit.Honoured)
-	renderBucket(&b, "diverged", v.GapAudit.Diverged)
-	renderBucket(&b, "missing", v.GapAudit.Missing)
-	renderDispositions(&b, v.ScopeConditions)
+	renderBucket(&b, "honoured", v.GapAudit.Honoured, free)
+	renderBucket(&b, "diverged", v.GapAudit.Diverged, free)
+	renderBucket(&b, "missing", v.GapAudit.Missing, free)
+	renderDispositions(&b, v.ScopeConditions, free)
 	return strings.TrimRight(b.String(), "\n")
 }
 
@@ -851,36 +897,39 @@ func ingestedBlock(rcp string, v verdict, rollup map[string]int) string {
 // Every field is agent-produced and lands in a committed record, so all of them
 // go through oneLine — the same neutraliser the per-criterion render uses, so no
 // payload can forge an `<!-- abcd-review: … -->` marker and spoof review state.
-func renderDispositions(b *strings.Builder, conds []verdictCondition) {
+// The FREE-TEXT ones go through free, which redacts first: an identifier and an
+// enum token are validated shapes that carry nothing to redact, while a
+// rationale and a narrowing are prose an agent wrote.
+func renderDispositions(b *strings.Builder, conds []verdictCondition, free proseField) {
 	if len(conds) == 0 {
 		return
 	}
 	b.WriteString("\nScope-condition dispositions:\n")
 	for _, c := range conds {
 		fmt.Fprintf(b, "- %s — %s", oneLine(c.ConditionID), oneLine(c.Disposition))
-		if r := oneLine(c.Rationale); r != "" {
+		if r := free(c.Rationale); r != "" {
 			fmt.Fprintf(b, ": %s", r)
 		}
 		b.WriteString("\n")
-		if n := oneLine(c.Narrowing); n != "" {
+		if n := free(c.Narrowing); n != "" {
 			fmt.Fprintf(b, "  narrowing: %s\n", n)
 		}
 		for _, e := range c.Evidence {
-			fmt.Fprintf(b, "  evidence: %s\n", renderEvidence(e))
+			fmt.Fprintf(b, "  evidence: %s\n", renderEvidence(e, free))
 		}
 	}
 }
 
-func renderBucket(b *strings.Builder, name string, entries []verdictGapEntry) {
+func renderBucket(b *strings.Builder, name string, entries []verdictGapEntry, free proseField) {
 	if len(entries) == 0 {
 		fmt.Fprintf(b, "- %s: (none)\n", name)
 		return
 	}
 	fmt.Fprintf(b, "- %s:\n", name)
 	for _, e := range entries {
-		fmt.Fprintf(b, "  - %s\n", oneLine(e.Claim))
+		fmt.Fprintf(b, "  - %s\n", free(e.Claim))
 		for _, ev := range e.Evidence {
-			fmt.Fprintf(b, "    evidence: %s\n", renderEvidence(ev))
+			fmt.Fprintf(b, "    evidence: %s\n", renderEvidence(ev, free))
 		}
 	}
 }
@@ -894,9 +943,9 @@ func renderBucket(b *strings.Builder, name string, entries []verdictGapEntry) {
 // backtick — putting an unpaired run into a committed record and reopening the
 // re-pairing hole this file's other embeddings close. Both fields are already
 // newline-free and control-rune-free, which is all %q was buying here.
-func renderEvidence(e verdictEvidence) string {
-	ref := oneLine(e.Ref)
-	if q := oneLine(e.Quote); q != "" {
+func renderEvidence(e verdictEvidence, free proseField) string {
+	ref := free(e.Ref)
+	if q := free(e.Quote); q != "" {
 		return fmt.Sprintf(`%s — "%s"`, ref, q)
 	}
 	return ref
@@ -983,8 +1032,65 @@ func oneLine(s string) string {
 	return termsafe.CleanProseLine(s, maxNoteFieldBytes)
 }
 
+// proseField renders one FREE-TEXT verdict field into the committed Audit Notes:
+// privacy redaction first, then oneLine's neutralisation.
+//
+// The two do different jobs and both are needed. oneLine protects the RECORD's
+// structure — a payload cannot forge a review marker or open raw HTML through it
+// — and it has always run here. It knows nothing about privacy, so a rationale,
+// a narrowing, a gap-audit claim or an evidence pointer carrying an absolute
+// home path, a hostname or a person's name was written into the shipped intent
+// verbatim, with only the committed-file privacy lint downstream to notice
+// (iss-2608300924205748). AGENTS.md's rule governs what lands in a committed
+// file, and framework 7.1 puts Audit Notes squarely there: a verdict is revision
+// history carried by the intent record.
+//
+// The ORDER is load-bearing in both directions. Redacting first means the
+// detector sees the agent's bytes rather than a neutralised paraphrase of them;
+// neutralising last means the final bytes still carry oneLine's guarantees, and
+// the masks it is handed (`[redacted-path]` and its siblings) are inert to every
+// rule oneLine applies.
+//
+// It is applied to free text ALONE, and what counts as free text is decided by
+// whether a VALIDATOR constrains the field — never by whether its name sounds
+// structural. A criterion id, an enum verdict, a disposition value, a condition
+// id, and the two policy hashes and an attestation digest under sha256FieldRe
+// are validated shapes with nothing to redact, and running a name matcher over
+// them would corrupt a value the record is keyed on rather than protect
+// anything. Those keep oneLine by itself.
+//
+// Everything else is free text, the verifier's id and version and an
+// attestation's kind and ref included. Those four were once excused here as
+// validated shapes while nothing validated them, and an attestation ref is prose
+// by construction — the contract's own example is a commit range with a
+// parenthetical beside it (iss-2609022002241168).
+type proseField func(string) string
+
+// newVerdictProse builds the free-text renderer for one ingest, failing closed
+// on a degraded scanner before any block is composed.
+func newVerdictProse(repoRoot string) (proseField, error) {
+	redact, err := newIntentRedactor(repoRoot)
+	if err != nil {
+		return nil, err
+	}
+	return func(s string) string {
+		redacted, _ := redact(s)
+		return oneLine(redacted)
+	}, nil
+}
+
 func orDash(s string) string {
 	if s = oneLine(s); s == "" {
+		return "-"
+	}
+	return s
+}
+
+// orFree is orDash for a FREE-TEXT field: the same em-dash for an empty value,
+// with proseField's privacy redaction ahead of oneLine's neutralisation. It is
+// what a provenance field takes when the contract gives it no shape.
+func orFree(s string, free proseField) string {
+	if s = free(s); s == "" {
 		return "-"
 	}
 	return s

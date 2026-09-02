@@ -47,6 +47,7 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path"
 	"path/filepath"
@@ -57,7 +58,9 @@ import (
 
 	"github.com/intentdriven/abcd/internal/core/lint"
 	"github.com/intentdriven/abcd/internal/core/rules"
+	"github.com/intentdriven/abcd/internal/core/surface"
 	"github.com/intentdriven/abcd/internal/gitutil"
+	"github.com/spf13/cobra"
 )
 
 // regimeToken is the thing no operator surface may carry. It is matched
@@ -75,15 +78,53 @@ const regimeToken = "regime"
 // accident.
 var readingOperands = map[string][]string{
 	"abcd reading": {},
-	// scope added by itd-199 under adr-58. This pin fails CLOSED on any
-	// addition precisely so a new operand has to say what it does before it
-	// ships, and it did its job here: --scope names what a reading is ABOUT,
-	// in a closed grammar of a record id, a material kind or a committed
-	// preset. It accepts no repository path and no prose, which is the
-	// property the 2026-08-28 rulings were protecting; a path may be named
-	// only inside the committed preset file, where it is reviewed and inside
-	// the dirty gate.
-	"abcd reading assemble": {"dry-run", "out", "position", "scope", "target"},
+	// The two operands the design admits, plus the two write-side ones. scope
+	// was added by itd-199 under adr-58 and is withdrawn by
+	// adr-2609021016286571, which supersedes it: the design fixes the
+	// invocation at a position and a target state (framework v4 section 8.2 and
+	// ruling M8; companion v4 section 4.1), and the committed preset for the
+	// position supplies what the reading is handed. This pin fails CLOSED on
+	// any addition precisely so a new operand has to say what it does before it
+	// ships, and it did its job for scope: the operand was declared here, which
+	// is what made its departure from the design legible enough to withdraw.
+	"abcd reading assemble": {"dry-run", "out", "position", "target"},
+}
+
+// readingOperandMismatches compares the walked tree against readingOperands and
+// returns one message per pinned command whose operand set has moved.
+//
+// It is a function rather than an inline loop so the guard and the mutation
+// that proves the guard can fail read the SAME comparison: a mutation checked
+// by a second copy of the rule proves that copy, not the rule.
+func readingOperandMismatches(commands []surface.Command) []string {
+	var out []string
+	for _, cmd := range commands {
+		want, pinned := readingOperands[cmd.Path]
+		if !pinned {
+			continue
+		}
+		got := make([]string, 0, len(cmd.Flags))
+		for _, f := range cmd.Flags {
+			got = append(got, f.Name)
+		}
+		sort.Strings(got)
+		if strings.Join(got, ",") == strings.Join(want, ",") {
+			continue
+		}
+		out = append(out, fmt.Sprintf("%q declares operands %v, want exactly %v; a new operand on "+
+			"the verb that runs at a position has to say what it does before it can ship, because "+
+			"the regime is not one of them", cmd.Path, got, want))
+	}
+	return out
+}
+
+// allCommands flattens a cobra tree, so a mutation can be applied to one node.
+func allCommands(cmd *cobra.Command) []*cobra.Command {
+	out := []*cobra.Command{cmd}
+	for _, child := range cmd.Commands() {
+		out = append(out, allCommands(child)...)
+	}
+	return out
 }
 
 // generatedBaselineSuffix names the machine-written caches under .abcd/, which
@@ -265,27 +306,49 @@ func TestNoOperatorSurfaceSetsARegime(t *testing.T) {
 			}
 		}
 
-		want, pinned := readingOperands[cmd.Path]
-		if !pinned {
+		if _, pinned := readingOperands[cmd.Path]; !pinned {
 			continue
 		}
 		seenReadingCommands[cmd.Path] = true
-		got := make([]string, 0, len(cmd.Flags))
-		for _, f := range cmd.Flags {
-			got = append(got, f.Name)
-		}
-		sort.Strings(got)
-		if strings.Join(got, ",") != strings.Join(want, ",") {
-			t.Errorf("%q declares operands %v, want exactly %v; a new operand on the verb that runs at a "+
-				"position has to say what it does before it can ship, because the regime is not one of them",
-				cmd.Path, got, want)
-		}
+	}
+	for _, msg := range readingOperandMismatches(commands) {
+		t.Error(msg)
 	}
 	for path := range readingOperands {
 		if !seenReadingCommands[path] {
 			t.Errorf("the command walk never reached %q, so its operand set was never checked", path)
 		}
 	}
+
+	// The pin fails CLOSED, and that is the whole of what it claims
+	// (itd-2609021003095168 ac-5; adr-2609021016286571, whose consequence is
+	// that itd-184's pin is updated to the two operands and goes on failing
+	// closed on any addition). A pin nobody has watched refuse an addition is a
+	// declaration, not a tripwire, so a third operand is added to a tree built
+	// for the purpose and the mismatch is required to name it.
+	t.Run("a third operand fails the pin closed", func(t *testing.T) {
+		root := NewRootCommand()
+		var added string
+		var found bool
+		for _, cmd := range allCommands(root) {
+			if cmd.CommandPath() != "abcd reading assemble" {
+				continue
+			}
+			cmd.Flags().StringVar(&added, "framing", "", "a third operand nobody decided on")
+			found = true
+		}
+		if !found {
+			t.Fatal("the tree carries no `abcd reading assemble`, so the mutation proved nothing")
+		}
+		msgs := readingOperandMismatches(commandSurface(root))
+		if len(msgs) == 0 {
+			t.Fatal("a third operand on `abcd reading assemble` passed the pin; the pin fails " +
+				"closed, so an operand nobody decided on cannot ship green")
+		}
+		if !strings.Contains(strings.Join(msgs, "\n"), "framing") {
+			t.Errorf("the pin refused without naming the added operand:\n%s", strings.Join(msgs, "\n"))
+		}
+	})
 
 	keys := walkConfigFiles(t, repoRootFromTest(t))
 	keys = append(keys, walkConfigKeys("record-lint schema", reflect.TypeOf(lint.Config{}))...)

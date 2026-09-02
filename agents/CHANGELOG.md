@@ -12,6 +12,87 @@ over the brief's earlier `1.0.0`-at-close expectation). The four M6 synthesis
 agents below entered at `0.1.0`, wired to their `abcd disembark` verbs and
 unmeasured; `lifeboat-oracle` has since become `lifeboat-reviewer` at `0.1.1`.
 
+## 2026-09-02 (iss-2609021833302981 — "at the target", as the derivation reads it)
+
+The comparative derivation admits a widening run whose recorded target is an
+ancestor of the assembly's target when nothing changed between the two outside
+the readings store and the issue ledger's own record families — which is what
+lets a run's records be committed between its ingest and the next reading, the
+act the design sequences there. The object section of the comparative definition
+states the derivation rule, so it states this too. The reading of the ADR's
+phrase is an interpretation and the maintainer's ruling is owed
+(iss-2609021857343626).
+
+### cold-reading-comparative 0.1.3
+
+PATCH: the object's one-sentence statement of the derivation gains the ancestor
+clause, as above. The source list, the question, the item shape, the regime and
+the blindness core are untouched. Unmeasured, as before.
+
+## 2026-09-02 (itd-194 — the object section states the include table)
+
+The object section's source list is the include table for that position, held
+so by a test, so a change to the table is a change to every definition whose
+position the change reaches. itd-194 admits the brief's surfaces, internals,
+delivery and meta chapters as brief current text — which both design documents
+name as a reading's object — so all four definitions gain those four sources,
+and the widening definition loses the shipped intents, whose position the
+framework's widening object and the readings companion's section 5.2 both state
+without them (iss-2609012259587904). Nothing else in any of the four moves: the
+blindness core, the questions, the item shapes and the regimes are untouched.
+
+### cold-reading-widening 0.2.2
+
+PATCH: the four brief chapters are added to the object's source list and the
+shipped intents are removed from it, as above. Unmeasured, as before.
+
+### cold-reading-entailment 0.1.2
+
+PATCH: the four brief chapters are added to the object's source list, as above.
+Unmeasured, as before.
+
+### cold-reading-comparative 0.1.2
+
+PATCH: the four brief chapters are added to the object's source list, as above.
+Unmeasured, as before.
+
+### cold-reading-detection 0.1.2
+
+PATCH: the four brief chapters are added to the object's source list, as above.
+Unmeasured, as before.
+
+## 2026-09-02 (iss-2609021153261145 — the fourth condition takes the companion's sentence)
+
+The four cold-reading definitions share one blindness core, byte-identical
+across the four and held so by a test, so a change to it is one change to four
+prompts and it is recorded here as one entry. The fourth condition's first
+sentence said items come back unordered and unweighted; the readings companion's
+section 2 says items are returned in the order they arise in the object. On
+correction (7) of the maintainer's ruling of 2026-09-02 the condition takes the
+companion's sentence. The rest of the condition — no severity, no confidence
+score, no most-important-first, no top-N, and the reason an ordering is an
+argument about what matters — is unchanged, and so is every other condition.
+
+### cold-reading-widening 0.2.1
+
+PATCH: the blindness core's fourth condition takes the companion's sentence, as
+above. Nothing else in the definition moves. Unmeasured, as before.
+
+### cold-reading-entailment 0.1.1
+
+PATCH: the blindness core's fourth condition takes the companion's sentence, as
+above. Nothing else in the definition moves. Unmeasured, as before.
+
+### cold-reading-comparative 0.1.1
+
+PATCH: the blindness core's fourth condition takes the companion's sentence, as
+above. Nothing else in the definition moves. Unmeasured, as before.
+
+### cold-reading-detection 0.1.1
+
+PATCH: the blindness core's fourth condition takes the companion's sentence, as
+above. Nothing else in the definition moves. Unmeasured, as before.
+
 ## 0.2.0 — 2026-09-02 (iss-2608311518056854 — the gate reads no prose)
 
 ### cold-reading-widening 0.2.0

@@ -92,11 +92,14 @@ type DraftOptions struct {
 	SeedBody     string
 	Impact       string
 	PromotedFrom string
-	// Origin is the draft's arrival path (itd-178). It is DERIVED from which
-	// command ran, never carried as free text: the empty value means the default
-	// (a verb a person invoked), and capture.Promote — the one shipped path that
-	// derives a record from another record — passes extracted-from-record.
-	Origin provenance.Kind
+	// Origin is the draft's arrival path (itd-178), PARSED rather than named: a
+	// caller declaring the reading kind hands over the run and the item in the
+	// same field, so the pointer cannot be forgotten at a call site. It is DERIVED
+	// from which command ran, never carried as free text — the zero value means
+	// the default (a verb a person invoked), the issue route of capture.Promote
+	// passes extracted-from-record, and its reading route passes
+	// contributed-by-reading with the pair it read out of the readings store.
+	Origin provenance.Origin
 	// ProductionMode is how the seed text was produced. Empty takes
 	// provenance.DefaultMode, so a draft written through a command carries the key
 	// whatever the caller says.
@@ -150,11 +153,7 @@ func CreateDraft(repoRoot string, opts DraftOptions) (Intent, error) {
 	// primitive, so every caller stamps both keys and none of them can mint a
 	// value outside the vocabulary. An unset origin means the default arrival
 	// path; an unset mode means provenance.DefaultMode.
-	kind := opts.Origin
-	if kind == "" {
-		kind = provenance.KindResearcherAuthored
-	}
-	stamp, err := provenance.NewStamp(kind, opts.ProductionMode)
+	stamp, err := draftStamp(opts)
 	if err != nil {
 		return Intent{}, fmt.Errorf("intent: %w", err)
 	}
@@ -214,6 +213,31 @@ func CreateDraft(repoRoot string, opts DraftOptions) (Intent, error) {
 		return Intent{}, err
 	}
 	return created, Validate(created)
+}
+
+// draftStamp resolves the draft's disclosure pair from the mint options: the
+// arrival path, the reading pointer when the path is a reading contribution, and
+// the production mode.
+//
+// The reading kind has one extra bar, and it is here rather than in the
+// provenance leaf because only this primitive holds both halves of the join: the
+// origin's item and the promoted_from back-edge are ONE join written twice, so a
+// draft carrying them in disagreement is a state no command produced. It is
+// refused before anything is written rather than reconciled by picking one.
+func draftStamp(opts DraftOptions) (provenance.Stamp, error) {
+	switch opts.Origin.Kind {
+	case "":
+		return provenance.NewStamp(provenance.KindResearcherAuthored, opts.ProductionMode)
+	case provenance.KindContributedByReading:
+		if opts.PromotedFrom != opts.Origin.Item {
+			return provenance.Stamp{}, fmt.Errorf(
+				"a reading origin names item %s but the back-edge names %q; the two are one join",
+				opts.Origin.Item, opts.PromotedFrom)
+		}
+		return provenance.NewReadingStamp(opts.Origin.Run, opts.Origin.Item, opts.ProductionMode)
+	default:
+		return provenance.NewStamp(opts.Origin.Kind, opts.ProductionMode)
+	}
 }
 
 // deriveIntentSlug lowercases the text, collapses non-[a-z0-9] runs to a single
@@ -367,12 +391,19 @@ func IsClaimPrompt(body string) bool {
 	return trimmed == MechanismPrompt || trimmed == ScopeConditionsPrompt
 }
 
-// The two Press Release placeholders this package mints, in their parts: a
-// per-path opening clause and the instruction both of them close with.
+// The Press Release placeholders this package mints, in their parts: a per-path
+// opening clause and the instruction all of them close with.
 const (
 	captureSeedOpening   = "Seeded from a quoted-text intent capture."
 	promotionSeedOpening = "Seeded by promotion from "
 	seedNoteTail         = "Expand into the full press-release narrative before planning."
+	// readingSeedSource is what the reading route names in place of the item id.
+	// The Press Release is the FIRST field the intent projection carries, and a
+	// draft is admitted at the entailment position — so an rdi-N here would put a
+	// prior reading's output inside the object of the next one, which the readings
+	// companion forbids (companion 8.3). The join lives in `origin` and
+	// `promoted_from`, two frontmatter keys no projection names.
+	readingSeedSource = "a reading item"
 )
 
 // CaptureSeedNote is the placeholder a quoted-text capture mints, whole.
@@ -399,7 +430,15 @@ func IsSeedNote(text string) bool {
 
 // seedNote is the standard Press Release placeholder, honest about which create
 // path seeded the draft.
+//
+// The reading route names the KIND of source rather than the source: same
+// opening, same tail, so IsSeedNote goes on matching both forms by prefix and
+// suffix, and the issue route keeps its iss-N — an issue is something a person
+// noticed, not a reading's output.
 func seedNote(opts DraftOptions) string {
+	if opts.Origin.Kind == provenance.KindContributedByReading {
+		return "_" + promotionSeedOpening + readingSeedSource + ". " + seedNoteTail + "_"
+	}
 	if opts.PromotedFrom != "" {
 		return "_" + promotionSeedOpening + opts.PromotedFrom + ". " + seedNoteTail + "_"
 	}

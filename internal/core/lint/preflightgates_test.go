@@ -1,6 +1,7 @@
 package lint_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -82,6 +83,167 @@ func TestPreflightGateListIsNotRestatedWrongly(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestPreflightRunsEveryTaggedEvalLane holds the position every tagged eval
+// lane is supposed to occupy (iss-2608311632382737).
+//
+// Framework 8.6 makes the read-block eval the only component capable of
+// falsifying the assembler's firewall, and framework 8.7 makes the amnesia eval
+// the only check on what a re-run is handed. Both live behind a build tag, so
+// `go test ./...` — preflight's own test step — compiles neither, and preflight
+// ran neither target: a defect in the component that falsifies the firewall
+// passed every local gate and surfaced, if at all, in CI, where the job that
+// executes it is not a required status check. That is not hypothetical — a
+// path-elision defect in the amnesia eval's own guard was unsatisfiable wherever
+// the process temp directory is the Linux one, so it landed green locally and
+// was found by an adversarial review rather than by any gate.
+//
+// The roster is DERIVED rather than listed here: a Makefile target is an eval
+// lane when its recipe runs `go test` with `-tags`. So a third lane joins the
+// push gate by existing, and cannot be added to the Makefile while staying
+// invisible to it — which a hand-written pair of names could not promise. The
+// restatement gate above then carries whatever this finds into every surface
+// that enumerates the gates.
+func TestPreflightRunsEveryTaggedEvalLane(t *testing.T) {
+	root := filepath.Join("..", "..", "..")
+
+	lanes := taggedEvalLanes(t, root)
+	if len(lanes) == 0 {
+		t.Fatal("parsed no `go test -tags ...` lane from the Makefile; the parser or the recipes changed shape")
+	}
+	declared := preflightPrereqs(t, root)
+
+	for _, lane := range lanes {
+		if slices.Contains(declared, lane) {
+			continue
+		}
+		t.Errorf("the Makefile declares the tagged eval lane %q, and preflight does not run it "+
+			"(it declares: %s).\n\n"+
+			"`go test ./...` does not compile a tagged file, so a lane preflight omits is "+
+			"guarded by nothing a push can fail on, and the eval that certifies the read-block "+
+			"then guards nothing that blocks anything.", lane, strings.Join(declared, " "))
+	}
+}
+
+// taggedEvalLanes returns the Makefile targets whose recipe runs `go test` with
+// a `-tags` selector — hand-parsed, for the reason preflightPrereqs is.
+func taggedEvalLanes(t *testing.T, root string) []string {
+	t.Helper()
+	target := regexp.MustCompile(`^([a-z][a-z-]*):`)
+	var lanes []string
+	var current string
+	for _, line := range strings.Split(readRepoFile(t, root, "Makefile"), "\n") {
+		if m := target.FindStringSubmatch(line); m != nil {
+			current = m[1]
+			continue
+		}
+		if !strings.HasPrefix(line, "\t") || current == "" {
+			continue
+		}
+		body := strings.TrimSpace(strings.TrimPrefix(line, "\t"))
+		if strings.HasPrefix(body, "go test ") && strings.Contains(body, "-tags ") &&
+			!slices.Contains(lanes, current) {
+			lanes = append(lanes, current)
+		}
+	}
+	return lanes
+}
+
+// TestColdReadingEvalsIsARequiredStatusCheck holds the other half of that gate
+// (iss-2608311051046981): the CI job that runs the read-block eval (framework
+// 8.6) blocks a merge rather than merely reporting on one.
+//
+// Three properties, and each is a way the guarantee can be lost. The workflow
+// defines the job, so a rename cannot leave a required context that never
+// arrives and wedges the queue. The job stands down on no event — no `if:` and
+// no `needs:` — so its context arrives on every event the other required checks
+// arrive on, which is what makes requiring it safe. And the committed ruleset
+// mirror requires the context, which is the tree's own record of what the live
+// ruleset is set to.
+func TestColdReadingEvalsIsARequiredStatusCheck(t *testing.T) {
+	const job = "cold-reading-evals"
+	root := filepath.Join("..", "..", "..")
+
+	workflow := readRepoFile(t, root, ".github/workflows/ci.yml")
+	block, ok := workflowJobBlock(workflow, job)
+	if !ok {
+		t.Fatalf(".github/workflows/ci.yml defines no %q job; a required status check whose "+
+			"job does not exist never reports, and a required context that never arrives "+
+			"wedges the merge queue", job)
+	}
+	for _, standDown := range []string{"if:", "needs:"} {
+		if !strings.Contains(block, standDown) {
+			continue
+		}
+		t.Errorf("the %q job carries a %q, so it can stand down on some event; a required "+
+			"check must report on every event the others do, and a stood-down job that "+
+			"still reports its context green is a green for work that did not happen",
+			job, standDown)
+	}
+
+	const mirror = ".abcd/work/rulesets/main-protection.json"
+	var ruleset struct {
+		Rules []struct {
+			Type       string `json:"type"`
+			Parameters struct {
+				RequiredStatusChecks []struct {
+					Context string `json:"context"`
+				} `json:"required_status_checks"`
+			} `json:"parameters"`
+		} `json:"rules"`
+	}
+	if err := json.Unmarshal([]byte(readRepoFile(t, root, mirror)), &ruleset); err != nil {
+		t.Fatalf("decoding %s: %v", mirror, err)
+	}
+	var required []string
+	for _, rule := range ruleset.Rules {
+		for _, c := range rule.Parameters.RequiredStatusChecks {
+			required = append(required, c.Context)
+		}
+	}
+	if len(required) == 0 {
+		t.Fatalf("%s declares no required status checks at all; the mirror is the tree's "+
+			"record of the live ruleset, so an empty list here reads as an unprotected branch", mirror)
+	}
+	if !slices.Contains(required, job) {
+		t.Fatalf("%s does not require the %q context (it requires: %s).\n\n"+
+			"The point of the always-run lane is that a record-only pull request cannot reach "+
+			"main with warm content in included material, and an unrequired check does not "+
+			"stop one.", mirror, job, strings.Join(required, ", "))
+	}
+	if !slices.IsSorted(required) {
+		t.Errorf("%s lists its required contexts out of order (%s); the mirror is refreshed "+
+			"by hand from a sorted `jq -S` rendering, and an unsorted list means it was not",
+			mirror, strings.Join(required, ", "))
+	}
+}
+
+// workflowJobBlock returns one job's block from a workflow: the `  <name>:`
+// line and everything indented under it, up to the next job. Hand-parsed for
+// the reason preflightPrereqs is: this repository carries no YAML parser for
+// its own workflows and adds none for one job.
+func workflowJobBlock(workflow, job string) (string, bool) {
+	lines := strings.Split(workflow, "\n")
+	at := -1
+	for i, l := range lines {
+		if l == "  "+job+":" {
+			at = i
+			break
+		}
+	}
+	if at < 0 {
+		return "", false
+	}
+	nextJob := regexp.MustCompile(`^  [A-Za-z]`)
+	end := len(lines)
+	for i := at + 1; i < len(lines); i++ {
+		if nextJob.MatchString(lines[i]) {
+			end = i
+			break
+		}
+	}
+	return strings.Join(lines[at:end], "\n"), true
 }
 
 // preflightPrereqs reads the prerequisites off the `preflight:` recipe line.

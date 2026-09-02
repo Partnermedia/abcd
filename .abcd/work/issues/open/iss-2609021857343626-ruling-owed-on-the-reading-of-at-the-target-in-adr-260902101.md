@@ -1,0 +1,14 @@
+---
+schema_version: 1
+id: "iss-2609021857343626"
+slug: "ruling-owed-on-the-reading-of-at-the-target-in-adr-260902101"
+severity: "major"
+category: "process"
+source: "impl-review"
+found_during: "cold-reading Phase A rehearsal"
+origin: researcher-authored
+production_mode: hand-written
+found_at: "internal/core/reading/candidates.go"
+---
+
+ruling owed on the reading of 'at the target' in adr-2609021016272867 for the comparative derivation; the implementation accepts a widening run whose target is an ancestor of the comparative's target when only the readings store changed between them, so the run's own records can be committed between ingest and the next reading; the alternative is an assembly whose target may differ from HEAD at the comparative position, which reads no tree; the maintainer chooses and the register gains the entry

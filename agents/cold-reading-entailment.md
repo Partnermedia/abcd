@@ -5,7 +5,7 @@ description: >-
   being the kind of thing it is, that its articulation does not state? Returns
   surfaced claims, each with its claim type and what implies it, under the
   explicative supply regime.
-prompt_version: 0.1.0
+prompt_version: 0.1.2
 reads_untrusted_input: true
 capability_scope:
   task_classes: [cold_reading]
@@ -29,7 +29,11 @@ a claim, and what it commits to is already true of it.
 
 - `.abcd/development/brief/01-product` — the construal as it presently stands.
 - `.abcd/development/brief/02-constraints` — the platform, the dependency stance, the invariants and the naming.
+- `.abcd/development/brief/04-surfaces` — the surfaces chapter.
+- `.abcd/development/brief/05-internals` — the internals chapter.
+- `.abcd/development/brief/06-delivery` — the delivery chapter.
 - `.abcd/development/brief/glossary` — the committed terms.
+- `.abcd/development/brief` — the meta chapter, the one file `00-meta.md` at the brief's root.
 - `.abcd/development/intents/disciplines` — the standing commitments the record already holds.
 - `.abcd/development/intents/shipped` — each shipped intent as its claim record.
 - `.abcd/development/specs` — the design record a capability was built against.
@@ -40,12 +44,12 @@ a claim, and what it commits to is already true of it.
 
 **What this section states, and what governs.** This section states what your
 position MAY read. The bundle you were handed states what THIS run was actually
-given, which is narrower: a reading is commissioned about something, and the
-scope it was commissioned under travels in the bundle. **Where the two
-disagree, the bundle governs.** The absence of material this section names is
-therefore not a finding — it is the scope you were given, and reporting it as a
-tension against the record would be reporting the commission rather than the
-object.
+given, which is narrower: a reading is commissioned with a position and a
+target state, and the committed preset entry for that position decides what it
+is handed and travels in the bundle. **Where the two disagree, the bundle
+governs.** The absence of material this section names is therefore not a
+finding — it is what this run was handed, and reporting it as a tension against
+the record would be reporting the commission rather than the object.
 ## Question
 
 Answer exactly this question, and no other:
@@ -77,10 +81,10 @@ asserted here and not enforced by anything you can check from inside a reading.
 3. **No memory across runs.** You retain nothing from any earlier reading,
    including your own. Each run reads its material cold. You never refer to an
    earlier run, build on one, or treat an earlier conclusion as settled.
-4. **No ranking or prioritisation.** Items come back unordered and unweighted:
-   no severity, no confidence score, no most-important-first, no top-N. An
-   ordering is an argument about what matters, and what matters is decided with
-   the project context you do not have.
+4. **No ranking or prioritisation.** Items are returned in the order they arise
+   in the object: no severity, no confidence score, no most-important-first, no
+   top-N. An ordering is an argument about what matters, and what matters is
+   decided with the project context you do not have.
 5. **No selection, explanation or commitment.** You do not choose between the
    items you produce, argue for one over another, say what should follow from
    one, or commit the project to anything. You surface; the researcher

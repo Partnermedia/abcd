@@ -30,9 +30,12 @@ package reading
 // its grammar has been checked: the run id is matched against
 // recordid.ValidReadingRunID first, and it is the ONLY payload value any path is
 // built from. Every payload-derived string that reaches a terminal or a durable
-// record passes through termsafe.Sanitize and a length cap; no item body text
-// reaches either, because the bodies belong in the ledger records, which
-// capture.IngestReading redacts.
+// record passes through termsafe.Sanitize and a length cap, and every one bound
+// for a DURABLE record is privacy-redacted before that (payloadField): a refused
+// item's own text is committed material, and it was the half of this verb the
+// redaction did not reach (iss-2609022002241168). Whole item bodies reach
+// neither surface — they belong in the ledger records, which
+// capture.IngestReading redacts on the same terms.
 
 import (
 	"encoding/json"
@@ -75,11 +78,17 @@ const IngestStageDir = ".abcd/.work.local/scratch/reading-ingest"
 
 // ReadingsRecordDir is the durable home of a run's own artefacts: the promoted
 // manifest, the run metadata, and a refusal.
-const ReadingsRecordDir = ".abcd/development/readings"
+//
+// It is an ALIAS of the constant in core/issueschema, which is where it moved
+// when core/capture gained a reader of it: capture answers "which comparative
+// run characterised this widening run" for the disposition gate, and two
+// packages naming one directory with two string literals is a divergence waiting
+// for a rename (spc-2609020626039834).
+const ReadingsRecordDir = issueschema.ReadingsRecordDir
 
 // The three filenames under a run's durable directory, and the stage's lock.
 const (
-	RunFileName     = "run.json"
+	RunFileName     = issueschema.RunRecordFileName
 	RefusalFileName = "refusal.json"
 	stageFileName   = "stage.json"
 	stageLockName   = ".lock"
@@ -153,9 +162,15 @@ type Output struct {
 	Items          []map[string]json.RawMessage `json:"items"`
 }
 
-// ItemRefusal is one item the run refused, and why. It carries no item body
-// text: a refusal names the ordinal, the rule and the offending field, which is
-// everything a reader needs and nothing a redactor would have to clean.
+// ItemRefusal is one item the run refused, and why: the ordinal, the rule, the
+// offending field, and enough of what the item said for the reader to see which
+// rule it broke.
+//
+// That last part is payload text — a criterion the discipline does not declare
+// is quoted back precisely BECAUSE nothing constrains it — and the refusal is
+// committed, so every such quotation is redacted and then neutralised by the
+// ingest's payloadField before it lands here. It carries no whole item BODY at
+// any point: a body belongs in the ledger record, and this names a field.
 //
 // Ordinal is omitted when it is zero, because zero is not an ordinal: items are
 // numbered from one, and the one entry carrying none is the elision entry a
@@ -206,6 +221,120 @@ type RunRecord struct {
 	Records        []capture.ReadingRecordRef `json:"records"`
 	RefusedItems   []ItemRefusal              `json:"refused_items"`
 	RefusedCount   int                        `json:"refused_count"`
+	// CandidateRun, Candidates and Exercised are the comparative position's three
+	// facts, carried forward FROM THE MANIFEST so a committed comparative run
+	// says which widening run it characterised, how many candidates that run
+	// held, and whether the position was exercised at all.
+	//
+	// The join is what makes the outcome of a widening run ONE shape: a
+	// committed comparative run naming it, never a mutable file. It is the
+	// probe capture.ComparativeRunFor reads, and through it the gate
+	// spc-2609020626040342 puts in the shared disposition writer
+	// (adr-2609021016272867; the 2026-09-02 interpretations ruling).
+	CandidateRun string `json:"candidate_run,omitempty"`
+	Candidates   int    `json:"candidates,omitempty"`
+	Exercised    *bool  `json:"exercised,omitempty"`
+	// Bounds are the departures this run made from the reading the design
+	// documents state, written by the verb FROM THE MANIFEST and never from the
+	// operator. Ruling M5 is that a reading which departs from the one the
+	// documents state is stated as a bound rather than passed off, and nothing
+	// wrote either statement before this field existed
+	// (cond-2609021140329660, cond-2609021140328523; divergence register 17
+	// and 18).
+	//
+	// A run with neither carries an EMPTY list and never an absent key, so a
+	// reader can tell a run that stated no bound from one written before the
+	// field existed.
+	Bounds []string `json:"bounds"`
+}
+
+// glossaryTermBound is the widening reading's stated bound on the glossary, as
+// the readings companion's section 5.6 fixes it: "three to six terms". It is
+// the upper half, which is the half a run can exceed.
+const glossaryTermBound = 6
+
+// statedBounds derives one run's departures from its own manifest and from the
+// runs already committed beside it.
+//
+// Both statements are the verb's, read off the record: the glossary count is
+// the manifest's own item list, and the preset-hash comparison is against the
+// manifests of the runs the readings family already holds. Neither is
+// repairable here — the design asks that a departure be STATED, and a run that
+// silently narrowed the glossary or re-pinned itself to an older entry would be
+// the passing-off ruling M5 forbids.
+func statedBounds(root *os.Root, m Manifest) []string {
+	out := []string{}
+	terms := 0
+	for _, it := range m.Items {
+		if it.Kind == KindGlossaryTerm {
+			terms++
+		}
+	}
+	if terms > glossaryTermBound {
+		out = append(out, fmt.Sprintf("the glossary bound is exceeded: the readings companion's "+
+			"section 5.6 states the bound in advance as three to six terms, and this run was handed "+
+			"%d glossary-term item(s); companion section 5.2 names brief/glossary/ whole, so the "+
+			"departure is stated rather than passed off", terms))
+	}
+	if prior, hash, ok := priorRunUnderAnotherPreset(root, m); ok {
+		out = append(out, fmt.Sprintf("the object set is not the one a prior run at the %s position "+
+			"read: run %s applied the entry hashed %s and this run applied %s. The design "+
+			"framework's section 13 requires a closing run to be over the same object set, so the "+
+			"mismatch is stated as a bound on the comparison rather than repaired here",
+			m.Position, prior, hash, m.PresetHash))
+	}
+	return out
+}
+
+// priorRunUnderAnotherPreset finds a committed run at the same position whose
+// manifest records a different preset hash, returning the earliest such run id
+// by directory order so the statement names one run rather than a set.
+//
+// It reads the RUN records to establish that a run committed, and the manifests
+// beside them for the hash: a parked assembly is not a prior run, and a
+// directory holding a manifest with no run record is exactly that.
+func priorRunUnderAnotherPreset(root *os.Root, m Manifest) (string, string, bool) {
+	entries, err := readDirIn(root, ReadingsRecordDir)
+	if err != nil {
+		return "", "", false
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir() && e.Name() != m.RunID {
+			names = append(names, e.Name())
+		}
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		var run struct {
+			Position Position `json:"position"`
+		}
+		if err := readJSONIn(root, ReadingsRecordDir+"/"+name+"/"+RunFileName, &run); err != nil {
+			continue
+		}
+		if run.Position != m.Position {
+			continue
+		}
+		var prior struct {
+			PresetHash string `json:"preset_hash"`
+		}
+		if err := readJSONIn(root, ReadingsRecordDir+"/"+name+"/"+ManifestFileName, &prior); err != nil {
+			continue
+		}
+		if prior.PresetHash != "" && prior.PresetHash != m.PresetHash {
+			return name, prior.PresetHash, true
+		}
+	}
+	return "", "", false
+}
+
+// readJSONIn decodes one JSON document from inside the containment root.
+func readJSONIn(root *os.Root, rel string, into any) error {
+	raw, err := fsutil.ReadGuardedInRoot(root, rel, MaxFileBytes)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(raw, into)
 }
 
 // RefusalRecord is what a list-level refusal leaves behind: the run metadata and
@@ -463,6 +592,15 @@ func ingestUnderLock(root *os.Root, repoRoot string, req IngestRequest, res *Ing
 		return err
 	}
 
+	// The redactor for everything payload-derived that this invocation may now
+	// commit, built ONCE and here: the identity is proven, so from this line on
+	// a refusal is recordable, and a recordable refusal is durable committed
+	// material. Constructing it earlier would make every payload that never
+	// reaches a recordable state pay for a scanner that probes the machine
+	// identity (iss-2609022002241168).
+	free, degraded := newPayloadField(repoRoot)
+	noteDegraded(res, degraded)
+
 	// A definition that does not resolve refuses the run, and the refusal is
 	// RECORDED like every other one from this point on: the identity is proven
 	// above, so the run happened. The record states no regime, because the
@@ -472,22 +610,22 @@ func ingestUnderLock(root *os.Root, repoRoot string, req IngestRequest, res *Ing
 	// refused run with nothing durable to find it by (iss-2608311518250688).
 	def, err := LoadDefinition(repoRoot, pos)
 	if err != nil {
-		return refuse(root, res, out, manifest, Definition{Position: pos}, err)
+		return refuse(root, res, out, manifest, Definition{Position: pos}, free, err)
 	}
 	res.Regime = def.Regime
 
-	if err := checkRegime(out, def); err != nil {
-		return refuse(root, res, out, manifest, def, err)
+	if err := checkRegime(out, def, free); err != nil {
+		return refuse(root, res, out, manifest, def, free, err)
 	}
-	if err := checkInstrument(out, def, manifest); err != nil {
-		return refuse(root, res, out, manifest, def, err)
+	if err := checkInstrument(out, def, manifest, free); err != nil {
+		return refuse(root, res, out, manifest, def, free, err)
 	}
 
-	items, refusals, refusedCount, err := validateItems(out, def)
+	items, refusals, refusedCount, err := validateItems(out, manifest, def, free)
 	res.RefusedItems = refusals
 	res.RefusedCount = refusedCount
 	if err != nil {
-		return refuse(root, res, out, manifest, def, err)
+		return refuse(root, res, out, manifest, def, free, err)
 	}
 
 	// The whole payload has validated: this is the first point at which the
@@ -514,7 +652,7 @@ func ingestUnderLock(root *os.Root, repoRoot string, req IngestRequest, res *Ing
 		return err
 	}
 
-	return write(root, repoRoot, res, out, manifest, def, items)
+	return write(root, repoRoot, res, out, manifest, def, free, items)
 }
 
 // leftPending is the orphans found minus the stages that were cleared: what a
@@ -601,10 +739,19 @@ func checkEnvelope(out Output) (Position, error) {
 		return "", errors.New("reading: instrument needs all three of model, definition_sha256 and " +
 			"assembler_version; two runs claiming one instrument are provably the same only if the claim is whole")
 	}
-	if len(out.Items) == 0 {
-		return "", errors.New("reading: the output carries no items; a run that returned nothing is " +
-			"recorded as a run with an empty item set, which is not an ingest")
-	}
+	// A run that returned NO ITEMS is committed, at every position, as a run
+	// with an empty item set.
+	//
+	// This refused once, and the refusal read the framework's contingency
+	// backwards: a null result IS recorded as a run with an empty item set, and
+	// there is no other writer of a run record, so refusing left the outcome
+	// recordable nowhere. The design framework's section 13 and the maintainer's
+	// corrections ruling of 2026-09-02 (4) settle it — the ingest commits such an
+	// output at widening, entailment, comparative and detection alike, and
+	// refusal is reserved for a MALFORMED payload, which every other check in
+	// this function goes on refusing by name. The comparative position's
+	// not-exercised outcome is one instance of the general rule rather than a
+	// carve-out (iss-2609021153269181).
 	return pos, nil
 }
 
@@ -658,7 +805,8 @@ func resolveParkedManifest(root *os.Root, out Output) (Manifest, error) {
 
 // write is the staged-write protocol. Nothing durable exists for the run until
 // step 1 has already validated everything, and the run metadata is written last.
-func write(root *os.Root, repoRoot string, res *IngestResult, out Output, m Manifest, def Definition, items []capture.ReadingItem) error {
+func write(root *os.Root, repoRoot string, res *IngestResult, out Output, m Manifest, def Definition,
+	free payloadField, items []capture.ReadingItem) error {
 	stageRel := IngestStageDir + "/" + out.RunID
 	marker := stageMarker{Type: StageType, RunID: out.RunID, Records: []string{}}
 	if err := writeJSONIn(root, stageRel+"/"+stageFileName, marker); err != nil {
@@ -678,7 +826,7 @@ func write(root *os.Root, repoRoot string, res *IngestResult, out Output, m Mani
 	})
 	res.Records = written.Records
 	res.Redacted = written.Redacted
-	res.Degraded = written.Degraded
+	noteDegraded(res, written.Degraded)
 	if err != nil {
 		return fmt.Errorf("reading: writing the records of run %s: %w", out.RunID, err)
 	}
@@ -704,11 +852,22 @@ func write(root *os.Root, repoRoot string, res *IngestResult, out Output, m Mani
 	run := RunRecord{
 		Type: RunType, SchemaVersion: SchemaVersion, RunID: out.RunID,
 		Position: def.Position, Regime: def.Regime, TargetCommit: m.TargetCommit,
-		ManifestSHA256: out.ManifestSHA256, Instrument: sanitizeInstrument(out.Instrument),
+		ManifestSHA256: out.ManifestSHA256, Instrument: sanitizeInstrument(out.Instrument, free),
 		Records: written.Records, RefusedItems: res.RefusedItems, RefusedCount: res.RefusedCount,
+		CandidateRun: m.CandidateRun, Candidates: m.Candidates, Exercised: m.Exercised,
+		// The bounds are derived AFTER the manifest is promoted, so the prior-run
+		// scan sees every run the readings family holds except this one, and
+		// before the run record is written, because the statement is part of it.
+		Bounds: statedBounds(root, m),
 	}
 	if run.RefusedItems == nil {
 		run.RefusedItems = []ItemRefusal{}
+	}
+	// An empty record list is written as `[]` and never as `null`: a run with an
+	// empty item set is the clean-run idiom, and a reader has to be able to tell
+	// it from a record written before the field existed.
+	if run.Records == nil {
+		run.Records = []capture.ReadingRecordRef{}
 	}
 	if err := writeJSONIn(root, runRel+"/"+RunFileName, run); err != nil {
 		return err
@@ -726,6 +885,83 @@ func write(root *os.Root, repoRoot string, res *IngestResult, out Output, m Mani
 				"reports it, and the next ingest of a DIFFERENT run that validates sweeps it — a rerun of "+
 				"this one is refused, because the run already has an outcome",
 			stageRel, err))
+	}
+	return nil
+}
+
+// WriteRunArtefact writes one JSON document beside a COMMITTED run, and it is
+// the one way a package outside this one does so.
+//
+// The containment root and the write belong to this package — it opens the
+// repository root as Ingest does, resolves every component in the kernel, and
+// writes through the canonical encoder — so a second package reaching into a run
+// directory with its own filepath.Join would be a second answer to where a run's
+// artefacts live and how they are written. spc-2609020626045177's `scribe
+// ingest` promotes its own manifest through this; nothing in this delivery calls
+// it, and that is said plainly rather than dressed up as a caller.
+//
+// Four refusals, each closing a way the durable tier could stop being durable:
+// a run with no commit marker never happened and nothing may be filed beside it;
+// a name that is one of the run's own three files would rewrite the run's
+// evidence; a name that is not a plain `.json` basename is a path rather than an
+// artefact; and an existing file is refused outright, because the durable tier
+// is WRITE-ONCE at emission and an amended run record is one nothing can date.
+func WriteRunArtefact(repoRoot, runID, name string, v any) (string, error) {
+	if strings.TrimSpace(repoRoot) == "" {
+		return "", errors.New("reading: writing a run artefact needs a repository root")
+	}
+	if !recordid.ValidReadingRunID(runID) {
+		return "", fmt.Errorf("reading: run %q is not a run identifier (%s-N); a run id becomes a "+
+			"directory name", echo(runID), RunIDFamily)
+	}
+	if err := validArtefactName(name); err != nil {
+		return "", err
+	}
+	root, err := os.OpenRoot(repoRoot)
+	if err != nil {
+		return "", fmt.Errorf("reading: opening the repository root: %w", err)
+	}
+	defer root.Close()
+
+	runRel := ReadingsRecordDir + "/" + runID
+	if _, err := root.Lstat(runRel + "/" + RunFileName); err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("reading: run %s has no commit marker at %s/%s, so it never "+
+				"happened and nothing is filed beside it; its records are the next ingest sweep's "+
+				"to roll back", runID, runRel, RunFileName)
+		}
+		return "", fmt.Errorf("reading: probing the commit marker of run %s: %w", runID, err)
+	}
+	rel := runRel + "/" + name
+	if _, err := root.Lstat(rel); err == nil {
+		return "", fmt.Errorf("reading: %s already exists; the durable tier is write-once at "+
+			"emission, and a run's artefacts are never amended in place", rel)
+	} else if !os.IsNotExist(err) {
+		return "", fmt.Errorf("reading: probing %s: %w", rel, err)
+	}
+	if err := writeJSONIn(root, rel, v); err != nil {
+		return "", err
+	}
+	return rel, nil
+}
+
+// artefactNameRe is the shape a run artefact's basename takes: a plain `.json`
+// file, no separator and no dot beyond the extension, so a name can never be a
+// path.
+var artefactNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*\.json$`)
+
+// validArtefactName refuses a name that is a path, or that is one of the run's
+// own three files.
+func validArtefactName(name string) error {
+	if !artefactNameRe.MatchString(name) || strings.Contains(name, "..") {
+		return fmt.Errorf("reading: %q is not a run artefact's name; a name is a plain lowercase "+
+			"basename ending in .json, never a path", echo(name))
+	}
+	for _, own := range []string{RunFileName, ManifestFileName, RefusalFileName} {
+		if name == own {
+			return fmt.Errorf("reading: %s is one of the run's own three files; a run's evidence is "+
+				"written by the ingest verb and never overwritten beside it", name)
+		}
 	}
 	return nil
 }
@@ -775,7 +1011,8 @@ func refuseARerun(root *os.Root, runID string) error {
 // its ledger write and its commit marker, and ac-10 says a refused run leaves
 // no reading records — so the one delete a refusal performs is rollbackThisRun
 // on the id it was already proven to carry no outcome for.
-func refuse(root *os.Root, res *IngestResult, out Output, m Manifest, def Definition, cause error) error {
+func refuse(root *os.Root, res *IngestResult, out Output, m Manifest, def Definition,
+	free payloadField, cause error) error {
 	// ac-10's other half: a refused run leaves a refusal record and NO reading
 	// records. Usually there are none to leave, because nothing has been staged
 	// yet — but a PREVIOUS ingest of this run id can have died between its
@@ -802,7 +1039,7 @@ func refuse(root *os.Root, res *IngestResult, out Output, m Manifest, def Defini
 	rec := RefusalRecord{
 		Type: RefusalType, SchemaVersion: SchemaVersion, RunID: out.RunID,
 		Position: def.Position, Regime: def.Regime, TargetCommit: m.TargetCommit,
-		ManifestSHA256: out.ManifestSHA256, Instrument: sanitizeInstrument(out.Instrument),
+		ManifestSHA256: out.ManifestSHA256, Instrument: sanitizeInstrument(out.Instrument, free),
 		Reason: reason,
 	}
 	rel := ReadingsRecordDir + "/" + out.RunID + "/" + RefusalFileName
@@ -1049,6 +1286,18 @@ func echoAll(names []string) []string {
 	return out
 }
 
+// freeAll is one payloadField over a list of payload-chosen strings: echoAll
+// with the privacy redaction the durable tier requires. A payload-chosen KEY is
+// payload text as much as a value is, and a list of them lands in a committed
+// refusal exactly as a single field does.
+func freeAll(free payloadField, names []string) []string {
+	out := make([]string, 0, len(names))
+	for _, n := range names {
+		out = append(out, free(n))
+	}
+	return out
+}
+
 // boundedNames caps how many payload-chosen names one refusal quotes. Each name
 // is capped by echo; the LIST is not, and a payload carrying ten thousand
 // unknown keys would otherwise put a megabyte of model-chosen text into a
@@ -1061,13 +1310,17 @@ func boundedNames(names []string) []string {
 	return append(out, fmt.Sprintf("and %d more", len(names)-maxQuotedNames))
 }
 
-// sanitizeInstrument is echo applied to the one payload-supplied identity that
-// lands in a durable record. No item body text ever does: bodies belong in the
-// ledger records, which capture.IngestReading redacts on the way in.
-func sanitizeInstrument(i Instrument) Instrument {
+// sanitizeInstrument is the ingest's payloadField applied to the payload-supplied
+// identity that lands in a durable record: redacted, then neutralised. A model
+// name is agent-supplied text and not a validated shape, so echo alone let a
+// locally hosted model named by its absolute path land in `run.json` verbatim.
+// An item BODY never reaches here: bodies belong in the ledger records, which
+// capture.IngestReading redacts on the way in — and this is what makes the two
+// halves of one ingest agree (iss-2609022002241168).
+func sanitizeInstrument(i Instrument, free payloadField) Instrument {
 	return Instrument{
-		Model:            echo(i.Model),
-		DefinitionSHA256: echo(i.DefinitionSHA256),
-		AssemblerVersion: echo(i.AssemblerVersion),
+		Model:            free(i.Model),
+		DefinitionSHA256: free(i.DefinitionSHA256),
+		AssemblerVersion: free(i.AssemblerVersion),
 	}
 }

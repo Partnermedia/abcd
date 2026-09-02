@@ -31,6 +31,17 @@ absences over what the assembler wrote: no planted token in the raw
 serialisation, no excluded frontmatter key or heading at any depth in a parsed
 item, and no item from an excluded record family.
 
+Two assertions sit beside those three and are about the manifest's own claims
+rather than about what was selected. Every item's `kind` must name the material
+class the record gives its path, in the manifest and in the bundle alike, so the
+per-item attestation has a falsifier — that is also the only thing that catches
+the include table's basename-SUFFIX row going missing, since the source row
+admits a `_test.go` file either way and no path changes. And every family the
+oracle refuses must be NAMED in the floor the manifest asserts: the local ledger
+tier was excluded by construction and asserted by nothing, so a reader could not
+tell that the framing traces had been refused (brief invariant 16 in its
+less-than direction).
+
 The oracle is independent of the assembler by construction. The eval invokes
 the binary out of process, its exclusion table is transcribed by hand from the
 record (itd-183's exclusion list, brief invariants 14 and 15, adr-55) with the
@@ -134,13 +145,25 @@ key and no scalar in it is timestamp-shaped, and its item paths agree with the
 eval's **own** lexicographic sort. The scan is confined to the manifest because a
 projected record body legitimately quotes dates in prose; the manifest carries
 paths, field names and hashes only, so a timestamp-shaped token there is
-unambiguously a defect. One exemption is declared rather than silent: the run
+unambiguously a defect. Two exemptions are declared rather than silent. The run
 identifier mints from a clock, so it is exempt from the packed-digit rule alone,
 and the manifest is not described as timestamp-free. The exemption is keyed on
 the NAME at any depth while the shape assertion reads the top-level field only,
 so a nested key spelled the same way would be exempt and unchecked; the closed
 manifest structs declare no such field, which is what makes that unreachable
 rather than merely unobserved.
+
+The second is the **minted record identifier**, and it is the one the manifest's
+own contents force: a path names a record, and every minting family allocates
+`<family>-<yymmddHHMMSS><4 random digits>` (adr-45), which is sixteen packed
+digits. The premise the scoping decision rests on was therefore already false
+for paths — fed a real id the scan fired, and it stayed quiet only because the
+fixture corpus names its records shortly (`iss-2608311502474022`). The exemption
+is narrow: the family list is closed and hand-transcribed, so a directory named
+after a moment (`run-20260831131824`) is not exempted by looking id-shaped; the
+elision is token-local, so a packed moment sitting beside a record id in one
+path is still reported; and it lifts the packed-digit rule alone, so an id
+carrying an ISO date or a clock time still fails.
 
 ### What keeps it from passing vacuously
 
@@ -181,12 +204,22 @@ make evals-cold-reading                # the cold-reading evals alone
 go test -tags coldreading ./evals/...  # the same thing
 ```
 
+`make preflight` runs both targets as prerequisites, so a push carries them —
+it did not until `iss-2608311632382737`, and a defect in the eval that certifies
+the read-block passed every local gate and surfaced only in CI. It names both
+even though `smoke` compiles a superset of `evals-cold-reading`'s files: the tag
+sets differ, so a cold-reading file that reaches for a smoke-only helper compiles
+under one and not the other. Each lane costs about five seconds on a warm cache.
+
 CI runs the smoke harness as the dedicated `smoke` job, and the release workflow
 smokes the binary built from the tagged commit before publishing. The
 cold-reading evals get their own `cold-reading-evals` job, which carries no
 `inert` condition: the diff classifier stands the `smoke` job down on a change
 confined to `docs/`, `.abcd/development/`, `.abcd/work/` and the root prose
-files, and those are exactly the paths the cold-reading evals read.
+files, and those are exactly the paths the cold-reading evals read. That job is
+a **required status check** on the default branch — an always-run lane whose
+check cannot block a merge reports a conclusion and stops nothing — and the
+committed ruleset mirror under `.abcd/work/rulesets/` names its context.
 
 A file visible to both lanes carries `//go:build smoke || coldreading`, which is
 also how a later cold-reading eval joins the lane — no Makefile or workflow edit.

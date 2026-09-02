@@ -230,7 +230,7 @@ func TestSeedDraftStampsProvenance(t *testing.T) {
 	// A promote-shaped draft declares the other arrival path.
 	it3, err := CreateDraft(root, DraftOptions{
 		Slug: "graduated", Title: "Graduated", SeedBody: "from a record",
-		PromotedFrom: "iss-1", Origin: provenance.KindExtractedFromRecord,
+		PromotedFrom: "iss-1", Origin: provenance.Origin{Kind: provenance.KindExtractedFromRecord},
 	})
 	if err != nil {
 		t.Fatalf("CreateDraft: %v", err)
@@ -269,4 +269,148 @@ func draftCount(t *testing.T, root string) int {
 		t.Fatalf("reading drafts: %v", err)
 	}
 	return len(entries)
+}
+
+// TestCreateDraftStampsAReadingOrigin — framework 11.3 (linkage): a draft a
+// reading occasioned carries the run and the item in `origin`, beside the
+// production mode, so both halves of the disclosure pair land in one act.
+func TestCreateDraftStampsAReadingOrigin(t *testing.T) {
+	root := t.TempDir()
+	it, err := CreateDraft(root, DraftOptions{
+		Slug: "a-reading-occasioned-draft", Title: "A reading occasioned draft",
+		SeedBody:     "Graduated from a reading item.",
+		PromotedFrom: "rdi-17",
+		Origin: provenance.Origin{
+			Kind: provenance.KindContributedByReading, Run: "rdg-3", Item: "rdi-17",
+		},
+		ProductionMode: "dictated-and-formatted",
+	})
+	if err != nil {
+		t.Fatalf("CreateDraft: %v", err)
+	}
+	fields := readDraftFields(t, root, it.Path)
+	if got, want := fields[provenance.KeyOrigin].Value, "contributed-by-reading rdg-3/rdi-17"; got != want {
+		t.Errorf("origin = %q, want %q", got, want)
+	}
+	if got := fields[provenance.KeyProductionMode].Value; got != "dictated-and-formatted" {
+		t.Errorf("production_mode = %q, want dictated-and-formatted", got)
+	}
+	if got := fields["promoted_from"].Value; got != "rdi-17" {
+		t.Errorf("promoted_from = %q, want rdi-17", got)
+	}
+	// The rendered value is a plain scalar: no ": " inside it, which is what keeps
+	// it readable to the same-line frontmatter scanner every record reader uses.
+	if _, err := provenance.ParseOrigin(fields[provenance.KeyOrigin].Value); err != nil {
+		t.Errorf("the written origin does not parse back: %v", err)
+	}
+}
+
+// TestCreateDraftRefusesAReadingOriginDisagreeingWithTheBackEdge — framework
+// 11.3: the origin's item and the `promoted_from` back-edge are one join written
+// twice, so a draft carrying them in disagreement is a state no command
+// produced. The mint refuses it rather than writing it.
+func TestCreateDraftRefusesAReadingOriginDisagreeingWithTheBackEdge(t *testing.T) {
+	root := t.TempDir()
+	if _, err := CreateDraft(root, DraftOptions{
+		Slug: "seeded", Title: "Seeded", SeedBody: "body",
+		Origin: provenance.Origin{Kind: provenance.KindContributedByReading, Run: "rdg-3", Item: "rdi-17"},
+	}); err == nil {
+		t.Error("a reading origin with no back-edge must be refused")
+	}
+	if _, err := os.ReadDir(filepath.Join(root, IntentsRelDir, BucketDrafts)); err == nil {
+		if n := draftCount(t, root); n != 0 {
+			t.Fatalf("a refused mint wrote %d draft(s)", n)
+		}
+	}
+	_, err := CreateDraft(root, DraftOptions{
+		Slug: "seeded", Title: "Seeded", SeedBody: "body",
+		PromotedFrom: "rdi-18",
+		Origin:       provenance.Origin{Kind: provenance.KindContributedByReading, Run: "rdg-3", Item: "rdi-17"},
+	})
+	if err == nil {
+		t.Fatal("a reading origin naming a different item from the back-edge must be refused")
+	}
+	if !strings.Contains(err.Error(), "rdi-17") || !strings.Contains(err.Error(), "rdi-18") {
+		t.Errorf("the refusal must name both halves of the disagreement; got %v", err)
+	}
+	if _, err := os.ReadDir(filepath.Join(root, IntentsRelDir, BucketDrafts)); err == nil {
+		if n := draftCount(t, root); n != 0 {
+			t.Fatalf("a refused mint wrote %d draft(s)", n)
+		}
+	}
+}
+
+// TestReadingRouteSeedNamesNoItem — companion 8.3 (no reading sees another's
+// output): the Press Release is the first field the intent projection carries to
+// the entailment reading, so a reading-route seed naming its rdi-N would put a
+// prior reading's output inside the object of the next one. The seed says "a
+// reading item" and the join lives in fields no projection reaches.
+func TestReadingRouteSeedNamesNoItem(t *testing.T) {
+	root := t.TempDir()
+	it, err := CreateDraft(root, DraftOptions{
+		Slug: "a-reading-occasioned-draft", Title: "A reading occasioned draft",
+		SeedBody: "Graduated from `rdi-17` (accepted): a stated constraint.",
+		// The back-edge and the origin carry the item; the seed must not.
+		PromotedFrom: "rdi-17",
+		Origin: provenance.Origin{
+			Kind: provenance.KindContributedByReading, Run: "rdg-3", Item: "rdi-17",
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateDraft: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(root, it.Path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	press := namedSection(t, string(data), "## Press Release")
+	if strings.Contains(press, "rdi-") {
+		t.Errorf("the reading-route Press Release names a reading item:\n%s", press)
+	}
+	if !IsSeedNote(seedWords(press)) {
+		t.Errorf("the reading-route seed is no longer recognised as a placeholder: %q", seedWords(press))
+	}
+
+	// The issue route's seed keeps its iss-N: an issue is something a person
+	// noticed, not a reading's output.
+	it2, err := CreateDraft(root, DraftOptions{
+		Slug: "graduated-from-an-issue", Title: "Graduated from an issue",
+		SeedBody: "from a record", PromotedFrom: "iss-1",
+		Origin: provenance.Origin{Kind: provenance.KindExtractedFromRecord},
+	})
+	if err != nil {
+		t.Fatalf("CreateDraft (issue route): %v", err)
+	}
+	data2, err := os.ReadFile(filepath.Join(root, it2.Path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	press2 := namedSection(t, string(data2), "## Press Release")
+	if !strings.Contains(press2, "iss-1") {
+		t.Errorf("the issue-route seed no longer names its issue:\n%s", press2)
+	}
+	if !IsSeedNote(seedWords(press2)) {
+		t.Errorf("the issue-route seed is no longer recognised as a placeholder: %q", seedWords(press2))
+	}
+}
+
+// sectionBody returns the text under one heading, up to the next heading.
+func namedSection(t *testing.T, doc, heading string) string {
+	t.Helper()
+	_, rest, ok := strings.Cut(doc, heading+"\n")
+	if !ok {
+		t.Fatalf("the record carries no %q section:\n%s", heading, doc)
+	}
+	if cut := strings.Index(rest, "\n## "); cut >= 0 {
+		rest = rest[:cut]
+	}
+	return strings.TrimSpace(rest)
+}
+
+// seedWords reduces a press-release body to the words IsSeedNote judges: quote
+// markers, emphasis markers and whitespace runs removed.
+func seedWords(body string) string {
+	body = strings.ReplaceAll(body, ">", " ")
+	body = strings.ReplaceAll(body, "_", " ")
+	return strings.Join(strings.Fields(body), " ")
 }

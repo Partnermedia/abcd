@@ -12,6 +12,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/intentdriven/abcd/internal/core/capture"
+	"github.com/intentdriven/abcd/internal/core/issueschema"
 	"github.com/intentdriven/abcd/internal/core/lint"
 	"github.com/intentdriven/abcd/internal/fsutil"
 	"github.com/intentdriven/abcd/internal/gitutil"
@@ -39,10 +41,6 @@ type AssembleRequest struct {
 	// and scrubPaths cannot redact the result when the working directory is not a
 	// prefix of it. Empty means OutDir is the operator's own spelling.
 	OutDirLabel string
-	// Scope names what this reading is ABOUT: a record id, a material kind, or
-	// a committed preset. It is required, and it is a closed form — the
-	// invocation carries no prose (adr-58).
-	Scope string
 	// DryRun writes nothing into the repository's own tiers. With OutDir set the
 	// artefacts still land there; with OutDir empty nothing is written at all
 	// and the result is rendered only.
@@ -60,17 +58,30 @@ type AssembleRequest struct {
 // operator's own string back on the result, so no absolute path nobody typed
 // reaches the success surface. Neither ARTEFACT carries an output path at all.
 type AssembleResult struct {
-	RunID            string     `json:"run_id"`
-	Position         Position   `json:"position"`
-	TargetCommit     string     `json:"target_commit"`
-	AssemblerVersion string     `json:"assembler_version"`
-	ItemCount        int        `json:"item_count"`
-	ManifestHash     string     `json:"manifest_hash"`
-	Scope            Scope      `json:"scope"`
-	Size             SizeReport `json:"size"`
-	OutDir           string     `json:"out_dir,omitempty"`
-	Artefacts        []string   `json:"artefacts"`
-	Written          bool       `json:"written"`
+	RunID            string        `json:"run_id"`
+	Position         Position      `json:"position"`
+	TargetCommit     string        `json:"target_commit"`
+	AssemblerVersion string        `json:"assembler_version"`
+	ItemCount        int           `json:"item_count"`
+	ManifestHash     string        `json:"manifest_hash"`
+	Preset           AppliedPreset `json:"preset"`
+	Size             SizeReport    `json:"size"`
+	// CandidateRun is the widening run this assembly derived, and Candidates the
+	// count of items it holds. Both are empty at every position but comparative,
+	// where the operator has to be told which run the reading is about — no
+	// operand named it, so the result is where they learn it
+	// (adr-2609021016272867).
+	CandidateRun string `json:"candidate_run,omitempty"`
+	Candidates   int    `json:"candidates,omitempty"`
+	// NotExercised reports the fixed interpretation: the derived run held fewer
+	// than two candidates, so the comparative reading has nothing to compare and
+	// the position was not exercised. The assembly still stages a run, and
+	// ingesting it commits a comparative run with an empty item set naming that
+	// widening run (the 2026-09-02 interpretations ruling; companion 7.6).
+	NotExercised bool     `json:"not_exercised,omitempty"`
+	OutDir       string   `json:"out_dir,omitempty"`
+	Artefacts    []string `json:"artefacts"`
+	Written      bool     `json:"written"`
 
 	Bundle   Bundle   `json:"-"`
 	Manifest Manifest `json:"-"`
@@ -109,11 +120,102 @@ type KindSize struct {
 // the record weighs. No budget is enforced and none is invented: the assembler
 // cannot know what a given reader accepts.
 type SizeReport struct {
-	ByKind    []KindSize `json:"by_kind"`
-	Items     int        `json:"items"`
-	Bytes     int        `json:"bytes"`
-	TokensEst int        `json:"tokens_est"`
-	Basis     string     `json:"basis"`
+	ByKind []KindSize `json:"by_kind"`
+	Items  int        `json:"items"`
+	// Unscanned is how many of those items the exclusion floor never examined,
+	// which is the operator's own figure for how much of the assembly travels
+	// on disclosure rather than on a scan. It rides on the result like the rest
+	// of this report and on neither artefact, so it moves no version: the
+	// per-item truth is the manifest's `scan` mark, and this is its total
+	// (itd-194).
+	Unscanned int    `json:"unscanned"`
+	Bytes     int    `json:"bytes"`
+	TokensEst int    `json:"tokens_est"`
+	Basis     string `json:"basis"`
+	// Window is the declaration the committed entry for this position carries,
+	// nil where none is declared — a version 1 preset file. It rides on the
+	// report rather than on either artefact, so a declaration is a fact about
+	// the run's cost and never a field a reading or an auditor reads
+	// (spc-2609020626048722).
+	Window *Window `json:"window,omitempty"`
+	// ExceedsWindow is whether this assembly measured past that declaration.
+	// Nothing is refused for it: the eval is what fails, and the operator is
+	// told here.
+	ExceedsWindow bool `json:"exceeds_window"`
+	// OverTarget is whether the total estimate exceeds TargetTokens. The target
+	// is a statement to the operator and never a refusal (maintainer's ruling of
+	// 2026-09-02; divergence register 24).
+	OverTarget bool `json:"over_target"`
+	// Mechanism is the entailment position's yield bound: how many projected
+	// intents carry a mechanism claim. It is nil at every other position,
+	// because the readings companion's section 6.6 asks for it beside the
+	// entailment reading's findings and nowhere else.
+	Mechanism *MechanismReport `json:"mechanism,omitempty"`
+}
+
+// MechanismReport is the proportion the readings companion's section 6.6 asks
+// be reported beside the entailment reading's findings (divergence register 16;
+// iss-2609012259585189).
+//
+// The count is per FILE, derived from the candidates by path and field, so it is
+// checkable against the manifest, which already records which fields each file
+// contributed. Nothing is added to the manifest's shape for it.
+//
+// The three lower counts are exhaustive over Intents: a projected intent file
+// either contributed a Mechanism item whose text is the nullity, one whose text
+// is anything else, or no Mechanism item at all. The workstream's own shipped
+// intents keep their absent claims as the Iteration 1 baseline and are reported,
+// never backfilled (maintainer's ruling of 2026-09-02).
+type MechanismReport struct {
+	Intents    int `json:"intents"`
+	Stated     int `json:"stated"`
+	NoneStated int `json:"none_stated"`
+	Absent     int `json:"absent"`
+}
+
+// mechanismField is the projected field a mechanism claim travels as, and
+// mechanismNullity is the text a record writes when it has none. Both are the
+// record's own spelling: the framework's section 7.1 fixes `## Mechanism` as the
+// causal claim's home, and the nullity is what an intent carries in place of one.
+const (
+	mechanismField   = "Mechanism"
+	mechanismNullity = "None stated."
+)
+
+// mechanismReport counts the projected intent files in one assembly by whether
+// they carried a mechanism claim.
+func mechanismReport(cands []candidate) *MechanismReport {
+	// Two passes over paths rather than one, because a file's verdict depends on
+	// whether ANY of its candidates is the Mechanism field, and the candidates
+	// of one file are not guaranteed adjacent to a reader of this function.
+	files := map[string]string{}
+	seen := map[string]bool{}
+	order := make([]string, 0, len(cands))
+	for _, c := range cands {
+		if c.kind != KindIntentProjection {
+			continue
+		}
+		if !seen[c.path] {
+			seen[c.path] = true
+			order = append(order, c.path)
+		}
+		if c.field == mechanismField {
+			files[c.path] = strings.TrimSpace(c.text)
+		}
+	}
+	rep := &MechanismReport{Intents: len(order)}
+	for _, p := range order {
+		text, ok := files[p]
+		switch {
+		case !ok:
+			rep.Absent++
+		case text == mechanismNullity:
+			rep.NoneStated++
+		default:
+			rep.Stated++
+		}
+	}
+	return rep
 }
 
 // sizeBasis names the method and the divisor inside the artefact, so a report
@@ -127,7 +229,7 @@ var sizeBasis = fmt.Sprintf("estimated: bytes / %.2f, byte-derived, not a tokeni
 // vocabulary's order. A kind that passed no item is omitted rather than
 // reported as zero: an absent kind and an empty one are different facts, and
 // the manifest can settle which.
-func sizeReport(cands []candidate) SizeReport {
+func sizeReport(cands []candidate, position Position, window *Window) SizeReport {
 	byKind := make(map[Kind]*KindSize, len(Kinds()))
 	rep := SizeReport{Basis: sizeBasis}
 	for _, c := range cands {
@@ -141,6 +243,9 @@ func sizeReport(cands []candidate) SizeReport {
 		k.Bytes += n
 		rep.Items++
 		rep.Bytes += n
+		if c.scan == ScanUnscanned {
+			rep.Unscanned++
+		}
 	}
 	rep.ByKind = make([]KindSize, 0, len(byKind))
 	for _, kind := range Kinds() {
@@ -152,6 +257,12 @@ func sizeReport(cands []candidate) SizeReport {
 		rep.ByKind = append(rep.ByKind, *k)
 	}
 	rep.TokensEst = estimateTokens(rep.Bytes)
+	rep.OverTarget = rep.TokensEst > TargetTokens
+	rep.Window = window
+	rep.ExceedsWindow = window != nil && rep.TokensEst > window.TokensEst
+	if position == PositionEntailment {
+		rep.Mechanism = mechanismReport(cands)
+	}
 	return rep
 }
 
@@ -198,6 +309,42 @@ var (
 var storeNodeType = map[string]string{
 	"itd": "intent",
 	"spc": "spec",
+	// The reading store, reached only by the candidate row at the comparative
+	// position. Its BUCKET is the run directory, which is what lets the assembly
+	// narrow that row to the derived run by setting Row.Bucket rather than by
+	// growing a second selector (adr-2609021016272867).
+	issueschema.ReadingItemFamily: "reading",
+}
+
+// rowClass is how a committed entry's object set narrows the row that admitted
+// a candidate. It is derived from the row's own declaration and never from the
+// candidate's path: the table says which rows enumerate a record store and
+// which reach the repository root, and reading that off a path again is how two
+// derivations of one fact come to disagree.
+type rowClass int
+
+const (
+	// rowConstraint is a row that is neither a record store nor the tree: the
+	// brief's chapters and the glossary. No part of the object set narrows a
+	// constraint source, so such a row is admitted by kind alone.
+	rowConstraint rowClass = iota
+	// rowRecord is a row routed through the record graph — the shipped, drafts,
+	// planned, specs and disciplines rows.
+	rowRecord
+	// rowTree is a row sourced at the repository root: the doc, config, source
+	// and test rows.
+	rowTree
+)
+
+// classOf reads one row's narrowing class off its own declaration.
+func classOf(row Row) rowClass {
+	if row.Store != "" {
+		return rowRecord
+	}
+	if path.Clean(row.Source) == "." {
+		return rowTree
+	}
+	return rowConstraint
 }
 
 // candidate is one admitted (file, field) pair before it is keyed.
@@ -206,7 +353,20 @@ type candidate struct {
 	field    string
 	fieldIdx int
 	kind     Kind
-	text     string
+	// rowIdx and rowClass are the admitting row's identity and its narrowing
+	// class, carried so the committed entry's object set can narrow per ROW —
+	// a record row is narrowed to the object set's records only when the object
+	// set reaches that row at all, and that question is a row's, not an item's
+	// (spc-2609020626048722).
+	rowIdx   int
+	rowClass rowClass
+	// scan is the admitting row's Scan, carried through so the manifest can
+	// state per item whether the exclusion floor examined it. It is set from
+	// the row and never inferred from the path: the row is the declaration, and
+	// a second derivation of the same fact is how admission and examination
+	// came to disagree (itd-194).
+	scan Scan
+	text string
 }
 
 // Assemble walks the repository under the include table at the given position
@@ -227,32 +387,39 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 		return AssembleResult{}, err
 	}
 
-	// The comparative position refuses BEFORE anything is resolved or
-	// collected. Its declared object is the widening run's pre-admission
-	// output, which is not repository material and has no channel today, and
-	// the readings family that would hold a prior run is denied to this
-	// assembler structurally. What it did instead was hand back a bundle
-	// byte-identical to detection's and report success: a false green, where
-	// every gate passes and the reading is about the wrong thing. Refusing is
-	// the loud-staging principle applied to a position (itd-199, adr-58).
+	// The comparative position derives its candidate run from the RECORD, before
+	// anything is resolved or collected.
+	//
+	// The position refused outright until adr-2609021016272867: its object is
+	// the widening reading's pre-admission output, and rather than hand it the
+	// detection corpus and let it read the wrong object with every gate green,
+	// itd-199 refused and scoped the channel out. The channel is this. No
+	// operand names the run — the invocation is a position and a target state —
+	// so the rule is the ADR's: the one committed widening run at the target
+	// whose items carry no disposition and no admission, with none or more than
+	// one refusing and listing the runs.
+	var candidateRun WideningRun
 	if position == PositionComparative {
-		return AssembleResult{}, fmt.Errorf("reading: the comparative position does not assemble. "+
-			"Its object is the widening reading's pre-admission output, which is not repository "+
-			"material and has no channel today, so there is no scope that is its object. It is "+
-			"refused rather than served the %s corpus, which is not what it is about",
-			PositionDetection)
+		candidateRun, err = DeriveCandidateRun(req.RepoRoot, target)
+		if err != nil {
+			return AssembleResult{}, err
+		}
 	}
 
 	presets, err := LoadPresets(req.RepoRoot)
 	if err != nil {
 		return AssembleResult{}, fmt.Errorf("reading: %w", err)
 	}
-	scope, err := ResolveScope(presets, position, req.Scope)
+	// The entry follows from the POSITION and from what is committed. No
+	// operand names it, so nothing an operator typed can change what this run
+	// is handed (adr-2609021016286571).
+	entry, err := PresetFor(presets, position)
 	if err != nil {
 		return AssembleResult{}, fmt.Errorf("reading: %w", err)
 	}
+	applied := entry.Applied()
 
-	cands, err := collect(req.RepoRoot, position)
+	cands, err := collect(req.RepoRoot, position, candidateRun.ID)
 	if err != nil {
 		return AssembleResult{}, err
 	}
@@ -264,27 +431,99 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 	if err := assertExclusionsHook(cands, exclusions); err != nil {
 		return AssembleResult{}, err
 	}
+	// The fail-closed half of the readings-store signal row, run over the
+	// unfiltered walk beside the directory assertion for the same reason: a
+	// narrow entry must not be able to quiet a breach a wide one would catch.
+	if position == PositionComparative {
+		if err := assertCandidateProjection(cands, candidateRun.ID); err != nil {
+			return AssembleResult{}, err
+		}
+	}
 
-	// The scope filter runs LAST, after the dirty gate and the exclusion
+	// The preset filter runs LAST, after the dirty gate and the exclusion
 	// assertion have both run over the unfiltered walk. That ordering is
 	// load-bearing rather than incidental: every structural property the
 	// assembler holds — the deny, the floor, the tracked-set intersection, the
-	// dirty gate — is a property of what the POSITION admits, and a scope must
-	// not be able to shrink the set those gates examine. A narrow scope
+	// dirty gate — is a property of what the POSITION admits, and an entry must
+	// not be able to shrink the set those gates examine. A narrow entry
 	// therefore cannot quiet a dirty-tree refusal or an exclusion breach that
 	// a wide one would have caught (spc-69).
+	//
+	// Within the entry the kinds ADMIT and the object set NARROWS, and the
+	// record half of that narrowing is a question about a ROW rather than about
+	// an item: a record row is narrowed to the object set's records when the
+	// object set names any record under that row's source, and admitted whole
+	// when it names none. So the rows the object set reaches are decided first,
+	// over the whole unfiltered walk, and the per-item filter reads that answer
+	// (spc-2609020626048722).
+	byRow := map[int][]string{}
+	for _, c := range cands {
+		if c.rowClass == rowRecord {
+			byRow[c.rowIdx] = append(byRow[c.rowIdx], c.path)
+		}
+	}
+	narrows := make(map[int]bool, len(byRow))
+	for rowIdx, paths := range byRow {
+		// The drafts and planned rows are the exception, ruled on 2026-09-02:
+		// they narrow to the records the entry NAMES whatever else the object
+		// set names, so a draft or a planned intent travels only when the
+		// committed entry names it. The companion's section 6.2 makes them
+		// admissible here, and admissible is a permission rather than a scope —
+		// the switch is where an entry takes that permission whole.
+		if narrowsToNamedRecordsAlways(Table[rowIdx]) {
+			narrows[rowIdx] = !entry.admitsEveryDraftAndPlanned()
+			continue
+		}
+		narrows[rowIdx] = entry.namesRecordIn(paths)
+	}
 	scoped := make([]candidate, 0, len(cands))
 	for _, c := range cands {
-		if scope.selects(c) {
+		// A CANDIDATE is not selected by an entry and never has been. An entry
+		// names repository material — an object set of records and paths, and the
+		// kinds within it — and the candidate set is selected by the derived run;
+		// `candidate` is refused as a preset kind for exactly that reason, so
+		// running these items through the kind filter would drop every one of
+		// them (spc-2609020626039834, "The candidate row").
+		if c.kind == KindCandidate || entry.selects(c, narrows[c.rowIdx]) {
 			scoped = append(scoped, c)
 		}
 	}
 	if len(scoped) == 0 {
-		return AssembleResult{}, fmt.Errorf("reading: the scope %q selects no item the %s "+
-			"position admits, so there is nothing to assemble; an empty assembly is a refusal "+
-			"rather than a bundle a reader would take for its whole object", scope.Source, position)
+		return AssembleResult{}, fmt.Errorf("reading: the committed entry for the %s position "+
+			"selects no item that position admits, so there is nothing to assemble; an empty "+
+			"assembly is a refusal rather than a bundle a reader would take for its whole object. "+
+			"Widen the entry in %s", position, PresetConfigPath)
 	}
 	cands = scoped
+
+	// The comparative position's two remaining facts: the criteria it
+	// characterises against, and whether it is exercised at all.
+	var criteria []string
+	notExercised := false
+	if position == PositionComparative {
+		criteria, err = comparativeCriteria(cands)
+		if err != nil {
+			return AssembleResult{}, err
+		}
+		if got := candidateItems(cands); len(got) != candidateRun.Items {
+			return AssembleResult{}, fmt.Errorf("reading: the derived run %s holds %d item(s) in the "+
+				"ledger and the candidate row enumerated %d (%s); the manifest states the run's item "+
+				"count as the count of candidates, and a disagreement means the two readers of one "+
+				"run see different records", candidateRun.ID, candidateRun.Items, len(got),
+				strings.Join(got, ", "))
+		}
+		// The fixed interpretation, ruled in advance and recorded before any
+		// reading ran: where the widening reading returns fewer than two
+		// configurations, the comparative reading has nothing to compare and is
+		// not exercised (the 2026-09-02 interpretations entry; companion 7.6).
+		// The bundle carries no candidate item, and the run is still staged, so
+		// the outcome of a widening run is ONE shape — a committed comparative
+		// run naming it — whether the position ran or not.
+		if candidateRun.Items < 2 {
+			notExercised = true
+			cands = withoutCandidates(cands)
+		}
+	}
 
 	runID, err := mintRunID()
 	if err != nil {
@@ -295,10 +534,10 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 		Type:          BundleType,
 		SchemaVersion: SchemaVersion,
 		Position:      position,
-		Scope:         bundleScope(scope),
+		Preset:        bundlePreset(applied),
 		Items:         make([]BundleItem, 0, len(cands)),
 	}
-	scopeHash, err := scope.Hash()
+	presetHash, err := applied.Hash()
 	if err != nil {
 		return AssembleResult{}, err
 	}
@@ -309,19 +548,37 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 		Position:         position,
 		TargetCommit:     target,
 		AssemblerVersion: AssemblerVersion(),
-		Scope:            scope,
-		ScopeHash:        scopeHash,
-		ScopeOverridden:  scope.Overridden,
+		Preset:           applied,
+		PresetHash:       presetHash,
 		Items:            make([]ManifestItem, 0, len(cands)),
 		Exclusions:       exclusions,
 	}
+	if position == PositionComparative {
+		exercised := !notExercised
+		manifest.CandidateRun = candidateRun.ID
+		manifest.CandidateRunTarget = candidateRun.Target
+		manifest.Candidates = candidateRun.Items
+		manifest.Exercised = &exercised
+		manifest.CandidateFields = append([]string{}, CandidateFields...)
+		manifest.Criteria = criteria
+	}
 	for i, c := range cands {
 		key := fmt.Sprintf("itm-%04d", i+1)
-		bundle.Items = append(bundle.Items, BundleItem{ItemKey: key, Kind: c.kind, Text: c.text})
-		manifest.Items = append(manifest.Items, ManifestItem{
-			ItemKey: key, Path: c.path, Field: c.field, Kind: c.kind,
+		item := BundleItem{ItemKey: key, Kind: c.kind, Text: c.text}
+		mItem := ManifestItem{
+			ItemKey: key, Path: c.path, Field: c.field, Kind: c.kind, Scan: c.scan,
 			Bytes: len(c.text), SHA256: sha256Hex([]byte(c.text)),
-		})
+		}
+		// A candidate is told which rdi-N it belongs to and which of the two
+		// fields it is, and nothing else. Neither is a repository path, and both
+		// stay empty on every other kind of item.
+		if c.kind == KindCandidate {
+			id := candidateIDOf(c.path)
+			item.Candidate, item.Field = id, c.field
+			mItem.Candidate = id
+		}
+		bundle.Items = append(bundle.Items, item)
+		manifest.Items = append(manifest.Items, mItem)
 	}
 
 	hash, err := ManifestHash(manifest)
@@ -335,8 +592,11 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 		AssemblerVersion: AssemblerVersion(),
 		ItemCount:        len(bundle.Items),
 		ManifestHash:     hash,
-		Scope:            scope,
-		Size:             sizeReport(cands),
+		Preset:           applied,
+		Size:             sizeReport(cands, position, PresetWindow(presets, position)),
+		CandidateRun:     candidateRun.ID,
+		Candidates:       candidateRun.Items,
+		NotExercised:     notExercised,
 		Artefacts:        []string{},
 		Bundle:           bundle,
 		Manifest:         manifest,
@@ -345,14 +605,80 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 	outDir, writeIt := resolveOutDir(req, runID)
 	res.OutDir = outDir
 	if !writeIt {
-		return res, nil
+		return res, notExercisedError(notExercised, candidateRun)
 	}
 	if err := writeArtefacts(req.RepoRoot, outDir, outDirLabel(req), bundle, manifest); err != nil {
 		return AssembleResult{}, err
 	}
 	res.Written = true
 	res.Artefacts = []string{BundleFileName, ManifestFileName}
-	return res, nil
+	return res, notExercisedError(notExercised, candidateRun)
+}
+
+// PositionNotExercised is the fixed interpretation as a refusal: the derived
+// widening run holds fewer than two candidates, so the comparative reading has
+// nothing to compare.
+//
+// It is returned BESIDE a populated result, because both halves are true — the
+// assembly refused, and it staged the run whose ingest records the outcome. The
+// front doors render the result and then exit on the error, which is the shape
+// `reading ingest` already carries for a refusal that produced a durable record.
+type PositionNotExercised struct {
+	CandidateRun string
+	Candidates   int
+}
+
+func (e *PositionNotExercised) Error() string {
+	return fmt.Sprintf("the widening run %s returned %d configuration(s), so the comparative "+
+		"reading has nothing to compare and this position is NOT EXERCISED. That is the "+
+		"interpretation fixed in advance, before any reading ran: where the widening reading "+
+		"returns fewer than two configurations the comparative reading is not exercised, and the "+
+		"outcome is recorded as a committed comparative run with an empty item set naming that "+
+		"widening run. The run is staged with an empty candidate set; ingest it to commit that "+
+		"outcome", e.CandidateRun, e.Candidates)
+}
+
+// notExercisedError returns the refusal when the position was not exercised, and
+// nil otherwise, so the two return sites above read as one decision.
+func notExercisedError(notExercised bool, run WideningRun) error {
+	if !notExercised {
+		return nil
+	}
+	return &PositionNotExercised{CandidateRun: run.ID, Candidates: run.Items}
+}
+
+// comparativeCriteria reads the declared slate off the discipline item the
+// assembly is about to hand over.
+//
+// A comparative bundle without the criteria characterises against nothing, and
+// the criteria are never supplied at invocation (itd-191's gate), so an assembly
+// that selected no discipline item REFUSES rather than assembling a reading that
+// would have to invent them.
+func comparativeCriteria(cands []candidate) ([]string, error) {
+	for _, c := range cands {
+		if c.kind == KindDiscipline && pathNamesRecord(c.path, CriteriaDiscipline) {
+			return declaredCriteria(c.text)
+		}
+	}
+	return nil, fmt.Errorf("reading: the comparative assembly selected no item from %s, which "+
+		"declares the selection criteria; the criteria come from the record and never from the "+
+		"invocation, and a comparative reading with no criteria characterises against nothing "+
+		"(itd-191). Name %s in the object set of the comparative entry in %s",
+		CriteriaDiscipline, CriteriaDiscipline, PresetConfigPath)
+}
+
+// withoutCandidates drops the candidate items, leaving the repository material
+// the entry selected. It is what a not-exercised run stages: a bundle with no
+// candidate item, on the same rules as any other assembly.
+func withoutCandidates(cands []candidate) []candidate {
+	out := make([]candidate, 0, len(cands))
+	for _, c := range cands {
+		if c.kind == KindCandidate {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
 }
 
 // outDirLabel is the spelling a refusal quotes back: the operator's own, where
@@ -547,6 +873,12 @@ func resolveTarget(repoRoot, target string) (string, error) {
 // in the working tree is in neither the assembly nor the walk, yet it is part of
 // the commit the manifest names, so a run over it would describe a target it
 // never read.
+//
+// A third ground is neither of those: material an assembly READS FROM THE
+// FILESYSTEM without ever putting it in a bundle. The two configuration files
+// below decide what the walk collects, and the comparative position's fate
+// families decide which run it collects; an uncommitted change to any of them
+// reshapes the assembly exactly as an uncommitted change to an item does.
 func refuseDirtyIncludedPaths(repoRoot string, position Position, cands []candidate) error {
 	// -uall, not the default -unormal: git collapses an untracked DIRECTORY to a
 	// single entry, and an admitted file inside a newly created directory would
@@ -573,6 +905,22 @@ func refuseDirtyIncludedPaths(repoRoot string, position Position, cands []candid
 	included[PresetConfigPath] = true
 	var dirty []string
 	for _, entry := range dirtyPaths(out) {
+		// The comparative derivation reads the two FATE families off the
+		// filesystem — capture.ItemFate walks the dispositions and the admissions
+		// directories to decide whether a widening run is still pre-admission
+		// (adr-2609021016272867; companion 8.3, which sequences dispositioning
+		// after the comparative reading). So an uncommitted fate selects a
+		// different candidate run than the commit the manifest names holds: a
+		// disposition deleted in the working tree makes a fated run look
+		// pre-admission, and an admission added there disqualifies a run the
+		// commit still admits. Neither family is admitted by an include row at any
+		// position — a fate is the researcher's judgement and never a reading's
+		// input — so no include row can put it in the set above, and it is named
+		// here for the reason the two configuration files are.
+		if position == PositionComparative && underFateFamily(entry) {
+			dirty = append(dirty, entry)
+			continue
+		}
 		if strings.HasSuffix(entry, "/") {
 			for p := range included {
 				if strings.HasPrefix(p, entry) {
@@ -592,6 +940,35 @@ func refuseDirtyIncludedPaths(repoRoot string, position Position, cands []candid
 	return fmt.Errorf("reading: %d included path(s) are uncommitted, starting with %s; "+
 		"a dirty tree cannot be described by a commit reference, so the manifest would promise "+
 		"a re-run it could not deliver", len(dirty), dirty[0])
+}
+
+// fateFamilyRoots names the two ledger families a fate is recorded in, derived
+// from the ledger's own constants rather than written out: a family whose
+// directory name moves must move here with it, or this gate would go on
+// watching a path nothing writes to.
+func fateFamilyRoots() [2]string {
+	return [2]string{
+		capture.LedgerRelPath + "/" + issueschema.DispositionsDir + "/",
+		capture.LedgerRelPath + "/" + issueschema.AdmissionsDir + "/",
+	}
+}
+
+// underFateFamily reports whether one dirty entry touches either fate family.
+//
+// A DIRECTORY entry counts on either side of the boundary: inside a family, and
+// containing one. `-uall` collapses no untracked directory, but a status entry
+// can still name a directory, and a family that arrives or disappears whole
+// changes what the derivation reads just as surely as a single record does.
+func underFateFamily(entry string) bool {
+	for _, root := range fateFamilyRoots() {
+		if strings.HasPrefix(entry, root) {
+			return true
+		}
+		if strings.HasSuffix(entry, "/") && strings.HasPrefix(root, entry) {
+			return true
+		}
+	}
+	return false
 }
 
 // dirtyPaths parses `git status --porcelain=v1 -z` into the paths it reports.
@@ -664,7 +1041,7 @@ func assertExclusions(cands []candidate, exclusions []Exclusion) error {
 // collect gathers every admitted (file, field) pair at the position, in
 // lexicographic path order with each file's fields in the order its row names
 // them. The first row that reaches a path owns the projection applied to it.
-func collect(repoRoot string, position Position) ([]candidate, error) {
+func collect(repoRoot string, position Position, candidateRun string) ([]candidate, error) {
 	graph, err := loadGraph(repoRoot)
 	if err != nil {
 		return nil, err
@@ -677,14 +1054,17 @@ func collect(repoRoot string, position Position) ([]candidate, error) {
 	var out []candidate
 
 	exclusions := ExclusionsFor(position)
-	for _, row := range Table {
+	for rowIdx, row := range Table {
 		if !row.AdmittedAt(position) {
 			continue
 		}
+		class := classOf(row)
+		row = narrowRow(row, position, candidateRun)
 		paths, err := rowPaths(repoRoot, row, graph)
 		if err != nil {
 			return nil, err
 		}
+		paths = narrowPaths(paths, row, position)
 		for _, rel := range paths {
 			if claimed[rel] || !tracked[rel] {
 				continue
@@ -694,15 +1074,40 @@ func collect(repoRoot string, position Position) ([]candidate, error) {
 			if err != nil {
 				return nil, fmt.Errorf("reading: %s: %w", rel, err)
 			}
+			// refuseOwnArtefact runs over EVERY admitted file whatever its row,
+			// because the artefact tag is a byte signature and needs no parse.
 			if err := refuseOwnArtefact(rel, raw); err != nil {
 				return nil, err
 			}
-			doc, err := redactExcluded(rel, string(raw), exclusions)
-			if err != nil {
-				return nil, err
+			// A candidate is a reading record at the WIDENING position, and the
+			// row's own path cannot establish that: every position's records
+			// live in one family. So each file the candidate row enumerates is
+			// validated as a reading record and refused by name if it was
+			// returned anywhere else (adr-2609021016272867).
+			if row.Kind == KindCandidate {
+				if err := refuseNonWideningCandidate(rel, raw); err != nil {
+					return nil, err
+				}
+			}
+			// The floor runs over the row's DECLARATION, not over the file's
+			// extension. That is the whole of adr-56's third rule made
+			// mechanical: the table says which rows the floor parses, and the
+			// floor runs over exactly those, so admission and examination
+			// cannot describe two different sets. A row the floor does not
+			// parse passes its document through untouched and every item it
+			// yields is marked unscanned in the manifest.
+			doc := string(raw)
+			if row.Scan == ScanParsed {
+				doc, err = redactExcluded(rel, doc, exclusions)
+				if err != nil {
+					return nil, err
+				}
 			}
 			if len(row.Fields) == 0 {
-				out = append(out, candidate{path: rel, kind: row.Kind, text: doc})
+				out = append(out, candidate{
+					path: rel, kind: row.Kind, rowIdx: rowIdx, rowClass: class,
+					scan: row.Scan, text: doc,
+				})
 				continue
 			}
 			for i, field := range row.Fields {
@@ -713,7 +1118,11 @@ func collect(repoRoot string, position Position) ([]candidate, error) {
 				if !ok {
 					continue
 				}
-				out = append(out, candidate{path: rel, field: field, fieldIdx: i, kind: row.Kind, text: text})
+				out = append(out, candidate{
+					path: rel, field: field, fieldIdx: i,
+					kind: row.Kind, rowIdx: rowIdx, rowClass: class,
+					scan: row.Scan, text: text,
+				})
 			}
 		}
 	}
@@ -724,6 +1133,48 @@ func collect(repoRoot string, position Position) ([]candidate, error) {
 		return out[i].fieldIdx < out[j].fieldIdx
 	})
 	return out, nil
+}
+
+// narrowRow applies the comparative position's two narrowings to one row before
+// it is enumerated. Both run BEFORE the committed entry is applied, which is
+// what makes them un-widenable: an entry intersects what the row admits, so a
+// narrowing here is one no entry can undo.
+//
+//   - The CANDIDATE row is narrowed to the derived run's directory by setting
+//     the row's Bucket. The rdi store's bucket IS the run directory, so this is
+//     the row's existing selector rather than a second mechanism, and the row
+//     then reaches one run and never the family.
+//   - The DISCIPLINES row is narrowed to CriteriaDiscipline, so no committed
+//     entry can widen the comparative material past the criteria. The
+//     consequence is deliberate: at this position an entry naming a record or a
+//     path selects nothing outside that one discipline.
+//
+// At every other position the row is returned unchanged.
+func narrowRow(row Row, position Position, candidateRun string) Row {
+	if position != PositionComparative {
+		return row
+	}
+	if row.Kind == KindCandidate {
+		row.Bucket = candidateRun
+	}
+	return row
+}
+
+// narrowPaths applies the disciplines narrowing, which cannot be expressed on
+// the row itself: the row selects by extension and by store, and the narrowing
+// is to ONE record. It is the same shape a record in an entry's object set
+// takes, applied here rather than there so that no entry can undo it.
+func narrowPaths(paths []string, row Row, position Position) []string {
+	if position != PositionComparative || row.Kind != KindDiscipline {
+		return paths
+	}
+	out := make([]string, 0, 1)
+	for _, rel := range paths {
+		if pathNamesRecord(rel, CriteriaDiscipline) {
+			out = append(out, rel)
+		}
+	}
+	return out
 }
 
 // artefactTags are the two strings that identify this assembler's own output.
@@ -805,6 +1256,18 @@ func requireConfiguredStores(repoRoot string, cfg lint.Config) error {
 		// passes this check and then enumerates nothing, because the record scan
 		// walks the real path. A link is refused rather than followed.
 		info, err := os.Lstat(filepath.Join(repoRoot, filepath.FromSlash(dir)))
+		// The READING store is provisioned on first use, so its absence is a
+		// state and not a retarget: a repository that has commissioned no reading
+		// has no readings directory, exactly as an empty lifecycle bucket is a
+		// legitimate state of a record store. It is also not a silent hole, which
+		// is what this check exists to close — the comparative position derives
+		// its candidate run from the record and refuses BY NAME when no widening
+		// run qualifies, listing what there is. A store pointed at something that
+		// exists and is not a directory is still refused below, for every store
+		// alike (adr-2609021016272867).
+		if os.IsNotExist(err) && row.Store == issueschema.ReadingItemFamily {
+			continue
+		}
 		if err != nil || !info.IsDir() {
 			return fmt.Errorf("reading: %s points the %q record store at %s, which is not a directory "+
 				"(a symlink is not followed), so the include row %q would enumerate nothing",
