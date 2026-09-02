@@ -54,7 +54,6 @@ gate. That is what keeps "not hand-counted" true after the day it was written.
 - `itd-55` — abcd can tell whether its own reasoning rests on bedrock or an unexamined assumption
 - `itd-57` — Manual-hold sentinel blocking a spec from autonomous pickup until a human lifts it
 - `itd-59` — Autonomous-run passes leave the same durable, queryable transcript an interactive session does
-- `itd-60` — Doc-fidelity anti-drift: a spec cannot close until the brief and public docs reflect what was built
 - `itd-61` — Brief-change derivation: a human brief edit reconciles its implied intents and principles before commit
 - `itd-62` — Pluggable fail-closed safety gate wrapping a trusted scanner
 - `itd-64` — Benchmark-driven configuration optimisation from abcd's own runs
