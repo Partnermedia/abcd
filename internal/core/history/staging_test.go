@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/intentdriven/abcd/internal/adapter/scanner"
 )
 
 // stagedNames lists the staging dir's staged transcripts (the .raw entries; the
@@ -349,5 +351,93 @@ func TestSessionIDFromStagedRoundTrips(t *testing.T) {
 	name := stagedFilename(time.Now().UTC(), id)
 	if got := sessionIDFromStaged(name); got != id {
 		t.Errorf("sessionIDFromStaged(%q) = %q, want %q", name, got, id)
+	}
+}
+
+// TestDrainLeavesAReStagedCopyForTheNextPass is the mid-drain limb of
+// GHSA-xq36-hcgf-9wrj, and the only test that exercises removeStagedIfUnchanged's
+// content check: Drain reads the staged bytes, spends the redaction budget in
+// Capture, and only then removes the file — so a SessionEnd that re-stages the
+// session in that window would have its newer transcript deleted by a bare
+// os.Remove, with the store holding only the stale prefix. That is permanent
+// loss of the sole copy, so the removal compares the bytes on disk against the
+// bytes it captured and leaves a replacement for the next pass.
+//
+// The interleave is deterministic rather than raced: scanGitleaks is a seam
+// inside Capture, which is exactly the window between Drain's read and its
+// removal, so staging the newer bytes from the seam replays the sequence with
+// no timing dependency.
+func TestDrainLeavesAReStagedCopyForTheNextPass(t *testing.T) {
+	repoRoot, home := setupStore(t)
+	const older = "user: older snapshot\n"
+	const newer = "user: older snapshot\nuser: newer snapshot\n"
+	if _, err := Stage(testRootSHA, "sess-middrain", []byte(older)); err != nil {
+		t.Fatal(err)
+	}
+
+	restore := scanGitleaks
+	t.Cleanup(func() { scanGitleaks = restore })
+	var restaged bool
+	var restageErr error
+	scanGitleaks = func(_, _, _ string) ([]scanner.Finding, error) {
+		if !restaged {
+			restaged = true
+			if _, err := Stage(testRootSHA, "sess-middrain", []byte(newer)); err != nil {
+				restageErr = err
+			}
+		}
+		return nil, nil
+	}
+
+	res, err := Drain(repoRoot, testRootSHA, 0)
+	if err != nil {
+		t.Fatalf("Drain: %v", err)
+	}
+	if restageErr != nil {
+		t.Fatalf("mid-drain Stage: %v", restageErr)
+	}
+	if !restaged {
+		t.Fatal("the seam never fired; the interleave did not happen")
+	}
+	if len(res.Failed) != 0 {
+		t.Fatalf("drain failures: %+v", res.Failed)
+	}
+	if len(res.Captured) != 1 {
+		t.Fatalf("expected the older snapshot captured, got %d records", len(res.Captured))
+	}
+
+	names := stagedNames(t, home)
+	if len(names) != 1 {
+		t.Fatalf("the mid-drain re-stage was removed: staging holds %v; the newer transcript is gone for good", names)
+	}
+	sdir := filepath.Join(home, ".abcd", "history", testRootSHA, "staging")
+	body, err := os.ReadFile(filepath.Join(sdir, names[0]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(body) != newer {
+		t.Fatalf("staged file holds %q, want the re-staged bytes %q", body, newer)
+	}
+
+	// The next pass stores what the first one left behind.
+	second, err := Drain(repoRoot, testRootSHA, 0)
+	if err != nil {
+		t.Fatalf("second Drain: %v", err)
+	}
+	if len(second.Failed) != 0 {
+		t.Fatalf("second drain failures: %+v", second.Failed)
+	}
+	if len(second.Captured) != 1 {
+		t.Fatalf("the second pass captured %d records, want the re-staged transcript", len(second.Captured))
+	}
+	_, stored, err := Read(testRootSHA, "sess-middrain")
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if !strings.Contains(string(stored), "newer snapshot") {
+		t.Errorf("the store never received the re-staged transcript:\n%s", stored)
+	}
+	if names := stagedNames(t, home); len(names) != 0 {
+		t.Errorf("staging still holds %v after the transcript reached the store", names)
 	}
 }
