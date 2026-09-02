@@ -436,12 +436,12 @@ func TestIngestReachesBothPlanes(t *testing.T) {
 	// cannot be followed, and a durable delete the page never names is the
 	// defect the sweep's own comment warns against.
 	for _, want := range []string{"reading ingest", "--reading-json", "refusal.json", "pattern",
-		"review_flags", "cleared_stages", "rolled_back_records"} {
+		"refused_items", "cleared_stages", "rolled_back_records"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("commands/reading.md does not mention %q", want)
 		}
 	}
-	for _, want := range []string{"review_flags", "cleared_stages", "rolled_back_records", "refusal_record"} {
+	for _, want := range []string{"refused_items", "cleared_stages", "rolled_back_records", "refusal_record"} {
 		if !strings.Contains(string(mustMarshalIngestFields(t)), want) {
 			t.Errorf("the ingest result carries no %q field for the page to report", want)
 		}
@@ -868,7 +868,6 @@ func mustMarshalIngestFields(t *testing.T) []byte {
 		RunID: "rdg-2608310000000061", Position: "detection", Regime: "registrative",
 		RefusedItems:  []reading.ItemRefusal{{Ordinal: 1, Rule: "named-provenance", Detail: "d"}},
 		RefusedCount:  1,
-		ReviewFlags:   []reading.ReviewFlag{{Ordinal: 1, SignatureID: "RG-REG-FIXPROPOSAL", Detail: "d"}},
 		RunRecordPath: "run.json", RefusalPath: "refusal.json",
 		ClearedStages: []string{"rdg-2608310000000062"},
 		RolledBack:    []string{"rdi-2608310000000063"},

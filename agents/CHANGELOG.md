@@ -12,6 +12,17 @@ over the brief's earlier `1.0.0`-at-close expectation). The four M6 synthesis
 agents below entered at `0.1.0`, wired to their `abcd disembark` verbs and
 unmeasured; `lifeboat-oracle` has since become `lifeboat-reviewer` at `0.1.1`.
 
+## 0.2.0 — 2026-09-02 (iss-2608311518056854 — the gate reads no prose)
+
+### cold-reading-widening 0.2.0
+
+MINOR: the definition no longer tells the reader that a registered signature
+over its prose raises a review flag, because the supply-regime gate reads no
+prose (the maintainer's ruling of 2026-09-01 on iss-2608311518056854): a
+reserved name refuses only as a key of the reader's own output. The reader's
+licence and every other instruction are unchanged; what changes is what the
+gate does with the output, and the definition now says so truthfully.
+
 ## 0.3.0 — 2026-09-01 (iss-2609011207114761 — only Added and Fixed)
 
 ### release-changelog-composer 0.3.0
