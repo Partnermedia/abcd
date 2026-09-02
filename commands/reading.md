@@ -184,17 +184,24 @@ absent `pattern` at any position, a field the position's body does not declare,
 or a reserved name. A registered signature does not refuse — it flags. A
 **list-level**
 violation refuses the whole run: a wrong `_type`, a run id that resolves to no
-parked manifest, a manifest hash that disagrees, an instrument claiming a
-definition hash or an assembler version the artefacts do not carry, a regime
-disagreeing with the definition, or a payload in which no item survived.
+parked manifest, a manifest hash that disagrees, a position whose definition
+does not resolve (absent, malformed, or stating another position's licence), an
+instrument claiming a definition hash or an assembler version the artefacts do
+not carry, a regime disagreeing with the definition, or a payload in which no
+item survived. Blankness is judged on a folded copy everywhere the verb judges
+it — the pattern, every body field, the instrument's three parts — so a value
+that renders as nothing (a zero-width rune, a variation selector, the braille
+blank) is empty.
 
 **A refusal leaves a record once the run's identity is proven** — that is, once
 the run id resolves to a parked manifest whose content hash matches. From that
 point every list-level refusal writes `refusal.json` under the run's directory,
-including a definition that does not resolve, whose record states no regime
-because there is none to state,
 carrying the run metadata and the named reason and no items, and the refusal
-message and the JSON render both name it. A refusal reached BEFORE that point —
+message and the JSON render both name it. A run refused because its definition
+did not resolve records the same way, with no `regime` in the record — the verb
+resolved none, and the reason names the definition instead. The refusal list in
+a reason is bounded, and its elision entry is not an item: it renders under its
+rule alone, and there is never an item 0. A refusal reached BEFORE that point —
 a wrong `_type`, a run id that resolves to nothing, a manifest hash that
 disagrees — writes nothing anywhere, because there is no proven run to record
 against.
