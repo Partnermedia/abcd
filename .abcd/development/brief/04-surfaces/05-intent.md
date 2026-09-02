@@ -151,6 +151,9 @@ Until then, `kind_notes` is the free-text descriptor.
      ship today; plan schedules a single standalone intent.
 
 3. Spec marked done in the native spec store   (standalone + bundle: work complete)
+   ├─ a MANUAL step, run in the same change that lands the work: `abcd spec close <spc-N>` (CLI-only; no hook or
+   │  gate runs it, and a planned intent whose code is on main is invisible to `launch ship`, which composes
+   │  only from terminal folders — the cut exits 0 without it; the intent's `impact` must be set first)
    ├─ native spec-store `spec close` close-hook (spc-36, predecessor store) → intent lifecycle reconcile (spc-28, predecessor store)
    └─ Moves intents/planned/itd-N-*.md → intents/shipped/itd-N-*.md (+ enqueues a review)
        (For bundles, all member intents move together when the shared spec closes.)
