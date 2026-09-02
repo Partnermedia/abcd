@@ -2,7 +2,7 @@
   "schema_version": 2,
   "positions": {
     "widening": {
-      "comment": "The object set is Iteration 1's shipped state (framework 13): the fifteen workstream intents, their fifteen specs, and the packages and pages they delivered that the deny list does not exclude. The kinds are every kind the readings companion's section 5.2 lists for this position - brief current text, the glossary, the disciplines, the specs, and the shipped tree where one exists - with source and test items marked unscanned in the manifest; no intent kind stands here, because neither design document lists the intents in the widening object and itd-194 withdraws the shipped row from the position. The window is what this entry measured on the commit named, over the 200,000-token target by a factor of four and inside a reader with a million-token window; the size report states the figure on every assembly at this position. A kind that proves useless leaves this entry by a commit that records why: measured here, without test it is about 521,000 estimated tokens and without source and test about 295,000, both still over the target. Changing any part of this entry is a commit, reviewed and inside the dirty gate.",
+      "comment": "The object set is Iteration 1's shipped state (framework 13): the fifteen workstream intents, their fifteen specs, and the packages and pages they delivered that the deny list does not exclude. The kinds are every kind the readings companion's section 5.2 lists for this position - brief current text, the glossary, the disciplines, the specs, and the shipped tree where one exists - with source and test items marked unscanned in the manifest; no intent kind stands here, because neither design document lists the intents in the widening object and itd-194 withdraws the shipped row from the position. The window is what this entry measured on the commit named, over the 200,000-token target by a factor of four and inside a reader with a million-token window; the size report states the figure on every assembly at this position. A kind that proves useless leaves this entry by a commit that records why: measured here, without test it is about 530,000 estimated tokens and without source and test about 297,000, both still over the target. Changing any part of this entry is a commit, reviewed and inside the dirty gate.",
       "object": {
         "records": [
           "itd-177", "itd-178", "itd-179", "itd-180", "itd-181", "itd-182",
@@ -27,10 +27,10 @@
       },
       "kinds": ["brief-section", "glossary-term", "discipline", "spec", "doc", "config", "source", "test"],
       "window": {
-        "tokens_est": 800000,
-        "measured_tokens_est": 799981,
-        "measured_bytes": 3079930,
-        "measured_at": "255543c1fa30ae7a9794e98c896b523586ff29ed"
+        "tokens_est": 830000,
+        "measured_tokens_est": 820460,
+        "measured_bytes": 3158774,
+        "measured_at": "3963b3933a3d1d74699506609979784f8734d388"
       }
     },
     "entailment": {
@@ -63,10 +63,10 @@
       },
       "kinds": ["brief-section", "glossary-term", "discipline", "spec", "intent-projection"],
       "window": {
-        "tokens_est": 380000,
-        "measured_tokens_est": 377674,
-        "measured_bytes": 1454048,
-        "measured_at": "255543c1fa30ae7a9794e98c896b523586ff29ed"
+        "tokens_est": 310000,
+        "measured_tokens_est": 300537,
+        "measured_bytes": 1157069,
+        "measured_at": "3963b3933a3d1d74699506609979784f8734d388"
       }
     },
     "comparative": {
@@ -84,7 +84,7 @@
       }
     },
     "detection": {
-      "comment": "The same object set. The kinds are every kind the detection definition reads: its object is the shipped tree read against the claim record, and the tree is code, tests, documentation and configuration alike, with source, test and config items marked unscanned in the manifest. The glossary stands here because the design framework's section 9 lists it among what the input assembler reads for this position and its section 7.2 classes brief/glossary/ as committed vocabulary read cold. The window is what this entry measured on the commit named, over the 200,000-token target by a factor of four and inside a reader with a million-token window; the size report states the figure on every assembly at this position. Two leaner entries are one commit away, measured here: without test about 530,000 estimated tokens, without source and test about 304,000, both still over the target. Changing any part of this entry is a commit.",
+      "comment": "The same object set. The kinds are every kind the detection definition reads: its object is the shipped tree read against the claim record, and the tree is code, tests, documentation and configuration alike, with source, test and config items marked unscanned in the manifest. The glossary stands here because the design framework's section 9 lists it among what the input assembler reads for this position and its section 7.2 classes brief/glossary/ as committed vocabulary read cold. The window is what this entry measured on the commit named, over the 200,000-token target by a factor of four and inside a reader with a million-token window; the size report states the figure on every assembly at this position. Two leaner entries are one commit away, measured here: without test about 539,000 estimated tokens, without source and test about 306,000, both still over the target. Changing any part of this entry is a commit.",
       "object": {
         "records": [
           "itd-177", "itd-178", "itd-179", "itd-180", "itd-181", "itd-182",
@@ -109,10 +109,10 @@
       },
       "kinds": ["brief-section", "glossary-term", "discipline", "spec", "intent-projection", "doc", "config", "source", "test"],
       "window": {
-        "tokens_est": 810000,
-        "measured_tokens_est": 809019,
-        "measured_bytes": 3114724,
-        "measured_at": "255543c1fa30ae7a9794e98c896b523586ff29ed"
+        "tokens_est": 830000,
+        "measured_tokens_est": 829498,
+        "measured_bytes": 3193568,
+        "measured_at": "3963b3933a3d1d74699506609979784f8734d388"
       }
     }
   }
