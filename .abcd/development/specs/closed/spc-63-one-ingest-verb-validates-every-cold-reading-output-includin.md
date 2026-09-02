@@ -154,22 +154,28 @@ Two enforcement layers sit behind that:
   `remedy`; `explicative`: `disposition`, `status`), and a payload naming one
   is refused with the field named and the licence stated. Arrangement order is
   never refused: items arrive in document order by mandate.
-- **Semantic signatures.** Prose that ranks, settles or proposes without the
-  field is checked too, through a registry of named detectors over item text
-  (`RG-EVAL-ORDERING`, `RG-EVAL-RECOMMENDATION`, `RG-REG-FIXPROPOSAL`,
-  `RG-EXPL-DISPOSITION`). All four are OBSERVED: a hit raises a review flag
-  naming the item and the signature id, the flag is carried on the run record,
-  and the item lands. `generative` carries no regime-specific refusal either,
-  and runs the whole registry as flags, because its licence is the widest and
-  the constraint falls at admission.
+- **Where a reserved name is matched.** Against the item's own KEYS, and the
+  keys of any nested object the contract does not define — never against the
+  words inside a value (ruling of 2026-09-01 on iss-2608311518056854). A reading
+  that REPORTS what the passed material disposed, ranked, recommended or fixed
+  lands at every regime; only a decision carried as a field of the reading's own
+  output refuses. `generative` declares no reserved name, because its licence is
+  the widest and the constraint on it falls at admission.
+- **No semantic signature.** The gate once carried a registry of named prose
+  detectors (`RG-EVAL-ORDERING`, `RG-EVAL-RECOMMENDATION`, `RG-REG-FIXPROPOSAL`,
+  `RG-EXPL-DISPOSITION`) over an item's text. It could not tell a reading that
+  proposes from one reporting somebody else proposing, and measured over
+  thirty-four realistic outputs it caught fourteen, every one for quoting the
+  document it read. The registry is withdrawn; recording the hit rather than
+  refusing it was considered and rejected, because a gate that reads prose is
+  still reading prose.
 
-**Matching runs over a folded copy, and so does the provenance rule.** Go's
-regexp is RE2, whose whitespace and word-boundary classes are ASCII-only, and
-the terminal sanitiser does not mask U+00A0 — so a signature's own phrasing with
-a non-breaking space between two words, or a zero-width space inside a keyword,
-matched nothing and the item landed. `strings.TrimSpace` likewise does not treat
-a zero-width rune as blank, so a `pattern` of one U+200B satisfied ac-11 at all
-four regimes and the record then asserted a provenance it does not carry.
+**Key matching runs over a folded copy, and so does the provenance rule.** A
+reserved name respelled in code points that render the same is the same key: a
+fullwidth `ｄｉｓｐｏｓｉｔｉｏｎ`, an `ﬁ` ligature in `fix`, a zero-width space
+inside `score`. `strings.TrimSpace` likewise does not treat a zero-width rune as
+blank, so a `pattern` of one U+200B satisfied ac-11 at all four regimes and the
+record then asserted a provenance it does not carry.
 
 `foldForMatching` closes three classes and the stored text is untouched: every
 Unicode space folds to ASCII; every invisible rune is dropped, across all three
@@ -178,40 +184,34 @@ a MARK, so guarding `Cf` alone left it open) and `Variation_Selector`; U+2800
 BRAILLE PATTERN BLANK folds to a space, being the one rune found that renders as
 nothing and is a GRAPHIC character, so no category above reports it; and NFKC
 folds the compatibility forms (the `fi` ligature, the fullwidth letters). Both
-the signature registry and the blankness rules read through it.
+the reserved-name rule over keys and the blankness rules read through it, and
+neither reaches a value's prose.
 
 **What stays open, stated plainly because this section previously read as a
-closure:** a script-CONFUSABLE substitution. A Cyrillic that is not the Latin
-one, and no normalisation equates them, so a signature's phrasing written in a
-confusable script is not caught. Closing it needs a confusables table, a new
-dependency and a maintainer's decision. itd-185's disclosed residue names this
-class alongside the phrased-outside-the-registry one, and names the OTHER
-direction with it: the registry cannot tell a reading that proposes from one
-reporting somebody else proposing, so it over-catches as well as under-catches,
-and over-catching is the larger risk on the evidence there is.
+closure:** a script-CONFUSABLE substitution in a KEY. A Cyrillic that is not the
+Latin one, and no normalisation equates them, so a reserved name spelled in a
+confusable script is refused as an unknown field rather than as a named licence
+breach. Closing it needs a confusables table, a new dependency and a maintainer's
+decision. itd-185's disclosed residue names this class alongside the one the
+withdrawal of the registry opened: a reading that proposes in PROSE, carrying no
+field for it, raises nothing.
 
-The line between defect and residue is one test: the registry's phrasing with a
-byte substituted is an evasion of the gate, and phrasing outside the registry is
-a limit of it. The invisible and compatibility classes fell on the defect side
-and are closed (iss-2608311306535485, iss-2608311351290623); the confusable
+The line between defect and residue is one test: a reserved name with a byte
+substituted is an evasion of the gate, and a proposal that carries no field at
+all is a limit of it. The invisible and compatibility classes fell on the defect
+side and are closed (iss-2608311306535485, iss-2608311351290623); the confusable
 class falls on the defect side too and is open, which is why it is disclosed
-rather than filed under the calibration residue.
+rather than filed under the residue.
 
-**Every signature ships in a recorded mode, and all four ship observed.** Each
-registry entry carries a literal mode (`enforce` or `flag`) in Go, with no
-configuration seam, and a test pins each entry's mode by name so a move in
-either direction fails: changing one is a code change plus a decision-log entry,
-which is what makes the property's standing between enforced and observed a
-recorded act rather than a quiet runtime toggle. The four semantic signatures
-took the degradation path on 2026-08-31. The evidence was synthetic — fourteen
-of thirty-four constructed realistic reading outputs were caught, every one for
-REPORTING what the read document said rather than for proposing anything — and
-the ruled condition was noise observed in practice, which this is not. It was
-taken anyway because the alternative is enforcement over a calibration that has
-never been taken and cannot be taken while the assembled input is too large to
-hand to a reading (iss-2608311501186646); of the two departures, this is the one
-that cannot refuse a real reading. The enforcing branch stays live and tested,
-and the first real reading is the revisit point.
+**The gate refuses only a real decision field.** The registry of prose
+detectors was degraded from enforce to flag on 2026-08-31 and withdrawn
+altogether on 2026-09-01, and the second ruling supersedes the first: a hit that
+is recorded rather than refused is still a hit on a reading for quoting the
+document it read. What remains is one structural rule over the item's key set,
+and `internal/core/reading/ingest_corpus_test.go` holds it to the thirty-four
+realistic outputs the noise was measured on — every honest report lands with
+nothing raised against it, and every reserved name carried as a key refuses,
+naming itself and the licence.
 
 ### Manifest reference
 
@@ -360,27 +360,28 @@ by a registry. The numbering below is the positional authority ac-1..ac-13.
 | ac-2 — a fault between staging and the commit marker leaves no half-run, and the orphan is named and cleared | Run metadata is written last as the commit marker; an orphaned stage found on a later invocation is reported by name, the run is rolled back, and the stage is cleared | `TestRunMetadataLandsLast` (both fault windows), `TestOrphanedStageIsReportedAndCleared`, `TestOrphanSweepLeavesACommittedRunAlone` |
 | ac-3 — the manifest reference resolves, and a mismatch refuses the run | `manifest_sha256` is checked against the parked manifest's own content hash before anything is written | `TestManifestReferenceMustResolve`, `TestManifestHashMismatchRefusesRun` |
 | ac-4 — a registrative reserved name refuses, naming ordinal, field and licence | The `registrative` reserved-name table: `resolution`, `fix`, `remedy` | `TestRegistrativeResolutionFieldRefused` |
-| ac-5 — a registered fix-proposal signature refuses, naming item and signature | `RG-REG-FIXPROPOSAL`, shipped in `enforce` mode with no configuration seam | `TestRegistrativeProseFixProposalRefused`, `TestEverySignatureShipsEnforced` |
+| ac-5 — a registrative body reporting a fix lands; only a `fix`, `remedy` or `resolution` KEY refuses | The reserved name is matched against the item's own keys, never against a value's prose | `TestEveryHonestReportLandsWithNothingRaisedAgainstIt`, `TestEveryRealDecisionFieldRefuses`, `TestTheRulingsExamplesPassAsValuesAndRefuseAsKeys` |
 | ac-6 — an evaluative reserved name refuses, naming the field | The `evaluative` reserved-name table: `rank`, `score`, `recommended`, `order` | `TestEvaluativeRankScoreRecommendedRefused` |
 | ac-7 — arrangement order alone is accepted | Arrangement order is never inspected: items arrive in document order by mandate | `TestEvaluativeDocumentOrderIsNeverRefused` |
 | ac-8 — an explicative disposition-bearing field refuses, naming the field | `disposition` and `status` are reserved on the explicative body, and the item's key set is closed against the position's own body fields, so any field outside it is refused by name | `TestExplicativeDispositionRefused`, `TestWrongPositionBodyIsUndecodable` |
-| ac-9 — a registered disposition signature refuses, naming item and signature | `RG-EXPL-DISPOSITION`, shipped in `enforce` mode | `TestExplicativeProseDispositionRefused`, `TestEverySignatureShipsEnforced` |
+| ac-9 — an explicative body reporting a disposition lands; only a `disposition` or `status` KEY refuses | The reserved name is matched against the item's own keys, never against a value's prose | `TestEveryHonestReportLandsWithNothingRaisedAgainstIt`, `TestEveryRealDecisionFieldRefuses`, `TestTheRulingsExamplesPassAsValuesAndRefuseAsKeys` |
 | ac-10 — a list-level refusal writes a refusal record and no items | The refusal path writes `refusal.json` carrying run metadata and the named reason; the stage is never taken | `TestListLevelRefusalWritesRefusalRecordOnly` |
 | ac-11 — an empty or absent `pattern` refuses the item at every regime | Provenance is one envelope field, checked before the body, at all four regimes without exception | `TestEmptyPatternNamedRefusesItemAtEveryRegime` (all four positions, three forms each) |
 | ac-12 — a self-declared regime disagreeing with the definition refuses the run | The regime's source of truth is the definition, resolved through the run's position; the payload's claim is compared, never trusted | `TestSelfDeclaredRegimeMismatchRefusesRun`, `TestRegimeComesFromTheDefinitionNotThePayload`, and `TestADriftedDefinitionRefusesTheRunRatherThanChangingTheLicence` for the adversarial half the criterion does not state — the DEFINITION lying rather than the payload |
 | ac-13 — item ids are minted by the verb, and a supplied id is an unknown field | `recordid.Minter.Mint("rdi")` through `capture.IngestReading` on acceptance; the payload schema carries no item identifier at all | `TestItemIDsAreMintedByTheVerb` |
 
-ac-5 and ac-9 are the two criteria bounded by the signature registry rather
-than by the schema, and itd-185 discloses that residue. Their structural
-halves, ac-4, ac-6 and ac-8, are unbounded in the other direction: the field is
-present or it is not.
+ac-5 and ac-9 were written against a signature registry that no longer exists;
+they are rewritten to the structural rule, and itd-185 discloses what that
+leaves open — a proposal made in prose, carrying no field, raises nothing. Their
+structural halves, ac-4, ac-6 and ac-8, are unbounded in the other direction:
+the field is present or it is not.
 
 Two behaviours this spec delivers carry no criterion of their own, and are
 recorded here rather than left to be discovered at the audit: item-level
 refusal granularity, which lands the surviving items when one item is refused
-(`TestItemLevelViolationLandsTheRest`), and the generative position's
-review-flag path, which raises a flag on the run record instead of refusing
-(`TestGenerativeHasNoRegimeRefusalButFlagsRecommendation`).
+(`TestItemLevelViolationLandsTheRest`), and the generative position's absence of
+a reserved-name row, its constraint falling at admission instead
+(`TestGenerativeHasNoRegimeRefusal`).
 
 ac-13 is checked against the mint's SHAPE rather than through an injected clock
 and entropy, which is a departure from this spec's first draft. The mint is
@@ -415,12 +416,15 @@ Each case is written to fail before the change and pass after, in
   `TestEvaluativeRankScoreRecommendedRefused`,
   `TestEvaluativeDocumentOrderIsNeverRefused`,
   `TestRegistrativeResolutionFieldRefused`,
-  `TestRegistrativeProseFixProposalRefused`,
   `TestExplicativeDispositionRefused`,
-  `TestExplicativeProseDispositionRefused`,
-  `TestGenerativeHasNoRegimeRefusalButFlagsRecommendation`,
-  `TestEverySignatureShipsEnforced` (a property over the registry),
+  `TestGenerativeHasNoRegimeRefusal`,
+  `TestInnocentProseCarryingFoldedRunesStillLands`,
+  `TestTheProvenanceFieldIsJudgedByTheSameRuleAsAnyOther`,
   `TestReservedNamesNeverCollideWithABodyField`.
+- `ingest_corpus_test.go`: the thirty-four-case realistic corpus and the
+  decision-field half — `TestEveryHonestReportLandsWithNothingRaisedAgainstIt`,
+  `TestEveryRealDecisionFieldRefuses`,
+  `TestTheRulingsExamplesPassAsValuesAndRefuseAsKeys`.
 - `ingest_provenance_test.go`: `TestEmptyPatternNamedRefusesItemAtEveryRegime`.
 - `ingest_fixture_test.go`: the shared fixture. Every refusal case is built by
   mutating a payload it produced, and asserts the adjacent LEGAL item in the
@@ -486,8 +490,8 @@ it and an oversized field must not drown it.
 - **Running a reading.** The instrument ships unrun for the whole cycle: this
   verb is exercised against fixture payloads only, and no reading is
   commissioned by this delivery.
-- Whether the semantic signatures lint cleanly in practice. Untested, recorded
-  as the open question, and the reason the degradation path is reserved.
+- Whether the gate lints cleanly against a REAL reading. The corpus it is held
+  to is constructed, and no reading has been run through this verb.
 - Teaching the issue-resolution gates about the new reading-record folders,
   and the reading-record schema itself: spc-58's.
 - The standing tension with the repository's widen-options promotion clause

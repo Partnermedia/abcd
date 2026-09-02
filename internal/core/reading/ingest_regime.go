@@ -5,28 +5,32 @@ package reading
 // what it saw.
 //
 // The regime's source of truth is the DEFINITION, resolved from the run's
-// position. Two enforcement layers sit behind that comparison.
+// position. One enforcement layer sits behind that comparison.
 //
-// RESERVED NAMES are structural and absolute: a field is present or it is not.
-// Strict decoding would already refuse an unknown field, but a bare "unknown
-// field" is a poor account of a licence breach, so each regime declares the
-// names that name one and the refusal states the licence.
+// THE GATE REFUSES ONLY A REAL DECISION FIELD (iss-2608311518056854, ruled
+// 2026-09-01). Its one enforcement layer is structural: RESERVED NAMES, matched
+// against the KEYS of the reader's own output — the item's own fields, and the
+// keys of any nested object the contract does not define. Strict decoding would
+// already refuse an unknown field, but a bare "unknown field" is a poor account
+// of a licence breach, so each regime declares the names that name one and the
+// refusal states the licence.
 //
-// SEMANTIC SIGNATURES are bounded by a registry: prose that ranks, settles or
-// proposes without the field. They are OBSERVED rather than enforced — every one
-// of the four ships in flag mode, so a hit is recorded on the run record and the
-// item lands. The registry cannot tell a reading that PROPOSES from one that
-// reports somebody else proposing, and the second is most of what a reading
-// legitimately does, so an enforcing registry refuses a reading for quoting the
-// document it read. The mode of each is a literal in Go with no configuration
-// seam, and a test pins each entry's mode by name: moving one in either
-// direction is a code change plus a decision-log entry, which is what makes it a
-// recorded act rather than a runtime toggle.
+// A reserved name is never matched inside a sentence or a quotation. The gate
+// used to carry a registry of semantic signatures over an item's PROSE — a
+// detector for ranking, settling or proposing without the field — and it could
+// not tell a reading that PROPOSES from one reporting somebody else proposing,
+// which is most of what a reading legitimately does. Measured over thirty-four
+// realistic outputs it caught fourteen, every one for quoting the document it
+// read: a record's `disposition:` line, a clause that settles a licensing
+// question, a paper closing by recommending further study, one section saying a
+// fix is merged while another says pending. The registry is gone rather than
+// softened; recording the hit instead of refusing it was considered and rejected,
+// because a gate that reads prose is still reading prose. `ingest_corpus_test.go`
+// is the corpus, held in both directions.
 
 import (
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 	"unicode"
@@ -71,81 +75,6 @@ var regimeLicence = map[string]string{
 		"proposing the resolution is not its licence",
 }
 
-// SignatureMode is whether a signature refuses or records.
-type SignatureMode string
-
-const (
-	// SignatureEnforce refuses the item. No shipped signature is in this mode:
-	// the four semantic detectors were degraded to flag mode when they were
-	// measured refusing a reading for quoting its own material. It stays the
-	// registry's other half, and the refusal branch it drives stays live, so a
-	// future signature that discriminates propose from report can ship enforced.
-	SignatureEnforce SignatureMode = "enforce"
-	// SignatureFlag records the hit on the run record and lands the item. All
-	// four shipped signatures are in this mode.
-	SignatureFlag SignatureMode = "flag"
-)
-
-// Signature is one named detector over an item's text — its body values and
-// the envelope pattern it was read under.
-type Signature struct {
-	// ID is the name a refusal cites, so a reader can find the rule that fired.
-	ID string
-	// Regime is the supply regime this signature polices.
-	Regime string
-	// Mode is a literal in Go with no configuration seam. Moving a signature
-	// between enforce and flag is an edit here plus a decision-log entry, which
-	// is what makes the change between enforced and observed a recorded act.
-	Mode SignatureMode
-	// Licence is what a hit breaches.
-	Licence string
-	// Pattern is the detector. Every one is case-insensitive and anchored on a
-	// verb phrase rather than on a bare word: a signature that fired on the word
-	// "recommend" appearing anywhere would refuse a reading for quoting the
-	// material it was handed.
-	Pattern *regexp.Regexp
-}
-
-// Signatures is the registry. It is deliberately small and conservative, and
-// all four entries are OBSERVED rather than enforcing: measured against a
-// constructed corpus of thirty-four realistic reading outputs, fourteen were
-// refused, every one of them for reporting what the read document said rather
-// than for proposing anything. A noisy signature costs a reading its findings,
-// so what a hit buys is a flag on the run record and a reader's attention.
-var Signatures = []Signature{
-	{
-		ID: "RG-EVAL-ORDERING", Regime: RegimeEvaluative, Mode: SignatureFlag,
-		Licence: regimeLicence[RegimeEvaluative],
-		Pattern: regexp.MustCompile(`(?i)\b(?:ranks?|ranked|rates?|rated|scores?|scored)\s+` +
-			`(?:it\s+|them\s+|this\s+)?(?:first|second|third|last|highest|lowest|above|below)\b` +
-			`|\bin\s+order\s+of\s+(?:merit|preference|strength|quality)\b` +
-			`|\b(?:the\s+)?(?:strongest|weakest|best|worst)\s+(?:candidate|option|choice)\b`),
-	},
-	{
-		ID: "RG-EVAL-RECOMMENDATION", Regime: RegimeEvaluative, Mode: SignatureFlag,
-		Licence: regimeLicence[RegimeEvaluative],
-		Pattern: regexp.MustCompile(`(?i)\b(?:we|i)\s+recommend\b` +
-			`|\brecommend(?:ation)?\s+(?:is|that)\b` +
-			`|\bshould\s+be\s+(?:chosen|selected|adopted|preferred|picked)\b`),
-	},
-	{
-		ID: "RG-REG-FIXPROPOSAL", Regime: RegimeRegistrative, Mode: SignatureFlag,
-		Licence: regimeLicence[RegimeRegistrative],
-		Pattern: regexp.MustCompile(`(?i)\bthe\s+(?:fix|remedy|resolution)\s+is\b` +
-			`|\bto\s+fix\s+(?:this|it|that)\b` +
-			`|\bpropos(?:e|es|ed|ing)\s+(?:a\s+|the\s+)?(?:fix|remedy|resolution)\b` +
-			`|\bshould\s+be\s+(?:changed|replaced|rewritten|removed|deleted)\s+to\b`),
-	},
-	{
-		ID: "RG-EXPL-DISPOSITION", Regime: RegimeExplicative, Mode: SignatureFlag,
-		Licence: regimeLicence[RegimeExplicative],
-		Pattern: regexp.MustCompile(`(?i)\b(?:this\s+claim\s+is|the\s+claim\s+is|it\s+is)\s+` +
-			`(?:already\s+)?(?:accepted|rejected|declined|settled|resolved)\b` +
-			`|\balready\s+(?:accepted|rejected|declined|settled|resolved)\b` +
-			`|\bdisposition\s*[:=]`),
-	},
-}
-
 // checkRegime is ac-12: the payload's self-declared regime is compared against
 // the definition's, never trusted. A disagreement refuses the RUN, not an item —
 // a run read under the wrong licence is wrong in whole, and which items it would
@@ -186,7 +115,7 @@ func checkInstrument(out Output, def Definition, m Manifest) error {
 // in which nothing survives becomes a list-level refusal, because a run with no
 // items is not a run with an empty item set — it is a run whose every finding
 // was refused, and recording it as the former would lose that.
-func validateItems(out Output, def Definition) ([]capture.ReadingItem, []ItemRefusal, []ReviewFlag, int, error) {
+func validateItems(out Output, def Definition) ([]capture.ReadingItem, []ItemRefusal, int, error) {
 	bodyFields := issueschema.ReadingBodyFields[string(def.Position)]
 	allowed := map[string]bool{PatternField: true}
 	for _, f := range bodyFields {
@@ -195,10 +124,25 @@ func validateItems(out Output, def Definition) ([]capture.ReadingItem, []ItemRef
 
 	var items []capture.ReadingItem
 	refusals := []ItemRefusal{}
-	flags := []ReviewFlag{}
 
 	for i, raw := range out.Items {
 		ordinal := i + 1
+
+		// The reserved-name rule runs over the RAW item, before it is decoded to
+		// a flat map of text, because that is the only place the whole structure
+		// is still visible. A decision carried one level down — `"verdict":
+		// {"disposition": "accepted"}` — would otherwise be refused as a
+		// non-string value under `item-shape`, which is true and says nothing
+		// about the licence. The contract defines no nested object, so a key
+		// inside one is the reader's own field and is judged as one.
+		if named := reservedKeysIn(raw, ReservedNames[def.Regime]); len(named) > 0 {
+			refusals = append(refusals, ItemRefusal{Ordinal: ordinal, Rule: "reserved-name",
+				Field: strings.Join(named, ", "),
+				Detail: fmt.Sprintf("item %d carries the reserved %s field %s: %s",
+					ordinal, def.Regime, renderFields(named), regimeLicence[def.Regime])})
+			continue
+		}
+
 		fields, err := decodeItemFields(raw)
 		if err != nil {
 			refusals = append(refusals, ItemRefusal{Ordinal: ordinal, Rule: "item-shape",
@@ -244,8 +188,6 @@ func validateItems(out Output, def Definition) ([]capture.ReadingItem, []ItemRef
 			continue
 		}
 
-		flags = append(flags, itemReviewFlags(ordinal, fields, def, bodyFields)...)
-
 		body := make(map[string]string, len(bodyFields))
 		for _, f := range bodyFields {
 			body[f] = encoded[f]
@@ -256,10 +198,10 @@ func validateItems(out Output, def Definition) ([]capture.ReadingItem, []ItemRef
 	total := len(refusals)
 	refusals = boundedRefusals(refusals)
 	if len(items) == 0 {
-		return nil, refusals, flags, total, fmt.Errorf("every one of the %d item(s) was refused, so the "+
+		return nil, refusals, total, fmt.Errorf("every one of the %d item(s) was refused, so the "+
 			"run carries nothing to record: %s", len(out.Items), renderRefusals(refusals))
 	}
-	return items, refusals, flags, total, nil
+	return items, refusals, total, nil
 }
 
 // boundedRefusals caps how many item refusals are carried into a message and a
@@ -287,20 +229,13 @@ func boundedRefusals(refusals []ItemRefusal) []ItemRefusal {
 
 // checkItem judges one item, returning the first rule it breaks.
 //
-// The order is deliberate. RESERVED NAMES come first, because strict decoding
-// would refuse the same field as a bare unknown one and a licence breach
-// deserves a better account than that. PROVENANCE comes next, before the body,
-// because it is the one condition every regime shares. Then the body's own key
-// set, and only then the signatures — a body that is not yet well formed is not
-// prose worth running a detector over.
+// The order is deliberate. RESERVED NAMES have already run, in validateItems,
+// over the undecoded item — they are the licence rule and they need the whole
+// structure. PROVENANCE comes first here, before the body, because it is the one
+// condition every regime shares. Then the body's own key set, and then the
+// values the definitions close.
 func checkItem(ordinal int, fields map[string]string, def Definition,
 	allowed map[string]bool, bodyFields []string) *ItemRefusal {
-
-	if named := present(fields, ReservedNames[def.Regime]); len(named) > 0 {
-		return &ItemRefusal{Ordinal: ordinal, Rule: "reserved-name", Field: strings.Join(named, ", "),
-			Detail: fmt.Sprintf("item %d carries the reserved %s field %s: %s",
-				ordinal, def.Regime, renderFields(named), regimeLicence[def.Regime])}
-	}
 
 	// Blankness is judged on the FOLDED text. strings.TrimSpace does not treat a
 	// zero-width rune as space, so a pattern of one U+200B was accepted at all
@@ -354,61 +289,7 @@ func checkItem(ordinal int, fields map[string]string, def Definition,
 				ordinal, field, echo(fields[field]), strings.Join(want, ", "))}
 	}
 
-	// The registry's ENFORCING half. No shipped signature is in that mode, so
-	// nothing reaches the refusal below today — the four semantic detectors were
-	// degraded to flag mode on measured over-catching. The branch is the
-	// registry's contract rather than a path to one entry, and it stays live so
-	// a signature that can tell proposing from reporting can ship enforced
-	// without a second mechanism being invented for it.
-	for _, s := range Signatures {
-		if s.Regime != def.Regime || s.Mode != SignatureEnforce {
-			continue
-		}
-		if s.Pattern.MatchString(signatureText(fields, bodyFields)) {
-			return &ItemRefusal{Ordinal: ordinal, Rule: s.ID,
-				Detail: fmt.Sprintf("item %d matches the registered signature %s: %s",
-					ordinal, s.ID, s.Licence)}
-		}
-	}
 	return nil
-}
-
-// itemReviewFlags records the signature hits that do not refuse. The item lands
-// either way, and the flag is durable on the run record.
-//
-// Two things reach it, for two different reasons.
-//
-// The GENERATIVE position runs the whole registry. Its licence is the widest — a
-// widening reading proposes, which is what it is for — so the constraint on what
-// it produces falls at ADMISSION rather than here, and no signature of any
-// regime refuses there. The prohibitions the widening definition states are
-// still worth seeing.
-//
-// Every other position runs its own regime's signatures, and a hit flags
-// wherever that signature ships in FLAG mode — which today is all four. A
-// signature in enforce mode never arrives here: checkItem has already refused
-// the item.
-func itemReviewFlags(ordinal int, fields map[string]string, def Definition, bodyFields []string) []ReviewFlag {
-	generative := def.Regime == RegimeGenerative
-	var out []ReviewFlag
-	text := signatureText(fields, bodyFields)
-	for _, s := range Signatures {
-		if !generative && (s.Regime != def.Regime || s.Mode != SignatureFlag) {
-			continue
-		}
-		if !s.Pattern.MatchString(text) {
-			continue
-		}
-		detail := fmt.Sprintf("item %d matches the registered signature %s: %s; the signature is "+
-			"observed rather than enforced, so the item lands and the hit is on the run record",
-			ordinal, s.ID, s.Licence)
-		if generative {
-			detail = fmt.Sprintf("item %d matches %s; the generative licence does not refuse it, and "+
-				"the constraint on a widening reading falls at admission", ordinal, s.ID)
-		}
-		out = append(out, ReviewFlag{Ordinal: ordinal, SignatureID: s.ID, Detail: detail})
-	}
-	return out
 }
 
 // ClosedVocabularies are the body fields whose value set is closed. The
@@ -468,40 +349,20 @@ func recordBytes(fields map[string]string, bodyFields []string) int {
 	return n
 }
 
-// signatureText is what a signature reads: every text value the item carries,
-// joined and folded. No key NAME is among them, because a detector over key
-// names would be the reserved-name table written twice.
-//
-// The envelope's pattern is included, and excluding it was a hole. The argument
-// for leaving it out was that it names the reading's own basis rather than a
-// finding — but the field is untrusted text the reading chose, it is the one
-// field every item at every regime must carry, and it lands in a committed
-// record. An item whose pattern read "the fix is to rewrite the charter" was
-// therefore accepted at exit 0 with the registry's exact phrasing, no byte
-// substituted, in the one field no detector read (iss-2608311517547712). A
-// channel that is always open is not narrowed by what its field is FOR.
-func signatureText(fields map[string]string, bodyFields []string) string {
-	parts := make([]string, 0, len(bodyFields)+1)
-	parts = append(parts, fields[PatternField])
-	for _, f := range bodyFields {
-		parts = append(parts, fields[f])
-	}
-	return foldForMatching(strings.Join(parts, "\n"))
-}
-
 // foldForMatching normalises text so an INVISIBLE or compatibility-equivalent
 // rune cannot decide whether a check fires. What is stored is untouched.
 //
 // It serves two callers, and they are the same question asked twice: the
-// signature registry, which must not be evaded, and the provenance rule, which
-// must not be satisfied by a pattern that renders as nothing.
+// reserved-name key fold (foldName), which must not be evaded, and the blankness
+// rules (isBlank), which must not be satisfied by a value that renders as
+// nothing.
 //
 // Three transformations, each closing a class that was demonstrated open:
 //
 //   - Every Unicode space folds to ASCII. Go's regexp is RE2, whose \s and \b
 //     classes are ASCII-only, and termsafe.Sanitize does not mask U+00A0 — so a
-//     signature's own phrasing with a NON-BREAKING space between two words
-//     matched nothing at all.
+//     reserved name written with a NON-BREAKING space around it matched nothing
+//     at all.
 //   - Every invisible rune is DROPPED, across all three of the categories that
 //     hold one: Cf (zero-width space, soft hyphen, the bidi controls),
 //     Other_Default_Ignorable_Code_Point (U+034F, a combining GRAPHEME JOINER —
@@ -509,14 +370,13 @@ func signatureText(fields map[string]string, bodyFields []string) string {
 //     one graphic character outside all three that renders as nothing, U+2800
 //     BRAILLE PATTERN BLANK (isInvisible). Dropping rather than folding is what
 //     catches a rune placed INSIDE a keyword: folding one to a space would split
-//     the word in two and the signature would still not match. Guarding Cf alone
-//     was the same defect one category over, and the three categories alone was
-//     the same defect one more out.
+//     the word in two and the reserved name would still not match. Guarding Cf
+//     alone was the same defect one category over, and the three categories alone
+//     was the same defect one more out.
 //   - NFKC folds the compatibility forms. The fi LIGATURE and the fullwidth
-//     letters are the registry's own phrasing written in code points that render
-//     the same, which is the defect side of this intent's own test — "the
-//     registry's phrasing with a byte substituted" — rather than the residue
-//     side.
+//     letters are a reserved name written in code points that render the same,
+//     which is the defect side of this intent's own test — "the reserved name
+//     with a byte substituted" — rather than the residue side.
 //
 // What it does NOT close, and the residue itd-185 and spc-63 now name: a
 // script-CONFUSABLE substitution. A Cyrillic that is not the Latin one, and
@@ -553,7 +413,7 @@ const braillePatternBlank = 0x2800
 // isInvisible is this package's one predicate for a rune that renders as
 // nothing: the three Unicode categories that hold one, plus the braille blank,
 // which is in none of them. It decides the fold above and, through the fold,
-// both the blankness of a provenance or body field and what a signature reads.
+// both the blankness of a provenance or body field and what a key folds to.
 // A pattern of one such rune was accepted and the record then asserted a
 // provenance that renders as blank (iss-2608311518250688) — the same failure
 // the zero-width fix closed, one category further out. The categories are
@@ -566,15 +426,87 @@ func isInvisible(r rune) bool {
 		r == braillePatternBlank
 }
 
-// present returns the members of names the item carries, in the table's order.
-func present(fields map[string]string, names []string) []string {
+// maxKeyScanDepth bounds the walk reservedKeysIn makes. The payload is untrusted
+// and its nesting is its own choice, so the recursion needs a floor that is not
+// the goroutine stack. The contract admits no nesting at all, so anything past
+// the first level is already a refusal on some rule; the depth only decides
+// whether this one gets to name the licence.
+const maxKeyScanDepth = 32
+
+// reservedKeysIn returns the reserved names the item carries AS KEYS, in the
+// table's order, matching the whole structure rather than the prose inside it.
+//
+// This is the rule the 2026-09-01 ruling states: a top-level field in the
+// reader's own output carrying a reserved name, never the name inside a sentence
+// or a quotation. It walks nested objects too, because the item contract defines
+// none — so a key one level down is the reader's own field, not part of any
+// declared shape.
+//
+// Keys are compared FOLDED. The fold is the same one the blankness rules use, so
+// a reserved name respelled in code points that render identically — a fullwidth
+// `ｄｉｓｐｏｓｉｔｉｏｎ`, an `ﬁ` ligature in `fix`, a zero-width space inside
+// `score` — is the same key and refuses as one. Case and surrounding space fold
+// too: a JSON key is chosen freely, and `Remedy` is not a different field. What
+// is RETURNED is the table's own spelling, so a refusal names the reserved field
+// rather than echoing the payload's rendering of it.
+func reservedKeysIn(raw map[string]json.RawMessage, names []string) []string {
+	if len(names) == 0 {
+		return nil
+	}
+	seen := map[string]bool{}
+	scanObjectKeys(raw, names, seen, 0)
 	var out []string
 	for _, n := range names {
-		if _, ok := fields[n]; ok {
+		if seen[n] {
 			out = append(out, n)
 		}
 	}
 	return out
+}
+
+// scanObjectKeys records the reserved names one object's keys carry, and
+// descends into every value.
+func scanObjectKeys(obj map[string]json.RawMessage, names []string, seen map[string]bool, depth int) {
+	if depth > maxKeyScanDepth {
+		return
+	}
+	for _, k := range sortedKeys(obj) {
+		folded := foldName(k)
+		for _, n := range names {
+			if folded == n {
+				seen[n] = true
+			}
+		}
+		scanValueKeys(obj[k], names, seen, depth+1)
+	}
+}
+
+// scanValueKeys descends through one value. Objects and ARRAYS of them are both
+// walked: a decision parked in a list — `"verdicts": [{"disposition": ...}]` —
+// is the same field one container further out, and stopping at objects would
+// name the licence for one spelling of it and not the other.
+func scanValueKeys(value json.RawMessage, names []string, seen map[string]bool, depth int) {
+	if depth > maxKeyScanDepth {
+		return
+	}
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(value, &obj); err == nil {
+		scanObjectKeys(obj, names, seen, depth)
+		return
+	}
+	var arr []json.RawMessage
+	if err := json.Unmarshal(value, &arr); err == nil {
+		for _, e := range arr {
+			scanValueKeys(e, names, seen, depth+1)
+		}
+	}
+}
+
+// foldName is one key in the form the reserved table is compared against: the
+// matching fold, then trimmed, then lower-cased. The table's own names are
+// already in that form, so a name added to it needs nothing done to it here.
+func foldName(key string) string {
+	return strings.ToLower(strings.TrimSpace(foldForMatching(key)))
 }
 
 // renderFields quotes a field list for a message.

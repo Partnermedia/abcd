@@ -407,9 +407,9 @@ func thousands(n int) string {
 // envelope, the ledger's refusal records and the core's own tests read. So the
 // front door subtracts rather than adds. Printing both reads as a stutter —
 // `abcd: reading: reading: agents/...` — and the refusal message is load-bearing
-// here: six of itd-185's thirteen criteria require the offending field, the
-// item's ordinal or the signature id to be NAMED, so a message a reader skims
-// past is a criterion half-met rather than a cosmetic complaint.
+// here: six of itd-185's thirteen criteria require the offending field or the
+// item's ordinal to be NAMED, so a message a reader skims past is a criterion
+// half-met rather than a cosmetic complaint.
 //
 // Every sub-verb goes through this, including the ones whose core paths do not
 // tag today (`ParsePosition` returns an untagged message): the rule is a property
@@ -428,10 +428,10 @@ func trimCorePrefix(msg string) string {
 
 // renderIngestResult writes one ingest's text render.
 //
-// The refused items and the review flags are rendered by ORDINAL, rule and
-// signature id, never by body text: the bodies belong in the ledger records,
-// which the record writer redacts on the way in, and a refusal quoting a
-// reading's prose back to a terminal would leave that redaction behind.
+// The refused items are rendered by ORDINAL, rule and field, never by body text:
+// the bodies belong in the ledger records, which the record writer redacts on the
+// way in, and a refusal quoting a reading's prose back to a terminal would leave
+// that redaction behind.
 func renderIngestResult(w io.Writer, res reading.IngestResult) {
 	// Two headings this render cannot write. A refusal before the run's
 	// identity is proven has no run to head the render with; what follows is
@@ -469,9 +469,6 @@ func renderIngestResult(w io.Writer, res reading.IngestResult) {
 		// One rule for the list, shared with the refusal record's reason: the
 		// elision entry names no item, so neither surface renders it as one.
 		fmt.Fprintf(w, "                 %s\n", r.Render())
-	}
-	for _, f := range res.ReviewFlags {
-		fmt.Fprintf(w, "  review flag:   item %d matches %s\n", f.Ordinal, f.SignatureID)
 	}
 	if len(res.ClearedStages) > 0 {
 		fmt.Fprintf(w, "  cleared:       orphaned stage(s) of %s\n", strings.Join(res.ClearedStages, ", "))
