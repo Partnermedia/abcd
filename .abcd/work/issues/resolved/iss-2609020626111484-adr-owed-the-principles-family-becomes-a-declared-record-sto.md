@@ -9,6 +9,8 @@ found_during: "iteration-2 planning, decomposition of the cold-reading intents, 
 origin: researcher-authored
 production_mode: dictated-and-formatted
 found_at: ".abcd/development/principles"
+resolution: "Adopted by the maintainer on 2026-09-02 as an ADR in this change."
+impact: internal
 ---
 
 ADR owed: the principles family becomes a declared record store with typed frontmatter, a record-architecture decision on the pattern of adr-30, and the lifeboat principles contract moves with it
@@ -34,3 +36,7 @@ and how the lifeboat's principles schema version moves.
 The intent that carries the keys, the projection, the check and the distil
 change is the knowledge-record intent filed the same day; it does not ship
 until this ADR is adopted.
+
+## Grounds
+
+- pursued: we expect a decision record adopted before the intent that waits on it to keep the trust rule out of the intent's scope list, which the decompose-before-filing rule requires; an intent shipping ahead of its ADR would show it wrong

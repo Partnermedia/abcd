@@ -1,10 +1,10 @@
 ---
 id: adr-58
 slug: a-reading-is-commissioned-about-something-so-the-invocation-takes-a-scope
-status: accepted
+status: superseded
 date: 2026-08-31
 supersedes: null
-superseded_by: null
+superseded_by: adr-2609021016286571
 related_intents: [itd-183, itd-184, itd-199]
 related_rfcs: []
 related_adrs: [adr-55, adr-56]
