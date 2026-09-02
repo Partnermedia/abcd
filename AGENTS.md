@@ -225,6 +225,15 @@ irreversible; guessing downward costs nothing.**
   after the merge is the one that gets forgotten, and a fixed-but-open issue
   leaves no marker to find it by. Resolving without a trailer stays legal — a
   stale issue closed on its own merits has no fixing commit to name.
+- **A change that delivers a planned intent closes its spec in the same
+  change**: `go run ./cmd/abcd spec close <spc-N>` moves the spec to `closed/`
+  and, as its close-hook, the intent from `planned/` to `shipped/`. Nothing
+  runs it for you, and the omission is silent: `launch ship` composes the
+  changelog from terminal folders only, so an intent whose code is on `main`
+  with its spec still open ships with no changelog line and the cut exits 0.
+  The intent's `impact` must be set first (`intent_impact_valid` refuses the
+  move without one). Same shape as the issue rule above: the step that happens
+  after the merge is the one that gets forgotten.
 - **A `resolved_by.commit` stamp names a commit that is actually reachable.**
   `abcd capture resolve --commit` is shape-checked only, so a wrong sha reads
   exactly like a right one; RS002/RS003 check reachability instead. Note the
