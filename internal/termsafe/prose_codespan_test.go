@@ -21,15 +21,21 @@ func TestCleanProseLeavesCodeSpansAlone(t *testing.T) {
 		{"placeholder-in-span", "run `abcd reading ingest --reading-json <path>` first",
 			"run `abcd reading ingest --reading-json <path>` first"},
 		{"tag-in-span", "the literal `<script>` token", "the literal `<script>` token"},
-		{"comment-in-span", "write `<!-- note -->` here", "write `<!-- note -->` here"},
+		// The comment delimiters are the ONE part of the HTML rule that keeps
+		// firing inside a span: they defend a byte-level marker grammar, not a
+		// render (see TestCleanProseBreaksCommentDelimitersInsideACodeSpan).
+		{"comment-in-span", "write `<!-- note -->` here", "write `< !-- note -- >` here"},
 		{"double-backtick-span", "use `` a ` <b> `` here", "use `` a ` <b> `` here"},
 		{"prose-around-span-still-neutralised", "<b>bold</b> and `<b>`",
 			"< b>bold< /b> and `<b>`"},
 		{"two-spans", "`<a>` then <a> then `<a>`", "`<a>` then < a> then `<a>`"},
 		// An unbalanced backtick opens no span in CommonMark, so what follows it is
-		// prose and stays neutralised — the primitive fails closed.
-		{"unbalanced-backtick", "`<script>alert(1)", "`< script>alert(1)"},
-		{"mismatched-run-lengths", "``<script>` still prose", "``< script>` still prose"},
+		// prose and stays neutralised — the primitive fails closed. The run itself
+		// is backslash-escaped, which renders as the same literal backticks it
+		// already rendered as and can no longer re-pair with a neighbouring field
+		// (TestCleanProseEmitsNoUnpairedBacktickRun).
+		{"unbalanced-backtick", "`<script>alert(1)", "\\`< script>alert(1)"},
+		{"mismatched-run-lengths", "``<script>` still prose", "\\`\\`< script>\\` still prose"},
 		// A backslash-escaped backtick is a literal backtick, not a delimiter.
 		{"escaped-backtick", `\` + "`<script>" + `\` + "`", `\` + "`< script>" + `\` + "`"},
 	}
