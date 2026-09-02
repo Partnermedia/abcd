@@ -666,6 +666,24 @@ func maskUserinfo(source string) string {
 	return source[:i+3] + user + ":xxxxx@" + rest[at+1:]
 }
 
+// transportCause renders the CAUSE of a failed fetch without the transport's
+// own copy of the request URL. net/http wraps every client error in a
+// *url.Error whose Error() re-prints the whole URL — masking only the
+// basic-auth password (stripPassword), never the query — so interpolating the
+// raw error with %v put a `?token=…` credential straight back into a message
+// whose own URL argument had just been filtered. Unwrapping to the innermost
+// non-*url.Error cause keeps what the operator needs (the reason the fetch
+// failed) and drops the one part the wrapper re-adds.
+func transportCause(err error) string {
+	for {
+		var ue *url.Error
+		if !errors.As(err, &ue) || ue.Err == nil {
+			return err.Error()
+		}
+		err = ue.Err
+	}
+}
+
 func acquireSource(repoRoot, source string, fetcher Fetcher, pdf PDFExtractor) (sourceMaterial, error) {
 	// The scheme gate stands ahead of the fetcher seam, not inside defaultFetch
 	// alone: a caller-supplied Fetcher replaces defaultFetch entirely, and the
@@ -684,11 +702,14 @@ func acquireSource(repoRoot, source string, fetcher Fetcher, pdf PDFExtractor) (
 			fetched, err = defaultFetch(source)
 		}
 		if err != nil {
+			// The IngestError itself, never the *url.Error a client wrapped it
+			// in: the wrapper re-prints the request URL, query credential and
+			// all, in front of the message this package composed.
 			var ie *IngestError
 			if errors.As(err, &ie) {
-				return sourceMaterial{}, err
+				return sourceMaterial{}, ie
 			}
-			return sourceMaterial{}, newIngestError("fetch failed for %s: %v", redactedSource(source), err)
+			return sourceMaterial{}, newIngestError("fetch failed for %s: %s", redactedSource(source), transportCause(err))
 		}
 		return materialFromFetched(source, fetched, pdf)
 	}
@@ -719,7 +740,7 @@ func ingestRedirectPolicy(rawURL string) func(*http.Request, []*http.Request) er
 			return newIngestError("too many redirects fetching %s", redactedSource(rawURL))
 		}
 		if r.URL.Scheme != "https" {
-			return newIngestError("redirect left https: %s", r.URL.Redacted())
+			return newIngestError("redirect left https: %s", redactedSource(r.URL.String()))
 		}
 		return guardFetchHost(r.URL.Hostname())
 	}
@@ -728,13 +749,13 @@ func ingestRedirectPolicy(rawURL string) func(*http.Request, []*http.Request) er
 func defaultFetch(rawURL string) (FetchedSource, error) {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
-		return FetchedSource{}, newIngestError("fetch failed for %s: %v", redactedSource(rawURL), err)
+		return FetchedSource{}, newIngestError("fetch failed for %s: %s", redactedSource(rawURL), transportCause(err))
 	}
 	// acquireSource has already refused a non-https source; this is the same
 	// rule stated where the connection is actually made, so the fetcher cannot
 	// be reached over plaintext by a later caller (mirrors update.go's get).
 	if parsed.Scheme != "https" {
-		return FetchedSource{}, newIngestError("refusing to fetch %s: the source origin must be https", parsed.Redacted())
+		return FetchedSource{}, newIngestError("refusing to fetch %s: the source origin must be https", redactedSource(rawURL))
 	}
 	if err := guardFetchHost(parsed.Hostname()); err != nil {
 		return FetchedSource{}, err
@@ -753,12 +774,18 @@ func defaultFetch(rawURL string) (FetchedSource, error) {
 	}
 	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
 	if err != nil {
-		return FetchedSource{}, newIngestError("fetch failed for %s: %v", redactedSource(rawURL), err)
+		return FetchedSource{}, newIngestError("fetch failed for %s: %s", redactedSource(rawURL), transportCause(err))
 	}
 	req.Header.Set("User-Agent", "abcd-memory-ingest")
 	resp, err := client.Do(req)
 	if err != nil {
-		return FetchedSource{}, newIngestError("fetch failed for %s: %v", redactedSource(rawURL), err)
+		// A CheckRedirect refusal comes back wrapped in a *url.Error; return the
+		// refusal this package composed, not the wrapper's re-print of the URL.
+		var ie *IngestError
+		if errors.As(err, &ie) {
+			return FetchedSource{}, ie
+		}
+		return FetchedSource{}, newIngestError("fetch failed for %s: %s", redactedSource(rawURL), transportCause(err))
 	}
 	defer resp.Body.Close()
 	return readFetchedResponse(rawURL, resp)
@@ -773,7 +800,7 @@ func readFetchedResponse(rawURL string, resp *http.Response) (FetchedSource, err
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxFetchBytes+1))
 	if err != nil {
-		return FetchedSource{}, newIngestError("fetch failed for %s: %v", redactedSource(rawURL), err)
+		return FetchedSource{}, newIngestError("fetch failed for %s: %s", redactedSource(rawURL), transportCause(err))
 	}
 	headers := map[string]string{}
 	for k := range resp.Header {

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io/fs"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -27,6 +29,10 @@ import (
 // The password below is a FAKE fixture, not a live credential.
 
 const fakeURLPassword = "s3cr3tPassw0rd"
+
+// fakeQueryToken is the other half of the class: a bearer credential carried as
+// a query value. Also FAKE.
+const fakeQueryToken = "SUPERSECRETqueryToken"
 
 // credentialPageDistiller copies the core's source block into the page, so the
 // stored frontmatter carries the citation the core built from the origin.
@@ -143,6 +149,68 @@ func TestIngestStripsURLCredential(t *testing.T) {
 		}
 		if strings.Contains(err.Error(), fakeURLPassword) {
 			t.Errorf("the fetch failure echoes the URL credential: %v", err)
+		}
+	})
+
+	t.Run("a transport error does not echo the credential it re-prints", func(t *testing.T) {
+		repo := t.TempDir()
+		source := "https://alice:" + fakeURLPassword + "@example.com/doc?token=" + fakeQueryToken
+		_, err := Ingest(IngestRequest{
+			RepoRoot:  repo,
+			Source:    source,
+			Distiller: credentialPageDistiller,
+			// The shape net/http actually returns from client.Do: a *url.Error
+			// whose message re-prints the whole request URL. It masks the
+			// basic-auth password and nothing else, so the query credential
+			// rides along inside the %v of the caller's own message.
+			Fetcher: func(raw string) (FetchedSource, error) {
+				return FetchedSource{Body: nil}, &url.Error{
+					Op:  "Get",
+					URL: raw,
+					Err: errors.New("connection reset"),
+				}
+			},
+			Now: fixedNow,
+		})
+		if err == nil {
+			t.Fatalf("a failing fetch must be an error")
+		}
+		if strings.Contains(err.Error(), fakeQueryToken) {
+			t.Errorf("the transport error echoes the URL query credential: %v", err)
+		}
+		if strings.Contains(err.Error(), fakeURLPassword) {
+			t.Errorf("the transport error echoes the URL password: %v", err)
+		}
+	})
+
+	t.Run("the redirect refusal does not echo the credential", func(t *testing.T) {
+		policy := ingestRedirectPolicy("https://example.com/a")
+		hop, perr := url.Parse("http://alice:" + fakeURLPassword + "@example.com/x?token=" + fakeQueryToken)
+		if perr != nil {
+			t.Fatalf("parse hop: %v", perr)
+		}
+		err := policy(&http.Request{URL: hop}, []*http.Request{{URL: hop}})
+		if err == nil {
+			t.Fatal("a redirect off https must be refused")
+		}
+		if strings.Contains(err.Error(), fakeQueryToken) {
+			t.Errorf("the redirect refusal echoes the hop's query credential: %v", err)
+		}
+		if strings.Contains(err.Error(), fakeURLPassword) {
+			t.Errorf("the redirect refusal echoes the hop's password: %v", err)
+		}
+	})
+
+	t.Run("the plaintext refusal at the connection does not echo the credential", func(t *testing.T) {
+		_, err := defaultFetch("http://alice:" + fakeURLPassword + "@example.com/x?token=" + fakeQueryToken)
+		if err == nil {
+			t.Fatal("a plaintext fetch must be refused")
+		}
+		if strings.Contains(err.Error(), fakeQueryToken) {
+			t.Errorf("the plaintext refusal echoes the query credential: %v", err)
+		}
+		if strings.Contains(err.Error(), fakeURLPassword) {
+			t.Errorf("the plaintext refusal echoes the password: %v", err)
 		}
 	})
 
