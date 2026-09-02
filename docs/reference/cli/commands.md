@@ -257,6 +257,24 @@ Preview the next release cut — derived version, records, guardrail (read-only,
 
 **Usage:** `abcd changelog`
 
+### `abcd decide`
+
+Mint a decision record (ADR) and lay its skeleton
+
+**Usage:** `abcd decide "<title>"`
+
+Mint an architecture decision record: allocate its id through the shared record-id
+seam and write the store's skeleton under .abcd/development/decisions/adrs/.
+
+The id is `adr-<yymmddHHMMSS><rrrr>` and the filename is ordered by that stamp, so two
+branches deciding on the same day cannot allocate the same number — the collision a
+hand-numbered ordinal has by construction. The hand-numbered records 0001-0058 keep
+their ids and their filenames; nothing is renumbered, and every reader admits both.
+
+The verb writes an EMPTY record: it owns the id, the date, the filename and the four
+sections, and states nothing. The decision is the author's to write, and the status it
+lands with is `proposed` until the author sets `accepted`.
+
 ### `abcd disembark`
 
 Lifeboat tooling: coverage probe, pack dry-run, and out-of-tree pack
