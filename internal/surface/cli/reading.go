@@ -165,10 +165,10 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 			"The verb checks what the reading was LICENSED to produce, not only what it saw: the\n" +
 			"supply regime is read from the position's definition and compared with the output's own\n" +
 			"claim, and the reserved names a regime declares are refused with the licence stated (the\n" +
-			"generative position declares none). A registry of named signatures watches for prose that\n" +
-			"ranks, settles or proposes without the field; those signatures are observed rather than\n" +
-			"enforcing, at every position, so a hit raises a review flag on the run record and the item\n" +
-			"lands.\n\n" +
+			"generative position declares none). A reserved name is matched against the item's own KEYS,\n" +
+			"never against the words inside a value: a reading that reports what the document it read\n" +
+			"disposed, recommended, scored or fixed lands, and only the decision carried as a field of\n" +
+			"the reading's own output refuses.\n\n" +
 			"Item identifiers are minted here. The payload carries none, so a supplied one is refused\n" +
 			"as an unknown field. A refusal becomes DURABLE once the run's identity is proven — the run\n" +
 			"id resolving to a parked manifest whose content hash matches — and from there a list-level\n" +
@@ -403,7 +403,7 @@ func thousands(n int) string {
 //
 // Printing both reads as a stutter — `abcd: reading ingest: reading: ...` — and
 // the refusal message is load-bearing for this verb: six of itd-185's thirteen
-// criteria require the offending field, the item's ordinal or the signature id
+// criteria require the offending field or the item's ordinal
 // to be NAMED, so a message a reader skims past is a criterion half-met rather
 // than a cosmetic complaint. The `assemble` path above carries the same stutter
 // and is deliberately left alone: it is a change to a shipped verb's output
@@ -414,8 +414,8 @@ func trimCorePrefix(msg string) string {
 
 // renderIngestResult writes one ingest's text render.
 //
-// The refused items and the review flags are rendered by ORDINAL, rule and
-// signature id, never by body text: the bodies belong in the ledger records,
+// The refused items are rendered by ORDINAL, rule and field, never by body
+// text: the bodies belong in the ledger records,
 // which the record writer redacts on the way in, and a refusal quoting a
 // reading's prose back to a terminal would leave that redaction behind.
 func renderIngestResult(w io.Writer, res reading.IngestResult) {
@@ -459,9 +459,6 @@ func renderIngestResult(w io.Writer, res reading.IngestResult) {
 			continue
 		}
 		fmt.Fprintf(w, "                 item %d (%s): %s\n", r.Ordinal, r.Rule, r.Detail)
-	}
-	for _, f := range res.ReviewFlags {
-		fmt.Fprintf(w, "  review flag:   item %d matches %s\n", f.Ordinal, f.SignatureID)
 	}
 	if len(res.ClearedStages) > 0 {
 		fmt.Fprintf(w, "  cleared:       orphaned stage(s) of %s\n", strings.Join(res.ClearedStages, ", "))

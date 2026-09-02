@@ -122,16 +122,24 @@ violation refuses the run, and **a refused run still leaves a durable record**:
 `refusal.json` carries the run metadata and the named reason and no items, so a
 rerun is a new run with a new run id rather than an amendment.
 
-The regime gate has two layers. Each regime declares reserved names — a field
-naming one is refused with the licence stated — and a registry of named
-signatures catches prose that ranks, settles or proposes without the field.
-Every signature ships enforced; the degradation path exists as a code change
-plus a decision-log entry, which is what makes weakening a claimed property from
-enforced to observed a recorded act rather than a runtime toggle. That second
-layer is bounded by the registry, and the bound is disclosed on itd-185: a fix
-proposal or a disposition phrased outside the registry's signatures is not
-caught. The reserved names carry no such bound, because a field is present or it
-is not.
+The regime gate has one layer, and it is structural. Each regime declares
+reserved names, and a reserved name is matched against the item's own KEYS — its
+declared fields, and the keys of any nested object the contract does not define —
+never against the words inside a value. A field naming one is refused with the
+licence stated. Keys are compared folded, so a reserved name respelled in code
+points that render the same refuses as itself.
+
+**The gate refuses only a real decision field.** A reading REPORTS: it quotes
+the record's `disposition:` line, says what a clause settles, what a paper
+recommends, what a suite scores, and which section says a fix is merged while
+another says pending — and that is most of what a reading legitimately does. The
+gate once carried a second layer, a registry of named signatures over an item's
+prose, and it could not tell a reading that proposes from one reporting somebody
+else proposing: measured over thirty-four realistic outputs it caught fourteen,
+every one of them for quoting the document it read. It is gone rather than
+softened — recording the hit instead of refusing it was considered and rejected,
+because a gate that reads prose is still reading prose. What remains carries no
+bound of that kind, because a field is present or it is not.
 
 Writes are staged. Nothing durable is written or deleted until the whole payload
 validates — a refusal after the run is proven leaves its refusal record and

@@ -167,15 +167,6 @@ type ItemRefusal struct {
 	Detail  string `json:"detail"`
 }
 
-// ReviewFlag is a signature hit that did not refuse: the generative regime's
-// path, where the licence is the widest and the constraint falls at admission
-// instead.
-type ReviewFlag struct {
-	Ordinal     int    `json:"ordinal"`
-	SignatureID string `json:"signature_id"`
-	Detail      string `json:"detail"`
-}
-
 // RunRecord is the run metadata, written LAST as the commit marker: a run
 // without one never happened.
 type RunRecord struct {
@@ -190,7 +181,6 @@ type RunRecord struct {
 	Records        []capture.ReadingRecordRef `json:"records"`
 	RefusedItems   []ItemRefusal              `json:"refused_items"`
 	RefusedCount   int                        `json:"refused_count"`
-	ReviewFlags    []ReviewFlag               `json:"review_flags"`
 }
 
 // RefusalRecord is what a list-level refusal leaves behind: the run metadata and
@@ -239,11 +229,10 @@ type IngestResult struct {
 	// RefusedCount is how many items were refused in total. RefusedItems is
 	// capped — the item count is payload-chosen — so the two differ when a run
 	// refused more than the cap, and the count is what nothing truncates.
-	RefusedCount  int          `json:"refused_count,omitempty"`
-	ReviewFlags   []ReviewFlag `json:"review_flags,omitempty"`
-	RunRecordPath string       `json:"run_record,omitempty"`
-	RefusalPath   string       `json:"refusal_record,omitempty"`
-	ClearedStages []string     `json:"cleared_stages,omitempty"`
+	RefusedCount  int      `json:"refused_count,omitempty"`
+	RunRecordPath string   `json:"run_record,omitempty"`
+	RefusalPath   string   `json:"refusal_record,omitempty"`
+	ClearedStages []string `json:"cleared_stages,omitempty"`
 	// RolledBack names the reading records the sweep REMOVED from the committed
 	// ledger, because their run never reached its commit marker. A delete in the
 	// committed tier is reported by id: "cleared an orphaned stage" does not tell
@@ -459,10 +448,9 @@ func ingestUnderLock(root *os.Root, repoRoot string, req IngestRequest, res *Ing
 		return refuse(root, res, out, manifest, def, err)
 	}
 
-	items, refusals, flags, refusedCount, err := validateItems(out, def)
+	items, refusals, refusedCount, err := validateItems(out, def)
 	res.RefusedItems = refusals
 	res.RefusedCount = refusedCount
-	res.ReviewFlags = flags
 	if err != nil {
 		return refuse(root, res, out, manifest, def, err)
 	}
@@ -683,13 +671,9 @@ func write(root *os.Root, repoRoot string, res *IngestResult, out Output, m Mani
 		Position: def.Position, Regime: def.Regime, TargetCommit: m.TargetCommit,
 		ManifestSHA256: out.ManifestSHA256, Instrument: sanitizeInstrument(out.Instrument),
 		Records: written.Records, RefusedItems: res.RefusedItems, RefusedCount: res.RefusedCount,
-		ReviewFlags: res.ReviewFlags,
 	}
 	if run.RefusedItems == nil {
 		run.RefusedItems = []ItemRefusal{}
-	}
-	if run.ReviewFlags == nil {
-		run.ReviewFlags = []ReviewFlag{}
 	}
 	if err := writeJSONIn(root, runRel+"/"+RunFileName, run); err != nil {
 		return err

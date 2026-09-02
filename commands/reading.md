@@ -181,8 +181,7 @@ at one.
 
 An **item-level** violation refuses that item and lands the rest: an empty or
 absent `pattern` at any position, a field the position's body does not declare,
-or a reserved name. A registered signature does not refuse — it flags. A
-**list-level**
+or a reserved name carried as one of the item's own keys. A **list-level**
 violation refuses the whole run: a wrong `_type`, a run id that resolves to no
 parked manifest, a manifest hash that disagrees, an instrument claiming a
 definition hash or an assembler version the artefacts do not carry, a regime
@@ -217,17 +216,22 @@ stated:
 - `registrative`: `fix`, `remedy`, `resolution`.
 - `explicative`: `disposition`, `status`.
 - `generative` has no reserved names. Its licence is the widest, and the
-  constraint on it falls at admission, so it runs the WHOLE registry as review
-  flags rather than only its own regime's.
+  constraint on it falls at admission rather than here.
 
-Prose that ranks, settles or proposes without the field is watched too, by a
-registry of named signatures (`RG-EVAL-ORDERING`, `RG-EVAL-RECOMMENDATION`,
-`RG-REG-FIXPROPOSAL`, `RG-EXPL-DISPOSITION`) reading every text value the item
-carries, `pattern` included. All four are **observed, not enforcing**: a hit raises a review flag on the run record naming the item and
-the signature id, and the item lands. They cannot tell a reading that proposes
-from one reporting that the document proposes, so an enforcing registry refused
-a reading for quoting its own material. Report `review_flags` and read them; the
-structural halves above are the ones that refuse.
+**The gate refuses only a real decision field.** A reserved name is matched
+against the KEYS of the item — its own fields, and the keys of any nested object
+the contract does not define — and never against the words inside a value. A
+reading REPORTS: it quotes the record's `disposition:` line, says what a clause
+settles, what a paper recommends, what a suite scores, and which section says a
+fix is merged while another says pending. All of that lands at every regime. The
+same word carried as a field of the reading's own output is the decision the
+licence withholds, and it refuses. Keys are compared folded, so a reserved name
+respelled in code points that render the same refuses as itself.
+
+The gate reads no prose. It once carried a registry of semantic signatures over
+an item's text; measured over thirty-four realistic outputs it caught fourteen,
+every one for quoting the document it read, so the registry is gone rather than
+softened.
 
 ### Where the records land
 
@@ -252,7 +256,7 @@ records. The ids a sweep removed are reported however the invocation ends. One
 ingest runs at a time in a checkout: a second waits, and reports contention
 rather than sweeping the first one's records away.
 
-Report from the JSON: `run_id`, `records`, `refused_items`, `review_flags`,
+Report from the JSON: `run_id`, `records`, `refused_items`,
 `cleared_stages`, `rolled_back_records`, `pending_stages`, and `run_record` —
 or, on a refusal that recorded one, `refusal_record`. A refusal renders the
 JSON whenever it has one of these to disclose, so read it on exit 2 as well.

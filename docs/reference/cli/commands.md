@@ -831,10 +831,10 @@ Validate the JSON a cold reading returned and write its reading records.
 The verb checks what the reading was LICENSED to produce, not only what it saw: the
 supply regime is read from the position's definition and compared with the output's own
 claim, and the reserved names a regime declares are refused with the licence stated (the
-generative position declares none). A registry of named signatures watches for prose that
-ranks, settles or proposes without the field; those signatures are observed rather than
-enforcing, at every position, so a hit raises a review flag on the run record and the item
-lands.
+generative position declares none). A reserved name is matched against the item's own KEYS,
+never against the words inside a value: a reading that reports what the document it read
+disposed, recommended, scored or fixed lands, and only the decision carried as a field of
+the reading's own output refuses.
 
 Item identifiers are minted here. The payload carries none, so a supplied one is refused
 as an unknown field. A refusal becomes DURABLE once the run's identity is proven — the run

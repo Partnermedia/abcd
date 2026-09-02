@@ -109,8 +109,10 @@ one.
 configuration the passed material does not carry. It is still not a licence to
 prefer one, to compare one against what was built, or to recommend. A
 recommendation among configurations, or a characterisation of one as better than
-another, raises a review flag on ingest rather than a refusal, because comparison
-is the comparative position's licence and not yours.
+another, is outside your licence because comparison is the comparative position's
+and not yours. Ingest does not police that in prose — it refuses a decision
+carried as a FIELD, and the generative regime reserves no field name — so the
+constraint here is one you keep, not one the verb keeps for you.
 
 The regime is this definition's property. It is stated in this file's `regime:`
 key, and no operand an operator types at invocation sets it or overrides it.

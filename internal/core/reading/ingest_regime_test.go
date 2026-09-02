@@ -12,7 +12,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -218,108 +217,6 @@ func TestRegistrativeResolutionFieldRefused(t *testing.T) {
 	}
 }
 
-// TestRegistrativeProseFixProposalFlagged is ac-5: a body matching a registered
-// fix-proposal signature raises a review flag naming the item and the signature
-// id, and the item lands. The signature is OBSERVED rather than enforcing — it
-// cannot tell a reading that proposes a fix from one reporting that the document
-// proposes one — so what a hit buys is a reader's attention, not a refusal.
-//
-// The residue is disclosed on itd-185 and is not tested here, because a residue
-// is what a test cannot assert.
-func TestRegistrativeProseFixProposalFlagged(t *testing.T) {
-	f := newIngestFixture(t, "detection")
-	doc := f.payload(2)
-	doc["items"].([]any)[1].(map[string]any)["why_a_tension"] =
-		"the record says one thing and the tree another; the fix is to restate the constraint"
-
-	res := f.mustIngest(doc)
-	if len(res.Records) != 2 {
-		t.Fatalf("a signature hit refused the item: %d record(s), refusals %v", len(res.Records), res.RefusedItems)
-	}
-	if len(res.RefusedItems) != 0 {
-		t.Errorf("an observed signature refused: %v", res.RefusedItems)
-	}
-	fl := f.flagOf(res, 2)
-	if fl.SignatureID != "RG-REG-FIXPROPOSAL" {
-		t.Errorf("the flag cites signature %q, want the registered signature id", fl.SignatureID)
-	}
-	if !strings.Contains(fl.Detail, "item 2") {
-		t.Errorf("the flag does not name the item: %q", fl.Detail)
-	}
-	if !strings.Contains(fl.Detail, "RG-REG-FIXPROPOSAL") {
-		t.Errorf("the flag does not name the signature id: %q", fl.Detail)
-	}
-
-	// And it is durable: the flag is on the run record, not only in the render.
-	run := f.readRunRecord(f.runID)
-	if len(run.ReviewFlags) != 1 || run.ReviewFlags[0].SignatureID != "RG-REG-FIXPROPOSAL" {
-		t.Errorf("the run record carries review flags %v", run.ReviewFlags)
-	}
-}
-
-// TestAReadingQuotingItsMaterialIsNotRefused is the reason the four semantic
-// signatures are observed rather than enforcing, held as a check.
-//
-// Every case below is prose a real cold reading legitimately writes: it REPORTS
-// what the read document says. The registry cannot distinguish that from the
-// reading proposing it itself, and under enforcement each of these refused an
-// item and cost the reading a finding.
-func TestAReadingQuotingItsMaterialIsNotRefused(t *testing.T) {
-	for _, tc := range []struct{ name, position, field, text string }{
-		{"a detection reporting a settled fix", "detection", "why_a_tension",
-			"section 3 says the fix is already merged while section 8 says it is pending"},
-		{"a comparative quoting a recommendation", "comparative", "characterisation",
-			"the cited paper closes with the sentence, we recommend further study"},
-		{"a comparative reporting an adoption clause", "comparative", "characterisation",
-			"clause 6 says the MIT licence should be adopted before the release"},
-		{"a comparative reporting a score", "comparative", "characterisation",
-			"the suite scores below the threshold the charter names"},
-		{"an entailment quoting a record's disposition key", "entailment", "what_implies_it",
-			"the record's frontmatter carries disposition: held, which is what implies it"},
-		{"an entailment reporting a settled question", "entailment", "what_implies_it",
-			"section 4 asserts the licensing question is already settled by adr-43"},
-	} {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			f := newIngestFixture(t, Position(tc.position))
-			doc := f.payload(1)
-			doc["items"].([]any)[0].(map[string]any)[tc.field] = tc.text
-
-			res := f.mustIngest(doc)
-			if len(res.Records) != 1 {
-				t.Fatalf("a reading quoting its material was refused: %v", res.RefusedItems)
-			}
-			if len(res.RefusedItems) != 0 {
-				t.Errorf("a reading quoting its material was refused: %v", res.RefusedItems)
-			}
-		})
-	}
-}
-
-// TestAnEnforcingSignatureStillRefuses keeps the registry's enforcing half
-// executable. No shipped signature is in that mode, so without this the branch
-// checkItem runs would be a claim nothing checks — and the degradation would
-// have quietly removed the mechanism instead of the four entries' use of it.
-func TestAnEnforcingSignatureStillRefuses(t *testing.T) {
-	prior := Signatures
-	Signatures = append(append([]Signature{}, prior...), Signature{
-		ID: "RG-TEST-ENFORCED", Regime: RegimeRegistrative, Mode: SignatureEnforce,
-		Licence: "a test-only signature, registered enforced",
-		Pattern: regexp.MustCompile(`(?i)\bthe canary phrase\b`),
-	})
-	t.Cleanup(func() { Signatures = prior })
-
-	f := newIngestFixture(t, "detection")
-	doc := f.payload(2)
-	doc["items"].([]any)[1].(map[string]any)["why_a_tension"] =
-		"the record and the tree disagree, and the canary phrase is in the body"
-
-	r := f.refusedItem(doc, 2, 2)
-	if r.Rule != "RG-TEST-ENFORCED" {
-		t.Errorf("the refusal cites rule %q, want the enforced signature id", r.Rule)
-	}
-}
-
 // TestExplicativeDispositionRefused is the structural half of ac-8: a
 // disposition-bearing FIELD on a surfaced claim refuses, and the refusal names
 // the field.
@@ -342,41 +239,12 @@ func TestExplicativeDispositionRefused(t *testing.T) {
 	}
 }
 
-// TestExplicativeProseDispositionFlagged is ac-9: a claim body matching a
-// registered disposition signature raises a review flag naming the item and the
-// signature id, and the item lands.
-func TestExplicativeProseDispositionFlagged(t *testing.T) {
-	f := newIngestFixture(t, "entailment")
-	doc := f.payload(2)
-	doc["items"].([]any)[0].(map[string]any)["what_implies_it"] =
-		"the passed material implies it, and the claim is already accepted by the record"
-
-	res := f.mustIngest(doc)
-	if len(res.Records) != 2 {
-		t.Fatalf("a signature hit refused the item: %d record(s), refusals %v", len(res.Records), res.RefusedItems)
-	}
-	fl := f.flagOf(res, 1)
-	if fl.SignatureID != "RG-EXPL-DISPOSITION" {
-		t.Errorf("the flag cites signature %q, want the registered signature id", fl.SignatureID)
-	}
-	if !strings.Contains(fl.Detail, "item 1") {
-		t.Errorf("the flag does not name the item: %q", fl.Detail)
-	}
-	if !strings.Contains(fl.Detail, "RG-EXPL-DISPOSITION") {
-		t.Errorf("the flag does not name the signature id: %q", fl.Detail)
-	}
-	run := f.readRunRecord(f.runID)
-	if len(run.ReviewFlags) != 1 || run.ReviewFlags[0].SignatureID != "RG-EXPL-DISPOSITION" {
-		t.Errorf("the run record carries review flags %v", run.ReviewFlags)
-	}
-}
-
-// TestGenerativeHasNoRegimeRefusalButFlagsRecommendation is the generative
-// path, which carries no criterion of its own and is recorded on spc-63 rather
-// than left to be discovered at the audit. The generative licence is the widest
-// and the constraint on it falls at admission, so a signature hit raises a
-// review flag on the run record and the item lands.
-func TestGenerativeHasNoRegimeRefusalButFlagsRecommendation(t *testing.T) {
+// TestGenerativeHasNoRegimeRefusal is the generative path, which carries no
+// criterion of its own and is recorded on spc-63 rather than left to be
+// discovered at the audit. The generative licence is the widest and the
+// constraint on it falls at admission, so no reserved-name row exists for it and
+// an item proposing a configuration lands.
+func TestGenerativeHasNoRegimeRefusal(t *testing.T) {
 	f := newIngestFixture(t, PositionWidening)
 	doc := f.payload(1)
 	doc["items"].([]any)[0].(map[string]any)["what_admits_it"] =
@@ -386,71 +254,11 @@ func TestGenerativeHasNoRegimeRefusalButFlagsRecommendation(t *testing.T) {
 	if len(res.Records) != 1 {
 		t.Fatalf("the generative item did not land: %d record(s)", len(res.Records))
 	}
-	if len(res.ReviewFlags) != 1 {
-		t.Fatalf("the generative run raised %d review flag(s), want 1: %v", len(res.ReviewFlags), res.ReviewFlags)
+	if len(res.RefusedItems) != 0 {
+		t.Errorf("the generative regime refused an item: %v", res.RefusedItems)
 	}
-	if res.ReviewFlags[0].SignatureID != "RG-EVAL-RECOMMENDATION" {
-		t.Errorf("the flag names signature %q", res.ReviewFlags[0].SignatureID)
-	}
-
-	// And the flag is durable: it is on the run record, not only in the render.
-	run := f.readRunRecord(f.runID)
-	if len(run.ReviewFlags) != 1 || run.ReviewFlags[0].SignatureID != "RG-EVAL-RECOMMENDATION" {
-		t.Errorf("the run record carries review flags %v", run.ReviewFlags)
-	}
-}
-
-// TestEverySignatureShipsInItsRecordedMode pins the registry ENTRY BY ENTRY.
-//
-// A property saying "every signature ships enforced" was true until the four
-// semantic detectors were degraded to flag mode, and a property saying "every
-// signature ships flagged" would be the same instrument pointed the other way:
-// it would let a signature be promoted to enforcement without anything failing.
-// The mode of each entry is a decision with a decision-log line behind it, so it
-// is pinned by name, and a move in EITHER direction turns this red.
-func TestEverySignatureShipsInItsRecordedMode(t *testing.T) {
-	// The four semantic detectors, observed rather than enforcing since the
-	// degradation of 2026-08-31: the registry cannot tell a reading that
-	// proposes from one reporting somebody else proposing.
-	want := map[string]SignatureMode{
-		"RG-EVAL-ORDERING":       SignatureFlag,
-		"RG-EVAL-RECOMMENDATION": SignatureFlag,
-		"RG-REG-FIXPROPOSAL":     SignatureFlag,
-		"RG-EXPL-DISPOSITION":    SignatureFlag,
-	}
-	if len(Signatures) != len(want) {
-		t.Fatalf("the registry holds %d signature(s) and %d are pinned here; a signature ships with its "+
-			"mode recorded, so a new one is pinned in the same change", len(Signatures), len(want))
-	}
-	seen := map[string]bool{}
-	for _, s := range Signatures {
-		mode, pinned := want[s.ID]
-		if !pinned {
-			t.Errorf("%s is registered and not pinned here", s.ID)
-			continue
-		}
-		if s.Mode != mode {
-			t.Errorf("%s ships in %q mode, and %q is what the record says; moving a signature between "+
-				"enforce and flag is a code change plus a decision-log entry", s.ID, s.Mode, mode)
-		}
-		if seen[s.ID] {
-			t.Errorf("%s is registered twice", s.ID)
-		}
-		seen[s.ID] = true
-		if s.Pattern == nil {
-			t.Errorf("%s registers no detector", s.ID)
-		}
-		if strings.TrimSpace(s.Licence) == "" {
-			t.Errorf("%s states no licence, so a flag citing it could not say what was breached", s.ID)
-		}
-		if _, ok := regimeLicence[s.Regime]; !ok {
-			t.Errorf("%s polices regime %q, which is not one of the four", s.ID, s.Regime)
-		}
-	}
-	for id := range want {
-		if !seen[id] {
-			t.Errorf("the registry does not carry %s, which spc-63 names", id)
-		}
+	if _, has := ReservedNames[RegimeGenerative]; has {
+		t.Error("the generative regime carries a reserved-name row; its constraint falls at admission")
 	}
 }
 
@@ -475,185 +283,88 @@ func TestReservedNamesNeverCollideWithABodyField(t *testing.T) {
 	}
 }
 
-// TestTheRegimeGateIsNotEvadedByInvisibleRunes.
+// TestInnocentProseCarryingFoldedRunesStillLands is the fold's other half, and
+// the more important one.
 //
-// Go's regexp is RE2, whose whitespace and word-boundary classes are ASCII-only,
-// and the terminal sanitiser does not mask U+00A0. So a registered signature's
-// OWN phrasing, with a non-breaking space between two words or a zero-width
-// space inside a keyword, matched nothing and the item landed unremarked —
-// inside the gate this verb exists to be.
+// `foldForMatching` widens what a comparison sees — every Unicode space to
+// ASCII, every invisible rune dropped, NFKC over the compatibility forms — and
+// it now serves two rules: the blankness rules, and the reserved-name rule over
+// an item's KEYS. Neither reads prose. So every case here is ordinary prose that
+// legitimately carries one of the runes being folded, and every one must LAND: a
+// widening of the fold that reached the values would cost a reading its
+// findings, which is the failure the 2026-09-01 ruling closed.
 //
-// This is not the residue itd-185 discloses. That residue covers a fix proposal
-// or a disposition phrased OUTSIDE the registry's signatures. This was the
-// registry's own phrasing with one invisible byte substituted.
-//
-// The last case is the one that keeps the fix honest: a non-breaking space in
-// innocent prose must still be ACCEPTED, or an evasion has been traded for a
-// false refusal.
-func TestTheRegimeGateIsNotEvadedByInvisibleRunes(t *testing.T) {
+// The evasion side — a reserved name spelled as a KEY in code points that render
+// the same — is in ingest_corpus_test.go, beside the corpus it is measured on.
+func TestInnocentProseCarryingFoldedRunesStillLands(t *testing.T) {
 	const (
-		nbsp       = " "
-		zeroWidth  = "​"
-		narrowNbsp = " "
-		ideoSpace  = "　"
+		nbsp       = "\u00a0"
+		narrowNbsp = "\u202f"
 	)
-	evasions := []struct {
-		name, position, field, text, signature string
-	}{
-		{"non-breaking space", "detection", "why_a_tension",
-			"the record and the tree disagree; the" + nbsp + "fix" + nbsp + "is to restate the constraint",
-			"RG-REG-FIXPROPOSAL"},
-		{"zero-width space inside a keyword", "detection", "why_a_tension",
-			"the record and the tree disagree; the fi" + zeroWidth + "x is to restate the constraint",
-			"RG-REG-FIXPROPOSAL"},
-		{"narrow no-break space", "entailment", "what_implies_it",
-			"the passed material implies it, and the claim is" + narrowNbsp + "already" + narrowNbsp + "accepted",
-			"RG-EXPL-DISPOSITION"},
-		{"ideographic space", "comparative", "characterisation",
-			"options of this shape behave unremarkably, and we" + ideoSpace + "recommend option B",
-			"RG-EVAL-RECOMMENDATION"},
-		// U+034F is a MARK, not a format rune, and U+FE00 is a variation
-		// selector: guarding Cf alone was the same defect one category over.
-		{"combining grapheme joiner", "detection", "why_a_tension",
-			"the record and the tree disagree; the f\u034fix is to restate the constraint",
-			"RG-REG-FIXPROPOSAL"},
-		{"variation selector", "detection", "why_a_tension",
-			"the record and the tree disagree; the fix\ufe00 is to restate the constraint",
-			"RG-REG-FIXPROPOSAL"},
-		// Compatibility forms: the registry's own phrasing in code points that
-		// render the same. NFKC folds them.
-		{"ligature", "detection", "why_a_tension",
-			"the record and the tree disagree; the \ufb01x is to restate the constraint",
-			"RG-REG-FIXPROPOSAL"},
-		{"fullwidth letters", "comparative", "characterisation",
-			"options of this shape behave unremarkably, and \uff57\uff45 recommend option B",
-			"RG-EVAL-RECOMMENDATION"},
+	innocent := []struct{ name, text string }{
+		{"non-breaking space in a measurement", "the constraint names a budget of 30" + nbsp + "ms"},
+		{"soft hyphen at a line break", "the constraint is docu\u00admented in the record"},
+		{"narrow no-break space in a figure", "the budget is 30" + narrowNbsp + "%, and the path exceeds it"},
+		{"zero-width non-joiner in a compound", "the record names a well\u200cknown constraint"},
+		{"combining acute", "the re\u0301cord and the tree disagree about the constraint"},
+		{"variation selector after a glyph", "the record marks it \u2714\ufe0f and the tree does not"},
+		{"the bare word fix", "the constraint names a fix window, and the tree has none"},
+		{"the bare word order", "the record states an order of operations the tree does not keep"},
+		{"the word recommend in quoted material", "the passed material uses the word recommend"},
+		{"ideographic text", "the record states \u5236\u7d04 and the tree does not"},
+		{"an em dash and curly quotes", "the record says \u201cone thing\u201d \u2014 the tree says another"},
+		{"a ligature in ordinary prose", "the record de\ufb01nes the constraint the tree ignores"},
 	}
-	for _, tc := range evasions {
+	for _, tc := range innocent {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			f := newIngestFixture(t, Position(tc.position))
-			doc := f.payload(2)
-			doc["items"].([]any)[1].(map[string]any)[tc.field] = tc.text
+			f := newIngestFixture(t, "detection")
+			doc := f.payload(1)
+			doc["items"].([]any)[0].(map[string]any)["why_a_tension"] = tc.text
 
 			res := f.mustIngest(doc)
-			if len(res.RefusedItems) != 0 {
-				t.Fatalf("an observed signature refused: %v", res.RefusedItems)
+			if len(res.Records) != 1 {
+				t.Fatalf("innocent prose was refused: %v", res.RefusedItems)
 			}
-			if fl := f.flagOf(res, 2); fl.SignatureID != tc.signature {
-				t.Errorf("the flag cites signature %q, want the registered signature %s",
-					fl.SignatureID, tc.signature)
+			if len(res.RefusedItems) != 0 {
+				t.Errorf("the fold reached a value and refused it: %v", res.RefusedItems)
 			}
 		})
 	}
-
-	// The folding is for MATCHING only: the stored text keeps its own bytes.
-	//
-	// This battery is the other half of the fix and the more important one. Every
-	// transformation above widens what refuses, and NFKC is more aggressive than
-	// the rest — so each case here is ordinary prose that legitimately carries
-	// one of the runes being folded, and every one must still LAND. An evasion
-	// traded for a false refusal costs a reading its findings, which is the cost
-	// itd-185's open question is about.
-	t.Run("innocent prose still lands", func(t *testing.T) {
-		innocent := []struct{ name, text string }{
-			{"non-breaking space in a measurement", "the constraint names a budget of 30" + nbsp + "ms"},
-			{"soft hyphen at a line break", "the constraint is docu\u00admented in the record"},
-			{"narrow no-break space in a figure", "the budget is 30" + narrowNbsp + "%, and the path exceeds it"},
-			{"zero-width non-joiner in a compound", "the record names a well\u200cknown constraint"},
-			{"combining acute", "the re\u0301cord and the tree disagree about the constraint"},
-			{"variation selector after a glyph", "the record marks it \u2714\ufe0f and the tree does not"},
-			{"the bare word fix", "the constraint names a fix window, and the tree has none"},
-			{"the bare word order", "the record states an order of operations the tree does not keep"},
-			{"the word recommend in quoted material", "the passed material uses the word recommend"},
-			{"ideographic text", "the record states \u5236\u7d04 and the tree does not"},
-			{"an em dash and curly quotes", "the record says \u201cone thing\u201d \u2014 the tree says another"},
-			{"a ligature in ordinary prose", "the record de\ufb01nes the constraint the tree ignores"},
-		}
-		for _, tc := range innocent {
-			tc := tc
-			t.Run(tc.name, func(t *testing.T) {
-				f := newIngestFixture(t, "detection")
-				doc := f.payload(1)
-				doc["items"].([]any)[0].(map[string]any)["why_a_tension"] = tc.text
-
-				res := f.mustIngest(doc)
-				if len(res.Records) != 1 {
-					t.Fatalf("innocent prose was refused: %v", res.RefusedItems)
-				}
-				if len(res.RefusedItems) != 0 {
-					t.Errorf("an evasion was traded for a false refusal: %v", res.RefusedItems)
-				}
-				if len(res.ReviewFlags) != 0 {
-					t.Errorf("an evasion was traded for a false flag: %v", res.ReviewFlags)
-				}
-			})
-		}
-	})
 }
 
-// TestTheSignaturesReadTheProvenanceFieldToo closes a channel that was open at
-// every regime.
+// TestTheProvenanceFieldIsJudgedByTheSameRuleAsAnyOther keeps
+// iss-2608311517547712's finding answered under the new rule.
 //
-// The detectors read the item's body, and `pattern` is an ENVELOPE field, so an
-// item whose pattern carried the registry's own phrasing landed unremarked: a
-// registrative pattern proposing a fix, an explicative one carrying a
-// disposition, an evaluative one recommending a candidate. No byte was
-// substituted and no phrasing was novel — the detector simply did not read that
-// field, and it is the field every item at every regime must carry, so the
-// channel was always open.
-//
-// By itd-185's own test that is a defect in the gate rather than the residue:
-// the residue covers phrasing OUTSIDE the registry, and this was the registry's
-// exact phrasing moved one field along.
-func TestTheSignaturesReadTheProvenanceFieldToo(t *testing.T) {
-	for _, tc := range []struct{ name, position, pattern, signature string }{
-		{"a registrative pattern proposing a fix", "detection",
-			"P-1. The fix is to rewrite the charter.", "RG-REG-FIXPROPOSAL"},
-		{"an explicative pattern carrying a disposition", "entailment",
-			"P-2. This claim is already accepted by the maintainer.", "RG-EXPL-DISPOSITION"},
-		{"an evaluative pattern recommending a candidate", "comparative",
-			"P-3. We recommend the second candidate.", "RG-EVAL-RECOMMENDATION"},
-	} {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			f := newIngestFixture(t, Position(tc.position))
-			doc := f.payload(2)
-			doc["items"].([]any)[1].(map[string]any)[PatternField] = tc.pattern
-
-			res := f.mustIngest(doc)
-			if fl := f.flagOf(res, 2); fl.SignatureID != tc.signature {
-				t.Errorf("the flag cites signature %q, want %s", fl.SignatureID, tc.signature)
-			}
-			// And it is durable, so the channel is closed in the record and not
-			// only in the render.
-			run := f.readRunRecord(f.runID)
-			if len(run.ReviewFlags) != 1 || run.ReviewFlags[0].SignatureID != tc.signature {
-				t.Errorf("the run record carries review flags %v", run.ReviewFlags)
-			}
-		})
-	}
-
-	// The generative position runs the whole registry, and its pattern is read
-	// under the same rule.
-	t.Run("a generative pattern is read too", func(t *testing.T) {
-		f := newIngestFixture(t, PositionWidening)
+// That issue found `pattern` to be a channel no detector read, so an item whose
+// provenance field carried the registry's own phrasing landed unremarked. There
+// is no prose detector now, at any field, so the asymmetry is gone by
+// construction: what the gate judges is the item's KEY SET, and `pattern` is one
+// key in it. A reserved name reaches the same refusal whichever key it is under,
+// and an ordinary pattern — whatever it says — lands.
+func TestTheProvenanceFieldIsJudgedByTheSameRuleAsAnyOther(t *testing.T) {
+	t.Run("a pattern quoting a fix proposal lands", func(t *testing.T) {
+		f := newIngestFixture(t, "detection")
 		doc := f.payload(1)
-		doc["items"].([]any)[0].(map[string]any)[PatternField] = "P-4. We recommend this configuration."
+		doc["items"].([]any)[0].(map[string]any)[PatternField] =
+			"P-1. The record says the fix is to rewrite the charter."
 
 		res := f.mustIngest(doc)
-		if fl := f.flagOf(res, 1); fl.SignatureID != "RG-EVAL-RECOMMENDATION" {
-			t.Errorf("the flag cites signature %q", fl.SignatureID)
+		if len(res.Records) != 1 || len(res.RefusedItems) != 0 {
+			t.Fatalf("a pattern reporting what the material says was refused: %v", res.RefusedItems)
 		}
 	})
 
-	// An ordinary pattern still raises nothing: a channel closed by flagging
-	// every provenance value would be a channel traded for noise.
-	t.Run("an ordinary pattern raises nothing", func(t *testing.T) {
+	t.Run("a reserved name beside the pattern still refuses", func(t *testing.T) {
 		f := newIngestFixture(t, "detection")
-		res := f.mustIngest(f.payload(1))
-		if len(res.ReviewFlags) != 0 {
-			t.Errorf("an ordinary pattern was flagged: %v", res.ReviewFlags)
+		doc := f.payload(2)
+		item := doc["items"].([]any)[1].(map[string]any)
+		item[PatternField] = "P-2. The record and the tree disagree."
+		item["fix"] = "rewrite the charter"
+
+		r := f.refusedItem(doc, 2, 2)
+		if r.Rule != "reserved-name" {
+			t.Errorf("the refusal cites rule %q, not the reserved-name table", r.Rule)
 		}
 	})
 }
