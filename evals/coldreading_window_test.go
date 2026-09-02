@@ -74,16 +74,30 @@ func TestEveryCommittedEntryFitsItsDeclaredWindow(t *testing.T) {
 //
 // `windowBreaches` is the one function both tests call, so a check that stopped
 // comparing would take this control down with it rather than leaving it green.
+//
+// What the control asserts is the EFFECT OF ITS OWN MUTATION and nothing about
+// the state of the rest of the file. It once asserted that the lowered file
+// produced exactly one breach, which is a claim about every entry: any unrelated
+// drift past a declaration — the very condition
+// TestEveryCommittedEntryFitsItsDeclaredWindow exists to report — took this
+// control down with it, so on the day a real breach appeared the check that
+// names it and the control that proves the check works failed together and
+// neither could be read as evidence about the other. The baseline is therefore
+// measured before the lowering, and every position but the target must be found
+// exactly as it was left.
 func TestTheWindowCheckReportsABreach(t *testing.T) {
 	clone := cloneHeadDetached(t)
 
-	// Measure first, so the lowered declaration is one below a real figure
-	// rather than an invented one.
-	measured := map[string]int{}
-	for _, position := range windowPositions {
-		measured[position] = assembledTokens(t, clone, position)
-	}
+	// The baseline: which positions already breach, before this test changes
+	// anything. Through windowBreaches, so the before and the after are one
+	// function's account and a difference between them is a difference in the
+	// file rather than between two notions of a breach.
+	before := breachedPositions(windowBreaches(t, clone))
+
 	const target = "widening"
+	// The target is measured first, so the lowered declaration is one below a
+	// real figure rather than an invented one.
+	targetTokens := assembledTokens(t, clone, target)
 
 	raw, err := os.ReadFile(filepath.Join(clone, filepath.FromSlash(presetConfigRel)))
 	if err != nil {
@@ -101,7 +115,7 @@ func TestTheWindowCheckReportsABreach(t *testing.T) {
 	if !ok {
 		t.Fatalf("the committed file names no entry for %s, so there is nothing to lower", target)
 	}
-	lowered := measured[target] - 1
+	lowered := targetTokens - 1
 	entry["window"] = json.RawMessage(fmt.Sprintf(
 		`{"tokens_est": %d, "measured_tokens_est": %d, "measured_bytes": 1, "measured_at": "0000000"}`,
 		lowered, lowered))
@@ -125,13 +139,30 @@ func TestTheWindowCheckReportsABreach(t *testing.T) {
 		"commit", "-q", "-m", "lower one declaration")
 
 	breaches := windowBreaches(t, clone)
-	if len(breaches) != 1 {
-		t.Fatalf("a declaration one below the measured figure produced %d breach(es), want "+
-			"exactly 1: %v", len(breaches), breaches)
+	after := breachedPositions(breaches)
+	if !after[target] {
+		t.Fatalf("a declaration one below the measured figure produced no breach at %s; the "+
+			"breaches were %v", target, breaches)
 	}
-	b := breaches[0]
-	if b.Position != target {
-		t.Errorf("the breach names the position %q, want %q", b.Position, target)
+	// And nothing else moved. This is the half that says the breach belongs to
+	// the lowering rather than to whatever else the file happens to hold: a
+	// position that already breached still does, and one that did not still does
+	// not.
+	for _, position := range windowPositions {
+		if position == target {
+			continue
+		}
+		if after[position] != before[position] {
+			t.Errorf("lowering the %s declaration changed whether %s breaches (before %v, "+
+				"after %v); the mutation is confined to one entry and the check must be too",
+				target, position, before[position], after[position])
+		}
+	}
+	var b windowBreach
+	for _, x := range breaches {
+		if x.Position == target {
+			b = x
+		}
 	}
 	if b.Declared != lowered {
 		t.Errorf("the breach names the declaration %d, want %d", b.Declared, lowered)
@@ -140,6 +171,17 @@ func TestTheWindowCheckReportsABreach(t *testing.T) {
 		t.Errorf("the breach names the measured figure ~%d over %d bytes, which does not "+
 			"exceed the declaration %d", b.TokensEst, b.Bytes, b.Declared)
 	}
+}
+
+// breachedPositions reduces a breach list to the set of positions in it, so a
+// control can compare the state before its own mutation with the state after it
+// without asserting anything about how many entries breach in total.
+func breachedPositions(breaches []windowBreach) map[string]bool {
+	out := make(map[string]bool, len(breaches))
+	for _, b := range breaches {
+		out[b.Position] = true
+	}
+	return out
 }
 
 // presetConfigRel is the committed preset configuration, spelled here rather
