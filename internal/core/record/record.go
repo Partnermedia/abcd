@@ -136,8 +136,8 @@ func describeIssue(repoRoot, id string) (Description, error) {
 			}
 		case iss.Status == capture.StateOpen:
 			d.NextMoves = []string{
-				"graduate it into an intent: `abcd " + verbCapturePromote + " " + id + "`",
-				"or close it: `abcd " + verbCaptureResolve + " " + id + " \"<note>\" --impact <...>` / `abcd " + verbCaptureWontfix + " " + id + " \"<reason>\"`",
+				"graduate it into an intent: `abcd " + verbCapturePromote + " " + id + " --grounds \"<pursued|deferred|declined>: <text>\"`",
+				"or close it: `abcd " + verbCaptureResolve + " " + id + " \"<note>\" --impact <...> --grounds \"<pursued|deferred|declined>: <text>\"` / `abcd " + verbCaptureWontfix + " " + id + " \"<reason>\"`",
 			}
 		default:
 			d.NextMoves = []string{"none — the issue is " + string(iss.Status) + "; the trail is above"}

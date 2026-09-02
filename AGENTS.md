@@ -196,8 +196,9 @@ irreversible; guessing downward costs nothing.**
 - **Record ids need no coordination between checkouts.** Captures, intents
   and specs mint timestamp-numeric ids through one allocator that reads no
   maximum (adr-45), so two current checkouts minting in the same window
-  allocate distinct ids by construction; the per-checkout mint lock only
-  serialises minters inside one checkout. ADRs keep their hand-numbered
+  allocate distinct ids unless they share the same second and the same
+  four-digit draw, a coincidence the armed uniqueness detectors assert against;
+  the per-checkout mint lock only serialises minters inside one checkout. ADRs keep their hand-numbered
   filename ordinal, so an ADR is the one record family where minting from two
   checkouts still needs a word first.
 

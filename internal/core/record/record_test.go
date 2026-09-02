@@ -83,6 +83,14 @@ func TestDescribeIssueNextMoves(t *testing.T) {
 		!strings.Contains(joined, "capture resolve") || !strings.Contains(joined, "capture wontfix") {
 		t.Fatalf("open+unpromoted next moves wrong:\n%s", joined)
 	}
+	// A printed remedy must run as printed: promote and resolve both require
+	// --grounds, so a next move that omits it is an instruction that refuses.
+	for _, move := range d.NextMoves {
+		if (strings.Contains(move, "capture promote") || strings.Contains(move, "capture resolve")) &&
+			!strings.Contains(move, "--grounds") {
+			t.Fatalf("next move omits the required --grounds and would refuse as printed: %s", move)
+		}
+	}
 	assertZeroWrites(t, repo, before)
 
 	// Promote it: the next move becomes the intent pointer.
