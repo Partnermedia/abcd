@@ -556,17 +556,21 @@ func remoteScheme(source string) string {
 // store copies verbatim into a citation, and the write-time scanner cannot help
 // here: an opaque token or password matches no pattern, so it has to be dropped
 // structurally, by the name it travels under. The list is deliberately short and
-// closed — every entry is a name whose value is a secret in ordinary usage, so
-// dropping it loses no addressing information worth keeping.
+// closed, and every entry has to name a secret in ESSENTIALLY EVERY usage, not
+// merely in a credentialled one: dropping a parameter truncates the address the
+// citation exists to reproduce, and a citation that no longer resolves is its
+// own defect. `key` and `signature` fail that bar — `?key=section3` addresses a
+// document section and `?signature=v2` names a content signature at least as
+// often as either carries a secret — so they are not on the list. A key-shaped
+// credential that travels under one of those names is out of reach here by
+// design; it is the operator's to keep out of the URL.
 var credentialQueryKeys = map[string]bool{
 	"token":        true,
 	"api_key":      true,
 	"apikey":       true,
 	"access_token": true,
-	"key":          true,
 	"password":     true,
 	"secret":       true,
-	"signature":    true,
 }
 
 // dropCredentialQuery removes every credential-shaped query parameter from u in

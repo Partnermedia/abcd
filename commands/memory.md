@@ -31,8 +31,9 @@ is wired.
 
 A credential carried by the URL never reaches the store: basic-auth userinfo
 (`https://user:pass@host/doc`) and credential-shaped query keys (`token`,
-`api_key`, `apikey`, `access_token`, `key`, `password`, `secret`, `signature`,
-case-insensitive) are stripped before the fetched address becomes the stored
+`api_key`, `apikey`, `access_token`, `password`, `secret`, case-insensitive —
+names that carry a secret in essentially every usage, so an addressing
+parameter such as `?key=` is never truncated) are stripped before the fetched address becomes the stored
 origin and title, and masked in every fetch-failure message — including the
 transport's own error, which is unwrapped to its cause so it cannot re-print
 the address behind the mask. The rest of the address is reproduced unchanged.

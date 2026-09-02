@@ -152,6 +152,35 @@ func TestIngestStripsURLCredential(t *testing.T) {
 		}
 	})
 
+	t.Run("an addressing query key is not mistaken for a credential", func(t *testing.T) {
+		repo := t.TempDir()
+		// `key` and `signature` name a credential only sometimes; they name a
+		// document section, a sort key or a content signature at least as
+		// often, and dropping them truncates a legitimate address the citation
+		// is supposed to reproduce.
+		final := "https://example.com/doc?key=section3&signature=v2&token=" + fakeQueryToken
+		res, err := Ingest(IngestRequest{
+			RepoRoot:  repo,
+			Source:    "https://example.com/doc",
+			Distiller: credentialPageDistiller,
+			Fetcher:   fetcherReturning(final),
+			Now:       fixedNow,
+		})
+		if err != nil {
+			t.Fatalf("ingest: %v", err)
+		}
+		origin, _ := res.Citation["origin"].(string)
+		if !strings.Contains(origin, "key=section3") {
+			t.Errorf("an addressing ?key= parameter was dropped from the stored origin: %q", origin)
+		}
+		if !strings.Contains(origin, "signature=v2") {
+			t.Errorf("an addressing ?signature= parameter was dropped from the stored origin: %q", origin)
+		}
+		if strings.Contains(origin, fakeQueryToken) {
+			t.Errorf("the stored origin keeps the bearer credential: %q", origin)
+		}
+	})
+
 	t.Run("a transport error does not echo the credential it re-prints", func(t *testing.T) {
 		repo := t.TempDir()
 		source := "https://alice:" + fakeURLPassword + "@example.com/doc?token=" + fakeQueryToken
