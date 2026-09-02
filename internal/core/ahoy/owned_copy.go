@@ -186,10 +186,12 @@ func isOwnedCopyFile(target string) bool {
 
 // ownedCopySourceReady reports whether a verified cache artefact exists to copy
 // from — the precondition for installing (or healing to) an owned copy. When it
-// does not hold, install degrades loudly to the spc-21 pinned symlink.
-func ownedCopySourceReady() bool {
+// does not hold, install degrades loudly to the spc-21 pinned symlink. cwd is
+// the repository the verb runs against: a data dir of a shape the harness never
+// produces (see dataDirHazard) is no source at all.
+func ownedCopySourceReady(cwd string) bool {
 	dataDir := pluginDataDir()
-	if dataDir == "" {
+	if dataDir == "" || dataDirHazard(dataDir, cwd) != "" {
 		return false
 	}
 	if cacheRecordedSHA(dataDir) == "" {

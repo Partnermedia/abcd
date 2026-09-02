@@ -80,8 +80,18 @@ var (
 	rcpIDRe = regexp.MustCompile(`^rcp-[0-9a-f]{12}$`)
 	// auditHeadingRe matches the `## Audit Notes` heading (any heading depth).
 	auditHeadingRe = regexp.MustCompile(`^#{1,6}\s+Audit Notes\s*$`)
-	// markerRe matches a parked review marker line inside the Audit Notes.
-	markerRe = regexp.MustCompile(`<!-- abcd-review: (OWED|INGESTED|DEAD_LETTER) receipt=(rcp-[0-9a-f]+) -->`)
+	// markerRe matches a parked review marker LINE inside the Audit Notes. It is
+	// line-anchored and whole-line on purpose: the marker is the ledger's own
+	// review state, and an unanchored pattern would find one anywhere in the
+	// record's bytes — mid-sentence inside a rendered verdict field, for instance,
+	// where an untrusted payload put it. termsafe's cleaner is the primary defence
+	// (it breaks `<!` and `-->` in every field it writes, code span or not); this
+	// is the second, so a marker has to occupy a line of its own to count.
+	//
+	// It is still a byte pattern rather than a grammar: it does not know a fenced
+	// block from prose, so a marker-shaped line inside a fence still matches
+	// (iss-2609020529185438). Both defences are needed; neither is sufficient.
+	markerRe = regexp.MustCompile(`(?m)^<!-- abcd-review: (OWED|INGESTED|DEAD_LETTER) receipt=(rcp-[0-9a-f]+) -->\r?$`)
 	// auditPlaceholderRe matches an intent template's Audit Notes placeholder,
 	// dropped when the first real review block lands so a populated audit carries no
 	// stale "Empty" claim. It tolerates both delimiter styles the templates have
@@ -875,10 +885,19 @@ func renderBucket(b *strings.Builder, name string, entries []verdictGapEntry) {
 	}
 }
 
+// renderEvidence writes one evidence pointer. The quote is delimited with plain
+// quotation marks rather than %q, and that is not a style choice: %q REWRITES the
+// cleaned bytes — it doubles every backslash — and the cleaner's guarantees are
+// stated over the exact string it returned (see the invariant note in
+// internal/termsafe/prose.go). The backslash the cleaner writes to escape a stray
+// backtick came back through %q doubled — an escaped backslash followed by a LIVE
+// backtick — putting an unpaired run into a committed record and reopening the
+// re-pairing hole this file's other embeddings close. Both fields are already
+// newline-free and control-rune-free, which is all %q was buying here.
 func renderEvidence(e verdictEvidence) string {
 	ref := oneLine(e.Ref)
 	if q := oneLine(e.Quote); q != "" {
-		return fmt.Sprintf("%s — %q", ref, q)
+		return fmt.Sprintf(`%s — "%s"`, ref, q)
 	}
 	return ref
 }
