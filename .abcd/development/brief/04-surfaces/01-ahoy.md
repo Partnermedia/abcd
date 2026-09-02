@@ -33,8 +33,10 @@ announces that it writes before it runs — and each also ships on the CLI as
 - **`/abcd:ahoy install`** — install or update the plugin in this repo
   (idempotent; covers first-install and upgrade). Runs the detection pass, then
   the apply pass over the resulting gaps.
-- **`/abcd:ahoy uninstall`** — reversible marker-only removal: removes the
-  marker block and abcd's own `PATH` entry (if owned by this plugin).
+- **`/abcd:ahoy uninstall`** — reversible removal: removes the marker block,
+  abcd's own `PATH` entry (if owned by this plugin) and the provenance record
+  that proves that ownership. `--bin-dir` names the directory holding the entry,
+  needed only when `install --bin-dir` put it somewhere not on `PATH`.
   NEVER mutates `hooks/hooks.json` (plugin-static per spc-14 T7 + spc-16 T1).
   Leaves `.abcd/` intact. Re-running `install` re-installs cleanly.
 - **`/abcd:ahoy dry-run`** — run the detection pass and render the
@@ -224,7 +226,13 @@ Steps, run in parallel where independent:
    non-SessionStart shims attempt `hooks/bootstrap.sh` when the plugin-root
    binary is missing (throttled by a `.bootstrap.attempt` marker within a
    10-minute window), then fall back to a PATH-resolved `abcd` before failing
-   loudly. A missing or
+   loudly. The PATH rung accepts only an absolute resolution out of a
+   directory that is neither under the shim's working directory nor
+   world-writable — the shapes the documented install never produces — and
+   says in one line which binary it ignored and why before degrading
+   (iss-2609012039117381); whether a PATH binary should have to be vouched
+   for by `~/.abcd/path-entry` at all is the open question in
+   GHSA-gx3m-3224-qqcv. A missing or
    malformed manifest surfaces as a non-resolvable `plugin-owned` diagnostic
    gap. Neither install nor uninstall ever mutates `hooks.json` — the manifest
    is plugin-static per spc-14 T7.
@@ -272,7 +280,9 @@ detection (step 7) is only meaningful because the marker block has one
 canonical source. The name guard `install` writes comes from the same directory
 (`pre-commit`, `pre-merge-commit`) — the generalised form of the prototype this
 repo runs on itself, with the repo-specific gates dropped, embedded so the binary
-is self-contained.
+is self-contained. The `prepare-commit-msg` prompt that `install --attribution`
+opts a repo into — asking every commit to declare whether a tool assisted it —
+is the fourth file in that directory.
 The `.abcd/rules.json` skeleton is written inline by the apply pass
 (`stepRules`); a later phase moves it — and `.abcd/usage.md`, once that artefact
 ships — to canonical files under `defaults/` too.
@@ -291,9 +301,15 @@ unmanaged-repo adoption question, `--docs-target` (`claude_md` | `agents_md` |
 `--scan-deep` (`true` | `false`) toggles the deep scan, `--visibility`
 (`private` | `public`) sets repo visibility, `--dev` selects track-latest
 dogfood mode (the PATH entry rebuilds from the source tip on every call instead
-of pinning the built binary), and `--allow-stale-binary` proceeds even when the
+of pinning the built binary), `--allow-stale-binary` proceeds even when the
 running binary is stale against its source tip or of undeterminable vintage
-(the default refuses before any write and names the rebuild fix). `--yes` does not adopt an
+(the default refuses before any write and names the rebuild fix), `--bin-dir`
+names the directory for the `PATH` entry (default `~/.local/bin`, or an existing
+abcd install adopted in place; a directory abcd cannot write refuses, because
+abcd never escalates privileges), and `--attribution` opts the repo into the
+committed `prepare-commit-msg` prompt asking every commit to declare whether a
+tool assisted it — the choice is recorded, so a later install without the flag
+keeps the hook. `--yes` does not adopt an
 unmanaged repo or pin an unset git identity — those still need `--adopt` and an
 answered prompt. The identity-pin exclusion is stated, never assumed: `--yes`
 names it in its own help, the install envelope carries it as `optional_skipped`,
@@ -372,7 +388,14 @@ closes stdin and pre-answers: `abcd ahoy install --yes --refuse-adopt
    per-repo `<root-sha>/meta.json` (`root_commit`, `name`, `github`, and a
    `corpus` block pointing at `transcripts/`), and register the repo in
    `index.json` by its immutable `root_commit`, refreshing the entry's mutable
-   `path` if the repo moved. The history `index.json` is the
+   `path` if the repo moved. A remote URL recorded in either file carries no
+   credential: it is scrubbed where the identity is derived, the index is
+   scrubbed again as it is LOADED — so every rewrite drops a credential from
+   every entry, not only from the one being registered — and a `meta.json`,
+   which is otherwise written once and never revisited, is rewritten in place
+   when it holds one. A store that already holds a credential raises
+   `history.credential_at_rest`, so an otherwise up-to-date repo does not
+   short-circuit past the heal. The history `index.json` is the
    **sole user-scope registry** — there is no `workspaces.json`. Transcript
    capture is native — no external tool and no per-repo redirect shim.
 8. **Marker block** (`plugin-owned`) — inject/refresh the block between
@@ -431,9 +454,11 @@ notes the orphaned-predecessor possibility in the summary.
 ## Sub-verb semantics
 
 **Uninstall (`/abcd:ahoy uninstall`):** removes the BEGIN/END marker block from
-CLAUDE.md/AGENTS.md and abcd's own `PATH` entry (`~/.local/bin/abcd`, or wherever
-on `PATH` it sits) **if it points at this
-plugin** (otherwise leave it alone). `hooks/hooks.json` is plugin-static per
+CLAUDE.md/AGENTS.md, abcd's own `PATH` entry (`~/.local/bin/abcd`, or wherever
+on `PATH` it sits) **if it points at this plugin** (otherwise leave it alone),
+and the provenance record by which that ownership is proven; `--bin-dir` names
+the directory holding the entry when `install --bin-dir` put it somewhere not on
+`PATH`. `hooks/hooks.json` is plugin-static per
 spc-14 T7 — uninstall NEVER mutates it (per spc-16 T1 brief amendment).
 **Leaves the entire `.abcd/` namespace intact** (`config/`, `config.json`,
 `rules.json`, `development/`, `work/`, `memory/`) and the history store. Deeper
@@ -455,8 +480,11 @@ reports the guard-hook health: `plugin_root_resolved`, `hook_installed`,
 names `abcd ahoy install` for anything actionable.
 
 **Doctor (`/abcd:ahoy doctor`):** runs the detection pass plus a read-only
-audit pass. The text render shows two counts — detection gaps and audit gaps.
-The JSON envelope (`{detection, audit_gaps}`) carries full per-gap detail: the
+audit pass. The text render shows two counts — detection gaps and audit gaps —
+and then names, one line each, every required gap that is NOT resolvable: those
+are the ones no later `install` will clear (a `config.json` abcd refuses to touch
+until a human repairs it is the case that matters), so a bare count of them
+would be a number the reader cannot act on. The JSON envelope (`{detection, audit_gaps}`) carries full per-gap detail: the
 detection gaps cover user-state checks (the history store exists and is
 writable, the `index.json` entry matches this root SHA, the PATH symlink and
 hook manifest are intact), while the audit pass reconciles the registered

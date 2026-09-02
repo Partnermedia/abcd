@@ -79,12 +79,12 @@ plugin command file present (`commands/disembark.md`, `embark.md`,
 `launch.md`, `intent.md`). The `/abcd:<verb>` surface covers `ahoy`,
 `banlist`, `capture`, `consult`, `disembark`, `docs`, `embark`, `guard`,
 `history`, `ideate`, `identity`, `ingest`, `intent`, `launch`, `lint`,
-`memory`, `prepare-this-repo`, `site`, `update`, and `version` (20 verb files, one per
-command directly under `commands/`). The investigation found no predecessor spc-17 probe STUB
+`memory`, `prepare-this-repo`, `reading`, `site`, `update`, and `version` (21 verb
+files, one per command directly under `commands/`). The investigation found no predecessor spc-17 probe STUB
 behind the top-level command to replace — the "stub replacement" premise is
 therefore recorded here as not-applicable. The top-level command file itself
 is present today (`commands/abcd.md`, referenced above and scaffolded with the
-repo, alongside the twenty verb files), so a later reader should hunt for
+repo, alongside the twenty-one verb files), so a later reader should hunt for
 neither a stub nor a missing file.
 
 ## The six sections (fixed order)

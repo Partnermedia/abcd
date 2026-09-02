@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -75,20 +76,24 @@ func TestIntentPlanHappy(t *testing.T) {
 			SpecID string `json:"spec_id"`
 		} `json:"intent"`
 		Spec struct {
-			ID string `json:"id"`
+			ID   string `json:"id"`
+			Path string `json:"path"`
 		} `json:"spec"`
 	}
 	if err := json.Unmarshal(out, &got); err != nil {
 		t.Fatalf("plan --json not JSON: %v\n%s", err, out)
 	}
-	if got.Intent.Bucket != "planned" || got.Spec.ID != "spc-1" || got.Intent.SpecID != "spc-1" {
+	if got.Intent.Bucket != "planned" || !cliNativeSpecIDRe.MatchString(got.Spec.ID) || got.Intent.SpecID != got.Spec.ID {
 		t.Fatalf("plan result = %+v", got)
 	}
-	// The draft moved and the spec landed on disk.
+	// The draft moved and the spec landed on disk, under the minted id.
 	if _, err := os.Stat(filepath.Join(repo, cliPlanned, "itd-10-alpha.md")); err != nil {
 		t.Fatalf("planned file missing: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(repo, cliSpecsOpen, "spc-1-alpha.md")); err != nil {
+	if got.Spec.Path != cliSpecsOpen+"/"+got.Spec.ID+"-alpha.md" {
+		t.Fatalf("spec path = %q, want the minted id and the slug under open/", got.Spec.Path)
+	}
+	if _, err := os.Stat(filepath.Join(repo, got.Spec.Path)); err != nil {
 		t.Fatalf("spec file missing: %v", err)
 	}
 }
@@ -253,8 +258,8 @@ func TestIntentQuotedTextCreates(t *testing.T) {
 	if err := json.Unmarshal(out, &got); err != nil {
 		t.Fatalf("create --json not JSON: %v\n%s", err, out)
 	}
-	if got.ID != "itd-1" || got.Bucket != "drafts" {
-		t.Fatalf("create result = %+v, want itd-1 in drafts", got)
+	if !cliNativeIntentIDRe.MatchString(got.ID) || got.Bucket != "drafts" {
+		t.Fatalf("create result = %+v, want a native itd id in drafts", got)
 	}
 	body, err := os.ReadFile(filepath.Join(repo, got.Path))
 	if err != nil {
@@ -284,8 +289,8 @@ func TestIntentNewAliasWarnsAndCreates(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &got); err != nil {
 		t.Fatalf("alias stdout not JSON: %v\n%s", err, stdout)
 	}
-	if got.ID != "itd-1" || got.Bucket != "drafts" {
-		t.Fatalf("alias create result = %+v, want itd-1 in drafts", got)
+	if !cliNativeIntentIDRe.MatchString(got.ID) || got.Bucket != "drafts" {
+		t.Fatalf("alias create result = %+v, want a native itd id in drafts", got)
 	}
 	if !strings.Contains(stderr, "deprecat") {
 		t.Fatalf("alias must warn on stderr about deprecation, got: %q", stderr)
@@ -740,3 +745,10 @@ func TestIntentReadyGroundsTextReceiptPrecedesTheReport(t *testing.T) {
 		t.Fatalf("the receipt must say how many entries the record now carries:\n%s", out)
 	}
 }
+
+// The shape of a native record id (adr-45): the family tag, a 12-digit UTC
+// second stamp and a 4-digit suffix.
+var (
+	cliNativeIntentIDRe = regexp.MustCompile(`^itd-[0-9]{16}$`)
+	cliNativeSpecIDRe   = regexp.MustCompile(`^spc-[0-9]{16}$`)
+)

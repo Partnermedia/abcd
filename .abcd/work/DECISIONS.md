@@ -2424,3 +2424,42 @@ together (the script's header says why there is no escape hatch).
 - 2026-09-01 — The design branch stays as it is (maintainer). `design/roles-loopback-workstream` is 471 commits behind main and carries two decision records numbered 0055 and 0056 that main has since used; with decisions moving to timestamp ids, the next design session merges main and takes the ids then, when the mint verb may exist, rather than renumbering by hand tonight.
 - 2026-09-01 — The brief is the shipped state, consolidated without a new intent (maintainer). The request "a product thinker must be able to understand the current shipped state of the repository by looking only at the brief" is already adr-5's decision and is delivered by two existing drafts, itd-60 (the doc-fidelity pass that gates spec close on the brief reflecting delivery) and itd-147 (generated surface blocks so a shape claim cannot drift), so no umbrella intent is filed; the drift records from the v0.7.0 receipts link to them and the two exact duplicate pairs close as duplicates. Added to the decision: brief, record and release stay in sync, with one legitimate lead — a brief edited after a release was cut is ahead of that release until the next cut, and the gap closes at the cut rather than between cuts. The work is sequenced as Phase 8, "the brief is the shipped state"; the design branch's unmerged "closed loop" phase takes 9 when it merges. itd-61, the reverse direction, stays adjacent as an open question of the phase.
 - 2026-09-02 — The 2026-09-01 supply-regime ruling reverses the 2026-08-31 degrade-to-flag decision (recorded at the maintainer's ruling, flagged as a reversal for the record). On 2026-08-31 the four prose signatures were degraded from refusing to flagging, so an honest report that tripped one landed with a review flag; the 2026-09-01 ruling names accept-and-flag as rejected and keeps only the structural rule, a reserved name as a key of the reader's own output. The implementation withdraws the signature registry and the review-flag plumbing it alone fed, since a detector that produces nothing is dead scaffolding, and re-stamps iss-2608311518056854, which the 31 August change had already resolved, under the new ruling with no `Resolves:` trailer, because RS001 refuses a trailer for an id that entered resolved/ before the branch diverged.
+- 2026-09-01 — The strict up-to-date policy stays in front of the merge queue, and the branch update is automated instead (maintainer, ruling on iss-2609012202237613 against the two directions it names). Every auto-merge pull request opened tonight sat `BEHIND` outside the queue until a hand-run update, because auto-merge enqueues only a CLEAN pull request and the strict policy makes a behind pull request never CLEAN; the queue that exists to test a pull request against the current base therefore never received it. The queue's group commit does gate the merged result, so dropping strict would preserve the duplicate-id gate iss-172 records as an invariant, but the maintainer keeps strict and ships iss-172's first rung: `scripts/pr-keep-current.sh` walks every armed pull request and asks the forge to merge the base into any that is `BEHIND` and not queued, `--watch` repeating until none is armed. Rejected for now: relaxing strict (belt and braces are kept on purpose); a scaffolded update-branch workflow (rung 2, still needing a token whose pushes trigger checks, carried by itd-107). CONTRIBUTING no longer claims branches never need updating.
+- 2026-09-01 — ADRs take timestamp ids through the same seam as issues (maintainer, the turn adr-45 ruling 3 deferred). Two branches minted `0055` and `0056` on the same day for different decisions, so the hand-numbered ordinal has the add/add collision the timestamp mint removed for captures. From here an ADR id is minted by the binary as `adr-<timestamp>` with a filename ordered by that stamp; `0001`–`0058` keep their ids and filenames, and nothing is renumbered. Rejected: minting ordinals from one checkout only (a convention, not a gate), and renumbering at merge (the collision tonight was found by reading, and a reader is not a gate). The mint verb and the lint rule that admits both shapes are implementation, tracked in the ledger.
+- 2026-08-31 — Degrade itd-185's four semantic supply-regime signatures
+  (RG-EVAL-ORDERING, RG-EVAL-RECOMMENDATION, RG-REG-FIXPROPOSAL,
+  RG-EXPL-DISPOSITION) from enforce to flag: a hit raises a review flag on the
+  run record and the item lands. This is the reserved degradation path spc-63
+  names, taken deliberately, and it weakens the claimed property from ENFORCED to
+  OBSERVED. The structural halves are untouched and stay absolute — the reserved
+  names and the strict per-position schema still refuse. THE EVIDENCE IS
+  SYNTHETIC, and saying so is the point: the itd-185 fidelity audit constructed a
+  corpus of 34 realistic reading outputs and 14 were caught, every one of them for
+  REPORTING what the read document said rather than for proposing anything (the
+  disposition detector fires on any claim quoting the token this repository's
+  records carry everywhere; "section 3 says the fix is already merged while
+  section 8 says it is pending" is the canonical shape of a detection finding and
+  fires too). No reading has ever been run through this verb — every payload the
+  delivery has validated is synthetic — so the ruled condition, "degradation only
+  on observed noise" (BUILD-PLAN.md:70, spc-63), is NOT met and this departs from
+  the ruled design. Taken anyway because the alternative departs further: the gate
+  is currently enforced over a calibration that has never been taken, which is the
+  standing tension itd-185 already records against widen-options' "calibrated
+  before it gates", and waiting for observed noise means enforcing indefinitely on
+  no calibration, because the assembled input is about 9.8 MB and cannot be handed
+  to a reading at all (iss-2608311501186646). Of the two departures this one
+  cannot produce a false refusal of a real reading, and it is reversible by the
+  same one-line mode change. REVISIT POINT: the first real reading. When the
+  instrument can be run, the flags it raises are the observed calibration, and the
+  mode is reconsidered on that evidence rather than left at flag by default.
+  Rejected: keep enforcing — defensible under the letter of "degradation only on
+  observed noise" and indefensible under "calibrated before it gates", and on the
+  synthetic evidence it would refuse roughly two in five legitimate outputs the
+  first time a reading ran. Consequences recorded in the same change:
+  TestEverySignatureShipsEnforced is replaced by a test pinning each entry's mode
+  by name so a silent flip in either direction fails; itd-185's ac-5 and ac-9 are
+  rewritten to say flag rather than refuse; the ingested audit verdict
+  rcp-fe3450ca55ff records those two criteria MET on the strength of a refusal and
+  therefore describes superseded behaviour needing re-issue at the next audit; and
+  the disclosed residue on itd-185 and spc-63 is widened to name over-catching
+  beside under-catching, with the propose-versus-report distinction as the reason.

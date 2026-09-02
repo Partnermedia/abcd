@@ -838,7 +838,7 @@ func sealLine(src string, findings []Finding, idxs []int) string {
 		if start >= end {
 			continue
 		}
-		spans = append(spans, sealSpan{start, end, IsIdentityKind(findings[i].Kind)})
+		spans = append(spans, sealSpan{start, end, maskedWhole(findings[i].Kind)})
 		cov[start]++
 		cov[end]--
 	}
@@ -1010,13 +1010,15 @@ func guardedReadWhy(err error) string {
 // unless the repo's pii.json raised that kind above its built-in default,
 // which is a judgement the byte scan honours.
 func (s *Scanner) scanBytes(data []byte, secrets []Pattern, logical string) []Finding {
-	// GitRemoteUsername travels with the name so the matcher derives
-	// nameEqGithub exactly as it does on text: a user.name equal to the public
-	// handle is reported as github_username (dropped here), never promoted to
-	// a hard-fail real_name by the file's extension (iss-283).
+	// GitRemoteUsername and the emails travel with the names so the matcher
+	// tells a public handle from a real name exactly as it does on text
+	// (isPublicHandle): a user.name equal to the public handle is reported as
+	// github_username (dropped here), never promoted to a hard-fail real_name
+	// by the file's extension (iss-283).
 	long := Identity{
 		HomePath: s.identity.HomePath, GitUserEmail: s.identity.GitUserEmail,
 		GitUserName: s.identity.GitUserName, GitRemoteUsername: s.identity.GitRemoteUsername,
+		OtherGitUserNames: s.identity.OtherGitUserNames, OtherGitUserEmails: s.identity.OtherGitUserEmails,
 	}
 	all := scanText(string(data), long, secrets, s.identSev, logical, true)
 	out := all[:0]

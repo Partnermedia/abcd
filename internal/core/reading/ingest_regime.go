@@ -13,11 +13,15 @@ package reading
 // names that name one and the refusal states the licence.
 //
 // SEMANTIC SIGNATURES are bounded by a registry: prose that ranks, settles or
-// proposes without the field. itd-185 discloses that residue — a fix proposal or
-// a disposition phrased outside the registry is not caught. Every signature
-// ships in enforce mode; degrading one is a code change plus a decision-log
-// entry, which is what makes a weakening from enforced to observed a recorded
-// act rather than a runtime toggle.
+// proposes without the field. They are OBSERVED rather than enforced — every one
+// of the four ships in flag mode, so a hit is recorded on the run record and the
+// item lands. The registry cannot tell a reading that PROPOSES from one that
+// reports somebody else proposing, and the second is most of what a reading
+// legitimately does, so an enforcing registry refuses a reading for quoting the
+// document it read. The mode of each is a literal in Go with no configuration
+// seam, and a test pins each entry's mode by name: moving one in either
+// direction is a code change plus a decision-log entry, which is what makes it a
+// recorded act rather than a runtime toggle.
 
 import (
 	"encoding/json"
@@ -71,22 +75,27 @@ var regimeLicence = map[string]string{
 type SignatureMode string
 
 const (
-	// SignatureEnforce refuses the item. Every shipped signature is in this mode.
+	// SignatureEnforce refuses the item. No shipped signature is in this mode:
+	// the four semantic detectors were degraded to flag mode when they were
+	// measured refusing a reading for quoting its own material. It stays the
+	// registry's other half, and the refusal branch it drives stays live, so a
+	// future signature that discriminates propose from report can ship enforced.
 	SignatureEnforce SignatureMode = "enforce"
-	// SignatureFlag records the hit on the run record and lands the item. It is
-	// the reserved degradation path; no shipped signature uses it.
+	// SignatureFlag records the hit on the run record and lands the item. All
+	// four shipped signatures are in this mode.
 	SignatureFlag SignatureMode = "flag"
 )
 
-// Signature is one named detector over an item's body text.
+// Signature is one named detector over an item's text — its body values and
+// the envelope pattern it was read under.
 type Signature struct {
 	// ID is the name a refusal cites, so a reader can find the rule that fired.
 	ID string
 	// Regime is the supply regime this signature polices.
 	Regime string
-	// Mode is a literal in Go with no configuration seam. Degrading a signature
-	// on observed noise is an edit here plus a decision-log entry, which is what
-	// makes the weakening from enforced to observed a recorded act.
+	// Mode is a literal in Go with no configuration seam. Moving a signature
+	// between enforce and flag is an edit here plus a decision-log entry, which
+	// is what makes the change between enforced and observed a recorded act.
 	Mode SignatureMode
 	// Licence is what a hit breaches.
 	Licence string
@@ -97,12 +106,15 @@ type Signature struct {
 	Pattern *regexp.Regexp
 }
 
-// Signatures is the registry. It is deliberately small and conservative: whether
-// these lint cleanly in practice is itd-185's recorded open question, and a
-// noisy signature costs a reading its findings.
+// Signatures is the registry. It is deliberately small and conservative, and
+// all four entries are OBSERVED rather than enforcing: measured against a
+// constructed corpus of thirty-four realistic reading outputs, fourteen were
+// refused, every one of them for reporting what the read document said rather
+// than for proposing anything. A noisy signature costs a reading its findings,
+// so what a hit buys is a flag on the run record and a reader's attention.
 var Signatures = []Signature{
 	{
-		ID: "RG-EVAL-ORDERING", Regime: RegimeEvaluative, Mode: SignatureEnforce,
+		ID: "RG-EVAL-ORDERING", Regime: RegimeEvaluative, Mode: SignatureFlag,
 		Licence: regimeLicence[RegimeEvaluative],
 		Pattern: regexp.MustCompile(`(?i)\b(?:ranks?|ranked|rates?|rated|scores?|scored)\s+` +
 			`(?:it\s+|them\s+|this\s+)?(?:first|second|third|last|highest|lowest|above|below)\b` +
@@ -110,14 +122,14 @@ var Signatures = []Signature{
 			`|\b(?:the\s+)?(?:strongest|weakest|best|worst)\s+(?:candidate|option|choice)\b`),
 	},
 	{
-		ID: "RG-EVAL-RECOMMENDATION", Regime: RegimeEvaluative, Mode: SignatureEnforce,
+		ID: "RG-EVAL-RECOMMENDATION", Regime: RegimeEvaluative, Mode: SignatureFlag,
 		Licence: regimeLicence[RegimeEvaluative],
 		Pattern: regexp.MustCompile(`(?i)\b(?:we|i)\s+recommend\b` +
 			`|\brecommend(?:ation)?\s+(?:is|that)\b` +
 			`|\bshould\s+be\s+(?:chosen|selected|adopted|preferred|picked)\b`),
 	},
 	{
-		ID: "RG-REG-FIXPROPOSAL", Regime: RegimeRegistrative, Mode: SignatureEnforce,
+		ID: "RG-REG-FIXPROPOSAL", Regime: RegimeRegistrative, Mode: SignatureFlag,
 		Licence: regimeLicence[RegimeRegistrative],
 		Pattern: regexp.MustCompile(`(?i)\bthe\s+(?:fix|remedy|resolution)\s+is\b` +
 			`|\bto\s+fix\s+(?:this|it|that)\b` +
@@ -125,7 +137,7 @@ var Signatures = []Signature{
 			`|\bshould\s+be\s+(?:changed|replaced|rewritten|removed|deleted)\s+to\b`),
 	},
 	{
-		ID: "RG-EXPL-DISPOSITION", Regime: RegimeExplicative, Mode: SignatureEnforce,
+		ID: "RG-EXPL-DISPOSITION", Regime: RegimeExplicative, Mode: SignatureFlag,
 		Licence: regimeLicence[RegimeExplicative],
 		Pattern: regexp.MustCompile(`(?i)\b(?:this\s+claim\s+is|the\s+claim\s+is|it\s+is)\s+` +
 			`(?:already\s+)?(?:accepted|rejected|declined|settled|resolved)\b` +
@@ -342,11 +354,17 @@ func checkItem(ordinal int, fields map[string]string, def Definition,
 				ordinal, field, echo(fields[field]), strings.Join(want, ", "))}
 	}
 
+	// The registry's ENFORCING half. No shipped signature is in that mode, so
+	// nothing reaches the refusal below today — the four semantic detectors were
+	// degraded to flag mode on measured over-catching. The branch is the
+	// registry's contract rather than a path to one entry, and it stays live so
+	// a signature that can tell proposing from reporting can ship enforced
+	// without a second mechanism being invented for it.
 	for _, s := range Signatures {
 		if s.Regime != def.Regime || s.Mode != SignatureEnforce {
 			continue
 		}
-		if s.Pattern.MatchString(bodyText(fields, bodyFields)) {
+		if s.Pattern.MatchString(signatureText(fields, bodyFields)) {
 			return &ItemRefusal{Ordinal: ordinal, Rule: s.ID,
 				Detail: fmt.Sprintf("item %d matches the registered signature %s: %s",
 					ordinal, s.ID, s.Licence)}
@@ -355,26 +373,40 @@ func checkItem(ordinal int, fields map[string]string, def Definition,
 	return nil
 }
 
-// itemReviewFlags is the generative path, and the only place a signature hit
-// does not refuse.
+// itemReviewFlags records the signature hits that do not refuse. The item lands
+// either way, and the flag is durable on the run record.
 //
-// The generative licence is the widest — a widening reading proposes, which is
-// what it is for — so the constraint on what it produces falls at ADMISSION
-// rather than here. The prohibitions the widening definition states are still
-// worth seeing, so every signature runs and each hit is recorded on the run
-// record as a flag. The item lands.
+// Two things reach it, for two different reasons.
+//
+// The GENERATIVE position runs the whole registry. Its licence is the widest — a
+// widening reading proposes, which is what it is for — so the constraint on what
+// it produces falls at ADMISSION rather than here, and no signature of any
+// regime refuses there. The prohibitions the widening definition states are
+// still worth seeing.
+//
+// Every other position runs its own regime's signatures, and a hit flags
+// wherever that signature ships in FLAG mode — which today is all four. A
+// signature in enforce mode never arrives here: checkItem has already refused
+// the item.
 func itemReviewFlags(ordinal int, fields map[string]string, def Definition, bodyFields []string) []ReviewFlag {
-	if def.Regime != RegimeGenerative {
-		return nil
-	}
+	generative := def.Regime == RegimeGenerative
 	var out []ReviewFlag
-	text := bodyText(fields, bodyFields)
+	text := signatureText(fields, bodyFields)
 	for _, s := range Signatures {
-		if s.Pattern.MatchString(text) {
-			out = append(out, ReviewFlag{Ordinal: ordinal, SignatureID: s.ID,
-				Detail: fmt.Sprintf("item %d matches %s; the generative licence does not refuse it, and "+
-					"the constraint on a widening reading falls at admission", ordinal, s.ID)})
+		if !generative && (s.Regime != def.Regime || s.Mode != SignatureFlag) {
+			continue
 		}
+		if !s.Pattern.MatchString(text) {
+			continue
+		}
+		detail := fmt.Sprintf("item %d matches the registered signature %s: %s; the signature is "+
+			"observed rather than enforced, so the item lands and the hit is on the run record",
+			ordinal, s.ID, s.Licence)
+		if generative {
+			detail = fmt.Sprintf("item %d matches %s; the generative licence does not refuse it, and "+
+				"the constraint on a widening reading falls at admission", ordinal, s.ID)
+		}
+		out = append(out, ReviewFlag{Ordinal: ordinal, SignatureID: s.ID, Detail: detail})
 	}
 	return out
 }
@@ -436,17 +468,30 @@ func recordBytes(fields map[string]string, bodyFields []string) int {
 	return n
 }
 
-// bodyText is what a signature reads: the item's body values, joined and folded.
-// The pattern is not among them — it names the reading's own basis, not a
-// finding — and no key name is either, because a detector over key names would
-// be the reserved-name table written twice.
-func bodyText(fields map[string]string, bodyFields []string) string {
-	parts := make([]string, 0, len(bodyFields))
+// signatureText is what a signature reads: every text value the item carries,
+// joined and folded. No key NAME is among them, because a detector over key
+// names would be the reserved-name table written twice.
+//
+// The envelope's pattern is included, and excluding it was a hole. The argument
+// for leaving it out was that it names the reading's own basis rather than a
+// finding — but the field is untrusted text the reading chose, it is the one
+// field every item at every regime must carry, and it lands in a committed
+// record. An item whose pattern read "the fix is to rewrite the charter" was
+// therefore accepted at exit 0 with the registry's exact phrasing, no byte
+// substituted, in the one field no detector read (iss-2608311517547712). A
+// channel that is always open is not narrowed by what its field is FOR.
+func signatureText(fields map[string]string, bodyFields []string) string {
+	parts := make([]string, 0, len(bodyFields)+1)
+	parts = append(parts, fields[PatternField])
 	for _, f := range bodyFields {
 		parts = append(parts, fields[f])
 	}
 	return foldForMatching(strings.Join(parts, "\n"))
 }
+
+// brailleBlank is U+2800 BRAILLE PATTERN BLANK: a graphic character that renders
+// as nothing, which no Unicode category the fold consults reports.
+const brailleBlank = '\u2800'
 
 // foldForMatching normalises text so an INVISIBLE or compatibility-equivalent
 // rune cannot decide whether a check fires. What is stored is untouched.
@@ -468,6 +513,14 @@ func bodyText(fields map[string]string, bodyFields []string) string {
 //     rather than folding is what catches a rune placed INSIDE a keyword:
 //     folding one to a space would split the word in two and the signature would
 //     still not match. Guarding Cf alone was the same defect one category over.
+//   - U+2800 BRAILLE PATTERN BLANK folds to a space. It is the one rune found
+//     that renders as nothing and is caught by none of the categories above: it
+//     is a graphic character, so it is not Cf, not default-ignorable, not a
+//     variation selector, and unicode.IsSpace is false for it. Without this a
+//     pattern of one U+2800 satisfied the provenance rule and the record then
+//     asserted a provenance that renders blank — the U+200B failure one category
+//     further out. Only the blank folds; a braille pattern carrying dots is
+//     ordinary text.
 //   - NFKC folds the compatibility forms. The fi LIGATURE and the fullwidth
 //     letters are the registry's own phrasing written in code points that render
 //     the same, which is the defect side of this intent's own test — "the
@@ -485,7 +538,7 @@ func foldForMatching(text string) string {
 			unicode.Is(unicode.Other_Default_Ignorable_Code_Point, r),
 			unicode.Is(unicode.Variation_Selector, r):
 			return -1
-		case unicode.IsSpace(r):
+		case unicode.IsSpace(r), r == brailleBlank:
 			return ' '
 		}
 		return r
@@ -539,10 +592,20 @@ func sortedKeys(m map[string]json.RawMessage) []string {
 	return out
 }
 
-// renderRefusals renders the refusal list for a list-level message.
+// renderRefusals renders the refusal list for a list-level message — which is
+// the reason a refusal RECORD carries, so this is a durable surface and not only
+// a terminal one.
+//
+// The elision entry names no item, so it is not rendered as one. There is no
+// item 0, and the terminal renderer already suppressed it; a record writer that
+// did not was the same claim held in one surface instead of in the value.
 func renderRefusals(refusals []ItemRefusal) string {
 	parts := make([]string, 0, len(refusals))
 	for _, r := range refusals {
+		if r.Ordinal == 0 {
+			parts = append(parts, fmt.Sprintf("(%s): %s", r.Rule, r.Detail))
+			continue
+		}
 		parts = append(parts, fmt.Sprintf("item %d (%s): %s", r.Ordinal, r.Rule, r.Detail))
 	}
 	return strings.Join(parts, "; ")

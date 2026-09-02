@@ -9,6 +9,10 @@ checks for or applies updates on its own
 verb and `version --check` are the only two paths to the release origin, each
 only when invoked ([itd-130](../../intents/shipped/itd-130-abcd-update-completes-a-chosen-update-in-one-verb-it-fetches.md), spc-32).
 
+`version --check` hands over to this verb: when an update is available, its
+`next:` line names the command to type, chosen by the same on-disk
+classification this verb dispatches on ([`12-version.md`](12-version.md)).
+
 ## Behaviour
 
 ```bash
