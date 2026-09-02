@@ -149,25 +149,32 @@ violation refuses the run, and **a refused run still leaves a durable record**:
 `refusal.json` carries the run metadata and the named reason and no items, so a
 rerun is a new run with a new run id rather than an amendment.
 
-The regime gate has two layers. Each regime declares reserved names — a field
-naming one is refused with the licence stated — and a registry of named
-signatures catches prose that ranks, settles or proposes without the field.
-Every signature ships enforced; the degradation path exists as a code change
-plus a decision-log entry, which is what makes weakening a claimed property from
-enforced to observed a recorded act rather than a runtime toggle. That second
-layer is bounded by the registry, and the bound is disclosed on itd-185: a fix
-proposal or a disposition phrased outside the registry's signatures is not
-caught. The reserved names carry no such bound, because a field is present or it
-is not.
+**The layer that refuses is structural.** Each regime declares reserved names,
+and an item carrying one as a field of its own is refused with the licence
+stated. The table is read at the run's own regime, one row per regime, and the
+generative regime has no row — its licence is the widest, and the constraint on
+it falls at admission. That layer carries no bound of the kind prose does,
+because a field is present or it is not.
 
-Writes are staged. Nothing durable is written or deleted until the whole payload
-validates — a refusal after the run is proven leaves its refusal record and
-nothing else; the reading records land in the reading-record family; and the run
-metadata is written **last**, as the commit marker, so a run without one never
-happened. An ingest interrupted before that marker leaves a stage in the local
-tier. Every later invocation names the orphan; the next one whose payload
-validates rolls the run back and clears it, and a refused run reports the
-orphans it left in place — the sweep is a delete in the committed tier, and a
+**Nothing an item's prose says refuses it.** A registry of named signatures
+reads the item's text and records a hit on the run record as a review flag; all
+four ship observed rather than enforcing, because a registry cannot tell a
+reading that proposes from one reporting that the document proposes, and an
+enforcing one refuses a reading for quoting its own material. Its bound is
+disclosed on itd-185: a fix proposal or a disposition phrased outside the
+registry's signatures is not seen at all.
+
+Writes are staged. No OTHER run's durable state is written to or deleted from
+until the whole payload validates — a refusal after the run is proven writes its
+refusal record and nothing else, and the one delete it makes is on its own run
+id, rolling back the records of an earlier attempt at it that never committed;
+the reading records land in the reading-record family; and the run metadata is
+written **last**, as the commit marker, so a run without one never happened. An
+ingest interrupted before that marker leaves a stage in the local tier. Every
+later invocation names the orphan; the next one whose payload validates rolls
+that run back and clears the stage, and a stage left by a run that did commit is
+a leftover — that run stands, and only the stage goes. A refused run reports the
+orphans it left in place: the sweep is a delete in the committed tier, and a
 refused run never reaches one.
 
 ## What this surface does not claim

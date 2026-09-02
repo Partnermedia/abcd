@@ -442,3 +442,34 @@ func TestADRReaderRendersARecordWithADuplicateKey(t *testing.T) {
 		t.Errorf("the lenient scanner keeps the FIRST value, so status = %q, want %q", d.Status, "accepted")
 	}
 }
+
+// TestDescribeADRAdmitsBothIDVintages is the 2026-09-01 ruling at the dispatch:
+// the ADR store holds the hand-numbered ordinals AND the minted timestamp form
+// side by side, and `abcd <adr-id>` answers for both out of one store. The
+// over-int-width row is the reason the comparison is TEXTUAL rather than an
+// integer parse — an ordinal wider than an int is still a well-formed adr-N, and
+// a parse of it fails, which would report a present record as absent.
+func TestDescribeADRAdmitsBothIDVintages(t *testing.T) {
+	repo := t.TempDir()
+	write(t, repo, ".abcd/development/decisions/adrs/0058-a-reading-is-commissioned.md",
+		"---\nid: adr-58\nslug: a-reading-is-commissioned\nstatus: accepted\n---\n\n# A reading is commissioned\n")
+	write(t, repo, ".abcd/development/decisions/adrs/2609012206053814-decisions-mint-through-the-seam.md",
+		"---\nid: adr-2609012206053814\nslug: decisions-mint-through-the-seam\nstatus: proposed\n---\n\n# Decisions mint through the seam\n")
+	write(t, repo, ".abcd/development/decisions/adrs/123456789012345678901234567890-wide.md",
+		"---\nid: adr-123456789012345678901234567890\nstatus: accepted\n---\n\n# A wide ordinal\n")
+
+	for _, tc := range []struct{ ask, title, status string }{
+		{"adr-58", "A reading is commissioned", "accepted"},
+		{"adr-2609012206053814", "Decisions mint through the seam", "proposed"},
+		{"adr-123456789012345678901234567890", "A wide ordinal", "accepted"},
+	} {
+		d, err := Describe(repo, tc.ask)
+		if err != nil {
+			t.Errorf("Describe(%s): %v", tc.ask, err)
+			continue
+		}
+		if d.ID != tc.ask || d.Title != tc.title || d.Status != tc.status {
+			t.Errorf("Describe(%s) = %+v, want title %q status %q", tc.ask, d, tc.title, tc.status)
+		}
+	}
+}
