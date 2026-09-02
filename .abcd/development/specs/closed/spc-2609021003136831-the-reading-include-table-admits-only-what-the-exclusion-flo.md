@@ -10,7 +10,7 @@ production_mode: dictated-and-formatted
 ## Summary
 
 spc-2609021003136831 delivers
-[itd-194](../../intents/planned/itd-194-the-reading-include-table-admits-only-what-the-exclusion-flo.md).
+[itd-194](../../intents/shipped/itd-194-the-reading-include-table-admits-only-what-the-exclusion-flo.md).
 The include table in `internal/core/reading/include.go` gains, on every row,
 a declaration of whether the exclusion floor parses what the row admits, and
 the rendered charter carries it as a column. The floor's key and heading scan
@@ -265,7 +265,7 @@ asserts every directory row, and `assertExclusions` enforces it by path. The
 oracle's `admittedRecordPaths` gains the four chapter paths, and its
 evidence-chapter entry keeps its place with the ground reworded. This
 resolves
-[iss-2609021153264023](../../../work/issues/open/iss-2609021153264023-the-assembler-admits-only-the-brief-s-product-and-constraint.md);
+[iss-2609021153264023](../../../work/issues/resolved/iss-2609021153264023-the-assembler-admits-only-the-brief-s-product-and-constraint.md);
 the preset-windows spec re-measures every entry the rows enlarge at landing.
 
 ### The read-block eval and the oracle

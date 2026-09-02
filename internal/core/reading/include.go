@@ -34,7 +34,14 @@ import (
 // `scope_overridden` become `preset` and `preset_hash`, so the shape a reader
 // and an auditor are promised has moved and nothing about the previous shape
 // remains true (adr-2609021016286571, spc-2609021004075744).
-const AssemblerVersionCore = "1.4.0"
+// It goes 1.4.0 to 1.5.0 with itd-194: Table gains a Scan declaration per row
+// and four brief-chapter rows, the shipped row withdraws from widening,
+// Exclusions gains the widening-scoped shipped entry, the rendering gains a
+// Floor column and the manifest item gains its scan mark. Every one of those is
+// a change to what a reader and an auditor are PROMISED about what was
+// examined, and the digest moves with the rendering by construction
+// (adr-56 as refined 2026-09-02, spc-2609021003136831).
+const AssemblerVersionCore = "1.5.0"
 
 // AssemblerVersion is the core semver with the rendered include table's digest
 // as semver build metadata. The digest is computed, not declared, so a table
@@ -142,6 +149,30 @@ func Kinds() []Kind {
 		KindDiscipline, KindSpec, KindSource, KindTest, KindDoc, KindConfig}
 }
 
+// Scan says whether the exclusion floor examined an item, and it is ONE word
+// used in two places: on a Row it is the table's promise that the floor parses
+// what the row admits, and on a ManifestItem it is the fact of whether the floor
+// did. Spelling the promise and the fact differently is how the two came to
+// disagree in the first place — the include table admitted by container shape
+// and the floor examined by file extension, and nothing downstream was told
+// which items the examination had reached (adr-56; brief invariant 16).
+type Scan string
+
+const (
+	// ScanParsed: the floor read this item's frontmatter keys and headings, so
+	// the manifest's key and heading exclusions are asserted for it.
+	ScanParsed Scan = "parsed"
+	// ScanUnscanned: the floor did not examine this item. It travels whole, and
+	// the manifest says so per item rather than leaving a reader to infer from a
+	// clean run that a scan ran (the 2026-09-02 refinement of adr-56).
+	ScanUnscanned Scan = "unscanned"
+)
+
+// Scans lists the closed scan vocabulary, in the order the charter renders it.
+func Scans() []Scan {
+	return []Scan{ScanParsed, ScanUnscanned}
+}
+
 // Row is one include-table row: which positions admit this source, what is
 // matched inside it, which fields are projected out of each matched file, the
 // material class the items carry, and the rule that admits the row.
@@ -188,6 +219,15 @@ type Row struct {
 	Bucket string
 	// Kind is the material class every item from this row carries.
 	Kind Kind
+	// Scan declares whether the exclusion floor parses what this row admits. It
+	// is the table's own statement of the narrowing it performs, so admission
+	// and examination are ONE declaration rather than a row on one side and an
+	// extension test inside the floor on the other — the undeclared scope
+	// decision underneath the whole container-shape class
+	// (iss-2608301450065320, adr-56 rule 3). collect reads it: a ScanParsed row
+	// goes through redactExcluded, a ScanUnscanned row's document travels
+	// untouched and every item it yields is marked unscanned in the manifest.
+	Scan Scan
 	// Rule is the rule that admits the row, quoted in the charter.
 	Rule string
 }
@@ -239,6 +279,7 @@ var Table = []Row{
 		Source:    ".abcd/development/brief/01-product",
 		Match:     []string{".md"},
 		Kind:      KindBriefSection,
+		Scan:      ScanParsed,
 		Rule: "adr-55: the construal as it presently stands is committed record, " +
 			"admissible to every reader including a cold reading",
 	},
@@ -247,16 +288,60 @@ var Table = []Row{
 		Source:    ".abcd/development/brief/02-constraints",
 		Match:     []string{".md"},
 		Kind:      KindBriefSection,
+		Scan:      ScanParsed,
 		Rule: "The constraints chapter states the platform, the dependency stance, " +
 			"the invariants and the naming a reading reads against",
+	},
+	{
+		Positions: allPositions,
+		Source:    ".abcd/development/brief/04-surfaces",
+		Match:     []string{".md"},
+		Kind:      KindBriefSection,
+		Scan:      ScanParsed,
+		Rule: "The surfaces chapter is brief current text, which both design documents " +
+			"name as a reading's object",
+	},
+	{
+		Positions: allPositions,
+		Source:    ".abcd/development/brief/05-internals",
+		Match:     []string{".md"},
+		Kind:      KindBriefSection,
+		Scan:      ScanParsed,
+		Rule: "The internals chapter is brief current text, which both design documents " +
+			"name as a reading's object",
+	},
+	{
+		Positions: allPositions,
+		Source:    ".abcd/development/brief/06-delivery",
+		Match:     []string{".md"},
+		Kind:      KindBriefSection,
+		Scan:      ScanParsed,
+		Rule: "The delivery chapter is brief current text, which both design documents " +
+			"name as a reading's object",
 	},
 	{
 		Positions: allPositions,
 		Source:    ".abcd/development/brief/glossary",
 		Match:     []string{".md"},
 		Kind:      KindGlossaryTerm,
+		Scan:      ScanParsed,
 		Rule: "adr-55: the glossary's committed terms are committed record; " +
 			"superseded terms and the reasoning that settled them are not",
+	},
+	{
+		// The meta chapter is one file at the brief's root, so this row's source
+		// is the brief directory and its Match is that exact basename: the row
+		// reaches 00-meta.md and nothing beside it. The six chapters are named
+		// individually rather than by naming `brief/` whole because assembler
+		// rule 1 forbids naming a directory that contains a record family, and
+		// this one contains the glossary — which keeps its own row above.
+		Positions: allPositions,
+		Source:    ".abcd/development/brief",
+		Match:     []string{"00-meta.md"},
+		Kind:      KindBriefSection,
+		Scan:      ScanParsed,
+		Rule: "The meta chapter is brief current text, which both design documents " +
+			"name as a reading's object; it is one file at the brief's root",
 	},
 	{
 		Positions: allPositions,
@@ -265,19 +350,29 @@ var Table = []Row{
 		Store:     "itd",
 		Bucket:    "disciplines",
 		Kind:      KindDiscipline,
+		Scan:      ScanParsed,
 		Rule: "A discipline is a standing commitment the record already holds, " +
 			"named individually inside the intent family",
 	},
 	{
-		Positions: allPositions,
+		// Not at widening. The design framework's widening object and the
+		// readings companion's section 5.2 both state that object without the
+		// shipped intents, and the maintainer ruled on 2026-09-02 that the row
+		// follows the documents (iss-2609012259587904). The withdrawal is
+		// asserted in the exclusion floor below, so a reader checks it rather
+		// than inferring it from a row's silence.
+		Positions: []Position{PositionEntailment, PositionComparative, PositionDetection},
 		Source:    ".abcd/development/intents/shipped",
 		Match:     []string{".md"},
 		Store:     "itd",
 		Bucket:    "shipped",
 		Fields:    intentProjection,
 		Kind:      KindIntentProjection,
+		Scan:      ScanParsed,
 		Rule: "Assembler rule 2: a shipped intent travels as its claim record, " +
-			"so the Audit Notes and dispositions it also carries stay behind",
+			"so the Audit Notes and dispositions it also carries stay behind; not at " +
+			"widening, whose object neither design document states with them in it " +
+			"(ruled 2026-09-02, iss-2609012259587904)",
 	},
 	{
 		Positions: allPositions,
@@ -285,6 +380,7 @@ var Table = []Row{
 		Match:     []string{".md"},
 		Store:     "spc",
 		Kind:      KindSpec,
+		Scan:      ScanParsed,
 		Rule:      "The design record a capability was built against",
 	},
 	{
@@ -295,6 +391,7 @@ var Table = []Row{
 		Bucket:    "drafts",
 		Fields:    intentProjection,
 		Kind:      KindIntentProjection,
+		Scan:      ScanParsed,
 		Rule: "Assembler rule 2: articulation precedes selection, so entailment sees " +
 			"the candidate set and the reading asked to widen it does not",
 	},
@@ -306,6 +403,7 @@ var Table = []Row{
 		Bucket:    "planned",
 		Fields:    intentProjection,
 		Kind:      KindIntentProjection,
+		Scan:      ScanParsed,
 		Rule: "Assembler rule 2: articulation precedes selection, so entailment sees " +
 			"the candidate set and the reading asked to widen it does not",
 	},
@@ -318,22 +416,29 @@ var Table = []Row{
 		Source:      ".",
 		MatchSuffix: []string{"_test.go"},
 		Kind:        KindTest,
-		Rule: "Assembler rule 1: the shipped tree is source and tests, counted apart " +
-			"because tests are the largest single class and admitted identically",
+		Scan:        ScanUnscanned,
+		Rule: "Admitted where a committed preset entry names this kind, and never examined: " +
+			"an item admitted here travels whole and marked `unscanned` in the manifest, " +
+			"because the exclusion floor's key and heading signals are record shapes only a " +
+			"markdown file carries",
 	},
 	{
 		Positions: allPositions,
 		Source:    ".",
 		Match:     []string{".go"},
 		Kind:      KindSource,
-		Rule: "Assembler rule 1: the shipped tree is source and tests, with the record, " +
-			"the definitions, the evals and the assembler's own package denied structurally",
+		Scan:      ScanUnscanned,
+		Rule: "Admitted where a committed preset entry names this kind, and never examined: " +
+			"an item admitted here travels whole and marked `unscanned` in the manifest, " +
+			"because the exclusion floor's key and heading signals are record shapes only a " +
+			"markdown file carries",
 	},
 	{
 		Positions: allPositions,
 		Source:    ".",
 		Match:     []string{".md"},
 		Kind:      KindDoc,
+		Scan:      ScanParsed,
 		Rule: "Assembler rule 1: the shipped tree is the delivered documentation and the " +
 			"root prose, with the record denied structurally",
 	},
@@ -342,8 +447,11 @@ var Table = []Row{
 		Source:    ".",
 		Match:     []string{".json", ".yml", ".yaml", ".toml", ".mod", ".sum", "Makefile"},
 		Kind:      KindConfig,
-		Rule: "Assembler rule 1: the shipped tree is the delivered configuration and build " +
-			"files, with the record denied structurally",
+		Scan:      ScanUnscanned,
+		Rule: "Admitted where a committed preset entry names this kind, and never examined: " +
+			"an item admitted here travels whole and marked `unscanned` in the manifest, " +
+			"because the exclusion floor's key and heading signals are record shapes only a " +
+			"markdown file carries",
 	},
 }
 
@@ -355,6 +463,16 @@ var Table = []Row{
 // The floor is a DECLARATION a reader checks, and the assembler additionally
 // refuses to emit an item under any path-shaped entry, so the two cannot part
 // company (see assertExclusions).
+//
+// What each entry asserts, and over WHICH items, is fixed here rather than left
+// to a reader: an entry whose Signal is `frontmatter key` or `heading` is
+// asserted for the items the manifest marks `parsed` and for no other, because
+// those two signals are read by a scan and a scan that did not run establishes
+// nothing; an entry whose Signal is `directory`, `file` or `unreachable path`
+// is asserted for EVERY item, because assertExclusions enforces those by path
+// and a path needs no parse. That is brief invariant 16 made a property of the
+// artefact rather than of the run: a scan that ran and a scan that never ran no
+// longer produce the same attestation (adr-56 as refined 2026-09-02).
 var Exclusions = []Exclusion{
 	{Rule: "field projection", Signal: "frontmatter key", Detail: "origin"},
 	{Rule: "field projection", Signal: "frontmatter key", Detail: "production_mode"},
@@ -362,7 +480,13 @@ var Exclusions = []Exclusion{
 	{Rule: "field projection", Signal: "heading", Detail: "Open Questions"},
 	{Rule: "field projection", Signal: "heading", Detail: "Why This Matters"},
 	{Rule: "a reading's object excludes what it exists to change", Signal: "heading", Detail: "Scope Condition Dispositions"},
-	{Rule: "absent from the positive walk", Signal: "directory", Detail: ".abcd/development/brief/03-evidence"},
+	// The one brief chapter the brief rows do not reach, and the ground is the
+	// framework's own: 7.1 excludes a record's Audit Notes because a prior
+	// verdict is revision history, and the evidence chapter is that material at
+	// chapter grain. Stating the ground here rather than in the floor's code
+	// means the charter says why the chapter is left out (iss-2609021153264023).
+	{Rule: "verdict material: a prior verdict is revision history, the ground the Audit Notes exclusion rests on",
+		Signal: "directory", Detail: ".abcd/development/brief/03-evidence"},
 	{Rule: "absent from the positive walk", Signal: "directory", Detail: ".abcd/development/decisions"},
 	{Rule: "absent from the positive walk", Signal: "directory", Detail: ".abcd/development/roadmap/rfcs"},
 	{Rule: "absent from the positive walk", Signal: "directory", Detail: ".abcd/development/intents/superseded"},
@@ -398,6 +522,12 @@ var Exclusions = []Exclusion{
 		Signal:    "directory",
 		Detail:    ".abcd/development/intents/planned",
 		Positions: []Position{PositionWidening, PositionComparative, PositionDetection},
+	},
+	{
+		Rule:      "the widening object as the design documents state it",
+		Signal:    "directory",
+		Detail:    ".abcd/development/intents/shipped",
+		Positions: []Position{PositionWidening},
 	},
 }
 
@@ -447,10 +577,10 @@ const CharterPath = ".abcd/development/readings/README.md"
 func Render() string {
 	var b strings.Builder
 	b.WriteString("### Include table\n\n")
-	b.WriteString("| Positions | Source | Matches | Suffixes | Fields | Store | Bucket | Kind | Admitting rule |\n")
-	b.WriteString("| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n")
+	b.WriteString("| Positions | Source | Matches | Suffixes | Fields | Store | Bucket | Kind | Floor | Admitting rule |\n")
+	b.WriteString("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |\n")
 	for _, row := range Table {
-		fmt.Fprintf(&b, "| %s | `%s` | %s | %s | %s | %s | %s | `%s` | %s |\n",
+		fmt.Fprintf(&b, "| %s | `%s` | %s | %s | %s | %s | %s | `%s` | `%s` | %s |\n",
 			sortedPositions(row.Positions),
 			row.Source,
 			matchList(row),
@@ -459,6 +589,7 @@ func Render() string {
 			routeField(row.Store),
 			routeField(row.Bucket),
 			row.Kind,
+			row.Scan,
 			row.Rule)
 	}
 	b.WriteString("\n### Exclusion floor\n\n")

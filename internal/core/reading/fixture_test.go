@@ -78,6 +78,18 @@ func fixtureRepo(t *testing.T) string {
 		"---\nproduction_mode: hand-written "+sentinelProdMode+"\n---\n\n# Press release\n\nThe product, stated.\n")
 	writeFile(t, root, ".abcd/development/brief/02-constraints/03-invariants.md",
 		"# Invariants\n\n1. The core is transport agnostic.\n")
+	// The rest of brief current text (itd-194): the meta chapter at the brief's
+	// root and the three chapters below the evidence chapter. A walk row's
+	// source directory must exist or the run refuses, so these are not optional
+	// decoration — the table names six chapters and the fixture carries six.
+	writeFile(t, root, ".abcd/development/brief/00-meta.md",
+		"# Meta\n\nHow this brief is organised.\n")
+	writeFile(t, root, ".abcd/development/brief/04-surfaces/23-reading.md",
+		"# The reading surface\n\nWhat the verb does.\n")
+	writeFile(t, root, ".abcd/development/brief/05-internals/03-configuration.md",
+		"# Configuration\n\nWhere the settings live.\n")
+	writeFile(t, root, ".abcd/development/brief/06-delivery/01-shipping.md",
+		"# Shipping\n\nHow a release is cut.\n")
 	writeFile(t, root, ".abcd/development/brief/glossary/core/construal.md",
 		"# Construal\n\nWhat the situation is treated as.\n")
 	writeFile(t, root, ".abcd/development/intents/disciplines/itd-4-selection-criteria.md",

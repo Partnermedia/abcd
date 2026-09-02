@@ -184,6 +184,14 @@ func TestAssembleRefusesAnOutputDirectoryTheTableAdmits(t *testing.T) {
 // asymmetry the record insists is stated rather than remembered: a widening
 // reading must not see the candidate set it is asked to widen, and articulation
 // precedes selection.
+//
+// It carries the shipped intents too, which is itd-194 ac-7 at table grain. The
+// framework's widening object and the readings companion's section 5.2 both
+// state that object without the shipped intents, and the maintainer's ruling of
+// 2026-09-02 takes the row's positions accordingly (iss-2609012259587904). The
+// shipped path sits here rather than in a test of its own because it is the
+// same asymmetry: the widening position is the one that does not receive what
+// it is asked to widen past.
 func TestWideningExcludesDraftsAndPlannedEntailmentIncludesThem(t *testing.T) {
 	candidates := []string{
 		".abcd/development/intents/drafts/itd-900-a-draft.md",
@@ -198,6 +206,22 @@ func TestWideningExcludesDraftsAndPlannedEntailmentIncludesThem(t *testing.T) {
 		}
 		if !Admits(PositionEntailment, rel) {
 			t.Errorf("the entailment position excludes %s; articulation precedes selection", rel)
+		}
+	}
+
+	const shipped = ".abcd/development/intents/shipped/itd-902-a-shipped.md"
+	if Admits(PositionWidening, shipped) {
+		t.Errorf("the widening position admits %s; neither design document lists the shipped "+
+			"intents in the widening object", shipped)
+	}
+	for _, p := range []Position{PositionEntailment, PositionDetection} {
+		if !Admits(p, shipped) {
+			t.Errorf("position %s excludes %s; only widening withdraws from the shipped row", p, shipped)
+		}
+		for _, e := range ExclusionsFor(p) {
+			if e.Detail == ".abcd/development/intents/shipped" {
+				t.Errorf("position %s asserts the shipped intents excluded while its rows admit them", p)
+			}
 		}
 	}
 }
@@ -242,7 +266,7 @@ func TestBriefEvidenceChapterIsNeverAdmitted(t *testing.T) {
 // insufficient no longer matters: updating this literal without moving the core
 // can no longer make a manifest lie, because the manifest's digest is not this
 // literal.
-const includeTableDigest = "bd6a433fbd8d57e7d92e73c820e9987466da464707aabfe7c9131f567f566bd2"
+const includeTableDigest = "69018cc03e293c68ad31e6c0d574bbbb801802d889b6c5781a6536e6b1bf1bde"
 
 // TestAssemblerVersionCoversTheIncludeTable puts the core semver in front of
 // whoever changed the table. It is ADVISORY by construction — the fix for a red
@@ -307,6 +331,10 @@ func TestEveryRowNamesAKnownKindAndPosition(t *testing.T) {
 	for _, k := range Kinds() {
 		kinds[k] = true
 	}
+	scans := map[Scan]bool{}
+	for _, s := range Scans() {
+		scans[s] = true
+	}
 	for _, row := range Table {
 		if !kinds[row.Kind] {
 			t.Errorf("row %q carries kind %q, which is not in the closed vocabulary", row.Source, row.Kind)
@@ -321,6 +349,15 @@ func TestEveryRowNamesAKnownKindAndPosition(t *testing.T) {
 		}
 		if row.Rule == "" {
 			t.Errorf("row %q states no admitting rule", row.Source)
+		}
+		// The third closed vocabulary (itd-194). A row's Scan is the table's
+		// promise about whether the exclusion floor examines what the row
+		// admits, and an unset or unknown value is a promise nobody made —
+		// which is the state brief invariant 16 refuses on the manifest side
+		// and refuses here for the same reason.
+		if !scans[row.Scan] {
+			t.Errorf("row %q declares the scan %q, which is not in the closed vocabulary %v",
+				row.Source, row.Scan, Scans())
 		}
 		// A row must select positively by SOMETHING. Either match form
 		// satisfies that; neither does not. The guard reads both fields
@@ -362,6 +399,10 @@ func TestExclusionFloorNamesEveryRecordedExclusion(t *testing.T) {
 		".abcd/development/plans",
 		".abcd/development/research/notes",
 		".abcd/development/readings",
+		// itd-194: the widening position withdraws from the shipped intents, and
+		// the floor asserts the withdrawal there so a reader can check it rather
+		// than infer it from a row's absence (iss-2609012259587904).
+		".abcd/development/intents/shipped",
 	}
 	joined := ""
 	for _, e := range ExclusionsFor(PositionWidening) {
@@ -371,5 +412,159 @@ func TestExclusionFloorNamesEveryRecordedExclusion(t *testing.T) {
 		if !strings.Contains(joined, "\x00"+w+"\n") {
 			t.Errorf("the exclusion floor does not name %q", w)
 		}
+	}
+}
+
+// TestParsedRowsAdmitOnlyMarkdown is the point at which the include table's
+// admission and the exclusion floor's examination are proved to describe one
+// set, whichever of them moves later — brief invariant 16's third clause, and
+// adr-56's third rule (spc-2609021003136831, "The vocabulary").
+//
+// The declaration is held to the parser rather than to itself: a row that says
+// the floor parses what it admits must admit markdown and nothing else, because
+// the floor's key and heading signals are record shapes only a markdown file
+// carries; and a row that says the floor does not parse what it admits must
+// admit no markdown, because an unparsed markdown document is exactly the
+// silent-admission path this intent closes.
+func TestParsedRowsAdmitOnlyMarkdown(t *testing.T) {
+	const markdown = "a-chapter.md"
+	nonMarkdown := []string{
+		"widget.go", "widget_test.go", "config.json", "ci.yml", "compose.yaml",
+		"tool.toml", "go.mod", "go.sum", "Makefile", "notes.txt",
+	}
+	for _, row := range Table {
+		// Every selector the row declares, so the property is read off the row
+		// rather than off a probe list that might miss a form.
+		selectors := append(append([]string{}, row.Match...), row.MatchSuffix...)
+		switch row.Scan {
+		case ScanParsed:
+			if len(selectors) == 0 {
+				t.Errorf("row %q declares %q and selects by nothing; a parsed row that admits "+
+					"no markdown declares a scan that never runs", row.Source, row.Scan)
+			}
+			for _, sel := range selectors {
+				if !strings.EqualFold(filepath.Ext(sel), ".md") {
+					t.Errorf("row %q declares %q and selects %q, which is not markdown; the "+
+						"floor parses markdown and nothing else", row.Source, row.Scan, sel)
+				}
+			}
+			if !row.matches(markdown) && !row.matches("00-meta.md") {
+				t.Errorf("row %q declares %q and admits no markdown probe; a parsed row that "+
+					"admits no markdown declares a scan that never runs", row.Source, row.Scan)
+			}
+			for _, base := range nonMarkdown {
+				if row.matches(base) {
+					t.Errorf("row %q declares %q and admits %s, which the floor cannot parse; "+
+						"admission and examination describe one set (adr-56, rule 3)",
+						row.Source, row.Scan, base)
+				}
+			}
+		case ScanUnscanned:
+			if row.matches(markdown) {
+				t.Errorf("row %q declares %q and admits %s; a markdown document the floor does "+
+					"not examine is the silent-admission path itd-194 closes",
+					row.Source, row.Scan, markdown)
+			}
+		default:
+			t.Errorf("row %q declares the scan %q, which is not in the closed vocabulary %v",
+				row.Source, row.Scan, Scans())
+		}
+	}
+}
+
+// admittingRow returns the first row that admits rel at p, which is the row
+// that owns the projection and the kind applied to it.
+func admittingRow(t *testing.T, p Position, rel string) (Row, bool) {
+	t.Helper()
+	for _, row := range Table {
+		if row.AdmittedAt(p) && row.Reaches(rel) {
+			return row, true
+		}
+	}
+	return Row{}, false
+}
+
+// TestBriefChaptersAreAdmittedAsBriefSections is ac-8's positive half: the
+// design documents name "brief current text" as a reading's object (framework
+// 7.2, companion 5.2), and on the corrections ruling of 2026-09-02 that is the
+// whole brief bar the evidence chapter and bar the glossary, which is a record
+// family with its own row (divergence register entry 26).
+func TestBriefChaptersAreAdmittedAsBriefSections(t *testing.T) {
+	const product = ".abcd/development/brief/01-product/06-framing.md"
+	var productPositions []Position
+	for _, p := range Positions() {
+		if Admits(p, product) {
+			productPositions = append(productPositions, p)
+		}
+	}
+	if len(productPositions) == 0 {
+		t.Fatal("no position admits the product chapter; the brief rows are stated against it")
+	}
+
+	chapters := []string{
+		".abcd/development/brief/00-meta.md",
+		".abcd/development/brief/01-product/06-framing.md",
+		".abcd/development/brief/02-constraints/03-invariants.md",
+		".abcd/development/brief/04-surfaces/23-reading.md",
+		".abcd/development/brief/05-internals/03-configuration.md",
+		".abcd/development/brief/06-delivery/01-shipping.md",
+	}
+	for _, rel := range chapters {
+		for _, p := range productPositions {
+			row, ok := admittingRow(t, p, rel)
+			if !ok {
+				t.Errorf("position %s admits no row reaching %s; brief current text is a "+
+					"reading's object", p, rel)
+				continue
+			}
+			if row.Kind != KindBriefSection {
+				t.Errorf("position %s admits %s as %q; a brief chapter travels as %q",
+					p, rel, row.Kind, KindBriefSection)
+			}
+			if row.Scan != ScanParsed {
+				t.Errorf("position %s admits %s under a row declaring %q; a brief chapter is "+
+					"markdown the floor parses", p, rel, row.Scan)
+			}
+		}
+	}
+
+	// The meta row's source is the brief directory, so its match is what bounds
+	// it: it reaches the one file 00-meta.md and nothing beside it.
+	for _, beside := range []string{
+		".abcd/development/brief/00-orientation.md",
+		".abcd/development/brief/07-appendix/00-meta-notes.md",
+	} {
+		row, ok := admittingRow(t, productPositions[0], beside)
+		if ok && row.Source == ".abcd/development/brief" {
+			t.Errorf("the meta row reaches %s; its Match is the exact basename so it reaches "+
+				"00-meta.md and nothing beside it", beside)
+		}
+	}
+}
+
+// TestTheEvidenceChapterIsExcludedAsVerdictMaterial is ac-8's negative half.
+// The ground moves into the table: framework 7.1 excludes Audit Notes because a
+// prior verdict is revision history, and the evidence chapter is the same
+// material at chapter grain (divergence register entry 26).
+func TestTheEvidenceChapterIsExcludedAsVerdictMaterial(t *testing.T) {
+	const evidence = ".abcd/development/brief/03-evidence/01-open-questions.md"
+	for _, p := range Positions() {
+		if Admits(p, evidence) {
+			t.Errorf("position %s admits %s; the evidence chapter is verdict material", p, evidence)
+		}
+	}
+	found := false
+	for _, e := range Exclusions {
+		if e.Detail != ".abcd/development/brief/03-evidence" {
+			continue
+		}
+		found = true
+		if !strings.Contains(e.Rule, "verdict material") {
+			t.Errorf("the evidence chapter's exclusion rule is %q; the table states the ground "+
+				"the Audit Notes exclusion rests on", e.Rule)
+		}
+	}
+	if !found {
+		t.Error("the exclusion floor names no entry for the brief's evidence chapter")
 	}
 }

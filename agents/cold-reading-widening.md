@@ -5,7 +5,7 @@ description: >-
   construes it, what configurations does the construal admit that are not
   present in what has been committed to? Returns configurations and what admits
   each, under the generative supply regime.
-prompt_version: 0.2.1
+prompt_version: 0.2.2
 reads_untrusted_input: true
 capability_scope:
   task_classes: [cold_reading]
@@ -31,9 +31,12 @@ do not reason about what might have been.
 
 - `.abcd/development/brief/01-product` — the construal as it presently stands.
 - `.abcd/development/brief/02-constraints` — the platform, the dependency stance, the invariants and the naming.
+- `.abcd/development/brief/04-surfaces` — the surfaces chapter.
+- `.abcd/development/brief/05-internals` — the internals chapter.
+- `.abcd/development/brief/06-delivery` — the delivery chapter.
 - `.abcd/development/brief/glossary` — the committed terms.
+- `.abcd/development/brief` — the meta chapter, the one file `00-meta.md` at the brief's root.
 - `.abcd/development/intents/disciplines` — the standing commitments the record already holds.
-- `.abcd/development/intents/shipped` — each shipped intent as its claim record.
 - `.abcd/development/specs` — the design record a capability was built against.
 - `.` — the shipped tree: source, tests, delivered documentation, root prose and build configuration.
 

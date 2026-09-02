@@ -83,9 +83,14 @@ func TestNewRecordFamilyIsAbsentWithoutTableChange(t *testing.T) {
 
 // TestShippedIntentProjectsFiveFieldsOnly holds field granularity: a shipped
 // intent travels as its claim record and nothing else.
+//
+// At detection rather than widening: itd-194 withdraws the shipped row from the
+// widening position, whose object neither design document states with the
+// shipped intents in it, so widening is now the one position where this
+// projection has nothing to project.
 func TestShippedIntentProjectsFiveFieldsOnly(t *testing.T) {
 	root := fixtureRepo(t)
-	res := assembleFixture(t, root, PositionWidening)
+	res := assembleFixture(t, root, PositionDetection)
 	const rel = ".abcd/development/intents/shipped/itd-1-a-shipped-intent.md"
 
 	var got []string
@@ -743,7 +748,8 @@ func TestProjectionKeepsASubsectionOfAProjectedField(t *testing.T) {
 			"## Audit Notes\n\n"+sentinelAuditNotes+"\n")
 	gitCommitAll(t, root)
 
-	res := assembleFixture(t, root, PositionWidening)
+	// At detection: the shipped row withdrew from widening with itd-194.
+	res := assembleFixture(t, root, PositionDetection)
 	text := bundleText(res.Bundle)
 	if !strings.Contains(text, nested) {
 		t.Error("a subsection of a projected field was dropped; projection must end where the redactor ends")

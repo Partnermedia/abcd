@@ -9,6 +9,11 @@ found_during: "iteration-2 conformance audit against the design framework v4 and
 origin: researcher-authored
 production_mode: dictated-and-formatted
 found_at: "internal/core/reading/include.go"
+resolution: "The shipped intent projection row's positions become entailment, comparative and detection, and the exclusion floor gains a widening-scoped entry for .abcd/development/intents/shipped so the manifest asserts the withdrawal and assertExclusions enforces it. The widening definition's admitted-sources list loses the shipped line and its prompt_version moves PATCH. The framework's widening object and the readings companion's section 5.2 both state that object without the shipped intents, which is what the maintainer ruled on 2026-09-02."
+impact: fix
+resolved_by:
+  intent: "itd-194"
+  spec: "spc-2609021003136831"
 ---
 
 The assembler passes the shipped intents at the widening position, which the readings companion's widening object does not list
@@ -43,3 +48,7 @@ The table should match a ruled object. Either the widening row set drops
 amended to list it with the ground above, and the include table's row comment
 cites the ruling. Until one happens the manifest's exclusions and the
 definition's Object section describe two different readings.
+
+## Grounds
+
+- pursued: we expect taking the row's positions from the two design documents, and asserting the withdrawal in the floor, to make the widening position's object what both documents state, because a reader can then check the refusal rather than infer it from a row's silence; a shipped intent reaching a widening bundle, or the entailment and detection positions losing them, would show it wrong

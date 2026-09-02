@@ -113,7 +113,15 @@ is no departure to report.
 
 Also report `size`, on every run including a dry run: the total `bytes` and
 `tokens_est`, and each row of `by_kind` (`kind`, `items`, `bytes`,
-`tokens_est`). Report `tokens_est` as an estimate and say so, quoting the
+`tokens_est`). Report `size.unscanned` too when it is above zero: it is how many
+of the run's items the exclusion floor did not examine. The include table
+declares, per row, whether the floor parses what the row admits; a row it does
+not parse — source, tests and configuration — hands each item over whole, and
+every manifest item carries a `scan` mark saying `parsed` or `unscanned`. The
+manifest's key and heading exclusions are asserted for the items marked `parsed`
+and for no other, so `unscanned` is a disclosure rather than a warning: it is
+what an operator weighs before dispatching a bundle. Report `tokens_est` as an
+estimate and say so, quoting the
 report's own `basis` — it is bytes over a measured constant, not a tokenizer's
 count, and it mis-states each kind by a few per cent in directions spc-68
 records. There is no budget and no threshold: the assembler cannot know what a
@@ -151,8 +159,9 @@ bundle.
 ### The host obligation this binary cannot discharge
 
 The assembled input carries no repository path: each item is an ordinal key, a
-material class and its text, and only the manifest maps a key back to a path
-and a field. That is the half of the isolation the binary enforces.
+material class and its text, and only the manifest maps a key back to a path,
+a field and its `scan` mark. That is the half of the isolation the binary
+enforces.
 
 The other half is yours. When you dispatch an assembled input to a reader,
 grant that reader **no repository access** — no file tools, no path, no working

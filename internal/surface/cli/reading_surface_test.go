@@ -59,6 +59,12 @@ func readingRepoAt(t *testing.T, root string) string {
   "severity": "blocker", "record_stores": {"itd": ".abcd/development/intents", "spc": ".abcd/development/specs"}}}}`)
 	write(".abcd/development/brief/01-product/06-framing.md", "# Framing\n\n## Construal\n\nA gap in the record.\n")
 	write(".abcd/development/brief/02-constraints/03-invariants.md", "# Invariants\n\n1. One core.\n")
+	// The rest of brief current text (itd-194). A walk row's source directory
+	// must exist or the run refuses, and the table names six chapters.
+	write(".abcd/development/brief/00-meta.md", "# Meta\n\nHow this brief is organised.\n")
+	write(".abcd/development/brief/04-surfaces/23-reading.md", "# The reading surface\n\nWhat the verb does.\n")
+	write(".abcd/development/brief/05-internals/03-configuration.md", "# Configuration\n\nWhere settings live.\n")
+	write(".abcd/development/brief/06-delivery/01-shipping.md", "# Shipping\n\nHow a release is cut.\n")
 	write(".abcd/development/specs/open/spc-1-a-spec.md", "---\nid: spc-1\n---\n\n# A spec\n\nThe mechanics.\n")
 	write(".abcd/development/intents/shipped/itd-1-an-intent.md",
 		"---\nid: itd-1\nspec_id: spc-1\n---\n\n# An intent\n\n## Press Release\n\nThe promise.\n")
@@ -1063,5 +1069,48 @@ func TestTheStatusRenderTellsALeftoverStageFromAnOrphan(t *testing.T) {
 	}
 	if !strings.Contains(string(raw), "leftover_stages") {
 		t.Error("commands/reading.md does not name leftover_stages, so a host is never told to report it")
+	}
+}
+
+// TestRenderSizeReportNamesUnscannedItems is itd-194's operator-facing half:
+// the assembler discloses per item that the exclusion floor did not examine it,
+// and the report totals that per run so an operator deciding whether to
+// dispatch a bundle can see how much of it travels on disclosure rather than on
+// a scan (spc-2609021003136831, "The size report counts what was not
+// examined").
+//
+// Absent at zero, and that is the deliberate half: a cold run has nothing to
+// disclose, and a line reading "0 item(s)" would be a disclosure about nothing.
+func TestRenderSizeReportNamesUnscannedItems(t *testing.T) {
+	render := func(unscanned int) string {
+		var buf bytes.Buffer
+		renderSizeReport(&buf, reading.SizeReport{
+			ByKind:    []reading.KindSize{{Kind: "doc", Items: 4, Bytes: 1200, TokensEst: 311}},
+			Items:     4,
+			Unscanned: unscanned,
+			Bytes:     1200,
+			TokensEst: 311,
+			Basis:     "estimated: bytes / 3.85",
+		})
+		return buf.String()
+	}
+
+	above := render(3)
+	for _, want := range []string{
+		"unscanned: 3 item(s)",
+		"travel whole, not examined by the exclusion floor",
+	} {
+		if !strings.Contains(above, want) {
+			t.Errorf("the report above zero omits %q:\n%s", want, above)
+		}
+	}
+	// After the per-kind rows: the count is a fact about the assembly as a
+	// whole, and a line above them would read as another kind.
+	if kind, unscanned := strings.Index(above, "doc"), strings.Index(above, "unscanned:"); kind > unscanned {
+		t.Errorf("the unscanned line renders before the per-kind rows:\n%s", above)
+	}
+
+	if at := render(0); strings.Contains(at, "unscanned") {
+		t.Errorf("a run with nothing unscanned still discloses one:\n%s", at)
 	}
 }

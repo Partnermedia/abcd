@@ -7,6 +7,11 @@ category: "security"
 source: "user-observation"
 found_during: "itd-183-round-9-security"
 found_at: "internal/core/reading/project.go"
+resolution: "A new displacedFrontmatter reports a delimited block that does not open at line 0 but opens one to a reader of the bundle, because only blank lines, whitespace-only lines, a byte-order mark or an HTML comment precede it, and verifyRedaction refuses it naming the document and the displacement. A delimiter after real prose is a thematic break to every reader and opens nothing, so the false-refusal class the line-0 rule closed stays closed."
+impact: fix
+resolved_by:
+  intent: "itd-194"
+  spec: "spc-2609021003136831"
 ---
 
 confining the frontmatter block to line 0 silently admits a delimited block carrying an excluded key that the manifest still asserts was excluded
@@ -45,3 +50,7 @@ FOR THE FACILITATOR -- two acceptable resolutions:
     and leading-space cases without reintroducing the thematic-break false
     refusal the change was made to close, since a `---` after real prose still
     opens nothing.
+
+## Grounds
+
+- pursued: we expect refusing exactly the document this binary reads as prose and a reader of the bundle reads as frontmatter to close the gap the line-0 rule left, without reopening the phantom-block class, because a delimiter after real prose is excluded from the shape by construction; an ordinary documentation page with a thematic break being refused, or a displaced block still assembling, would show it wrong

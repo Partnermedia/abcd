@@ -7,6 +7,11 @@ category: "security"
 source: "user-observation"
 found_during: "itd-183-round-9-ruthless"
 found_at: "internal/core/reading/project.go"
+resolution: "unresolvableFrontmatterShape gains flowExplicitKeyRe, which reports a question mark following a brace or a comma in a flow context as 'an explicit key in a flow mapping', beside nestedMappingRe for the block-sequence half. Both are refused whatever the key is named, which is the one fix this record and iss-2608301237450573's first half ask for: the floor stops recognising a nested key by its spelling and refuses the nesting."
+impact: fix
+resolved_by:
+  intent: "itd-194"
+  spec: "spc-2609021003136831"
 ---
 
 a flow-context explicit key leaks an excluded field and wants the same fix as the compact block-sequence mapping
@@ -30,3 +35,7 @@ has spent nine rounds.
 Per the facilitator's ruling of 2026-08-30, this is seed material for the
 exclusion-floor intent rather than another round on this branch: a spelling
 arms race needs a design, not more patterns.
+
+## Grounds
+
+- pursued: we expect refusing the construction rather than learning the key's spelling to end the arms race this record names, because the refusal does not depend on which name is hidden; an explicit flow key still assembling, or an ordinary flow sequence being refused, would show it wrong

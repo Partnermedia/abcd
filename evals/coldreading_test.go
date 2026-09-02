@@ -17,6 +17,7 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -635,6 +636,109 @@ func TestComparativeRefusesToAssemble(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(outDir, name)); err == nil {
 			t.Errorf("the comparative refusal still wrote %s; a refused position must leave "+
 				"no artefact behind", name)
+		}
+	}
+}
+
+// TestWideningNeverSeesTheShippedIntents is itd-194 ac-7 (the design framework's
+// widening object; the readings companion's section 5.2; the maintainer's ruling
+// of 2026-09-02, which resolves iss-2609012259587904).
+//
+// Neither design document lists the shipped intents in the widening object, and
+// the assembler passed them there. The row withdraws from that position and the
+// exclusion floor asserts the withdrawal, so a reader can CHECK the refusal
+// rather than infer it from a row's silence — which is the same disclosure
+// argument the local ledger tier's entry rests on.
+//
+// The other two assembling positions still receive them, and that half is
+// asserted here too: a withdrawal that took the shipped intents out everywhere
+// would satisfy an absence assertion completely while destroying the object of
+// the two positions that are about the record as it stands.
+func TestWideningNeverSeesTheShippedIntents(t *testing.T) {
+	requireOracleTables(t)
+	f := materialise(t, variantBaseline)
+	const shipped = ".abcd/development/intents/shipped"
+
+	for _, position := range assemblingPositions {
+		t.Run(position, func(t *testing.T) {
+			a := assemble(t, f, position)
+			present := false
+			for _, it := range a.ManifestItems {
+				if strings.HasPrefix(path.Clean(it.Path), shipped+"/") {
+					present = true
+					break
+				}
+			}
+			asserted := false
+			for _, e := range a.Exclusions {
+				if e.Detail == shipped {
+					asserted = true
+					break
+				}
+			}
+			if position == posWidening {
+				if present {
+					t.Errorf("the widening assembly carries an item from %s; neither design "+
+						"document lists the shipped intents in the widening object", shipped)
+				}
+				if !asserted {
+					t.Errorf("the widening manifest asserts no exclusion for %s; a refusal a "+
+						"reader cannot check is a refusal the manifest does not make", shipped)
+				}
+				if vs := checkFamilyAbsence(a); len(vs) > 0 {
+					t.Errorf("family absence reports %d violation(s) at widening:\n%s",
+						len(vs), reportViolations(vs))
+				}
+				return
+			}
+			if !present {
+				t.Errorf("the %s assembly carries no item from %s; only widening withdraws, and "+
+					"a withdrawal everywhere would destroy the object of this position",
+					position, shipped)
+			}
+			if asserted {
+				t.Errorf("the %s manifest asserts %s excluded while its rows admit it", position, shipped)
+			}
+		})
+	}
+}
+
+// TestManifestMarksWhatTheFloorDidNotExamine is itd-194 ac-3 and ac-4 at the
+// artefact: every item carries a scan mark, the mark is the one the record says
+// its path carries, and the excluded key and heading assertions are held over
+// the items marked `parsed` and over no other.
+//
+// The corpus is what makes it more than a shape check. The baseline carries a
+// Go test file with a record-shaped page and a literal `## Audit Notes` section
+// in it — the live leak's own shape, found on this repository's corpus by the
+// itd-183 audit (iss-2608301450065320). It still travels, because both design
+// documents name the shipped tree's code and tests as a reading's object; what
+// changed is that the manifest now says, per item, that no examination stood
+// behind the exclusion assertion over it.
+func TestManifestMarksWhatTheFloorDidNotExamine(t *testing.T) {
+	requireOracleTables(t)
+	f := materialise(t, variantBaseline)
+	marks := map[string]bool{}
+	for _, position := range assemblingPositions {
+		t.Run(position, func(t *testing.T) {
+			a := assemble(t, f, position)
+			for _, it := range a.ManifestItems {
+				marks[it.Scan] = true
+			}
+			if vs := checkScanMarks(a); len(vs) > 0 {
+				t.Fatalf("the manifest mis-states the examination behind %d item(s) at the %s "+
+					"position:\n%s", len(vs), position, reportViolations(vs))
+			}
+		})
+	}
+	// Both marks have to occur somewhere in the corpus, or one branch of the
+	// oracle judged nothing: a corpus of markdown alone makes "unscanned" a rule
+	// no item exercises, and the assertion goes quietly vacuous in the direction
+	// that matters.
+	for _, want := range []string{"parsed", "unscanned"} {
+		if !marks[want] {
+			t.Errorf("no item in the corpus is marked %q, so that branch of the scan oracle "+
+				"judged nothing; the mark is what tells a scan that ran from one that never did", want)
 		}
 	}
 }

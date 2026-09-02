@@ -85,7 +85,12 @@ type excludedFamily struct {
 
 // excludedFamilies is the path half of the exclusion floor.
 var excludedFamilies = []excludedFamily{
-	{Path: ".abcd/development/brief/03-evidence", Source: "itd-183: the evidence chapter is deliberation"},
+	{
+		Path: ".abcd/development/brief/03-evidence",
+		Source: "framework 7.1 as itd-194 applies it at chapter grain: the evidence chapter is " +
+			"verdict material, and a prior verdict is revision history — the ground the Audit " +
+			"Notes exclusion rests on",
+	},
 	{Path: ".abcd/development/decisions", Source: "itd-183 exclusion list: decisions/"},
 	{Path: ".abcd/development/roadmap/rfcs", Source: "itd-183 exclusion list: roadmap/rfcs/"},
 	{Path: ".abcd/development/intents/superseded", Source: "itd-183 exclusion list: intents/superseded/"},
@@ -114,6 +119,13 @@ var excludedFamilies = []excludedFamily{
 		Path:      ".abcd/development/intents/planned",
 		Positions: []string{posWidening, posComparative, posDetection},
 		Source:    "itd-183's drafts asymmetry: a reading's object excludes what it exists to change",
+	},
+	{
+		Path:      ".abcd/development/intents/shipped",
+		Positions: []string{posWidening},
+		Source: "itd-194: the framework's widening object and the readings companion's section " +
+			"5.2 both state that object without the shipped intents, so the widening position " +
+			"withdraws from the row and the floor asserts the withdrawal (iss-2609012259587904)",
 	},
 }
 
@@ -149,8 +161,20 @@ type admittedRecordPath struct {
 var admittedRecordPaths = []admittedRecordPath{
 	{Path: ".abcd/development/brief/01-product", Source: "itd-183 include list; adr-55: the construal as it presently stands is committed record"},
 	{Path: ".abcd/development/brief/02-constraints", Source: "itd-183 include list"},
+	// itd-194: brief current text is the whole brief bar the evidence chapter
+	// and bar the glossary, which is a record family with its own row
+	// (framework 7.2, companion 5.2; the corrections ruling of 2026-09-02).
+	{Path: ".abcd/development/brief/04-surfaces", Source: "itd-194: brief current text, the surfaces chapter"},
+	{Path: ".abcd/development/brief/05-internals", Source: "itd-194: brief current text, the internals chapter"},
+	{Path: ".abcd/development/brief/06-delivery", Source: "itd-194: brief current text, the delivery chapter"},
+	{Path: ".abcd/development/brief/00-meta.md", Source: "itd-194: brief current text, the meta chapter's one file"},
 	{Path: ".abcd/development/brief/glossary", Source: "itd-183 include list; adr-55: the glossary's committed terms"},
-	{Path: ".abcd/development/intents/shipped", Source: "itd-183 include list, projected to the claim record"},
+	{
+		Path:      ".abcd/development/intents/shipped",
+		Positions: []string{posEntailment, posComparative, posDetection},
+		Source: "itd-183 include list, projected to the claim record; not at widening, whose " +
+			"object neither design document states with the shipped intents in it (itd-194)",
+	},
 	{Path: ".abcd/development/intents/disciplines", Source: "itd-183 include list"},
 	{Path: ".abcd/development/specs", Source: "itd-183 include list"},
 	{
@@ -215,10 +239,27 @@ type materialClass struct {
 // the eval does not test.
 var materialClasses = []materialClass{
 	{
+		Kind: "brief-section",
+		Under: []string{
+			".abcd/development/brief/01-product",
+			".abcd/development/brief/02-constraints",
+			".abcd/development/brief/04-surfaces",
+			".abcd/development/brief/05-internals",
+			".abcd/development/brief/06-delivery",
+		},
+		Match: []string{".md"},
+		Source: "itd-183 include list, widened by itd-194 to brief current text: the product, " +
+			"constraints, surfaces, internals and delivery chapters, admitted whole",
+	},
+	{
+		// The meta chapter is the brief's one root file, so the row that reaches
+		// it is bounded by an exact basename rather than by a directory. It sits
+		// above the glossary row because the brief directory CONTAINS the
+		// glossary, and the first row that reaches a path owns it.
 		Kind:   "brief-section",
-		Under:  []string{".abcd/development/brief/01-product", ".abcd/development/brief/02-constraints"},
-		Match:  []string{".md"},
-		Source: "itd-183 include list: the product and constraints chapters, admitted whole",
+		Under:  []string{".abcd/development/brief"},
+		Match:  []string{"00-meta.md"},
+		Source: "itd-194: brief current text, the meta chapter's one file at the brief's root",
 	},
 	{
 		Kind:   "glossary-term",
@@ -348,6 +389,7 @@ const (
 	ruleFamily         = "family absence"
 	ruleUnnamedRecord  = "family absence (record path no include names)"
 	ruleMaterialClass  = "material-class attestation"
+	ruleScanMark       = "scan-mark attestation"
 )
 
 // bundleItem and manifestItem are the two artefacts' item shapes, read as this
@@ -365,7 +407,13 @@ type manifestItem struct {
 	// Kind is the material class the manifest attests for this item. It is read
 	// here so the attestation is checked rather than trusted; see
 	// checkMaterialClass.
-	Kind   string `json:"kind"`
+	Kind string `json:"kind"`
+	// Scan is whether the exclusion floor EXAMINED this item. It is read here
+	// because the manifest's key and heading exclusions are asserted for the
+	// items marked `parsed` and for no other, so an oracle that ignored the
+	// mark would hold the assertion over items no scan ever reached — which is
+	// the artefact brief invariant 16 forbids (itd-194).
+	Scan   string `json:"scan"`
 	SHA256 string `json:"sha256"`
 }
 
@@ -448,9 +496,11 @@ func requireCarriers(t *testing.T, a assembled) {
 			"bundle asserts nothing", a.Position)
 	}
 	seen := make(map[string]bool, len(a.ManifestItems))
+	scanOf := map[string]string{}
 	projected := map[string]map[string]bool{}
 	for _, it := range a.ManifestItems {
 		seen[it.Path] = true
+		scanOf[it.Path] = it.Scan
 		if it.Field == "" {
 			continue
 		}
@@ -468,6 +518,14 @@ func requireCarriers(t *testing.T, a assembled) {
 		if !seen[c.Path] {
 			t.Fatalf("the assembly at %s does not carry %s (%s); %s",
 				a.Position, c.Path, c.Why, c.stake())
+		}
+		// Then the mark, where the carrier declares one. A carrier that arrives
+		// whole proves the item travelled; only the mark says whether an
+		// examination stood behind the manifest's exclusion assertion over it.
+		if c.Scan != "" && scanOf[c.Path] != c.Scan {
+			t.Fatalf("the assembly at %s carries %s marked %q, and the record makes it %q (%s); "+
+				"the mark is what tells a scan that ran from a scan that never ran",
+				a.Position, c.Path, scanOf[c.Path], c.Scan, c.Why)
 		}
 		// Then the bytes. The manifest names what an assembly SAYS it passed; only
 		// the bundle says what it actually passed, and an absence assertion over an
@@ -512,15 +570,15 @@ func requireOracleTables(t *testing.T) {
 		want int
 	}{
 		{"sentinelClasses", len(sentinelClasses), 18},
-		{"carriers", len(carriers), 12},
-		{"materialClasses", len(materialClasses), 9},
+		{"carriers", len(carriers), 17},
+		{"materialClasses", len(materialClasses), 10},
 		{"holes", len(holes), 2},
-		{"refusals", len(refusals), 2},
+		{"refusals", len(refusals), 8},
 		{"excludedKeys", len(excludedKeys), 2},
 		{"excludedHeadings", len(excludedHeadings), 4},
-		{"excludedFamilies", len(excludedFamilies), 15},
-		{"admittedRecordPaths", len(admittedRecordPaths), 8},
-		{"coverage", len(coverage), 58},
+		{"excludedFamilies", len(excludedFamilies), 16},
+		{"admittedRecordPaths", len(admittedRecordPaths), 12},
+		{"coverage", len(coverage), 70},
 	} {
 		if tbl.got != tbl.want {
 			t.Fatalf("the %s table holds %d row(s), and this eval is written against %d; "+
@@ -779,7 +837,32 @@ func checkFieldAbsence(a assembled) []violation {
 		}
 	}
 
+	// The key and heading halves are held over the items the manifest marks
+	// `parsed` and over no other. The floor's two signals are read by a scan,
+	// and an item the scan never reached carries no claim that it was clean —
+	// so an unscanned item carrying an excluded heading is disclosure working,
+	// not a leak, and holding it to the same rule would report the disclosure
+	// as the failure. The inverse is the assertion that matters: an item the
+	// manifest marks `parsed` is one the assembler says it examined, so a hit
+	// there is a leak under an attestation (itd-194; brief invariant 16).
+	// The set is built from the mark that EXCUSES an item, never from the one
+	// that holds it. An item the manifest does not mention at all is held, and
+	// so is one whose mark is missing or unrecognised: only an explicit
+	// `unscanned` says the assembler never claimed to have examined it. Reading
+	// it the other way round — holding the items marked `parsed` — would let a
+	// manifest disarm this assertion by omission, and would silently disarm it
+	// for a caller that has the bundle and not the manifest.
+	unscanned := make(map[string]bool, len(a.ManifestItems))
+	for _, it := range a.ManifestItems {
+		if it.Scan == "unscanned" {
+			unscanned[it.ItemKey] = true
+		}
+	}
+
 	for _, it := range a.Items {
+		if unscanned[it.ItemKey] {
+			continue
+		}
 		for _, line := range strings.Split(it.Text, "\n") {
 			if m := excludedKeyLine.FindStringSubmatch(line); m != nil {
 				if hit, ok := keys[strings.ToLower(m[1])]; ok {
@@ -936,6 +1019,54 @@ func checkMaterialClass(a assembled) []violation {
 					"auditor as %q", it.ItemKey, got, it.Kind),
 				Source: "brief invariant 16: an attestation never states more than the examination " +
 					"behind it establishes, and the two artefacts describe one selection",
+			})
+		}
+	}
+	return out
+}
+
+// checkScanMarks is the scan attestation: every manifest item carries a mark,
+// and the mark is the one the record says its path carries.
+//
+// The expectation is TRANSCRIBED from the include table's declaration rather
+// than read from it, like every other oracle here: the floor's key and heading
+// signals are record shapes only a markdown file carries, so a `.md` item is
+// `parsed` and every other item is `unscanned`. An oracle that read Row.Scan
+// would agree with the assembler by construction and could only ever confirm
+// it.
+//
+// It is what makes the disclosure falsifiable. An assembler that stamped
+// `parsed` on every candidate would satisfy the decoder, the size report and
+// every absence assertion here, while the manifest's key and heading
+// exclusions rested on a scan that never ran over the source and test items —
+// which is the artefact adr-56 exists to forbid.
+func checkScanMarks(a assembled) []violation {
+	var out []violation
+	for _, it := range a.ManifestItems {
+		want := "unscanned"
+		if strings.EqualFold(path.Ext(it.Path), ".md") {
+			want = "parsed"
+		}
+		switch {
+		case it.Scan == "":
+			out = append(out, violation{
+				Position: a.Position,
+				Rule:     ruleScanMark,
+				Detail: fmt.Sprintf("item %s (%s) carries no scan mark, so the manifest cannot "+
+					"say whether the exclusion floor examined it", it.ItemKey, it.Path),
+				Source: "brief invariant 16: an attestation never states more than the examination " +
+					"behind it establishes, and an unmarked item's exclusion assertion states " +
+					"exactly that",
+			})
+		case it.Scan != want:
+			out = append(out, violation{
+				Position: a.Position,
+				Rule:     ruleScanMark,
+				Detail: fmt.Sprintf("the manifest marks item %s (%s) %q, and the record makes it %q",
+					it.ItemKey, it.Path, it.Scan, want),
+				Source: "itd-194: the floor's key and heading signals are record shapes only a " +
+					"markdown file carries, so a markdown item is parsed and every other item " +
+					"travels whole and marked unscanned",
 			})
 		}
 	}

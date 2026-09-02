@@ -399,6 +399,97 @@ var refusals = []refusal{
 			"emphasis marks defeat; the equality that recognises `## **Audit Notes**` as the " +
 			"excluded heading exists on the refusal path alone",
 	},
+	// The six shapes itd-194 adds. Each is a markdown document the include
+	// table admits and the exclusion floor cannot resolve, and each is refused
+	// rather than admitted unscanned — the mechanism that closes the
+	// container-shape class nine rounds of added patterns did not (adr-56 rule
+	// 1; brief invariant 16).
+	//
+	// Their Names carry the path and the shape's wording and NOT the excluded
+	// thing the shape hides. That is a property of the refusals themselves: a
+	// frontmatter shape this package cannot resolve is refused without the key
+	// being named, because naming it would mean resolving it, which is the
+	// guess these refusals exist not to make. What the shape hides is stated in
+	// Why instead.
+	{
+		Name:  "fence-in-frontmatter",
+		Path:  ".abcd/development/specs/open/spc-1-a-design-record.md",
+		Token: refusedPrefix + "FENCE-IN-FRONTMATTER",
+		Names: []string{
+			".abcd/development/specs/open/spc-1-a-design-record.md",
+			"a fence delimiter inside the frontmatter block",
+		},
+		Falsifier: "compute the fence mask over the whole document again, as fenceMask does, " +
+			"instead of over the body from the line after the block closes",
+		Why: "a fence delimiter inside the frontmatter toggled the fence mask, and the excluded-key " +
+			"scan skips fenced lines — so the delimiter switched off the very refusal that exists " +
+			"to catch a key the field reader cannot see, and `origin` travelled",
+	},
+	{
+		Name:  "displaced-block",
+		Path:  ".abcd/development/brief/01-product/06-framing.md",
+		Token: refusedPrefix + "DISPLACED-BLOCK",
+		Names: []string{
+			".abcd/development/brief/01-product/06-framing.md",
+			"displaced from line 0",
+		},
+		Falsifier: "delete the displacedFrontmatter call from verifyRedaction",
+		Why: "the frontmatter block is recognised at line 0 alone, so a block preceded only by " +
+			"blank lines, whitespace or an HTML comment is prose to this binary and frontmatter " +
+			"to every reader of the bundle — and `origin` inside it travelled",
+	},
+	{
+		Name:  "nested-mapping",
+		Path:  ".abcd/development/intents/disciplines/itd-4-selection-criteria.md",
+		Token: refusedPrefix + "NESTED-MAPPING",
+		Names: []string{
+			".abcd/development/intents/disciplines/itd-4-selection-criteria.md",
+			"a mapping nested in a block sequence",
+		},
+		Falsifier: "delete nestedMappingRe's case from unresolvableFrontmatterShape",
+		Why: "an excluded key nested inside a block-sequence entry is invisible to a field reader " +
+			"that reports one value per top-level key, so there was no span to redact and the key " +
+			"travelled; the floor refuses the nesting rather than learning the key's spelling",
+	},
+	{
+		Name:  "flow-explicit-key",
+		Path:  ".abcd/development/brief/02-constraints/03-invariants.md",
+		Token: refusedPrefix + "FLOW-EXPLICIT-KEY",
+		Names: []string{
+			".abcd/development/brief/02-constraints/03-invariants.md",
+			"an explicit key in a flow mapping",
+		},
+		Falsifier: "delete flowExplicitKeyRe's case from unresolvableFrontmatterShape",
+		Why: "the flow scan reads a key that follows a brace or a comma directly, and YAML's " +
+			"explicit-key indicator is not that shape, so the key behind it travelled; this and " +
+			"the nested mapping are the one fix the two records ask for rather than two",
+	},
+	{
+		Name:  "attribute-newline",
+		Path:  ".abcd/development/brief/glossary/core/construal.md",
+		Token: refusedPrefix + "ATTRIBUTE-NEWLINE",
+		Names: []string{
+			".abcd/development/brief/glossary/core/construal.md",
+			"an attribute value that opens on the line after its equals sign",
+		},
+		Falsifier: "drop maskMarkupData's shape return, or stop raising it from verifyRedaction",
+		Why: "the mask's blank skip after `=` is space and tab, so a value whose opening quote " +
+			"sits on the next line is never found and the `>` inside it is read as the end of the " +
+			"opening tag — the heading is judged as something else and the section under it travels",
+	},
+	{
+		Name:  "unbounded-raw-heading",
+		Path:  "docs/reference/thing.md",
+		Token: refusedPrefix + "UNBOUNDED-RAW-HEADING",
+		Names: []string{
+			"docs/reference/thing.md",
+			"a raw heading element that is never closed",
+		},
+		Falsifier: "delete the unboundedRawHeading call from verifyRedaction",
+		Why: "an opener with neither a hard nor a soft bound has its title read over the whole " +
+			"remainder of the document, which is how the heading sitting under it was admitted; " +
+			"the refusal removes the shape and claims nothing about the scan's cost",
+	},
 }
 
 // apply replaces the refusal's file in a materialised tree.
@@ -447,6 +538,17 @@ type carrier struct {
 	// narrowing the projection to that one field drops four of the five contracted
 	// fields and every marker still arrives.
 	Markers []string
+	// Scan is the mark the manifest must carry for this carrier's items:
+	// "parsed" for a document the exclusion floor examined, "unscanned" for one
+	// it did not. Empty asserts nothing, which is what every carrier planted
+	// before itd-194 does.
+	//
+	// It is what makes the disclosure falsifiable from the oracle's side. A
+	// carrier that arrives whole proves the item travelled; only the mark says
+	// whether an examination stood behind the manifest's exclusion assertion
+	// over it, and a run that stamped every item `parsed` would otherwise be
+	// green with the assertion resting on a scan that never ran.
+	Scan string
 	// Fields are the projected fields the manifest must record for this path.
 	//
 	// It exists because one of the five contracted fields cannot be pinned by a
@@ -506,7 +608,10 @@ var carriers = []carrier{
 		// The only fixture record carrying all five contracted fields, so it is the
 		// one that can pin the whole projection: four markers from four distinct
 		// sections, and spec_id off the manifest because no marker can reach it.
-		Path: ".abcd/development/intents/shipped/itd-1-a-shipped-intent.md",
+		// Not at widening since itd-194: neither design document lists the
+		// shipped intents in that position's object, so the row withdrew from it.
+		Path:      ".abcd/development/intents/shipped/itd-1-a-shipped-intent.md",
+		Positions: []string{posEntailment, posDetection},
 		Markers: []string{
 			"The promise, as it was made.",
 			"- Given a fixture state, when the assembly runs, then the read-block holds.",
@@ -540,6 +645,54 @@ var carriers = []carrier{
 		Fields:  []string{"Press Release", "Mechanism", "spec_id"},
 		Classes: []string{"UNPROJECTED-SECTION"},
 		Why:     "the planned half of the candidate set, projected the same way",
+	},
+	// The four chapters itd-194 adds to brief current text, which both design
+	// documents name as a reading's object (framework 7.2, companion 5.2) and
+	// which the table admitted two of. One carrier per chapter, because a
+	// carrier pins ONE path and each chapter's row has to be falsifiable on its
+	// own: deleting the 05-internals row must fail, and a carrier under
+	// 04-surfaces cannot see that.
+	{
+		Path:    ".abcd/development/brief/00-meta.md",
+		Markers: []string{"ABCD-EVAL-CHAPTER-META travels as brief current text."},
+		Scan:    "parsed",
+		Why: "the brief's meta chapter, reached by the one row whose source is the brief " +
+			"directory and whose match is that exact basename",
+	},
+	{
+		Path:    ".abcd/development/brief/04-surfaces/01-reading.md",
+		Markers: []string{"ABCD-EVAL-CHAPTER-SURFACES travels as brief current text."},
+		Scan:    "parsed",
+		Why:     "the brief's surfaces chapter, admitted as brief current text",
+	},
+	{
+		Path:    ".abcd/development/brief/05-internals/01-packages.md",
+		Markers: []string{"ABCD-EVAL-CHAPTER-INTERNALS travels as brief current text."},
+		Scan:    "parsed",
+		Why:     "the brief's internals chapter, admitted as brief current text",
+	},
+	{
+		Path:    ".abcd/development/brief/06-delivery/01-shipping.md",
+		Markers: []string{"ABCD-EVAL-CHAPTER-DELIVERY travels as brief current text."},
+		Scan:    "parsed",
+		Why:     "the brief's delivery chapter, admitted as brief current text",
+	},
+	{
+		// The live leak's own shape: a Go test file carrying record-shaped
+		// markdown with a literal `## Audit Notes` section. itd-194 does not
+		// stop it travelling — both design documents name the shipped tree's
+		// code and tests as a reading's object — it makes the manifest say, per
+		// item, that no examination stood behind the exclusion assertion over
+		// it (iss-2608301450065320; adr-56 as refined 2026-09-02).
+		Path: "sitefixture_test.go",
+		Markers: []string{
+			"ABCD-EVAL-UNSCANNED-CARRIER travels whole and marked, never examined.",
+		},
+		Scan: "unscanned",
+		Why: "a Go test file carrying a record-shaped page with an excluded heading in it; it " +
+			"is what makes the unscanned mark falsifiable, because an assembler that stamped " +
+			"every item `parsed` would leave this item's exclusion assertion resting on a scan " +
+			"that never ran",
 	},
 	{
 		Path:    "main.go",

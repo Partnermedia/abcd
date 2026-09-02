@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -223,11 +224,16 @@ func TestThePresetCannotReachTheLedgerTier(t *testing.T) {
 // asymmetry survives an entry that names the intent kind.
 func TestDraftsStayDeniedAtWidening(t *testing.T) {
 	root := fixtureRepo(t)
+	// The entry names the intent kind AND a kind the widening position still
+	// admits, because since itd-194 no intent-projection row is admitted at
+	// widening at all — the drafts and planned rows never were, and the shipped
+	// row withdrew — so an entry naming that kind alone selects nothing and the
+	// run refuses before it can demonstrate anything about narrowing.
 	writeFile(t, root, ".abcd/config/reading-presets.json", `{
   "schema_version": 1,
   "presets": {
     "default": {"positions": {"widening":
-      {"kinds": ["intent-projection"], "records": [], "paths": []}}}
+      {"kinds": ["intent-projection", "brief-section"], "records": [], "paths": []}}}
   }
 }`)
 	gitCommitAll(t, root)
@@ -239,7 +245,8 @@ func TestDraftsStayDeniedAtWidening(t *testing.T) {
 		t.Fatalf("assemble: %v", err)
 	}
 	for _, m := range res.Manifest.Items {
-		if strings.Contains(m.Path, "/drafts/") || strings.Contains(m.Path, "/planned/") {
+		if strings.Contains(m.Path, "/drafts/") || strings.Contains(m.Path, "/planned/") ||
+			strings.Contains(m.Path, "/shipped/") {
 			t.Errorf("an entry naming the intent kind at widening admitted %s; an entry narrows the "+
 				"table's admission and never widens it", m.Path)
 		}
@@ -1008,6 +1015,123 @@ func TestRunIsReproducibleFromCommitAndPreset(t *testing.T) {
 		}
 		if string(h) != string(decodedManifest(t, second.Manifest)["preset_hash"]) {
 			t.Errorf("two assemblies at %s recorded different preset hashes", p)
+		}
+	}
+}
+
+// TestOnlyTheTreePositionsNameSourceOrTest is itd-194 ac-5 and its third scope
+// condition (cond-2609021003130127), which is the object-set ruling of
+// 2026-09-02: the committed detection and widening entries name the `source`
+// and `test` kinds, because both design documents name code and tests as the
+// shipped tree a reading may see, and the entailment entry names neither.
+//
+// An entry that names either kind ACCEPTS the unscanned items it selects, and
+// the acceptance is paid for by disclosure — so the second half of this test
+// assembles under those entries and holds every source and test item to
+// carrying the mark. The live fixture leak at itm-0736 is absent from every
+// committed entry, whose paths reach nothing under internal/core/site, and that
+// absence is asserted here rather than left to the eval alone
+// (iss-2608301450065320).
+//
+// The assembly runs over the FIXTURE tree carrying the committed entries rather
+// than over this repository: a unit test cannot assume the working tree is
+// clean, and the assembler rightly refuses a dirty one. What is read from the
+// committed file is the thing under test — which kinds the entries name — and
+// the tree the entries are applied to is incidental to that claim. The eval's
+// TestTheFixtureLeakIsAbsentUnderEveryCommittedPreset takes the other half, over
+// a clone of HEAD.
+func TestOnlyTheTreePositionsNameSourceOrTest(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join(repoRoot(t), filepath.FromSlash(PresetConfigPath)))
+	if err != nil {
+		t.Fatalf("read %s: %v", PresetConfigPath, err)
+	}
+	var file struct {
+		Presets map[string]struct {
+			Positions map[string]struct {
+				Kinds []string `json:"kinds"`
+				Paths []string `json:"paths"`
+			} `json:"positions"`
+		} `json:"presets"`
+	}
+	if err := json.Unmarshal(raw, &file); err != nil {
+		t.Fatalf("decode %s: %v", PresetConfigPath, err)
+	}
+	if len(file.Presets) != 1 {
+		t.Fatalf("%s holds %d presets; one entry per position means one preset",
+			PresetConfigPath, len(file.Presets))
+	}
+	var preset struct {
+		Positions map[string]struct {
+			Kinds []string `json:"kinds"`
+			Paths []string `json:"paths"`
+		} `json:"positions"`
+	}
+	for _, p := range file.Presets {
+		preset = p
+	}
+
+	names := func(position string, kind Kind) bool {
+		for _, k := range preset.Positions[position].Kinds {
+			if k == string(kind) {
+				return true
+			}
+		}
+		return false
+	}
+	for _, position := range []Position{PositionDetection, PositionWidening} {
+		for _, kind := range []Kind{KindSource, KindTest} {
+			if !names(string(position), kind) {
+				t.Errorf("the committed %s entry does not name %q; both design documents name "+
+					"code and tests as the shipped tree a reading may see, and the ruling of "+
+					"2026-09-02 keeps them in", position, kind)
+			}
+		}
+	}
+	for _, kind := range []Kind{KindSource, KindTest} {
+		if names(string(PositionEntailment), kind) {
+			t.Errorf("the committed entailment entry names %q; the ruling of 2026-09-02 gives "+
+				"the tree kinds to detection and widening alone", kind)
+		}
+	}
+	for position, entry := range preset.Positions {
+		for _, p := range entry.Paths {
+			if strings.HasPrefix(path.Clean(p), "internal/core/site") {
+				t.Errorf("the committed %s entry names the path %q, which reaches the Go fixture "+
+					"the itd-183 audit found leaking; no committed entry reaches it", position, p)
+			}
+		}
+	}
+
+	// The disclosure half. The fixture carries the committed entries verbatim,
+	// so what is applied here is what a run of this repository applies.
+	root := fixtureRepo(t)
+	writeFile(t, root, PresetConfigPath, string(raw))
+	writeFile(t, root, "main_test.go",
+		"package main\n\n// the fixture's own test file is corpus, never built\n")
+	gitCommitAll(t, root)
+
+	for _, position := range []Position{PositionDetection, PositionWidening} {
+		res, err := Assemble(AssembleRequest{
+			RepoRoot: root, Position: position, Target: "HEAD", DryRun: true,
+		})
+		if err != nil {
+			t.Fatalf("assemble at %s under the committed entry: %v", position, err)
+		}
+		marked := 0
+		for _, m := range res.Manifest.Items {
+			if m.Kind != KindSource && m.Kind != KindTest {
+				continue
+			}
+			marked++
+			if m.Scan != ScanUnscanned {
+				t.Errorf("the committed %s entry passed %s (%s) marked %q; an entry that names "+
+					"either tree kind accepts the unscanned items it selects, disclosed by the mark",
+					position, m.Path, m.Kind, m.Scan)
+			}
+		}
+		if marked == 0 {
+			t.Errorf("the committed %s entry passed no source or test item, so the mark was "+
+				"asserted over nothing", position)
 		}
 	}
 }

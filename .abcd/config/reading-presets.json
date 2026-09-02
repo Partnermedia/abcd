@@ -4,7 +4,7 @@
     "default": {
       "positions": {
         "widening": {
-          "kinds": ["brief-section", "glossary-term", "discipline"],
+          "kinds": ["brief-section", "glossary-term", "discipline", "source", "test"],
           "records": [],
           "paths": []
         },
@@ -14,7 +14,7 @@
           "paths": []
         },
         "detection": {
-          "kinds": ["brief-section", "discipline", "spec"],
+          "kinds": ["brief-section", "discipline", "spec", "source", "test"],
           "records": [],
           "paths": []
         }

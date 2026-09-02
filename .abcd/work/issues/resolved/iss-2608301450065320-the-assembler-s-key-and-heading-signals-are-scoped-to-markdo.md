@@ -9,6 +9,11 @@ found_during: "itd-183-fidelity-audit"
 origin: researcher-authored
 production_mode: hand-written
 found_at: "internal/core/reading/project.go"
+resolution: "The scope decision is declared rather than inferred. Every include row carries a Scan declaration saying whether the exclusion floor parses what the row admits, collect runs redactExcluded over exactly the rows declared parsed, and redactExcluded's own file-extension test is gone — so admission and examination are one declaration instead of a row on one side and an extension test on the other. An item from an unparsed row travels whole and its manifest entry is marked unscanned, and the manifest's key and heading exclusions are asserted for the items marked parsed and for no other. The Go fixture at itm-0736 therefore arrives disclosed rather than silently, which is the ruling of 2026-09-02."
+impact: fix
+resolved_by:
+  intent: "itd-194"
+  spec: "spc-2609021003136831"
 ---
 
 the assembler's key and heading signals are scoped to markdown so a record-shaped document inside a Go fixture carries its Audit Notes into the bundle while the manifest asserts refusal
@@ -45,3 +50,7 @@ Remedy is a design question, not a patch: either the include table admits only
 what the floor can read, or the floor reads what the include table admits.
 Seed material for the exclusion-floor intent, and the strongest single argument
 in it — because it is the one leak a maintainer can reproduce today.
+
+## Grounds
+
+- pursued: we expect moving the scope decision onto the table row, and marking every unexamined item in the manifest, to close the container-shape class where widening the parse would have been the other branch, because the manifest then states a fact about each item rather than a claim about the run; an item the manifest marks parsed that no scan ran over, or an unparsed item arriving with no mark, would show it wrong

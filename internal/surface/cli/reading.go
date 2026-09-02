@@ -384,6 +384,13 @@ func renderSizeReport(w io.Writer, s reading.SizeReport) {
 		fmt.Fprintf(w, "    %-18s %6d item(s)  %9s  ~%s tokens\n",
 			k.Kind, k.Items, humanBytes(k.Bytes), thousands(k.TokensEst))
 	}
+	// How much of this assembly the exclusion floor never looked at. Printed
+	// only above zero: under a cold run there is nothing to disclose, and a line
+	// reading "0 items" would be a disclosure about nothing (itd-194).
+	if s.Unscanned > 0 {
+		fmt.Fprintf(w, "  unscanned: %d item(s) travel whole, not examined by the exclusion floor\n",
+			s.Unscanned)
+	}
 }
 
 // humanBytes renders a byte count at a readable scale. The unit is decimal, not

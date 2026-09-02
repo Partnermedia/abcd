@@ -105,11 +105,18 @@ type KindSize struct {
 // the record weighs. No budget is enforced and none is invented: the assembler
 // cannot know what a given reader accepts.
 type SizeReport struct {
-	ByKind    []KindSize `json:"by_kind"`
-	Items     int        `json:"items"`
-	Bytes     int        `json:"bytes"`
-	TokensEst int        `json:"tokens_est"`
-	Basis     string     `json:"basis"`
+	ByKind []KindSize `json:"by_kind"`
+	Items  int        `json:"items"`
+	// Unscanned is how many of those items the exclusion floor never examined,
+	// which is the operator's own figure for how much of the assembly travels
+	// on disclosure rather than on a scan. It rides on the result like the rest
+	// of this report and on neither artefact, so it moves no version: the
+	// per-item truth is the manifest's `scan` mark, and this is its total
+	// (itd-194).
+	Unscanned int    `json:"unscanned"`
+	Bytes     int    `json:"bytes"`
+	TokensEst int    `json:"tokens_est"`
+	Basis     string `json:"basis"`
 }
 
 // sizeBasis names the method and the divisor inside the artefact, so a report
@@ -137,6 +144,9 @@ func sizeReport(cands []candidate) SizeReport {
 		k.Bytes += n
 		rep.Items++
 		rep.Bytes += n
+		if c.scan == ScanUnscanned {
+			rep.Unscanned++
+		}
 	}
 	rep.ByKind = make([]KindSize, 0, len(byKind))
 	for _, kind := range Kinds() {
@@ -202,7 +212,13 @@ type candidate struct {
 	field    string
 	fieldIdx int
 	kind     Kind
-	text     string
+	// scan is the admitting row's Scan, carried through so the manifest can
+	// state per item whether the exclusion floor examined it. It is set from
+	// the row and never inferred from the path: the row is the declaration, and
+	// a second derivation of the same fact is how admission and examination
+	// came to disagree (itd-194).
+	scan Scan
+	text string
 }
 
 // Assemble walks the repository under the include table at the given position
@@ -318,7 +334,7 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 		key := fmt.Sprintf("itm-%04d", i+1)
 		bundle.Items = append(bundle.Items, BundleItem{ItemKey: key, Kind: c.kind, Text: c.text})
 		manifest.Items = append(manifest.Items, ManifestItem{
-			ItemKey: key, Path: c.path, Field: c.field, Kind: c.kind,
+			ItemKey: key, Path: c.path, Field: c.field, Kind: c.kind, Scan: c.scan,
 			Bytes: len(c.text), SHA256: sha256Hex([]byte(c.text)),
 		})
 	}
@@ -693,15 +709,27 @@ func collect(repoRoot string, position Position) ([]candidate, error) {
 			if err != nil {
 				return nil, fmt.Errorf("reading: %s: %w", rel, err)
 			}
+			// refuseOwnArtefact runs over EVERY admitted file whatever its row,
+			// because the artefact tag is a byte signature and needs no parse.
 			if err := refuseOwnArtefact(rel, raw); err != nil {
 				return nil, err
 			}
-			doc, err := redactExcluded(rel, string(raw), exclusions)
-			if err != nil {
-				return nil, err
+			// The floor runs over the row's DECLARATION, not over the file's
+			// extension. That is the whole of adr-56's third rule made
+			// mechanical: the table says which rows the floor parses, and the
+			// floor runs over exactly those, so admission and examination
+			// cannot describe two different sets. A row the floor does not
+			// parse passes its document through untouched and every item it
+			// yields is marked unscanned in the manifest.
+			doc := string(raw)
+			if row.Scan == ScanParsed {
+				doc, err = redactExcluded(rel, doc, exclusions)
+				if err != nil {
+					return nil, err
+				}
 			}
 			if len(row.Fields) == 0 {
-				out = append(out, candidate{path: rel, kind: row.Kind, text: doc})
+				out = append(out, candidate{path: rel, kind: row.Kind, scan: row.Scan, text: doc})
 				continue
 			}
 			for i, field := range row.Fields {
@@ -712,7 +740,10 @@ func collect(repoRoot string, position Position) ([]candidate, error) {
 				if !ok {
 					continue
 				}
-				out = append(out, candidate{path: rel, field: field, fieldIdx: i, kind: row.Kind, text: text})
+				out = append(out, candidate{
+					path: rel, field: field, fieldIdx: i,
+					kind: row.Kind, scan: row.Scan, text: text,
+				})
 			}
 		}
 	}

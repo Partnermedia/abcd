@@ -662,15 +662,19 @@ const fourthConditionSentence = "Items are returned in the order they arise in t
 // presence-only assertion.
 const retiredFourthConditionSentence = "Items come back unordered and unweighted"
 
-// promptVersions pins each definition's prompt version after the PATCH bump the
-// fourth-condition correction makes. It is a declaration rather than a
-// derivation: a version read out of the file it is checking would agree with it
-// by construction and could only confirm it.
+// promptVersions pins each definition's prompt version. It is a declaration
+// rather than a derivation: a version read out of the file it is checking would
+// agree with it by construction and could only confirm it.
+//
+// The four moved PATCH together with the fourth-condition correction, and PATCH
+// again with itd-194, which is a change to the object's source list rather than
+// to the blindness core: all four gain the brief's surfaces, internals,
+// delivery and meta chapters, and widening loses the shipped intents.
 var promptVersions = map[Position]string{
-	PositionWidening:    "0.2.1",
-	PositionEntailment:  "0.1.1",
-	PositionComparative: "0.1.1",
-	PositionDetection:   "0.1.1",
+	PositionWidening:    "0.2.2",
+	PositionEntailment:  "0.1.2",
+	PositionComparative: "0.1.2",
+	PositionDetection:   "0.1.2",
 }
 
 // TestTheFourthConditionTakesTheCompanionsSentence is itd-2609021003095168 ac-7

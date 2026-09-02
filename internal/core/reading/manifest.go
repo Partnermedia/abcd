@@ -23,8 +23,11 @@ import (
 // BOTH shapes move again: the scope operand and its override stamp are
 // withdrawn, so the manifest's `scope`, `scope_hash` and `scope_overridden`
 // become `preset` and `preset_hash`, and the bundle's `scope` becomes `preset`
-// (adr-2609021016286571).
-const SchemaVersion = 5
+// (adr-2609021016286571). At version 6 the manifest item gains its `scan` mark,
+// the fact of whether the exclusion floor examined that item, so the shared
+// constant restamps the bundle once more (itd-194, adr-56 as refined
+// 2026-09-02).
+const SchemaVersion = 6
 
 // The two artefact type tags. They are carried in the documents themselves so a
 // reader of a loose file can tell the two apart without its filename.
@@ -118,6 +121,20 @@ type ManifestItem struct {
 	// NOT omitempty: an item without a kind is a defect, and a shape that can
 	// omit the field cannot tell that defect from a well-formed item (spc-68).
 	Kind Kind `json:"kind"`
+	// Scan is whether the exclusion floor EXAMINED this item: `parsed` when its
+	// key and heading signals were read over the bytes that travelled,
+	// `unscanned` when the row that admitted it is one the floor does not parse
+	// and the item travelled whole.
+	//
+	// It is what makes the manifest's exclusion assertion a fact about each item
+	// rather than a claim about the run. Without it a scan that ran and found
+	// nothing and a scan that never ran produced byte-identical attestations,
+	// which is an attestation that does not attest (adr-56; brief invariant 16).
+	//
+	// Deliberately NOT omitempty, on the same argument Kind carries: an item
+	// without a mark is a defect, and a shape that can omit the field cannot
+	// tell that defect from a well-formed item.
+	Scan Scan `json:"scan"`
 	// Bytes is the length of the passed text. Without it the size report was
 	// only HALF checkable against the manifest: an auditor could recompute the
 	// per-kind item COUNTS and not the per-kind BYTES, which is the figure
@@ -221,6 +238,15 @@ func DecodeManifest(data []byte) (Manifest, error) {
 	for _, k := range Kinds() {
 		known[k] = true
 	}
+	// The scan mark is refused on exactly the same ground, and it is the
+	// stronger case of the two: a manifest whose item carries no mark cannot say
+	// whether its key and heading exclusions were established for that item, so
+	// decoding it clean would hand a reader an exclusion assertion with nothing
+	// behind it (itd-194 ac-4).
+	knownScans := make(map[Scan]bool, len(Scans()))
+	for _, s := range Scans() {
+		knownScans[s] = true
+	}
 	for i, it := range m.Items {
 		if it.Kind == "" {
 			return Manifest{}, fmt.Errorf("decoding reading manifest: item %d (%s) carries no kind",
@@ -229,6 +255,15 @@ func DecodeManifest(data []byte) (Manifest, error) {
 		if !known[it.Kind] {
 			return Manifest{}, fmt.Errorf("decoding reading manifest: item %d (%s) carries the "+
 				"unknown kind %q; the vocabulary is closed", i, it.ItemKey, it.Kind)
+		}
+		if it.Scan == "" {
+			return Manifest{}, fmt.Errorf("decoding reading manifest: item %d (%s) carries no "+
+				"\"scan\" mark, so the manifest cannot say whether the exclusion floor examined it",
+				i, it.ItemKey)
+		}
+		if !knownScans[it.Scan] {
+			return Manifest{}, fmt.Errorf("decoding reading manifest: item %d (%s) carries the "+
+				"unknown \"scan\" mark %q; the vocabulary is closed", i, it.ItemKey, it.Scan)
 		}
 	}
 	return m, nil

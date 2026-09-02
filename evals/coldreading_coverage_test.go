@@ -88,6 +88,13 @@ const (
 	// STOPS being refused, so the refusal corpus reports an assembly that
 	// succeeded — with the warm token in the bundle it reads back.
 	caughtUnrefused = "the refusal corpus reports an assembly that was not refused"
+	// caughtScan: the manifest's per-item scan mark disagrees with the
+	// hand-transcribed expectation, so an assembly that stopped disclosing what
+	// the exclusion floor did not examine is named. It reaches a claim no leak
+	// can: an item marked `parsed` that no scan ran over leaks nothing on this
+	// corpus and still leaves the manifest's exclusion assertion resting on an
+	// examination that did not happen (itd-194).
+	caughtScan = "the scan-mark oracle names the item whose examination is mis-attested"
 )
 
 // coverageRow is one rule of the assembler's contract.
@@ -138,7 +145,7 @@ var coverage = []coverageRow{
 		Classes:   []string{"WARM-KEY", "WARM-FIELD"},
 	},
 	{
-		Rule:      "intents/shipped is admitted at every position",
+		Rule:      "intents/shipped is admitted at entailment and detection",
 		Falsifier: "delete the shipped row from Table",
 		Caught:    caughtCarrier,
 		Classes:   []string{"WARM-FIELD", "UNPROJECTED-SECTION"},
@@ -361,7 +368,7 @@ var coverage = []coverageRow{
 	// positive walk and the fail-closed assertExclusions gate are two independent
 	// mechanisms, so removing either alone changes no output.
 	{
-		Rule:      "the brief's evidence chapter is deliberation and never travels",
+		Rule:      "the brief's evidence chapter is verdict material and never travels",
 		Falsifier: "add an include row for brief/03-evidence and delete its Exclusions row",
 		Caught:    caughtLeak,
 		Classes:   []string{"DELIBERATION"},
@@ -557,6 +564,89 @@ var coverage = []coverageRow{
 			"assembly exit non-zero and the eval's own depth-agnostic branch is never " +
 			"reached. The branch is kept because spc-64 asks for it and it costs nothing " +
 			"to be right if that refusal ever softens, not because it has caught anything",
+	},
+	// ---- itd-194: the six shapes the floor refuses rather than admits ----
+	//
+	// Every one of these is reached ONLY by the refusal corpus. A refusal
+	// removed against a corpus with nothing to refuse changes no output, so the
+	// falsifier here is the plant ceasing to be refused — at which point the
+	// same binary exits 0 with the warm token in the bundle.
+	{
+		Rule: "a fence delimiter inside the frontmatter block is refused, and the fence mask " +
+			"cannot be toggled from inside the block",
+		Falsifier: "compute the fence mask over the whole document again, as fenceMask does, " +
+			"instead of over the body from the line after the block closes",
+		Caught:   caughtUnrefused,
+		Refusals: []string{"fence-in-frontmatter"},
+	},
+	{
+		Rule: "a delimited block preceded only by blank lines, whitespace or an HTML comment " +
+			"is refused as displaced from line 0",
+		Falsifier: "delete the displacedFrontmatter call from verifyRedaction",
+		Caught:    caughtUnrefused,
+		Refusals:  []string{"displaced-block"},
+	},
+	{
+		Rule:      "a compact mapping nested in a block sequence is refused, whatever the key is named",
+		Falsifier: "delete nestedMappingRe's case from unresolvableFrontmatterShape",
+		Caught:    caughtUnrefused,
+		Refusals:  []string{"nested-mapping"},
+	},
+	{
+		Rule:      "an explicit key in a flow mapping is refused, whatever the key is named",
+		Falsifier: "delete flowExplicitKeyRe's case from unresolvableFrontmatterShape",
+		Caught:    caughtUnrefused,
+		Refusals:  []string{"flow-explicit-key"},
+	},
+	{
+		Rule:      "an attribute value that opens on the line after its equals sign is refused",
+		Falsifier: "drop maskMarkupData's shape return, or stop raising it from verifyRedaction",
+		Caught:    caughtUnrefused,
+		Refusals:  []string{"attribute-newline"},
+	},
+	{
+		Rule: "a raw heading opener that reaches the end of the document with no bound is " +
+			"refused, and a CRLF blank line bounds an element as an LF one does",
+		Falsifier: "delete the unboundedRawHeading call from verifyRedaction",
+		Caught:    caughtUnrefused,
+		Refusals:  []string{"unbounded-raw-heading"},
+	},
+
+	// ---- itd-194: the widening object, and what the manifest says it examined ----
+	{
+		Rule:      "the widening reading does not see the shipped intents",
+		Falsifier: "widen the shipped row's Positions to allPositions and delete the widening-scoped shipped row from Exclusions",
+		Caught:    caughtFamily,
+	},
+	{
+		Rule:      "an item from an unscanned row carries the mark and a parsed item does not",
+		Falsifier: "stamp `ScanParsed` on every candidate",
+		Caught:    caughtScan,
+	},
+
+	// ---- itd-194: brief current text ----
+	//
+	// One row per chapter, because a carrier pins one path and each chapter's
+	// include row has to be falsifiable on its own.
+	{
+		Rule:      "brief/00-meta.md is admitted as a brief section at every position the brief rows admit",
+		Falsifier: "delete the row",
+		Caught:    caughtCarrier,
+	},
+	{
+		Rule:      "brief/04-surfaces is admitted as brief sections at every position the brief rows admit",
+		Falsifier: "delete the row",
+		Caught:    caughtCarrier,
+	},
+	{
+		Rule:      "brief/05-internals is admitted as brief sections at every position the brief rows admit",
+		Falsifier: "delete the row",
+		Caught:    caughtCarrier,
+	},
+	{
+		Rule:      "brief/06-delivery is admitted as brief sections at every position the brief rows admit",
+		Falsifier: "delete the row",
+		Caught:    caughtCarrier,
 	},
 }
 

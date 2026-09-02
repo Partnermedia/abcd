@@ -7,6 +7,11 @@ category: "security"
 source: "user-observation"
 found_during: "itd-183-round-10-security"
 found_at: "internal/core/reading/project.go"
+resolution: "maskMarkupData gains a second return naming the shape when the blank skip after an equals sign reaches a newline before the opening quote, and verifyRedaction refuses it as 'an attribute value that opens on the line after its equals sign'. The HTML-whitespace skip the record proposed is deliberately not taken: a resolved mask on that shape is comprehension, which the 2026-08-30 ruling declined."
+impact: fix
+resolved_by:
+  intent: "itd-194"
+  spec: "spc-2609021003136831"
 ---
 
 a newline between an attribute name's equals and its opening quote declines the markup mask on both readings so a value carrying a greater-than truncates the heading opener
@@ -35,3 +40,7 @@ on the mask, and a declined mask leaves it mis-parsed -- reached by a different
 route. Remedy: an HTML-whitespace skip local to the markup mask, which a YAML
 line scan has no business sharing. Seed material for the exclusion floor's own
 intent.
+
+## Grounds
+
+- pursued: we expect refusing the shape to close it where widening the skip class would have resolved it, because a mask that declines silently is the failure and a mask that guesses is the comprehension this intent does not buy; an attribute value opening on the next line that still assembles, or a heading admitted past a mask that declined, would show it wrong
