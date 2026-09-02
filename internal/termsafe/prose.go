@@ -44,6 +44,22 @@ package termsafe
 // backtick string, and nothing splits the field — before asking for the
 // exemption. The default is the neutralise-everything form for exactly that
 // reason.
+// The link rule is not a spoofing defence but a gate one (iss-2608311504353427):
+// an auditor quoting an element path of the form `items[0](itm-0001)` writes an
+// inline link whose target resolves to nothing, and record-lint's links_resolve
+// rule then refuses the whole tree on a record the ingest itself just wrote — a
+// failure no care in the author can prevent, because the offending text is a
+// faithful quotation of the code under review. The neutralisation is the one the
+// comment delimiters get, a single space breaking the adjacency CommonMark
+// requires, so `items[0] (itm-0001)` still reads as the code it quotes. Only the
+// adjacency is touched: a bracket or a parenthesis on its own is left alone, and
+// a shortcut reference `[label]` is not neutralised, because doing so would have
+// to rewrite every bracket in every field and it opens no link unless a matching
+// definition exists in the surrounding document.
+//
+// Every rule inserts a form the same rule no longer matches, so the cleaner is
+// idempotent: a field cleaned twice is the field cleaned once, and a downstream
+// caller that re-cleans what it was handed does not drift it further.
 //
 // Two forms exist because two callers legitimately want different whitespace
 // handling, and the difference is visible in the record: CleanProse trims,
@@ -146,7 +162,12 @@ func hasOption(opts []Option, want Option) bool {
 // rules are one; the comment-close rule is the only other.
 func neutraliseHTML(s string) string {
 	s = htmlOpenerRe.ReplaceAllStringFunc(s, func(m string) string { return "< " + m[1:] })
-	return strings.ReplaceAll(s, "-->", "-- >")
+	s = strings.ReplaceAll(s, "-->", "-- >")
+	// A space after the `]` is enough for links too: CommonMark requires the
+	// destination `(` or the label `[` to follow the link text immediately, and
+	// the record-lint links_resolve pattern requires the same adjacency.
+	s = strings.ReplaceAll(s, "](", "] (")
+	return strings.ReplaceAll(s, "][", "] [")
 }
 
 // codeSpansAreUnambiguous reports whether the span boundaries the cleaner would

@@ -12,6 +12,29 @@ over the brief's earlier `1.0.0`-at-close expectation). The four M6 synthesis
 agents below entered at `0.1.0`, wired to their `abcd disembark` verbs and
 unmeasured; `lifeboat-oracle` has since become `lifeboat-reviewer` at `0.1.1`.
 
+## 0.3.0 — 2026-09-01 (iss-2609011207114761 — only Added and Fixed)
+
+### release-changelog-composer 0.3.0
+
+MINOR: the section set the composer may choose from closes to `Added` and
+`Fixed`, which changes what it emits for the same cut. The 0.2.0 baseline rule
+asked the composer whether a capability was reachable in `base_tag` while giving
+it no way to look, so the ruling of 2026-09-01 (iss-2609011207114761) removes
+the question: `Changed`, `Deprecated` and `Removed` are claims about the previous
+release's surface, `Security` is a claim about a vulnerability that release
+carried, and the composer's inputs are the cut and the record bodies alone. The
+table offers two rows; the four other Keep a Changelog names are listed as ones
+the binary refuses. `impact` maps explicitly: `breaking` is an `Added` line that
+states the break, a `removed[]` record is cited on the `Added` line of what
+replaced or withdrew it, and a closed vulnerability is a `Fixed` line. The
+example payload's `Removed` entry becomes an `Added` line stating the
+withdrawal. The binary side lands in the same change: `writableSections` in
+`internal/core/release` is the one declaration of the set, the ingest refuses
+any other registered section by name and by ruling, a test pins this prompt's
+table to that list, and every dated section the ingest writes carries one
+sentence under its heading saying what the notes list and what they do not
+claim. Unmeasured, as before.
+
 ## 0.2.0 — 2026-09-01 (iss-2609011207114761 — the base_tag baseline rule)
 
 ### release-changelog-composer 0.2.0

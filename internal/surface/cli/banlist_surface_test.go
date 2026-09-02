@@ -252,6 +252,13 @@ func runBanlist(stdin string, args ...string) (stdout, stderr string, code int) 
 // patterns in it, and one the guard never reads, so nothing stops that commit.
 func TestBanlistResolvesTheRepoRootNotTheCwd(t *testing.T) {
 	repo := blRepo(t, "")
+	// The repo root is the git toplevel: outside a working tree there is no
+	// root to resolve to, and the resolver never walks past one to find a
+	// .abcd above it (GHSA-vvqc-3mv2-5p49).
+	gitInitAt(t, repo)
+	if err := os.WriteFile(filepath.Join(repo, ".gitignore"), []byte(".abcd/.work.local/\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	sub := filepath.Join(repo, "internal", "deep")
 	if err := os.MkdirAll(sub, 0o755); err != nil {
 		t.Fatal(err)

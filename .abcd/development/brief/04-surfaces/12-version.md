@@ -17,15 +17,41 @@ abcd version --json
 emits `{ "name": "abcd", "version": "<version>", "vintage": "<revision>",
 "staleness": "<fresh|stale|unknown>" }`, plus `install_mode` when a PATH-entry
 install mode is resolvable (the field is omitted when empty) and a `check`
-object (latest, source, verdict) when `--check` was passed. The plugin command
+object (latest, source, verdict) when `--check` was passed. When the verdict is
+that an update is available, `check` also carries `next_step` and the plain
+render adds a `next:` line: the command that takes the update — `abcd update`
+for the one install shape the update verb can swap, and for every other shape
+the refusal remedy `abcd update` itself would print (the host's plugin update
+for a plugin-root binary, `ahoy install` for a stranded entry, the package
+manager's own command for a Homebrew install) — chosen by the same disk-only
+classification the update verb dispatches on, so `--check` keeps its single
+sanctioned fetch ([`21-update.md`](21-update.md)). The plugin command
 (`commands/version.md`) reads the JSON and tells the user the `name`,
 `version`, `install_mode`, `vintage`, and `staleness`. Without `--json`, bare
 `abcd version` prints a short block — the version line (e.g. `abcd dev` in a
 development build) followed by `install:` (when resolvable), `vintage:`, and
 `staleness:` lines — not the version string alone, and it does **not** render
-a full status board; the bare-status convention is scoped to
-`ahoy`/`banlist`/`capture`/`identity`/`intent`/`memory`/`spec`
-and bare `abcd`, not to `version`.
+a full status board; the [surfaces index](README.md) carries the one
+enumeration of where the bare-status convention holds, and `version` is not on it.
+
+## A stale binary names itself
+
+The plugin surface (`commands/*.md`) and the binary ship from one release but
+drift: a plugin update lands a newer surface before the bootstrap re-provisions
+the binary, a cached root goes stale, a PATH copy outlives the root it was
+copied from. A page then names a verb or flag the binary predates, and the CLI
+framework's answer — `unknown command` or `unknown flag` — has the shape of a
+typo, not of a stale install. So an unknown command or flag carries a second
+line derived from what the binary can prove on disk alone, never from the
+network ([adr-38](../../decisions/adrs/0038-implicit-checks-are-disk-only.md)):
+when the command surface beside the resolved plugin root documents the very verb
+or flag that was refused, the line says the binary predates it and names the
+remedy for where the binary sits — `make build` in a source checkout, the plugin
+update for a plugin-root binary, `abcd update` for a PATH copy; failing that
+evidence, the disk-only vintage this verb renders stands in (behind the checkout
+tip, or differing from the release the plugin cache pinned); and when neither
+says anything, the framework's line stands byte-for-byte. The exit code, the
+stream and the JSON envelope are the framework's own.
 
 ## Where the version comes from
 

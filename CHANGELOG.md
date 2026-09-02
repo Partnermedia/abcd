@@ -6,10 +6,13 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html) with a
 leading `v`.
 
 Before v1.0.0, a minor release may make breaking changes: a record
-declaring `impact: breaking` bumps the minor, and its entry appears under
-the Keep a Changelog section it belongs to — usually **Changed** or
-**Removed**. The version number is the signal; sections at v0.6.0 and
-earlier were rolled by hand and some carry a **Breaking** heading.
+declaring `impact: breaking` bumps the minor, and its entry is an **Added**
+line that states the break. A derived section carries only **Added** and
+**Fixed**: the composer that writes it sees the records that shipped and
+not the previous release's surface, so it does not claim what changed,
+was deprecated or was removed (iss-2609011207114761). The version number
+is the signal; sections at v0.6.0 and earlier were rolled by hand and
+some carry a **Breaking** heading.
 
 ## [Unreleased]
 

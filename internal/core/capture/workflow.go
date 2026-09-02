@@ -24,13 +24,13 @@ import (
 // fills its reserved placeholder via commitCapture, which now also holds the
 // ledger lock, so the sweep's classify-then-unlink can no longer interleave with
 // a commit's fill and delete a just-committed issue file.
-func mutationPreamble(issuesRoot string) error {
-	if err := withLedgerLock(issuesRoot, func() error {
+func mutationPreamble(repoRoot, issuesRoot string) error {
+	if err := withLedgerLock(repoRoot, issuesRoot, func() error {
 		return cleanOrphanPlaceholders(issuesRoot)
 	}); err != nil {
 		return err
 	}
-	return ensureLedgerDirs(issuesRoot)
+	return ensureLedgerDirs(repoRoot, issuesRoot)
 }
 
 // Capture appends a new issue to open/ with an auto-assigned (or forced) iss-N.
@@ -41,7 +41,7 @@ func Capture(req CaptureRequest) (CaptureResult, error) {
 	if err != nil {
 		return CaptureResult{}, err
 	}
-	if err := mutationPreamble(issuesRoot); err != nil {
+	if err := mutationPreamble(repoRoot, issuesRoot); err != nil {
 		return CaptureResult{}, err
 	}
 	if err := captureBlockers(issuesRoot, req.BlockedBy); err != nil {
@@ -88,12 +88,12 @@ func Capture(req CaptureRequest) (CaptureResult, error) {
 	// no maximum, so the refs-union scan the max+1 allocator needed (iss-115,
 	// iss-120) is gone — time orders the ids and entropy separates same-second
 	// minters on branches this working tree cannot see.
-	issID, placeholder, err := reservePath(issuesRoot, slugNorm, req.ForceID)
+	issID, placeholder, err := reservePath(repoRoot, issuesRoot, slugNorm, req.ForceID)
 	if err != nil {
 		return CaptureResult{}, err
 	}
 
-	result, err := commitCapture(issuesRoot, req, issID, slugNorm, placeholder)
+	result, err := commitCapture(repoRoot, issuesRoot, req, issID, slugNorm, placeholder)
 	if err != nil {
 		_ = cancelReservation(placeholder)
 		return CaptureResult{}, err
@@ -129,7 +129,7 @@ func captureBlockers(issuesRoot string, blockedBy []string) error {
 	return nil
 }
 
-func commitCapture(issuesRoot string, req CaptureRequest, issID, slug, placeholder string) (CaptureResult, error) {
+func commitCapture(repoRoot, issuesRoot string, req CaptureRequest, issID, slug, placeholder string) (CaptureResult, error) {
 	// The disclosure pair (itd-178). origin is DERIVED — a capture is a person
 	// filing an observation, so it is researcher-authored and no request member
 	// carries it — while the production mode is the closed choice the caller
@@ -211,7 +211,7 @@ func commitCapture(issuesRoot string, req CaptureRequest, issID, slug, placehold
 	// just-committed file deleted. If the sweep reclaimed the placeholder first, the
 	// re-read fails and the capture reports an error rather than a false success.
 	var result CaptureResult
-	err = withLedgerLock(issuesRoot, func() error {
+	err = withLedgerLock(repoRoot, issuesRoot, func() error {
 		// Guard the overwrite: the placeholder must still be the zero-byte file we
 		// reserved (expected_checksum = sha256("")).
 		_, checksum, rerr := readWithChecksum(placeholder)
@@ -451,7 +451,7 @@ func transition(repoRoot, issuesRoot, issID, verb, field, note string, extra []k
 	if err != nil {
 		return TransitionResult{}, err
 	}
-	if err := mutationPreamble(ir); err != nil {
+	if err := mutationPreamble(rr, ir); err != nil {
 		return TransitionResult{}, err
 	}
 	if !reIssID.MatchString(issID) {
@@ -467,7 +467,7 @@ func transition(repoRoot, issuesRoot, issID, verb, field, note string, extra []k
 	// already moved out of open/ and conflicts, instead of both passing the
 	// checksum re-read and landing the issue in two status dirs (split-brain).
 	var result TransitionResult
-	err = withLedgerLock(ir, func() error {
+	err = withLedgerLock(rr, ir, func() error {
 		src, status, err := findIssue(ir, issID)
 		if err != nil {
 			return err
@@ -624,7 +624,7 @@ func List(req ListRequest) (ListResult, error) {
 // relativiseLedgerPaths rewrites every ledger Path in place to a repo-relative
 // locator, so no --json envelope echoes an absolute developer-identity path
 // (iss-81). It covers both the structured Path field and a SkipRecord.Error
-// string that wraps an os.ReadFile/parse failure carrying the same absolute path:
+// string that wraps a guarded-read/parse failure carrying the same absolute path:
 // the skipped list rides an exit-0 success envelope, which the CLI's error-path
 // scrubber never sees, so the abs path is stripped here for the --json surface.
 func relativiseLedgerPaths(repoRoot string, issues []Issue, skipped []SkipRecord) {
@@ -654,7 +654,9 @@ func Status(req StatusRequest) (StatusResult, error) {
 	res.WontfixCount = len(wontfix)
 	res.Skipped = append(append(append([]SkipRecord{}, skOpen...), skRes...), skWf...)
 
-	openIDs := idSet(open)
+	// The same predicate List uses, over the scan already in hand: skOpen carries
+	// the records open/ holds and the reader refused, and they block too.
+	openIDs := openBlockingIDs(open, skOpen)
 	// Newest first: higher N is newer (ids are monotonic with creation).
 	sort.SliceStable(open, func(i, j int) bool { return issNumber(open[i].ID) > issNumber(open[j].ID) })
 	if len(open) > 10 {
@@ -704,8 +706,39 @@ func prioritise(issues []Issue, openIDs map[string]bool) {
 // openIDSet returns the set of ids currently in open/ — the predicate a
 // blocked_by target must satisfy to still count as blocking. Read-only.
 func openIDSet(issuesRoot string) map[string]bool {
-	open, _ := scanLedger(issuesRoot, StateOpen)
-	return idSet(open)
+	return openBlockingIDs(scanLedger(issuesRoot, StateOpen))
+}
+
+// openBlockingIDs is that predicate over ONE scan of open/: the ids that listed,
+// PLUS the ids of the records the scan had to skip. A record the guarded reader
+// refused — a FIFO, a body over the read cap, a symlinked leaf — is still in
+// open/, and being unreadable says nothing about whether it was resolved.
+// Counting only what parsed rendered every dependent unblocked and sorted it to
+// the top of the board while its own blocked_by went on naming the record. The
+// unreadable case resolves toward still-blocking: a board that understates
+// progress is recoverable, one that invites work whose blocker nobody can read
+// is not — and the skip is reported alongside, so the cause is never silent.
+func openBlockingIDs(open []Issue, skipped []SkipRecord) map[string]bool {
+	set := idSet(open)
+	for _, sk := range skipped {
+		if id := skippedRecordID(sk.Path); id != "" {
+			set[id] = true
+		}
+	}
+	return set
+}
+
+// skippedRecordID recovers the id a skipped file's NAME claims, through
+// issFileNumRe — the one detection grammar the scan, the resolver and
+// record-lint share, so a file the scan counted as a record contributes the id
+// that same grammar reads. A name too malformed to carry an ordinal claims no
+// id and contributes none: there is nothing to be blocked by.
+func skippedRecordID(path string) string {
+	m := issFileNumRe.FindStringSubmatch(filepath.Base(path))
+	if m == nil {
+		return ""
+	}
+	return issFamily + "-" + m[1]
 }
 
 // idSet collects the ids of a slice of issues into a set.
@@ -765,12 +798,18 @@ func scanLedger(issuesRoot string, state State) ([]Issue, []SkipRecord) {
 			}
 			// A well-formed name always ends .md — the grammar's pattern requires
 			// it — so no separate extension check is needed on this path.
-			data, err := os.ReadFile(path)
+			//
+			// The read is guarded, not bare: a well-formed NAME says nothing about
+			// the leaf behind it, and in a hostile clone that leaf is a FIFO that
+			// would hang this scan, a symlink to a file outside the ledger, or a
+			// body sized to make the read unbounded. Each is a skipped record the
+			// surfaces already render, never a hang and never serialized.
+			content, err := readRecordGuarded(path)
 			if err != nil {
 				skipped = append(skipped, SkipRecord{Path: path, Error: err.Error()})
 				continue
 			}
-			fm, body, err := parseFrontmatterAndBody(string(data))
+			fm, body, err := parseFrontmatterAndBody(content)
 			if err != nil {
 				skipped = append(skipped, SkipRecord{Path: path, Error: err.Error()})
 				continue
