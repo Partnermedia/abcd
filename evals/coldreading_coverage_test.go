@@ -574,7 +574,7 @@ var coverage = []coverageRow{
 	{
 		Rule: "a fence delimiter inside the frontmatter block is refused, and the fence mask " +
 			"cannot be toggled from inside the block",
-		Falsifier: "compute the fence mask over the whole document again, as fenceMask does, " +
+		Falsifier: "compute the fence mask over the whole document again, " +
 			"instead of over the body from the line after the block closes",
 		Caught:   caughtUnrefused,
 		Refusals: []string{"fence-in-frontmatter"},

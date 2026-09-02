@@ -342,3 +342,32 @@ func TestAnUnresolvableDocumentIsRefusedByName(t *testing.T) {
 		t.Error("the refusal returned a result carrying items; a refused assembly produces no bundle")
 	}
 }
+
+// TestAFencedMarkupExampleIsNotTheShape: shape 5's scan reads the UNFENCED
+// BODY, the way every other scan in this verifier reads it.
+//
+// A code block showing an HTML attribute whose value opens on the line after
+// its equals sign is an EXAMPLE, not markup the bundle carries — the same
+// argument the fenced record template rests on in shape 1. Reading the joined
+// document instead made any admitted markdown file holding such an example
+// refuse every assembly at every position, which is a floor refusing the corpus
+// it exists to pass (spc-2609021003136831, "The six refusals"; adr-56 rule 1).
+func TestAFencedMarkupExampleIsNotTheShape(t *testing.T) {
+	const fenced = "---\nid: spc-1\n---\n\n# A record\n\nHow the shape looks:\n\n" +
+		"```html\n<img alt=\n\"a>b\">\n```\n\nProse after the example.\n"
+	if err := refuses(t, "spc-1-a-record.md", fenced, refusalKeys, refusalHeadings); err != nil {
+		t.Errorf("a fenced markup example was refused: %v", err)
+	}
+
+	// The negative control: the same shape OUTSIDE a fence is markup the file
+	// carries, the mask still cannot bound it, and it still refuses.
+	const bare = "---\nid: spc-1\n---\n\n# A record\n\n<img alt=\n\"a>b\">\n"
+	err := refuses(t, "spc-1-a-record.md", bare, refusalKeys, refusalHeadings)
+	if err == nil {
+		t.Fatal("an unfenced attribute value opening on the line after its equals sign was " +
+			"admitted; scoping the scan to the body must not switch the refusal off")
+	}
+	if !strings.Contains(err.Error(), "an attribute value that opens on the line after its equals sign") {
+		t.Errorf("the refusal does not name the shape: %v", err)
+	}
+}

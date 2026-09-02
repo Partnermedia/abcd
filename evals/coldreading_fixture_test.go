@@ -534,7 +534,7 @@ var refusals = []refusal{
 			".abcd/development/specs/open/spc-1-a-design-record.md",
 			"a fence delimiter inside the frontmatter block",
 		},
-		Falsifier: "compute the fence mask over the whole document again, as fenceMask does, " +
+		Falsifier: "compute the fence mask over the whole document again, " +
 			"instead of over the body from the line after the block closes",
 		Why: "a fence delimiter inside the frontmatter toggled the fence mask, and the excluded-key " +
 			"scan skips fenced lines — so the delimiter switched off the very refusal that exists " +

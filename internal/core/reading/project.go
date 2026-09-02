@@ -294,27 +294,23 @@ func normaliseHeadingTitle(title string) string {
 	return strings.TrimSpace(atxCloseRe.ReplaceAllString(strings.TrimSpace(title), ""))
 }
 
-// fenceMask reports, per line, whether that line sits inside a fenced code
-// block. It answers a LINE-level question the section scan does not expose —
-// that scan reports where the headings are, having already skipped the fences —
-// and the two scans share one fence rule so they cannot disagree about it.
+// unfencedBody joins the document with every fenced line BLANKED rather than
+// dropped, for a scan that reads the whole text at once instead of filtering its
+// matches by line the way rawHTMLHeading does.
 //
-// It is what keeps this floor from firing on a document that merely SHOWS the
-// record template: a fenced example carries frontmatter and headings that are
-// examples, not fields, and refusing them would stop every assembly the
-// repository can run.
-func fenceMask(lines []string) []bool {
-	mask := make([]bool, len(lines))
-	inside := false
+// Blanked rather than dropped, because both properties are needed: the fenced
+// example must say nothing to the scan, and a match's offset must still count
+// the document's own newlines, or the line a refusal names would be the line of
+// some shorter text nobody holds.
+func unfencedBody(lines []string, fenced []bool) string {
+	out := make([]string, len(lines))
 	for i, line := range lines {
-		if fenceOpenRe.MatchString(line) {
-			inside = !inside
-			mask[i] = true // the delimiter itself belongs to the block
+		if i < len(fenced) && fenced[i] {
 			continue
 		}
-		mask[i] = inside
+		out[i] = line
 	}
-	return mask
+	return strings.Join(out, "\n")
 }
 
 // verifyRedaction is the key-and-heading half of the exclusion floor made
@@ -429,7 +425,13 @@ func verifyRedaction(rel, original, redacted string, keys, headings map[string]b
 	// every browser renders as the excluded one is judged as something else.
 	// Resolving the shape means taking HTML's own whitespace rule, which is
 	// comprehension the 2026-08-30 ruling declined (iss-2608301350534164).
-	if shape := markupShapeOf(strings.Join(lines, "\n")); shape != "" {
+	//
+	// The scan reads the UNFENCED BODY, the way the raw-HTML scan below reads it
+	// and for the same reason: a code block showing the shape is an example, not
+	// markup the bundle carries, and reading the joined document made any
+	// admitted markdown file holding one refuse every assembly at every position
+	// — a floor refusing the corpus it exists to pass.
+	if shape := markupShapeOf(unfencedBody(lines, fenced)); shape != "" {
 		return fmt.Errorf("reading: %s carries %s; the markup mask cannot bound the value, and "+
 			"a mask that declines silently is how a heading written past it travelled", rel, shape)
 	}
@@ -1048,7 +1050,7 @@ func unresolvableFrontmatterShape(lines []string, fenced []bool) (int, string, b
 // block in the document's BODY — the region after the frontmatter block closes.
 //
 // It exists because the mask and the block bounds used to be computed in the
-// wrong order. fenceMask ran over the whole document, so a fence delimiter
+// wrong order. The mask ran over the whole document, so a fence delimiter
 // written inside the frontmatter toggled the mask and every line after it in
 // the block was reported as fenced; excludedKeyInFirstBlock skips fenced lines,
 // so the key scan was switched off from inside the very block it exists to read
