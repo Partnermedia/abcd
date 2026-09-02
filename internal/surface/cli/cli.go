@@ -1212,7 +1212,15 @@ func newHookCommand() *cobra.Command {
 				return warn("staging failed (%v); this session was not captured", err)
 			}
 			if !res.Wrote {
-				return warn("session %s already staged (no-op)", res.Staged.SessionID)
+				return warn("session %s already staged with identical bytes (no-op)", res.Staged.SessionID)
+			}
+			if res.Replaced {
+				// Different bytes for an already-staged session: the later
+				// snapshot replaced the earlier one, and this says so rather
+				// than reporting a no-op that would hide a replaced transcript.
+				fmt.Fprintf(cmd.ErrOrStderr(), "abcd history: re-staged %s (%d bytes), replacing %d stale bytes; the next session redacts and stores it\n",
+					res.Staged.SessionID, res.Staged.Bytes, res.ReplacedBytes)
+				return nil
 			}
 			fmt.Fprintf(cmd.ErrOrStderr(), "abcd history: staged %s (%d bytes); the next session redacts and stores it\n",
 				res.Staged.SessionID, res.Staged.Bytes)
