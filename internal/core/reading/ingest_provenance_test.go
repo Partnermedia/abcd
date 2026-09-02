@@ -26,10 +26,15 @@ func TestEmptyPatternNamedRefusesItemAtEveryRegime(t *testing.T) {
 			// regimes and the record asserted a provenance it does not carry.
 			// U+034F is a MARK rather than a format rune, so guarding Cf alone
 			// left it open; U+FE00 is a variation selector, a third category.
+			// U+2800 BRAILLE PATTERN BLANK is a fourth: a graphic character
+			// that renders as nothing, in none of the three categories and not
+			// a space, so it cleared the folded blankness test
+			// (iss-2608311518250688).
 			for _, form := range []string{
 				"empty", "absent", "whitespace",
 				"zero-width space", "soft hyphen", "byte-order mark",
 				"combining grapheme joiner", "variation selector", "ideographic space",
+				"braille pattern blank",
 			} {
 				t.Run(form, func(t *testing.T) {
 					f := newIngestFixture(t, pos)
@@ -56,6 +61,8 @@ func TestEmptyPatternNamedRefusesItemAtEveryRegime(t *testing.T) {
 						item[PatternField] = "\ufe00"
 					case "ideographic space":
 						item[PatternField] = "\u3000\u00a0"
+					case "braille pattern blank":
+						item[PatternField] = "\u2800 \u2800"
 					}
 
 					// refusedItem establishes both halves at once: the item
