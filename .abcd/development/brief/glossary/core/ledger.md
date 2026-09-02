@@ -1,7 +1,7 @@
 ---
 term: ledger
 bounded_context: core
-definition: An append-or-move store a command writes and a human reads back — the issue ledger under .abcd/work/issues/ when the word stands bare. Four further ledgers exist (provenance, voyage, sources, and the local framing side), and each is named in full because none of them is the issue ledger.
+definition: An append-or-move store a command writes and a human reads back, the issue ledger under .abcd/work/issues/ when the word stands bare; inside the cold-reading experiment the word means the warm material and its stores, which the read-block keeps from a reading (the ledger context's entries govern that sense). Four further ledgers share the word and are always named in full.
 aliases: ["issue ledger"]
 forbidden_synonyms: ["database", "log file", "queue", "tracker"]
 status: stable
@@ -29,12 +29,10 @@ Bare, the word means the **issue ledger**: the structured per-repo capture store
 | Origin, grounds and disposition stamped at the point of commitment | **the provenance ledger** | [`roadmap/phases/phase-7-ledger.md`](../../../roadmap/phases/phase-7-ledger.md) |
 | The append-only record of every disembark and embark run | **the voyage ledger** | [voyage](voyage.md), `~/.abcd/voyage/<source-root-sha>/` |
 | Source-to-decision provenance for the local sources corpus | **the sources ledger** | [`04-surfaces/13-consult.md`](../../04-surfaces/13-consult.md) |
+| The warm material a cold reading must not see, and its stores | **ledger content**, or **the warm side** | [warm](../ledger/warm.md) and [read-block](../ledger/read-block.md) in the ledger context, which govern this sense |
 | The uncommitted side where framing traces stay | **the local ledger side** | [adr-50](../../../decisions/adrs/0050-framing-traces-never-enter-the-record.md), [adr-55](../../../decisions/adrs/0055-the-construal-stands-in-the-record-its-history-does-not.md) |
 
-**"Ledger content" in the reading chapter means the second sense.** The cold-reading surface
-says that nothing in the repository's tiering prevents a reading reaching ledger content — the
-material the provenance ledger holds, which a reading must not see. Read as the issue ledger,
-that sentence says something else entirely, so the qualifier carries the whole claim.
+**"Ledger content" in the cold-reading chapters means the warm sense.** The reading surface says nothing in the repository's tiering prevents a reading reaching ledger content, meaning the warm material and its stores that the [read-block](../ledger/read-block.md) exists to keep from it. Read as the issue ledger, that sentence says something else entirely, so the qualifier carries the whole claim, and the ledger context's [warm](../ledger/warm.md) entry is the canonical definition.
 
 **Where the record disagrees.** The fifth sense is a side, not a store: adr-50 and adr-55 use
 "the local ledger side" for where framing traces live, which is a place no `ledger` command

@@ -296,6 +296,40 @@ func IsNull(v string) bool {
 	return false
 }
 
+// StringList parses an inline YAML flow sequence of strings — `["sprint",
+// "milestone"]` — into its members, tolerating quotes and surrounding
+// whitespace. An empty or null sequence yields nothing.
+//
+// It is deliberately small: the frontmatter this package reads only ever writes
+// the inline `[…]` form for a list, and a block sequence is a different shape
+// the line scanner does not claim to read. It lives here for the reason IsNull
+// and Unquote do — record-lint's forbidden-synonym rule and the glossary's own
+// index both read the same `aliases`/`forbidden_synonyms` fields, and two
+// readers of one field that drift make a term the one rule gates and the other
+// does not.
+//
+// A YAML null is NOT special-cased here, for the reason Unquote leaves quoting
+// to its caller: `IsNull` is the one predicate that answers it, and a caller
+// that means "absent" asks that question before asking this one.
+func StringList(v string) []string {
+	v = strings.TrimSpace(v)
+	v = strings.TrimPrefix(v, "[")
+	v = strings.TrimSuffix(v, "]")
+	if strings.TrimSpace(v) == "" {
+		return nil
+	}
+	var out []string
+	for _, part := range strings.Split(v, ",") {
+		part = strings.TrimSpace(part)
+		part = strings.Trim(part, `"'`)
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
+}
+
 // Unquote reverses the backslash escaping a double-quoted frontmatter scalar
 // carries — the mirror of the escaping capture's yamlScalar emits, where a
 // backslash and a double quote are each written `\`-prefixed.
