@@ -934,15 +934,31 @@ type heredoc struct {
 	quoted bool
 }
 
-// isDelimStart reports whether a word looks like a here-document delimiter: an
-// unquoted one starts with a letter or an underscore, which is what separates
-// `cat <<EOF` from the `<<` of an arithmetic shift.
+// isDelimStart reports whether a word can begin an unquoted here-document
+// delimiter. bash accepts a WORD there, not an identifier: `cat <<20` reads a
+// document ended by a line saying 20, `cat <<$D` reads one ended by whatever
+// $D expands to, and `let mask=1<<20` is a here-document too — the shell
+// tokenises the redirection before the `let` builtin ever sees an arithmetic
+// expression. Restricting the set to letters and `_` therefore sent those to
+// the shift branch, where the DOCUMENT was tokenised as commands: one
+// apostrophe in the body became ErrUnparsableCommand, which the pre-tool-use
+// hook maps to fail-OPEN, and any hazard below it ran unguarded.
+//
+// The set is the conservative superset of what a delimiter word ordinarily
+// starts with — a letter, a digit, `_`, or a `$`-led word. bash accepts more
+// (`<<!`, `<</tmp/x`); those stay out, because a `<<` reached in an arithmetic
+// context this tokenizer does not model would otherwise swallow the rest of
+// the input on the strength of an operator. What actually separates a shift
+// from a document is the ENCLOSING context (inArithmetic), which is checked
+// before this; the unmodelled contexts that remain — bash's deprecated
+// `$[ … ]` — are a named residual, not a discriminator this word test can fix.
 func isDelimStart(delim string) bool {
 	if delim == "" {
 		return false
 	}
 	c := delim[0]
-	return c == '_' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
+	return c == '_' || c == '$' ||
+		(c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
 }
 
 // readHeredocDelim reads the delimiter word after a `<<` at pos, honouring the

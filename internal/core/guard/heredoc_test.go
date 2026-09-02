@@ -175,3 +175,75 @@ func TestParenthesisedArithmeticIsNotAHeredoc(t *testing.T) {
 		})
 	}
 }
+
+// TestNonAlphabeticHeredocDelimiterOpensADocument pins the delimiter WORD.
+// bash accepts any word after `<<` — `cat <<20` and `cat <<$D` are ordinary
+// here-documents, and `let mask=1<<20` is one too, because the shell tokenises
+// the redirection before the `let` builtin ever sees the arithmetic. The guard
+// read only a letter- or underscore-led word as a delimiter, so a `<<` followed
+// by anything else fell to the shift branch and the DOCUMENT was tokenised as
+// commands: one apostrophe in the body became ErrUnparsableCommand, which the
+// pre-tool-use hook maps to fail-OPEN, and a hazard on a later line ran
+// unguarded. That also made the two front doors' own claim — "a quote inside a
+// here-document body is document text and is not unparsable" — false for every
+// delimiter the heuristic rejected.
+//
+// The word set is the conservative superset bash allows: letters, digits, `_`
+// and a `$`-led word (whose value the guard cannot know, so the document never
+// terminates and the fail-closed block answers). What still decides a shift is
+// the ENCLOSING context, which is where the discriminator belongs.
+func TestNonAlphabeticHeredocDelimiterOpensADocument(t *testing.T) {
+	cases := []struct {
+		name    string
+		line    string
+		verdict Verdict
+		entry   string
+	}{
+		{
+			"a numeric delimiter, an apostrophe in the body, a hazard below",
+			"cat <<20\nit's a doc\n20\ngit push --force origin main",
+			VerdictBlock, "git-push-force",
+		},
+		{
+			"a numeric delimiter whose body is only data",
+			"cat <<20\nit's a doc\n20\necho done",
+			VerdictAllow, "",
+		},
+		{
+			"a delimiter the guard cannot evaluate never terminates",
+			"cat <<$D\nit's a doc\ngit push --force origin main",
+			VerdictBlock, "heredoc-unterminated",
+		},
+		{
+			"let tokenises as a redirection before the builtin sees it",
+			"let mask=1<<20\necho done",
+			VerdictBlock, "heredoc-unterminated",
+		},
+		{
+			"an underscore-led delimiter, unchanged",
+			"cat <<_doc\nit's a doc\n_doc\ngit push --force origin main",
+			VerdictBlock, "git-push-force",
+		},
+		{
+			"an arithmetic shift is still a shift",
+			"echo $((1<<20))\necho done",
+			VerdictAllow, "",
+		},
+		{
+			"a parenthesised arithmetic shift is still a shift",
+			"mask=$(( (1 << 20) - 1 ))\necho done",
+			VerdictAllow, "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			d, err := Defaults().Check(tc.line)
+			if err != nil {
+				t.Fatalf("Check(%q): %v — bash runs this line, so the guard must answer, not error", tc.line, err)
+			}
+			if d.Verdict != tc.verdict || d.EntryID != tc.entry {
+				t.Fatalf("Check(%q) = %q via %q, want %q via %q", tc.line, d.Verdict, d.EntryID, tc.verdict, tc.entry)
+			}
+		})
+	}
+}

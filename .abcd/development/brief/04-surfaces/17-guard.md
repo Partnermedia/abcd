@@ -76,6 +76,18 @@ paren pair close right here?" — sees only the flattest shift: `$(( (1 << n) + 
 document text lands in command position, where one apostrophe becomes an error
 the hook hands through unguarded.
 
+The delimiter is a **word**, not an identifier: `cat <<20`, `cat <<$D` and the
+`<<20` of `let mask=1<<20` are all here-documents, because the shell tokenises
+the redirection before any builtin sees an arithmetic expression. The word set
+read is the conservative superset — a letter, a digit, `_`, or a `$`-led word,
+whose value the guard cannot know, so the document never terminates and the
+fail-closed block answers. What is left out is the residual: a delimiter bash
+allows but this set does not (`<<!`, `<</tmp/x`), and a `<<` in an arithmetic
+context the tokenizer does not model — bash's deprecated `$[ … ]` — where a
+delimiter-shaped operand is read as a document and over-blocks. In both the
+body claim above is the thing that gives: for a delimiter the reader does not
+recognise, the lines below it are read as command text after all.
+
 A third reserved id is a **warn**: `git-config-rewrite-unread`, raised when a
 git command points at configuration whose body the guard cannot read —
 `GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`, `-c include.path=`, an `includeIf`,
