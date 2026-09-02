@@ -23,14 +23,19 @@ genealogy; which of those positions receives the projection is a preset choice
 this spec does not make. `disembark principles` carries the four keys in the
 payload it writes, and the payload's schema version moves.
 
-The intent flags one decision for the maintainer: The family becomes a
-declared record store, a record-architecture ruling on the pattern of
-[adr-30](../../decisions/adrs/0030-record-information-architecture.md), owed
-as an ADR and captured as
-[iss-2609020626111484](../../../work/issues/open/iss-2609020626111484-adr-owed-the-principles-family-becomes-a-declared-record-sto.md).
-This spec builds under the flagged reading, that the ADR is adopted as the
-issue describes it, and the intent does not ship until it is. Population is
-forward-only throughout: No existing entry is renamed, typed or moved.
+The decision the intent flagged for the maintainer is adopted: The family
+becomes a declared record store, a record-architecture ruling on the pattern
+of [adr-30](../../decisions/adrs/0030-record-information-architecture.md),
+recorded as
+[adr-2609021016270132](../../decisions/adrs/2609021016270132-the-principles-family-is-a-declared-record-store-whose-entri.md)
+with `status: accepted`, adopted by the maintainer on 2026-09-02 at the
+planning interview after being checked against the design framework and the
+readings companion;
+[iss-2609020626111484](../../../work/issues/resolved/iss-2609020626111484-adr-owed-the-principles-family-becomes-a-declared-record-sto.md)
+is resolved by it. The ADR fixes what this spec builds: Four typed keys,
+forward-only population, a principle read cold by statement and never by
+citation, and the inheritance check. Population is forward-only throughout:
+No existing entry is renamed, typed or moved.
 
 This spec lands last of the Iteration 2 set. It consumes the condition reader
 the sibling spec
@@ -41,7 +46,7 @@ tables as the earlier specs leave them.
 ## Scope
 
 In: The `prn` record store and its slug-keyed identity; the four keys, their
-grammar, the explicit-null form and the mapping from the reading vocabulary;
+grammar, the explicit-null form and the `mechanism` alias;
 the two shape rules and their severities; the include-table row at the three
 assembling positions, the labelled-paragraph projection and the exclusions it
 asserts; the inheritance rules over condition dispositions; the lifeboat
@@ -59,17 +64,24 @@ position, whose object arrives by its own channel.
 
 ### Landing order
 
-The eight Iteration 2 specs land in the order spc-2609020626048722 (preset
-windows), spc-2609020626046252 (condition verb), spc-2609020626042168
-(reading-occasioned origin), spc-2609020626039834 (comparative channel),
-spc-2609020626040342 (admission and surprise verbs), spc-2609020626048705
-(reframe record), spc-2609020626045177 (scribe verbs), spc-2609020626042471
-(principles). The condition verb lands strictly before the principles; the
-comparative channel before the admission verbs before the scribe; the reframe
-record after the admission verbs and after the comparative channel. Each spec
-names the class of version bump it makes and no target number: The merging
+The Iteration 2 set lands in two phases around the maintainer's readings, on
+the corrections ruling of 2026-09-02. Phase A, before any reading runs: The
+two-operand invocation (spc-2609021004075744), itd-194
+(spc-2609021003136831), the preset windows (spc-2609020626048722), the
+comparative channel (spc-2609020626039834) and the reading-occasioned origin
+(spc-2609020626042168), in that order. The maintainer then runs the four
+readings in the cycle's order, widening, entailment, comparative and
+detection, and dispositions their outputs. Phase B, built at Step 5 after
+those dispositions: The condition disposition (spc-2609020626046252), the
+admission and surprise verbs (spc-2609020626040342), the reframe record
+(spc-2609020626048705), the scribe verbs (spc-2609020626045177) and the
+principles read object (spc-2609020626042471), in that order. No spec names a
+target version number: Each names the class of bump it makes, and the merging
 change sets each constant from the merged base and updates every pinned count
 in the same diff.
+
+This spec lands last, in Phase B, after the condition disposition, whose
+`internal/core/condition` package it consumes as it finds it.
 
 For this spec that rule reads: `Kinds()` gains `principle`, and the manifest's
 kind vocabulary is closed (`DecodeManifest` refuses an unknown kind), so the
@@ -78,7 +90,7 @@ bundle and manifest `SchemaVersion` moves by one; `Table`, `Exclusions`,
 a MINOR bump. The lifeboat's `PrinciplesSchemaVersion` moves 1 to 2, which no
 sibling touches.
 
-### The store, under the flagged decision
+### The store, under adr-2609021016270132
 
 `.abcd/record-lint.json` gains `"prn": ".abcd/development/principles"` in
 `record_schema.record_stores`, and `recordStores` in
@@ -119,7 +131,7 @@ by `frontmatter.Fields`:
 ```yaml
 ---
 id: prn-fix-the-detector
-claim_type: mechanism
+claim_type: causal
 reference: "abcd lint"
 comparison: "Hand-fixing instances against arming a detector over the class."
 evidence: [itd-181, spc-59, cond-2608311949582375]
@@ -128,9 +140,10 @@ evidence: [itd-181, spc-59, cond-2608311949582375]
 
 - `id`: `prn-` followed by the filename stem; required on a typed entry, and
   the one key `record_schema` judges.
-- `claim_type`: Exactly one of `criterion`, `mechanism`, `context`, the
-  vocabulary `internal/core/intent/claims.go` gives an intent's claim kinds per
-  [itd-190](../../intents/disciplines/itd-190-the-claim-recording-gradient-an-intent-s-three-claim-kinds-c.md).
+- `claim_type`: Exactly one of `criterion`, `causal`, `context`, the design
+  documents' words for the three claim kinds the gradient
+  [itd-190](../../intents/disciplines/itd-190-the-claim-recording-gradient-an-intent-s-three-claim-kinds-c.md)
+  records; `mechanism` is read as an alias for `causal`, below.
 - `reference`: A record handle matching `recordid.CitedIDRe`, or a
   double-quoted string naming a surface (a verb, a package, a rule id).
 - `comparison`: A double-quoted string, one sentence, non-empty.
@@ -139,18 +152,25 @@ evidence: [itd-181, spc-59, cond-2608311949582375]
   `condition.MarkerIDRe` (`cond-` and sixteen digits). A duplicate member is a
   finding.
 
-**Two claim vocabularies meet here, and the mapping is stated.** The record's
-vocabulary is the intent's, `criterion`, `mechanism`, `context`. The
-entailment contract's `claim_type` on a reading item, `ClosedVocabularies` in
-`internal/core/reading/ingest_regime.go`, is `criterion`, `causal`, `context`.
-`causal` maps to `mechanism`, and the other two map to themselves: An
-entailment item that surfaced a causal claim types as a `mechanism` principle
-when it is distilled, because a causal claim about how a design works is what
-the gradient calls a mechanism claim. The reading vocabulary itself does not
-move, since [spc-63](../closed/spc-63-one-ingest-verb-validates-every-cold-reading-output-includin.md)
-tables it. The mapping is enforced at the one place the two meet:
-`principle_claims` refuses `claim_type: causal` with a message naming
-`mechanism` as the record's word for it.
+**Two claim vocabularies meet here, and the documents' word governs.** The
+design framework and the readings companion name the three claim kinds
+`criterion`, `causal` and `context`, and the entailment contract's
+`claim_type` on a reading item, `ClosedVocabularies` in
+`internal/core/reading/ingest_regime.go`, already uses those words. The
+principle key uses them too, so an entailment item that surfaced a causal
+claim types as a `causal` principle when it is distilled, with no mapping.
+The shipped intent vocabulary in `internal/core/intent/claims.go` spells the
+causal kind `mechanism`
+([itd-177](../../intents/shipped/itd-177-an-intent-s-claims-are-typed-and-its-scope-conditions-keep-t.md),
+[itd-190](../../intents/disciplines/itd-190-the-claim-recording-gradient-an-intent-s-three-claim-kinds-c.md)),
+and the `## Mechanism` heading on an intent stays, since the framework names
+that section as the causal claim's home; the token itself is separate work
+the implementer aligns to `causal` under the maintainer's rule that the
+documents' word governs, and this spec does not move it. Until it moves,
+`mechanism` is accepted on read as an alias: `principle_claims` reads
+`claim_type: mechanism` as `causal` and emits no finding, and every writer of
+the key, the lifeboat's `disembark principles` included, writes `causal`.
+Nothing refuses `mechanism` with a rename, and nothing refuses `causal`.
 
 **The explicit null is the literal `null`, alone.** `claim_type: null` records
 a key considered and declined. The lint reads a key's byte state as `claims.go`
@@ -178,14 +198,13 @@ configuration as `record_provenance` does.
 - `principle_claims`, declared at `blocker`: Findings on a typed entry, one
   per defect, each naming file, line and key. The defects: A key present while
   another of the four is absent (the message names the missing key); a missing
-  or wrong `id`; an empty value; a value outside its grammar above, `causal`
-  included; a duplicated `evidence` member; and a statement carrying a
+  or wrong `id`; an empty value; a value outside its grammar above, with
+  `mechanism` read as `causal` and not a defect; a duplicated `evidence` member; and a statement carrying a
   citation, that is a record handle or a markdown link inside the `**The
   rule.**` paragraph, because the projection below promises a statement free
   of genealogy and a promise the assembler cannot keep is one the lint refuses
-  first. Only a typed entry is judged, so the one untyped entry whose rule
-  paragraph carries a link today produces no finding until its author types
-  it.
+  first. Only a typed entry is judged; an untyped entry produces no finding
+  until its author types it.
 
 `principle_claims` enters at blocker because the corpus is clean by
 construction: No typed entry exists, so no pre-existing finding lands as a wall.
@@ -218,16 +237,17 @@ criteria discipline only, on the comparative spec's ruling, so the knowledge
 record is not among the sources that position may see, and the oracle binds
 `.abcd/development/principles` as an excluded family there.
 
-`Kinds()` gains `KindPrinciple = "principle"`, so `principle` is a scope token
-for `abcd reading assemble`. **This spec makes no edit to
+`Kinds()` gains `KindPrinciple = "principle"`, so `principle` is a kind a
+committed preset entry may name. **This spec makes no edit to
 `.abcd/config/reading-presets.json`.** The table admits the projection at
 every position but the comparative; admitting `principle` at a position is a
-preset choice, and which of the three assembling positions receives the
-knowledge record is a ruling this spec does not make. The presets spec's eval
-measures every committed entry against the window it declares, so an entry
-that adds `principle` is made under that eval and re-measured by it. Until
-such an entry exists, `principle` reaches a reading by the kind token, which
-the manifest records as an override of the committed presets.
+commit to that position's entry, and which of the three assembling positions
+receives the knowledge record is a ruling this spec does not make. The
+presets spec's eval measures every committed entry against the window it
+declares, so an entry that adds `principle` is made under that eval and
+re-measured by it. Until such an entry exists, `principle` reaches no reading:
+The invocation carries nothing that could widen an entry, and the manifest
+records the entry applied.
 
 `Exclusions` gains four `frontmatter key` entries, `claim_type`, `reference`,
 `comparison` and `evidence`, under the rule `field projection`, and one entry
@@ -288,7 +308,8 @@ at 1 with `unsupported principles schema_version 1` and a consumer of
 `principles.json` sees the change by the version. `validateDelegatedPrinciples`
 decodes each entry's raw object before the typed decode so absent and `null`
 are told apart: Every entry carries all four keys, `null` allowed on the three
-new ones, `claim_type` one of the three or `null`; an entry failing that is a
+new ones, `claim_type` one of the three or `null`, a delegated `mechanism`
+written back as `causal`; an entry failing that is a
 `PrincipleDrop` with its reason, never fatal. Deterministic mode writes
 `reference` as the ADR handle it distilled from and the other two as `null`:
 It carries what it can establish and invents nothing.
@@ -417,7 +438,7 @@ Each watched fail before the change and pass after.
   `TestSlugKeyedStoreCollidesOnTheRenderedHandle`,
   `TestUntypedPrincipleHasNoSchemaFinding`, `TestPrincipleClaimsRefusesEmptyValue`,
   `TestPrincipleClaimsRefusesFourthClaimType`,
-  `TestPrincipleClaimsMapsCausalToMechanism`, `TestPrincipleStatementMayNotCite`,
+  `TestPrincipleClaimsReadsMechanismAsCausal`, `TestPrincipleStatementMayNotCite`,
   `TestUnresolvableEvidenceIsReportedNotAbsent`, `TestWarnRuleDoesNotFailPreflight`,
   and `agentcontract_test.go` holding the distiller's documented payload in
   lockstep with `lifeboat.Principle`.
@@ -428,7 +449,7 @@ Each watched fail before the change and pass after.
   and the charter-render and assembler-version pins updated.
 - `internal/core/lifeboat`: The two named above, `TestSchemaVersionOneIsRefused`,
   `TestNullKeyIsCarriedNotDropped`, `TestPrinciplesMarkdownRendersTheKeys`,
-  `TestEvidenceCarriesPackedIDsOnly`.
+  `TestEvidenceCarriesPackedIDsOnly`, `TestDelegatedMechanismIsWrittenAsCausal`.
 - `evals`: The `PRINCIPLE-CITATION` class in both eval lanes with the coverage
   rows and count pins above, run explicitly under `make evals-cold-reading`.
 

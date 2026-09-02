@@ -18,7 +18,7 @@ Typed links: `builds_on` [itd-189](../shipped/itd-189-what-the-widening-reading-
 
 ## Press Release
 
-> **What the widening reading proposes is admitted or declined through a command.** `abcd capture admit <rdi-N> --grounds "<why>"` records an admission as one act: the item's `accepted` disposition, carrying the grounds, and the admission record that joins it to the run's candidate set. `abcd capture surprise --occasioned-by <id> "<what>"` writes one surprise entry as its own record. Declining stays what it already is, a disposition in the `declined` state. An admission is refused until the comparative reading over that run has been ingested or recorded as not exercised, because the design characterises first and admits second. `abcd <id>` dispatches on `adm-N` and `srp-N`, which no record dispatch reaches today, and the outstanding report says at any moment which widening items carry neither an admission nor a decline.
+> **What the widening reading proposes is admitted or declined through a command.** `abcd capture admit <rdi-N> --grounds "<why>"` records an admission as one act: the item's `accepted` disposition, carrying the grounds, and the admission record that joins it to the run's candidate set. `abcd capture surprise --occasioned-by <id> "<what>"` writes one surprise entry as its own record. Declining stays what it already is, a disposition in the `declined` state. An admission is refused until the comparative reading over that run has been ingested or recorded as not exercised, because the design characterises first and admits second. `abcd <id>` dispatches on `adm-N` and `srp-N`, which no record dispatch reaches today, and the outstanding report says at any moment which widening items carry neither an admission nor a `declined` or `held` disposition.
 
 > "Every proposal I took into the candidate set carries the reason I took it, written at the moment I took it, and every one I passed over says I passed over it," said a facilitator who runs the loop for a researcher-developer. "The verb refuses to let me admit before the characterisation is in, so the record shows the order happened the way the design says it must."
 
@@ -40,7 +40,7 @@ The ordering is ruled: Step 2 precedes Step 4, and admission is performed after 
 - **The ordering as one gate in the shared disposition writer.** At the widening position, any disposition (accepted, declined or held) and any admission refuses until a committed comparative run names the item's run, and names what it is waiting for. The gate lives in the writer every verb routes through, so neither `capture disposition` nor the scribe's ingest can land an acceptance before characterisation.
 - **`abcd capture surprise --occasioned-by <rdi-N|adm-N|dsp-N> "<text>"`**, writing `surprises/srp-N.md` as its own record, never as a field on a disposition, and refusing an occasion that does not resolve.
 - **Dispatch.** `abcd adm-N` and `abcd srp-N` report the record and its joins. The dispatcher covers issues, intents, specs and ADRs today; the reading families (`rdi`, `dsp`, `rdg`) stay outside it and are named as out of scope.
-- **The outstanding report** names every widening item of a run that carries neither an admission nor a `declined` disposition, so the admitted-against-declined count is a query rather than an inspection.
+- **The outstanding report** names every widening item of a run that carries neither an admission nor a `declined` or `held` disposition, so the admitted-against-declined count is a query rather than an inspection.
 - The plugin surface page for capture documents the two verbs and the ordering.
 
 ## What's Out of Scope
@@ -57,7 +57,7 @@ We expect a verb that refuses a blank ground to make the admission asymmetry leg
 
 ## Scope Conditions
 
-- The ordering gate reads the comparative outcome for a run as a committed comparative run naming it, which the comparative-channel intent defines (an empty item set records the not-exercised outcome). Those two intents ship together or this gate is a stub that says so. <!-- cond: cond-2609020626047113 -->
+- The ordering gate reads the comparative run the channel commits, which the comparative-channel intent defines (an empty item set records the not-exercised outcome), and the channel lands in Phase A before this verb. <!-- cond: cond-2609020626047113 -->
 - Grounds on admission use the same substance floor as every other grounds primitive. A different floor for admissions is a ruling this intent does not make. <!-- cond: cond-2609020626042968 -->
 - The verb is written for the widening position only, because admission is the widening reading's warm act by design. <!-- cond: cond-2609020626040151 -->
 
@@ -69,7 +69,7 @@ We expect a verb that refuses a blank ground to make the admission asymmetry leg
 - **Given** a widening item with a standing `declined` disposition, **when** `capture admit` runs, **then** it refuses and names the disposition.
 - **Given** `capture admit` with a blank, whitespace or degenerate ground, **when** it runs, **then** it refuses and nothing is written.
 - **Given** `capture surprise` with an occasion that resolves, **when** it runs, **then** one surprise record exists as its own file, and no disposition record was touched.
-- **Given** a run with three widening items of which one is admitted and one declined, **when** the outstanding report runs, **then** it names the third item and no other.
+- **Given** a run with four widening items of which one is admitted, one declined and one held, **when** the outstanding report runs, **then** it names the fourth item, which carries neither an admission nor a `declined` or `held` disposition, and no other.
 - **Given** `abcd adm-N` or `abcd srp-N`, **when** it runs, **then** it reports the record and the records it joins to.
 
 ## Prior Art

@@ -9,6 +9,8 @@ found_during: "iteration-2 planning, decomposition of the cold-reading intents, 
 origin: researcher-authored
 production_mode: dictated-and-formatted
 found_at: "agents/scribe.md"
+resolution: "Adopted by the maintainer on 2026-09-02 as an ADR in this change."
+impact: internal
 ---
 
 ADR and brief invariant owed: no session holds both a reading and the ledger, and the session-kind stamp changes the reading bundle's shape
@@ -32,3 +34,7 @@ surface chapter describes the bundle. Both are the brief's to record.
 
 The intent that carries the two verbs and the check is the scribe-verb intent
 filed the same day.
+
+## Grounds
+
+- pursued: we expect a decision record adopted before the intent that waits on it to keep the trust rule out of the intent's scope list, which the decompose-before-filing rule requires; an intent shipping ahead of its ADR would show it wrong

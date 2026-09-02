@@ -61,19 +61,32 @@ ended.
 
 ### Landing order
 
-The eight Iteration 2 specs land in this order: PRE (spc-2609020626048722),
-CND (spc-2609020626046252), ORG (spc-2609020626042168), CMP
-(spc-2609020626039834), ADM (spc-2609020626040342), RFM (spc-2609020626048705),
-SCR (spc-2609020626045177), PRN (spc-2609020626042471). CND lands strictly
-before PRN; CMP before ADM before SCR; RFM after ADM and after CMP. No spec
-names a target version number: Each names the class of bump it makes, and the
-merging change sets each constant from the merged base and updates every
-pinned count in the same diff.
+The Iteration 2 set lands in two phases around the maintainer's readings, on
+the corrections ruling of 2026-09-02. Phase A, before any reading runs: The
+two-operand invocation (spc-2609021004075744), itd-194
+(spc-2609021003136831), the preset windows (spc-2609020626048722), the
+comparative channel (spc-2609020626039834) and the reading-occasioned origin
+(spc-2609020626042168), in that order. The maintainer then runs the four
+readings in the cycle's order, widening, entailment, comparative and
+detection, and dispositions their outputs. Phase B, built at Step 5 after
+those dispositions: The condition disposition (spc-2609020626046252), the
+admission and surprise verbs (spc-2609020626040342), the reframe record
+(spc-2609020626048705), the scribe verbs (spc-2609020626045177) and the
+principles read object (spc-2609020626042471), in that order. No spec names a
+target version number: Each names the class of bump it makes, and the merging
+change sets each constant from the merged base and updates every pinned count
+in the same diff.
 
 This spec moves no assembler, bundle or preset version: It touches neither the
-include table nor the bundle shape. It lands after CMP because the gate reads
-CMP's probe, and before SCR because the scribe's ingest writes through the
-functions it adds.
+include table nor the bundle shape. It lands second in Phase B, after the
+condition disposition, whose `readingitem` leaf its wrappers resolve through,
+and after the comparative channel in Phase A, because the gate reads that
+channel's probe; it lands before the scribe because the scribe's ingest
+writes through the functions it adds. Between Phase A and this spec the
+maintainer's widening reading has run and the comparative reading has
+characterised its candidates, so the first admissions are hand-authored in
+the target format, with the gate this spec builds applied by hand to them,
+until the verb lands.
 
 ### One act, two records, one lock
 
@@ -151,9 +164,27 @@ scanner fix named in the residue is what catches as a class. There is no
 deadlock, because the comparative run the gate waits for is exactly the run
 the assembler produces over the undispositioned set.
 
-The scope condition holds by construction: The two intents ship together, and
-until the channel lands no comparative run can be committed, so the refusal is
-not a stub but the honest state of a run nobody has characterised.
+`held` is available at the widening position, and the ground is stated here
+because the readings companion leaves it open: Its section 4.3 sends the
+question to section 11, and section 11 does not settle it. The ground is that
+a proposed configuration can be real and not yet articulable, with an
+epistemic exit, exactly as a tension can: The researcher can see that the
+construal admits it without yet being able to say whether the record should,
+and `held` with its `exit_condition` records that state as the disposition
+vocabulary already does for a detection tension. Routing such a candidate
+through the selection vocabulary's `deferred` instead would move it onto the
+selection surface before the comparative reading has characterised it, and
+the companion's section 8.3 orders the two the other way, characterisation
+first and admission or decline with grounds after. So `held` is the widening
+position's third state and is written through the same gate, after the
+comparative run and never before. The choice is registered as an
+interpretation of a section the document leaves open, not as a reading of it.
+
+The scope condition holds by construction: The gate reads the comparative run
+the channel commits, and the channel lands in Phase A before this verb, so by
+the time the gate exists every widening run it is asked about either has a
+committed comparative run naming it or has none, and the refusal is not a
+stub but the honest state of a run nobody has characterised.
 
 ### The grounds
 
@@ -267,7 +298,7 @@ rows; `.abcd/development/release/surface.json` is regenerated so
   opens no disposition for writing; the test hashes the dispositions tree
   before and after. Test: `TestSurpriseIsItsOwnRecord`.
 - **ac-7**: The `WideningRuns` summary over a run with one admission, one
-  decline and one untouched item names the third alone. Test:
+  decline, one `held` item and one untouched item names the fourth alone. Test:
   `TestWideningRunSummaryNamesTheOutstandingItem`.
 - **ac-8**: `IDRe` and `Describe` accept `adm-N` and `srp-N` and report the
   record and its joins. Tests: `TestDescribeAdmission`,

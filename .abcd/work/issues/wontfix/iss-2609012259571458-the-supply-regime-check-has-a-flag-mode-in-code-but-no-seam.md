@@ -9,6 +9,7 @@ found_during: "iteration-2 conformance audit against the design framework v4 and
 origin: researcher-authored
 production_mode: dictated-and-formatted
 found_at: "internal/core/reading/ingest_regime.go"
+wontfix_reason: "Ruled 2026-09-02: the supply-regime check is the framework's section 8.9 as written, the reserved-name refusals enforced and the prose detectors flagging until their withdrawal lands; the mode of a signature is code-pinned by a test and moves by a commit, never by a setting, so no seam is built."
 ---
 
 The supply-regime check has a flag mode in code but no seam that can select it, so the design's degradation path cannot be taken
@@ -44,3 +45,7 @@ forbids.
 Related: iss-2608311517547712 (the provenance field is a signature-free
 channel) and iss-2608311518109233 (the reserved-name tables are
 mutation-vacuous), both of which bear on the same gate.
+
+## Grounds
+
+- declined: Ruled 2026-09-02: the supply-regime check is the framework's section 8.9 as written, the reserved-name refusals enforced and the prose detectors flagging until their withdrawal lands; the mode of a signature is code-pinned by a test and moves by a commit, never by a setting, so no seam is built.

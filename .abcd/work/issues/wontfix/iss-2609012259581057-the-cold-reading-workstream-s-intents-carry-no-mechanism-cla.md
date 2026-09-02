@@ -9,6 +9,7 @@ found_during: "iteration-2 conformance audit against the design framework v4 and
 origin: researcher-authored
 production_mode: dictated-and-formatted
 found_at: ".abcd/development/intents/shipped"
+wontfix_reason: "Ruled 2026-09-02 from the framework's section 10: existing records are untouched, sparseness is information, and an older record's absent claim is never backfilled; the fifteen shipped intents keep their missing mechanism claims as the Iteration 1 baseline, and the entailment reading's yield bound is reported beside its findings by the size report instead."
 ---
 
 The cold-reading workstream's intents carry no mechanism claim and twelve of fourteen declare no scope condition, so the record was populated by demonstration rather than use
@@ -44,3 +45,7 @@ them, and that is the substrate Iteration 2's readings open on. The second
 reading is the safer one under the framework's "an absent stamp on an older
 record is evidence of that record's age and is never backfilled", and it should
 be written down as a ruling either way.
+
+## Grounds
+
+- declined: Ruled 2026-09-02 from the framework's section 10: existing records are untouched, sparseness is information, and an older record's absent claim is never backfilled; the fifteen shipped intents keep their missing mechanism claims as the Iteration 1 baseline, and the entailment reading's yield bound is reported beside its findings by the size report instead.

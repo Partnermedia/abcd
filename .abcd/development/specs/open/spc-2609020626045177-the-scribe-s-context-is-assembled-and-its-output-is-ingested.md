@@ -31,14 +31,23 @@ met both of
 [itd-188](../../intents/shipped/itd-188-machine-assistance-in-maintaining-the-ledger-without-any-con.md)'s
 criteria by declaration; this spec meets them by mechanism.
 
-The two flagged decisions are built under their flagged readings. Brief
-invariant 15 already carries the sentence "No session holds both a reading and
-the ledger", so the invariant is not what this spec is owed; what is owed is
-the ADR that states the mechanism behind the sentence and the amendment to
-the invariant naming the stamp and the check, which
-[iss-2609020626114155](../../../work/issues/open/iss-2609020626114155-adr-and-brief-invariant-owed-no-session-holds-both-a-reading.md)
-carries, and this spec does not ship until they are adopted. `scribe` is a
-top-level verb, because the two contexts must never share a front door.
+The decision this spec builds on is adopted:
+[adr-2609021016275803](../../decisions/adrs/2609021016275803-no-session-holds-both-a-reading-and-the-ledger-and-a-per-run.md)
+carries `status: accepted`, adopted by the maintainer on 2026-09-02 at the
+planning interview after being checked against the design framework and the
+readings companion, and
+[iss-2609020626114155](../../../work/issues/resolved/iss-2609020626114155-adr-and-brief-invariant-owed-no-session-holds-both-a-reading.md)
+is resolved by it. Brief invariant 15 already carried the sentence "No session
+holds both a reading and the ledger"; the ADR states the mechanism behind it,
+the per-run context stamp and the session-separation check that reports
+held-for-what-was-seen or unobserved and never clean, and the invariant is
+amended to name both. The ADR also states, so nobody reads it as a departure
+from the framework, that the scribe transcribes dispositions and reads the
+run's reading records from the store: The ingest verb writes the reading
+records first, and the scribe is handed the committed records rather than a
+raw output a second time, which is what this spec's assembler does below.
+`scribe` is a top-level verb, because the two contexts must never share a
+front door.
 
 ## Scope
 
@@ -62,20 +71,28 @@ invariant amendment.
 
 ### Landing order
 
-The eight Iteration 2 specs land in this order: PRE (spc-2609020626048722),
-CND (spc-2609020626046252), ORG (spc-2609020626042168), CMP
-(spc-2609020626039834), ADM (spc-2609020626040342), RFM (spc-2609020626048705),
-SCR (spc-2609020626045177), PRN (spc-2609020626042471). CND lands strictly
-before PRN; CMP before ADM before SCR; RFM after ADM and after CMP. No spec
-names a target version number: Each names the class of bump it makes, and the
-merging change sets each constant from the merged base and updates every
-pinned count in the same diff.
+The Iteration 2 set lands in two phases around the maintainer's readings, on
+the corrections ruling of 2026-09-02. Phase A, before any reading runs: The
+two-operand invocation (spc-2609021004075744), itd-194
+(spc-2609021003136831), the preset windows (spc-2609020626048722), the
+comparative channel (spc-2609020626039834) and the reading-occasioned origin
+(spc-2609020626042168), in that order. The maintainer then runs the four
+readings in the cycle's order, widening, entailment, comparative and
+detection, and dispositions their outputs. Phase B, built at Step 5 after
+those dispositions: The condition disposition (spc-2609020626046252), the
+admission and surprise verbs (spc-2609020626040342), the reframe record
+(spc-2609020626048705), the scribe verbs (spc-2609020626045177) and the
+principles read object (spc-2609020626042471), in that order. No spec names a
+target version number: Each names the class of bump it makes, and the merging
+change sets each constant from the merged base and updates every pinned count
+in the same diff.
 
 This spec's classes: `SchemaVersion` on the bundle and the manifest moves by
 one, because the bundle gains a field; `AssemblerVersionCore` moves MINOR,
-because the bundle shape is part of the contract. It lands after ADM, whose
-`Admit` and `Surprise` it writes through, and after RFM, whose reframes
-directory its derived allow list already names.
+because the bundle shape is part of the contract. It lands fourth in Phase B,
+after the admission and surprise verbs, whose `Admit` and `Surprise` it
+writes through, and after the reframe record, whose reframes directory its
+derived allow list already names.
 
 ### The context stamp, and where it lives
 
@@ -397,4 +414,5 @@ it.
 - The ordering gate and the one-ground rule, which spc-2609020626040342 builds
   in the functions this verb writes through.
 - The durable-tier writer, which spc-2609020626039834 exports.
-- The ADR and the invariant amendment iss-2609020626114155 carries.
+- The ADR and the invariant amendment, both adopted on 2026-09-02 (adr-2609021016275803,
+  `status: accepted`); this spec builds on them and does not restate them.
