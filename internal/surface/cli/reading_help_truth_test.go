@@ -86,6 +86,11 @@ func TestIngestHelpNamesTheReservedTableAsTheGateReadsIt(t *testing.T) {
 // earlier attempt at its OWN run id. Another run's orphan is left where it was.
 // The help said "and nothing else", which omits the delete the code makes on
 // every refusal path.
+//
+// The same shape pins the disclosure the refusal renders. `pending_stages` is
+// the operator's list of stages STILL STANDING, so it names the other run's
+// orphan and it must not name the stage this run's own rollback just cleared
+// (iss-2609020848468450).
 func TestIngestHelpDescribesTheDeletesARefusalMakes(t *testing.T) {
 	srcRoot := repoRootFromTest(t)
 	repo := readingRepo(t)
@@ -111,6 +116,10 @@ func TestIngestHelpDescribesTheDeletesARefusalMakes(t *testing.T) {
 	const ownItem = "rdi-2608310000000101"
 	ownRecord := ledgerRecord(runID, ownItem)
 	write(ownRecord, "---\nid: "+ownItem+"\n---\n\nthe half-landed body\n")
+	// and the stage that attempt left standing beside it: the refusal's own
+	// rollback clears this one, which is what the pending assertion below turns on.
+	write(reading.IngestStageDir+"/"+runID+"/stage.json",
+		`{"_type":"`+reading.StageType+`","run_id":"`+runID+`","records":["`+ownItem+`"]}`)
 
 	// Somebody else's orphan: a stage and the record its run had landed.
 	const otherRun, otherItem = "rdg-2608310000000102", "rdi-2608310000000103"
@@ -181,6 +190,28 @@ func TestIngestHelpDescribesTheDeletesARefusalMakes(t *testing.T) {
 	if !sawPending {
 		t.Errorf("the refusal reported pending stages %v, which does not name the orphan %s",
 			res.PendingStages, otherRun)
+	}
+
+	// (d) and the disclosure is exact: the stage the refusal itself cleared is
+	// gone from the tree, so it is not one an operator is told is still pending.
+	var clearedOwn bool
+	for _, id := range res.ClearedStages {
+		if id == runID {
+			clearedOwn = true
+		}
+	}
+	if !clearedOwn {
+		t.Errorf("the refusal cleared stages %v, which does not name its own run %s; the "+
+			"pending assertion below rests on that clear having happened", res.ClearedStages, runID)
+	}
+	if _, statErr := os.Stat(filepath.Join(repo, filepath.FromSlash(reading.IngestStageDir), runID)); !os.IsNotExist(statErr) {
+		t.Errorf("the refusal left its own stage standing at %s/%s (%v)", reading.IngestStageDir, runID, statErr)
+	}
+	for _, id := range res.PendingStages {
+		if id == runID {
+			t.Errorf("the refusal reported pending stages %v, which names its own stage %s — "+
+				"the stage it had just cleared (cleared: %v)", res.PendingStages, runID, res.ClearedStages)
+		}
 	}
 
 	// The help has to say all of that, because the operator reads the help.

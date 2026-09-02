@@ -437,6 +437,17 @@ func TestTheRefusalListIsBoundedInCount(t *testing.T) {
 		if len(run.RefusedItems) > maxReportedRefusals+1 {
 			t.Errorf("the run record carries %d refusals, past the cap", len(run.RefusedItems))
 		}
+		// The DURABLE record must not carry the elision entry as an item
+		// either: an ordinal of zero in run.json names an item 0 as surely as
+		// the text render would (iss-2608311518250688).
+		rawRun, err := os.ReadFile(filepath.Join(f.root, filepath.FromSlash(
+			ReadingsRecordDir+"/"+f.runID+"/"+RunFileName)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(rawRun), `"ordinal": 0`) {
+			t.Errorf("the run record carries an item 0 in its refused_items")
+		}
 		if run.RefusedCount != items-1 {
 			t.Errorf("the run record's refused_count is %d, want %d", run.RefusedCount, items-1)
 		}
@@ -477,6 +488,16 @@ func TestTheRefusalListIsBoundedInCount(t *testing.T) {
 		rec := f.readRefusalRecord(f.runID)
 		if !strings.Contains(rec.Reason, "more item(s) refused") {
 			t.Errorf("the bounded reason does not say how many refusals it left out: %q", rec.Reason)
+		}
+		// The elision entry is not an item, and the durable record renders it
+		// under the same rule as the terminal: no ordinal, so no "item 0". The
+		// terminal had the branch and the record writer did not
+		// (iss-2608311518250688).
+		if strings.Contains(rec.Reason, "item 0") {
+			t.Errorf("the refusal record names an item 0, which does not exist: %q", rec.Reason)
+		}
+		if !strings.Contains(rec.Reason, "(refusals-elided) and 180 more item(s) refused") {
+			t.Errorf("the refusal record does not render the elision entry as an elision: %q", rec.Reason)
 		}
 	})
 }

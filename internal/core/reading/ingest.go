@@ -156,15 +156,40 @@ type Output struct {
 // ItemRefusal is one item the run refused, and why. It carries no item body
 // text: a refusal names the ordinal, the rule and the offending field, which is
 // everything a reader needs and nothing a redactor would have to clean.
+//
+// Ordinal is omitted when it is zero, because zero is not an ordinal: items are
+// numbered from one, and the one entry carrying none is the elision entry a
+// bounded list ends with (boundedRefusals). A durable record that wrote
+// `"ordinal": 0` named an item that does not exist as surely as a terminal
+// printing "item 0" would (iss-2608311518250688).
 type ItemRefusal struct {
-	// Ordinal is 1-based, and it is omitted rather than rendered as 0. The
-	// bounded list's elision entry is not an item, so it names none, and a
-	// record asserting "item 0" sends a reader looking for something that does
-	// not exist.
 	Ordinal int    `json:"ordinal,omitempty"`
 	Rule    string `json:"rule"`
 	Field   string `json:"field,omitempty"`
 	Detail  string `json:"detail"`
+}
+
+// refusalsElidedRule names the elision entry a bounded refusal list ends with.
+const refusalsElidedRule = "refusals-elided"
+
+// IsElision reports whether r is the list's elision entry rather than an item.
+// An item has an ordinal from one; the elision entry has none, and nothing else
+// is ever built without one. This is the ONE rule both surfaces render by.
+func (r ItemRefusal) IsElision() bool {
+	return r.Ordinal == 0
+}
+
+// Render is the one-line form of a refusal, shared by every surface that prints
+// the list — the refusal record's reason and the terminal render. There is no
+// item 0: the elision entry renders under its rule alone, and a reader is never
+// sent looking for an item that does not exist. The terminal once carried this
+// branch and the record writer did not, and the durable record was the one that
+// named item 0 (iss-2608311518250688).
+func (r ItemRefusal) Render() string {
+	if r.IsElision() {
+		return fmt.Sprintf("(%s) %s", r.Rule, r.Detail)
+	}
+	return fmt.Sprintf("item %d (%s): %s", r.Ordinal, r.Rule, r.Detail)
 }
 
 // RunRecord is the run metadata, written LAST as the commit marker: a run
@@ -186,12 +211,18 @@ type RunRecord struct {
 // RefusalRecord is what a list-level refusal leaves behind: the run metadata and
 // the named reason, and no items. The event is durable, and a rerun is a new run
 // with a new run id, never an amendment.
+//
+// Regime is omitted when the run has none: a run refused because its position's
+// definition did not resolve — absent, malformed, or stating another position's
+// licence — read under no regime the verb could name, and the record says
+// nothing rather than something the verb never read. The reason names the
+// definition instead.
 type RefusalRecord struct {
 	Type           string     `json:"_type"`
 	SchemaVersion  int        `json:"schema_version"`
 	RunID          string     `json:"run_id"`
 	Position       Position   `json:"position"`
-	Regime         string     `json:"regime"`
+	Regime         string     `json:"regime,omitempty"`
 	TargetCommit   string     `json:"target_commit"`
 	ManifestSHA256 string     `json:"manifest_sha256"`
 	Instrument     Instrument `json:"instrument"`
@@ -244,6 +275,10 @@ type IngestResult struct {
 	// that is refused — or that fails before the sweep — reports the orphans
 	// it saw and leaves them for the next one that validates. A sweep that
 	// skipped something says so.
+	//
+	// LEFT IN PLACE is the whole of it: a stage this invocation cleared is not
+	// on this list, whichever path cleared it — the sweep's, or the single
+	// rollback a refusal makes on its own run id.
 	PendingStages []string `json:"pending_stages,omitempty"`
 	Redacted      int      `json:"redacted,omitempty"`
 	Degraded      string   `json:"redaction_degraded,omitempty"`
@@ -482,10 +517,11 @@ func ingestUnderLock(root *os.Root, repoRoot string, req IngestRequest, res *Ing
 	return write(root, repoRoot, res, out, manifest, def, items)
 }
 
-// leftPending is the orphans found minus the stages the sweep cleared: what a
-// later invocation will find again. Both lists are sorted, and the cleared list
-// is a prefix of the found one in sweep order, but the subtraction does not
-// rest on either.
+// leftPending is the orphans found minus the stages that were cleared: what a
+// later invocation will find again. Both lists are sorted where the sweep is the
+// caller, and there the cleared list is a prefix of the found one in sweep
+// order, but the subtraction rests on neither — the refusal path subtracts a
+// single id from a list it does not otherwise touch.
 func leftPending(found, cleared []string) []string {
 	if len(cleared) == 0 {
 		return found
@@ -560,9 +596,8 @@ func checkEnvelope(out Output) (Position, error) {
 	if !sha256HexRe.MatchString(out.ManifestSHA256) {
 		return "", fmt.Errorf("reading: manifest_sha256 %q is not a sha-256 digest", echo(out.ManifestSHA256))
 	}
-	if strings.TrimSpace(out.Instrument.Model) == "" ||
-		strings.TrimSpace(out.Instrument.DefinitionSHA256) == "" ||
-		strings.TrimSpace(out.Instrument.AssemblerVersion) == "" {
+	if isBlank(out.Instrument.Model) || isBlank(out.Instrument.DefinitionSHA256) ||
+		isBlank(out.Instrument.AssemblerVersion) {
 		return "", errors.New("reading: instrument needs all three of model, definition_sha256 and " +
 			"assembler_version; two runs claiming one instrument are provably the same only if the claim is whole")
 	}
@@ -725,7 +760,10 @@ func refuseARerun(root *os.Root, runID string) error {
 	return nil
 }
 
-// refuse records a list-level refusal and returns it.
+// refuse records a list-level refusal and returns it. It is the ONE writer of a
+// refusal record: every list-level refusal past the identity point routes
+// through here, and a refusal that returns bare instead is the defect
+// iss-2608311518250688 names.
 //
 // The record is durable because the event is: a refused run is a run that
 // happened, and a rerun is a NEW run with a new run id, never an amendment. It
@@ -750,29 +788,42 @@ func refuse(root *os.Root, res *IngestResult, out Output, m Manifest, def Defini
 		return fmt.Errorf("reading: %w (and the earlier attempt at run %s could not be rolled back: %v)",
 			cause, out.RunID, err)
 	}
+	// The reason is carried WHOLE. Every payload-derived substring inside it
+	// was already cleaned where it was interpolated, so a second cap here
+	// would only cut the repository's own prose — and it did: a 338-rune
+	// refusal reached the record as 123 runes, ending mid-word, and an
+	// every-item-refused run lost its per-item refusals entirely. A record
+	// whose stated purpose is to carry the named reason has to carry it.
+	//
+	// The one thing stripped is this package's own "reading: " prefix, which
+	// the locator's errors carry and the checks' do not: the message below
+	// adds it once, and a record is not the place for a stutter.
+	reason := strings.TrimPrefix(cause.Error(), "reading: ")
 	rec := RefusalRecord{
 		Type: RefusalType, SchemaVersion: SchemaVersion, RunID: out.RunID,
 		Position: def.Position, Regime: def.Regime, TargetCommit: m.TargetCommit,
 		ManifestSHA256: out.ManifestSHA256, Instrument: sanitizeInstrument(out.Instrument),
-		// The reason is carried WHOLE. Every payload-derived substring inside it
-		// was already cleaned where it was interpolated, so a second cap here
-		// would only cut the repository's own prose — and it did: a 338-rune
-		// refusal reached the record as 123 runes, ending mid-word, and an
-		// every-item-refused run lost its per-item refusals entirely. A record
-		// whose stated purpose is to carry the named reason has to carry it.
-		Reason: cause.Error(),
+		Reason: reason,
 	}
 	rel := ReadingsRecordDir + "/" + out.RunID + "/" + RefusalFileName
 	if err := writeJSONIn(root, rel, rec); err != nil {
-		return fmt.Errorf("reading: %w (and the refusal record could not be written: %v)", cause, err)
+		return fmt.Errorf("reading: %s (and the refusal record could not be written: %v)", reason, err)
 	}
 	res.RefusalPath = rel
-	return fmt.Errorf("reading: %w; the refusal is recorded at %s", cause, rel)
+	return fmt.Errorf("reading: %s; the refusal is recorded at %s", reason, rel)
 }
 
 // rollbackThisRun removes one run's half-landed records and its stage, and says
 // on the result what it removed. It is the sweep's rollback applied to a single
 // named run rather than to whatever the stage directory happens to hold.
+//
+// It also drops the stage it cleared from PendingStages, which is the one place
+// that subtraction can live for the refusal path. The orphan probe runs before
+// anything is refused, so a run whose OWN earlier attempt left a stage finds
+// itself in that list — and the refusal below then clears it. Left unsubtracted
+// the disclosure named a stage that no longer existed, wrong by one entry in
+// exactly the case it exists to describe (iss-2609020848468450). Pending means
+// STILL STANDING: it is read against the tree, so the two have to agree.
 func rollbackThisRun(root *os.Root, res *IngestResult, runID string) error {
 	removed, err := rollbackRun(root, runID)
 	res.RolledBack = append(res.RolledBack, removed...)
@@ -790,6 +841,7 @@ func rollbackThisRun(root *os.Root, res *IngestResult, runID string) error {
 		return fmt.Errorf("reading: clearing the stage of refused run %s: %w", runID, err)
 	}
 	res.ClearedStages = append(res.ClearedStages, runID)
+	res.PendingStages = leftPending(res.PendingStages, []string{runID})
 	return nil
 }
 

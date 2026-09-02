@@ -50,7 +50,7 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			status, err := reading.Describe(captureRoot(mustCwd()))
 			if err != nil {
-				return &exitError{Code: 2, Msg: "reading: " + scrubPaths(err)}
+				return readingRefusal("reading", err)
 			}
 			return render(cmd.OutOrStdout(), *asJSON, status, func(w io.Writer) {
 				renderReadingStatus(w, status)
@@ -105,7 +105,7 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 			}
 			pos, err := reading.ParsePosition(position)
 			if err != nil {
-				return &exitError{Code: 2, Msg: "reading assemble: " + scrubPaths(err)}
+				return readingRefusal("reading assemble", err)
 			}
 			// The core takes a relative output directory against the REPOSITORY
 			// root, which is right for the default it computes itself and wrong
@@ -128,7 +128,7 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 				DryRun:      dryRun,
 			})
 			if err != nil {
-				return &exitError{Code: 2, Msg: "reading assemble: " + scrubPaths(err)}
+				return readingRefusal("reading assemble", err)
 			}
 			// The core was handed the resolved path so it could write there; the
 			// operator is shown the string they typed. A resolved absolute path on
@@ -229,7 +229,7 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 						renderIngestResult(w, res)
 					})
 				}
-				return &exitError{Code: 2, Msg: "reading ingest: " + trimCorePrefix(scrubPaths(err))}
+				return readingRefusal("reading ingest", err)
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				renderIngestResult(w, res)
@@ -399,26 +399,39 @@ func thousands(n int) string {
 	return neg + b.String()
 }
 
+// readingRefusal composes one reading sub-verb's refusal: the verb's own name,
+// then the core's message with the package tag the core already carries dropped.
+//
+// The prefix has ONE owner, and it is the core: `internal/core/reading` tags
+// every error it returns with `reading: `, and those strings are what the JSON
+// envelope, the ledger's refusal records and the core's own tests read. So the
+// front door subtracts rather than adds. Printing both reads as a stutter —
+// `abcd: reading: reading: agents/...` — and the refusal message is load-bearing
+// here: six of itd-185's thirteen criteria require the offending field or the
+// item's ordinal to be NAMED, so a message a reader skims past is a criterion
+// half-met rather than a cosmetic complaint.
+//
+// Every sub-verb goes through this, including the ones whose core paths do not
+// tag today (`ParsePosition` returns an untagged message): the rule is a property
+// of the surface, not of the particular strings the core happens to return, and a
+// per-verb exemption is how the stutter survived its first fix
+// (iss-2608311145286014, half-closed by itd-185).
+func readingRefusal(verb string, err error) *exitError {
+	return &exitError{Code: 2, Msg: verb + ": " + trimCorePrefix(scrubPaths(err))}
+}
+
 // trimCorePrefix drops the core package's own tag from a message this front door
 // is about to prefix with the verb's name.
-//
-// Printing both reads as a stutter — `abcd: reading ingest: reading: ...` — and
-// the refusal message is load-bearing for this verb: six of itd-185's thirteen
-// criteria require the offending field or the item's ordinal
-// to be NAMED, so a message a reader skims past is a criterion half-met rather
-// than a cosmetic complaint. The `assemble` path above carries the same stutter
-// and is deliberately left alone: it is a change to a shipped verb's output
-// rather than to what this delivery adds, and it is captured separately.
 func trimCorePrefix(msg string) string {
 	return strings.TrimPrefix(msg, "reading: ")
 }
 
 // renderIngestResult writes one ingest's text render.
 //
-// The refused items are rendered by ORDINAL, rule and field, never by body
-// text: the bodies belong in the ledger records,
-// which the record writer redacts on the way in, and a refusal quoting a
-// reading's prose back to a terminal would leave that redaction behind.
+// The refused items are rendered by ORDINAL, rule and field, never by body text:
+// the bodies belong in the ledger records, which the record writer redacts on the
+// way in, and a refusal quoting a reading's prose back to a terminal would leave
+// that redaction behind.
 func renderIngestResult(w io.Writer, res reading.IngestResult) {
 	// Two headings this render cannot write. A refusal before the run's
 	// identity is proven has no run to head the render with; what follows is
@@ -453,13 +466,9 @@ func renderIngestResult(w io.Writer, res reading.IngestResult) {
 		fmt.Fprintf(w, "  refused items: %d\n", res.RefusedCount)
 	}
 	for _, r := range res.RefusedItems {
-		// The elision entry names no item, so it is not rendered as one: there
-		// is no item 0, and printing one would send a reader looking for it.
-		if r.Ordinal == 0 {
-			fmt.Fprintf(w, "                 (%s) %s\n", r.Rule, r.Detail)
-			continue
-		}
-		fmt.Fprintf(w, "                 item %d (%s): %s\n", r.Ordinal, r.Rule, r.Detail)
+		// One rule for the list, shared with the refusal record's reason: the
+		// elision entry names no item, so neither surface renders it as one.
+		fmt.Fprintf(w, "                 %s\n", r.Render())
 	}
 	if len(res.ClearedStages) > 0 {
 		fmt.Fprintf(w, "  cleared:       orphaned stage(s) of %s\n", strings.Join(res.ClearedStages, ", "))
