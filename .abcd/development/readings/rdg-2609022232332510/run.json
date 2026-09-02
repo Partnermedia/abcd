@@ -1,0 +1,77 @@
+{
+  "_type": "abcd.reading.run/1",
+  "schema_version": 9,
+  "run_id": "rdg-2609022232332510",
+  "position": "detection",
+  "regime": "registrative",
+  "target_commit": "e491f34ad89c4e098765f3ffbdd4b42caed80e0a",
+  "manifest_sha256": "2b7e4b5401f5e9d553fa70fe9bac0df7d5952d2e25867881fc052cba22d5ffc2",
+  "instrument": {
+    "model": "claude-opus-5",
+    "definition_sha256": "4e8ca629bc6ca862be3977e5b0f331b78802b2e80aee15df0709d500aadcc605",
+    "assembler_version": "1.7.0+b7cc427449a3395570d542ee5423b55adf84521cb49e8bda0f695e96962b2f24"
+  },
+  "records": [
+    {
+      "id": "rdi-2609022244129894",
+      "path": ".abcd/work/issues/readings/rdg-2609022232332510/rdi-2609022244129894.md"
+    },
+    {
+      "id": "rdi-2609022244123883",
+      "path": ".abcd/work/issues/readings/rdg-2609022232332510/rdi-2609022244123883.md"
+    },
+    {
+      "id": "rdi-2609022244128523",
+      "path": ".abcd/work/issues/readings/rdg-2609022232332510/rdi-2609022244128523.md"
+    },
+    {
+      "id": "rdi-2609022244125170",
+      "path": ".abcd/work/issues/readings/rdg-2609022232332510/rdi-2609022244125170.md"
+    },
+    {
+      "id": "rdi-2609022244120570",
+      "path": ".abcd/work/issues/readings/rdg-2609022232332510/rdi-2609022244120570.md"
+    },
+    {
+      "id": "rdi-2609022244124504",
+      "path": ".abcd/work/issues/readings/rdg-2609022232332510/rdi-2609022244124504.md"
+    },
+    {
+      "id": "rdi-2609022244123418",
+      "path": ".abcd/work/issues/readings/rdg-2609022232332510/rdi-2609022244123418.md"
+    },
+    {
+      "id": "rdi-2609022244126358",
+      "path": ".abcd/work/issues/readings/rdg-2609022232332510/rdi-2609022244126358.md"
+    },
+    {
+      "id": "rdi-2609022244122370",
+      "path": ".abcd/work/issues/readings/rdg-2609022232332510/rdi-2609022244122370.md"
+    },
+    {
+      "id": "rdi-2609022244123808",
+      "path": ".abcd/work/issues/readings/rdg-2609022232332510/rdi-2609022244123808.md"
+    },
+    {
+      "id": "rdi-2609022244123031",
+      "path": ".abcd/work/issues/readings/rdg-2609022232332510/rdi-2609022244123031.md"
+    },
+    {
+      "id": "rdi-2609022244129793",
+      "path": ".abcd/work/issues/readings/rdg-2609022232332510/rdi-2609022244129793.md"
+    },
+    {
+      "id": "rdi-2609022244129975",
+      "path": ".abcd/work/issues/readings/rdg-2609022232332510/rdi-2609022244129975.md"
+    },
+    {
+      "id": "rdi-2609022244121412",
+      "path": ".abcd/work/issues/readings/rdg-2609022232332510/rdi-2609022244121412.md"
+    }
+  ],
+  "refused_items": [],
+  "refused_count": 0,
+  "bounds": [
+    "the glossary bound is exceeded: the readings companion's section 5.6 states the bound in advance as three to six terms, and this run was handed 38 glossary-term item(s); companion section 5.2 names brief/glossary/ whole, so the departure is stated rather than passed off"
+  ]
+}
