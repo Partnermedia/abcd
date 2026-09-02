@@ -473,8 +473,11 @@ reports the guard-hook health: `plugin_root_resolved`, `hook_installed`,
 names `abcd ahoy install` for anything actionable.
 
 **Doctor (`/abcd:ahoy doctor`):** runs the detection pass plus a read-only
-audit pass. The text render shows two counts — detection gaps and audit gaps.
-The JSON envelope (`{detection, audit_gaps}`) carries full per-gap detail: the
+audit pass. The text render shows two counts — detection gaps and audit gaps —
+and then names, one line each, every required gap that is NOT resolvable: those
+are the ones no later `install` will clear (a `config.json` abcd refuses to touch
+until a human repairs it is the case that matters), so a bare count of them
+would be a number the reader cannot act on. The JSON envelope (`{detection, audit_gaps}`) carries full per-gap detail: the
 detection gaps cover user-state checks (the history store exists and is
 writable, the `index.json` entry matches this root SHA, the PATH symlink and
 hook manifest are intact), while the audit pass reconciles the registered

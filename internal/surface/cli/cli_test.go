@@ -989,3 +989,30 @@ func TestAhoyDoctorJSONCarriesNoHomePrefix(t *testing.T) {
 		t.Fatalf("doctor --json carries the home directory somewhere in its output:\n%s", out)
 	}
 }
+
+// TestAhoyDoctorNamesTheDiagnosticsNoInstallCanFix: doctor's text render is the
+// read-only surface an operator reaches for when something is wrong, and it
+// printed two integers. A required gap that is deliberately NOT resolvable —
+// config.malformed is the case that matters, since abcd will never touch the
+// file again until a human repairs it — is exactly the one no later `install`
+// will clear, so a count that cannot be acted on is the wrong report. Name each
+// such diagnostic and its detail.
+func TestAhoyDoctorNamesTheDiagnosticsNoInstallCanFix(t *testing.T) {
+	repo, _ := hermeticGitRepo(t)
+	runCLI(t, "ahoy", "install", "--yes", "--adopt",
+		"--visibility", "private", "--docs-target", "both",
+		"--oracle-backend", "host-delegated", "--scan-deep", "false", "--json")
+
+	cfg := filepath.Join(repo, ".abcd", "config.json")
+	if err := os.WriteFile(cfg, []byte("{\"repo\":{\"visibility\":\"private\"}\n<<<<<<<\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out := string(runCLI(t, "ahoy", "doctor"))
+	if !strings.Contains(out, "config.malformed") {
+		t.Fatalf("doctor did not name the diagnostic no install can fix:\n%s", out)
+	}
+	if !strings.Contains(out, "could not be parsed") {
+		t.Fatalf("doctor named the gap but not what is wrong with it:\n%s", out)
+	}
+}

@@ -94,6 +94,22 @@ func Install(cwd string, opts InstallOptions, p Prompter) (InstallResult, error)
 		!overridesWouldChange(abs, opts.ValueOverrides) &&
 		!attributionWouldChange(abs, opts) &&
 		!modeForced {
+		// One state reaches here that is NOT a no-op: a config.json that could not
+		// be parsed. It raises exactly one gap, deliberately non-resolvable — the
+		// file is the user's data — so it counts zero actionable gaps, and
+		// overridesWouldChange reports "no change" because it cannot read the file
+		// to compare against. Reporting that as already_up_to_date is the loudest
+		// possible silence: abcd has stopped touching the repo's config and an
+		// explicit --visibility went nowhere. Say both, and say them here, because
+		// no apply step — and so no applyCtx — will run to say them later.
+		if gapIDSet(det.Gaps)[malformedConfigGapID] {
+			_, cfgErr := loadPersistedInstallConfig(abs)
+			return InstallResult{
+				Status:          "partial",
+				Notes:           malformedConfigNotes(cfgErr, opts.ValueOverrides),
+				OptionalSkipped: optionalSkipped(opts, det.Gaps),
+			}, nil
+		}
 		return InstallResult{
 			Status:          "already_up_to_date",
 			OptionalSkipped: optionalSkipped(opts, det.Gaps),
@@ -313,9 +329,43 @@ func (a *applyCtx) refuseMalformedConfig(err error) {
 		return
 	}
 	a.configMalformed = true
-	a.refuse("refused to touch .abcd/config.json: it could not be parsed (" + errText(err) +
+	a.notes = append(a.notes, malformedConfigNotes(err, a.overrides)...)
+}
+
+// malformedConfigNotes renders everything a run that could not parse
+// .abcd/config.json owes the operator: the refusal and its cause, and —
+// separately — which explicitly-typed value overrides were dropped with it.
+//
+// It is a free function rather than a method because the SECOND caller has no
+// applyCtx: the idempotency early return in Install fires before the first apply
+// step is built, and config.malformed is a required but non-resolvable gap, so a
+// repo whose config abcd has stopped touching counts zero actionable gaps and
+// reported already_up_to_date with nothing to say at all.
+func malformedConfigNotes(err error, overrides map[string]string) []string {
+	notes := []string{"refused to touch .abcd/config.json: it could not be parsed (" + errText(err) +
 		") — repair the file (a merge-conflict marker is the usual cause) and re-run `abcd ahoy install`; " +
-		"no config value, marker block or setup stamp was written.")
+		"no config value, marker block or setup stamp was written."}
+	if dropped := droppedOverrides(overrides); dropped != "" {
+		notes = append(notes, "the value override(s) this run was given ("+dropped+
+			") were NOT applied: every config value is written into .abcd/config.json, which this run refused to touch.")
+	}
+	return notes
+}
+
+// droppedOverrides renders the explicit value overrides a refused config.json
+// swallowed, as a sorted "key=value" list. A flag the operator typed and abcd
+// silently ignored is the failure mode this closes: `--visibility public` over
+// an unparseable config leaves the repo private and said so nowhere.
+func droppedOverrides(overrides map[string]string) string {
+	pairs := make([]string, 0, len(overrides))
+	for k, v := range overrides {
+		if v == "" {
+			continue
+		}
+		pairs = append(pairs, k+"="+v)
+	}
+	sort.Strings(pairs)
+	return strings.Join(pairs, ", ")
 }
 
 // stepIdentityPin adopts the iss-62 identity gate for an un-pinned repo: it
@@ -1317,6 +1367,12 @@ func Status(cwd string) (string, error) {
 // OptionalPinGapID is the one optional gap --yes does not cover. Named here so
 // the front doors can point at it without re-deriving the string.
 const OptionalPinGapID = "git_identity.unpinned"
+
+// malformedConfigGapID is the one gap that means "abcd will not touch this
+// repo's config until a human repairs it". It is required and non-resolvable, so
+// it never appears in an actionable count, and both the detector that raises it
+// and the install path that must not short-circuit past it name it from here.
+const malformedConfigGapID = "config.malformed"
 
 // optionalSkipped lists the optional gaps a --yes run left un-applied. --yes
 // approves every resolvable category but never adopts the identity pin (see

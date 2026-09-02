@@ -121,3 +121,96 @@ func TestDetectMalformedConfigIsOneDiagnosticGap(t *testing.T) {
 		t.Fatalf("config.malformed detail = %q, want it to say the file could not be parsed", malformed[0].Detail)
 	}
 }
+
+// TestInstallReportsAMalformedConfigWhenOtherwiseUpToDate is the sibling the
+// GHSA-mchq-gm34-3j34 fix left open. That fix taught every apply step to refuse
+// an unparseable config.json, but the idempotency early return sits BEFORE the
+// first apply step: a repo that installed cleanly and only later acquired a
+// merge marker raises exactly one gap (config.malformed), which is required and
+// deliberately NOT resolvable, so `actionable` counts zero and the run returns
+// already_up_to_date with no notes at all. The state that most needs the
+// operator — a config abcd will no longer touch — was the quietest one abcd
+// could report.
+func TestInstallReportsAMalformedConfigWhenOtherwiseUpToDate(t *testing.T) {
+	setupHermetic(t)
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	res, err := Install(repo, installOpts(), RefusingPrompter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Status != "clean" {
+		t.Fatalf("precondition: first install status = %q (remaining=%v), want clean", res.Status, res.Remaining)
+	}
+
+	// The merge that broke it. Everything else on disk is still correct.
+	if err := os.WriteFile(configPath(repo), []byte(conflictedConfig), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	res2, err := Install(repo, installOpts(), RefusingPrompter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res2.Status != "partial" {
+		t.Fatalf("re-install over a broken config: status = %q, want partial", res2.Status)
+	}
+	said := false
+	for _, n := range res2.Notes {
+		if strings.Contains(n, "config.json") && strings.Contains(n, "could not be parsed") {
+			said = true
+		}
+	}
+	if !said {
+		t.Fatalf("no note names the unparseable config.json; notes: %v", res2.Notes)
+	}
+	after, err := os.ReadFile(configPath(repo))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != conflictedConfig {
+		t.Fatalf("the refusing path still rewrote the config:\n%s", after)
+	}
+}
+
+// TestInstallSaysWhichOverrideAMalformedConfigDropped: overridesWouldChange
+// reports "no change" for a config it cannot parse, which is right — nothing
+// may be written — but it also means an explicit `--visibility public` is
+// dropped on the floor. A flag the operator typed and abcd did not apply is
+// said out loud, or the repo is left looking public when it is not.
+func TestInstallSaysWhichOverrideAMalformedConfigDropped(t *testing.T) {
+	setupHermetic(t)
+	repo := t.TempDir()
+	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if res, err := Install(repo, installOpts(), RefusingPrompter{}); err != nil {
+		t.Fatal(err)
+	} else if res.Status != "clean" {
+		t.Fatalf("precondition: first install status = %q, want clean", res.Status)
+	}
+	if err := os.WriteFile(configPath(repo), []byte(conflictedConfig), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	opts := installOpts()
+	opts.ValueOverrides["visibility"] = "public"
+	res, err := Install(repo, opts, RefusingPrompter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Status != "partial" {
+		t.Fatalf("status = %q, want partial", res.Status)
+	}
+	said := false
+	for _, n := range res.Notes {
+		if strings.Contains(n, "visibility") {
+			said = true
+		}
+	}
+	if !said {
+		t.Fatalf("no note says --visibility was not applied; notes: %v", res.Notes)
+	}
+}

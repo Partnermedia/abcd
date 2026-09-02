@@ -607,7 +607,7 @@ func detectHookManifest(pluginRoot string, pluginOK bool) []Gap {
 func detectConfigIntegrity(cwd string) []Gap {
 	if _, err := readConfig(cwd); err != nil {
 		return []Gap{{
-			ID: "config.malformed", Category: ConfigChange, Scope: "repo",
+			ID: malformedConfigGapID, Category: ConfigChange, Scope: "repo",
 			Title:    ".abcd/config.json could not be parsed",
 			Detail:   ".abcd/config.json is present but could not be parsed (" + errText(err) + "); its values are unknown and ahoy install will not rewrite it.",
 			FixHint:  "Repair the file by hand — a merge-conflict marker is the usual cause — and re-run ahoy install.",
