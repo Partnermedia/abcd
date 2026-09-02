@@ -1,0 +1,113 @@
+{
+  "_type": "abcd.reading.run/1",
+  "schema_version": 9,
+  "run_id": "rdg-2609022155461185",
+  "position": "widening",
+  "regime": "generative",
+  "target_commit": "435b775f386c380d26616150456844b3ac49472b",
+  "manifest_sha256": "fc868379def4f004ff2fecfc0a1d7b46b2959b5c72a3d67e241d1d74ea8cebea",
+  "instrument": {
+    "model": "claude-opus-5",
+    "definition_sha256": "cdfdbbbc0a85c2c63c56e85aae0c6871639612a60c30d7be2344f957528cf266",
+    "assembler_version": "1.7.0+b7cc427449a3395570d542ee5423b55adf84521cb49e8bda0f695e96962b2f24"
+  },
+  "records": [
+    {
+      "id": "rdi-2609022207121078",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207121078.md"
+    },
+    {
+      "id": "rdi-2609022207124968",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207124968.md"
+    },
+    {
+      "id": "rdi-2609022207120933",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207120933.md"
+    },
+    {
+      "id": "rdi-2609022207120521",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207120521.md"
+    },
+    {
+      "id": "rdi-2609022207120768",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207120768.md"
+    },
+    {
+      "id": "rdi-2609022207120399",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207120399.md"
+    },
+    {
+      "id": "rdi-2609022207125832",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207125832.md"
+    },
+    {
+      "id": "rdi-2609022207129380",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207129380.md"
+    },
+    {
+      "id": "rdi-2609022207121446",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207121446.md"
+    },
+    {
+      "id": "rdi-2609022207128711",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207128711.md"
+    },
+    {
+      "id": "rdi-2609022207126427",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207126427.md"
+    },
+    {
+      "id": "rdi-2609022207126330",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207126330.md"
+    },
+    {
+      "id": "rdi-2609022207122580",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207122580.md"
+    },
+    {
+      "id": "rdi-2609022207121754",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207121754.md"
+    },
+    {
+      "id": "rdi-2609022207120641",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207120641.md"
+    },
+    {
+      "id": "rdi-2609022207124378",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207124378.md"
+    },
+    {
+      "id": "rdi-2609022207129496",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207129496.md"
+    },
+    {
+      "id": "rdi-2609022207125921",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207125921.md"
+    },
+    {
+      "id": "rdi-2609022207126460",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207126460.md"
+    },
+    {
+      "id": "rdi-2609022207120387",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207120387.md"
+    },
+    {
+      "id": "rdi-2609022207128020",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207128020.md"
+    },
+    {
+      "id": "rdi-2609022207124438",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207124438.md"
+    },
+    {
+      "id": "rdi-2609022207126285",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207126285.md"
+    }
+  ],
+  "refused_items": [],
+  "refused_count": 0,
+  "bounds": [
+    "the glossary bound is exceeded: the readings companion's section 5.6 states the bound in advance as three to six terms, and this run was handed 38 glossary-term item(s); companion section 5.2 names brief/glossary/ whole, so the departure is stated rather than passed off"
+  ]
+}
