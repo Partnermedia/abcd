@@ -22,13 +22,18 @@ import (
 // So the pattern reaches over whatever body shares the header's OWN line (a
 // resolve note, a JSON or K8s secret dump with literal \n escapes — see
 // patterns.go), and Redact consumes the block's FOLLOWING lines through the
-// END line here. The consumer is bounded three ways. It consumes NOTHING until
-// a body demonstrably opened — a base64 run long enough to be key material, or
-// an armour header, within a line or two of the header (pemBodyEvidence) —
-// because a header that is only NAMED in a rotation note or a runbook opens no
-// block, and "body-shaped" on its own accepts a blank line, a code fence, a
-// setext underline, a bare number and a single-token list item. Once a body
-// has opened it takes only body-shaped lines — base64 runs, the armour headers
+// END line here. The consumer is bounded three ways. An OPEN block — one with
+// no END marker within the bound — consumes NOTHING until a body demonstrably
+// opened: a base64 run long enough to be key material, or an armour header,
+// within a line or two of the header (pemBodyEvidence). A header that is only
+// NAMED in a rotation note or a runbook opens no block, and "body-shaped" on
+// its own accepts a blank line, a code fence, a setext underline, a bare
+// number and a single-token list item. A CLOSED block needs no such evidence:
+// an END marker reached over an unbroken run of body-shaped lines is the proof
+// that the run was a body, and a real block can hold its key material deeper
+// than the window reaches (a leading blank line, a short prefix chunk). Either
+// route opens the block; neither means nothing is taken. What is taken is
+// body-shaped lines only — base64 runs, the armour headers
 // a legacy encrypted PEM or a PGP block carries, blank lines, each behind an
 // optional gutter (indentation, a diff or quote marker, a line number, a
 // quote) — so a truncated block with no END line never swallows the prose
@@ -171,10 +176,19 @@ func consumePEMBodies(original, lines []string, findings []Finding) ([]string, i
 // header is lines[h] consumes: through the END line when one is reached within
 // the bound, else through the last body-shaped line — with trailing blank
 // lines given back, since they belong to the prose after a truncated block.
+//
+// Two independent routes open a block, and either alone is enough. A CLOSED
+// block needs no evidence near its header: an END marker reached within the
+// bound over an unbroken run of body-shaped lines is itself the proof that the
+// run was a body, wherever the key material sits inside it — a real block
+// whose first lines are blank or carry a short prefix chunk keeps its evidence
+// deeper than pemEvidenceWindow can see, and demanding evidence there wrote
+// the whole body and the END line out verbatim. An OPEN block — no END marker
+// within the bound — has no such proof, so it opens only on evidence in the
+// window (pemBodyEvidence), which is what keeps a header that is merely NAMED
+// in a rotation note from swallowing the prose after it. Only when there is
+// neither is nothing consumed.
 func pemBlockEnd(lines []string, h int) int {
-	if !pemBodyEvidence(lines, h) {
-		return h + 1 // the header was named, not opened: take nothing
-	}
 	limit := h + 1 + maxPEMBodyLines
 	if limit > len(lines) {
 		limit = len(lines)
@@ -182,11 +196,14 @@ func pemBlockEnd(lines []string, h int) int {
 	j := h + 1
 	for ; j < limit; j++ {
 		if pemEndRe.MatchString(lines[j]) {
-			return j + 1
+			return j + 1 // closed: the END marker is the evidence
 		}
 		if !pemBodyLineRe.MatchString(lines[j]) {
 			break
 		}
+	}
+	if !pemBodyEvidence(lines, h) {
+		return h + 1 // the header was named, not opened: take nothing
 	}
 	for j > h+1 && strings.TrimSpace(lines[j-1]) == "" {
 		j--

@@ -278,3 +278,38 @@ func TestPEMSameLineBodyStopsAtProse(t *testing.T) {
 		}
 	})
 }
+
+// TestRedactPEMBlockClosesAtItsEndMarker: a REAL key block whose first body
+// lines are blank or short carries its evidence deeper than the two-line
+// window pemBodyEvidence looks over — a leading blank line, the short prefix
+// chunks a DER body opens with, a hard-wrapped paste. The window is ONE route
+// to opening a block, not the only one: an END marker reached within the bound
+// over an unbroken run of body-shaped lines closes the block wherever the
+// evidence sits. Without that second route the whole body and the END line
+// were written verbatim into a committed record while the header alone was
+// masked and the record asserted one redacted secret.
+func TestRedactPEMBlockClosesAtItsEndMarker(t *testing.T) {
+	header, body1, _, _, end := pemFixture()
+	// Assembled from halves like every other marker here: four and four base64
+	// bytes, far too short to be evidence and far too short to be key material.
+	shortA, shortB := "MII"+"E", "Ag"+"EA"
+	cases := map[string][]string{
+		"blank first body lines":  {header, "", "", body1, end},
+		"short leading chunks":    {header, shortA, shortB, body1, end},
+		"blank then short chunk":  {header, "", shortA, body1, end},
+		"blank then indented one": {header, "", "\t" + shortB, body1, end},
+	}
+	for name, block := range cases {
+		t.Run(name, func(t *testing.T) {
+			out := redactAll(t, "before the key\n"+strings.Join(block, "\n")+"\nafter the key")
+			for _, leak := range []string{body1, end} {
+				if strings.Contains(out, leak) {
+					t.Errorf("the block was not closed at its END marker; %q survived:\n%s", leak[:8], out)
+				}
+			}
+			if !strings.HasPrefix(out, "before the key\n") || !strings.HasSuffix(out, "\nafter the key") {
+				t.Errorf("prose around the block was disturbed:\n%s", out)
+			}
+		})
+	}
+}
