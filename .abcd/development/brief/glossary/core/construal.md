@@ -2,7 +2,7 @@
 ---
 term: construal
 bounded_context: core
-definition: What a situation is treated as — the frame a piece of work reasons inside, stated in one or two sentences at the top of the brief's framing chapter. The construal as it presently stands is committed record; the history of how it came to stand is not.
+definition: The statement of what the situation is being treated as, in one or two sentences, held at the top of the brief's framing chapter as the frame a widening reading reads against; one of adr-55's three framing surfaces, beside the committed glossary terms and the committed scope. The ledger context's entry governs the term inside the cold-reading experiment.
 aliases: ["construal statement", "framing statement"]
 forbidden_synonyms: ["opinion", "assumption", "hypothesis", "framing trace"]
 status: stable
@@ -37,6 +37,14 @@ divides the word from its history, and both rules are unconditional:
   terminological dispute stay on the local ledger side, which no automated reviewer reads
   ([adr-50](../../../decisions/adrs/0050-framing-traces-never-enter-the-record.md)).
 
+## The canonical entry for the experiment
+
+Inside the cold-reading experiment the word is defined by the ledger context's
+[construal](../ledger/construal.md) entry, which this one follows: the frame statement in the
+framing chapter, one of the three framing surfaces a reading may see, beside the committed
+glossary terms and the committed scope. This entry carries the sense for the wider record and
+restates nothing the ledger entry settles.
+
 ## When to use
 
 Use "construal" for the stated frame — what a piece of work treats the situation as. Use it
@@ -57,6 +65,7 @@ deliberately does not hold.
 
 ## Related terms
 
+- [construal (ledger context)](../ledger/construal.md), the canonical entry for the experiment
 - [reading-position](reading-position.md) — the widening position reads against the construal as it stands
 - [ledger](ledger.md) — the local ledger side, where the construal's history stays
 - [brief](brief.md) — the document whose framing chapter states the construal

@@ -81,6 +81,7 @@ directory holding `.git` are refused before anything is read; the bare
 | `.abcd/record-lint.json` | where the record stores are, so the graph scan finds them |
 | `.abcd/site-baseline.json` | the unresolved-reference ratchet the health block counts against (the path is `checks.unresolved_reference_baseline`'s, defaulting to this one) |
 | `.abcd/development/**`, `.abcd/work/issues/**` | the record itself, through the record-lint engine's own scan — one parser, not a second |
+| `.abcd/development/brief/glossary/**` | the terms, through the glossary package's own scan, for the glossary page set and the term links on every record page |
 | git history | one `git log --reverse --name-status --diff-merges=first-parent` pass, plus `shortlog` and the `Assisted-by:` trailers |
 | `CHANGELOG.md` | the dated release headings |
 | `docs/**` | the composed pages and their committed assets |
@@ -93,6 +94,14 @@ It writes the landing page, the explorer's pages, `record.json`,
 `_redirects` and `_headers` maps, the stylesheets and scripts, every
 referenced raster, and the `.abcd-site-build` marker. Nothing else, nowhere
 else, and no network at any point.
+
+The explorer's pages include the **glossary page set** — `/record/glossary/`
+and one page per term — and the term links that reach it: the first use of a
+glossary term on a record page is a link to that term's entry, and only the
+first. A use inside a code span, a heading, a link already there, or on the
+term's own entry page is left exactly as the record wrote it. Both halves are
+graceful absences: a repository that keeps no glossary gets no pages, no
+navigation entry and no links.
 
 ## The gates
 
