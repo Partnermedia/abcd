@@ -143,6 +143,11 @@ func materialiseOrderPair(t *testing.T) (fixture, fixture) {
 			filepath.Join(first.Root, filepath.FromSlash(r.Path)))
 	}
 	gitCommitFixture(t, first.Root)
+	// The order corpus is the baseline plus its own records, so it carries the
+	// baseline's two widening runs and needs their commit markers for the same
+	// reason: without one the comparative position has no candidate set to
+	// derive and cannot be ordered at all (adr-2609021016272867).
+	stampFixtureRuns(t, first.Root)
 	first.RootSHA = rootCommit(t, first.Root)
 	copyTree(t, fixtureHomeDir, first.Home)
 	renamePlaceholder(t, first.Home, first.RootSHA)
@@ -337,6 +342,29 @@ func nonVacuous(a assembled) error {
 	seen := map[string]bool{}
 	for _, it := range a.ManifestItems {
 		seen[it.Path] = true
+	}
+	// The comparative position reads none of the order corpus, and that is the
+	// withdrawal adr-2609021016272867 makes rather than a hole: its two sources
+	// are the derived widening run's candidates and the criteria discipline. So
+	// its non-vacuity is asked over what it DOES carry — the three candidate
+	// records, whose ids are what an ordering assertion there is about — and an
+	// assembly that lost them is refused here exactly as one that lost the order
+	// records is.
+	if a.Position == posComparative {
+		for _, id := range derivedCandidateItems {
+			rel := ".abcd/work/issues/readings/" + derivedCandidateRun + "/" + id + ".md"
+			if !seen[rel] {
+				return errVacuous("the comparative assembly does not carry the candidate record " +
+					rel + ", so the ordering the derived run's items are placed in is not in this " +
+					"assembly")
+			}
+		}
+		if !bytes.Contains(a.BundleRaw, []byte(sentinelPrefix+"CANDIDATE")) {
+			return errVacuous("the comparative assembly names the candidate records in its " +
+				"manifest but the bundle does not carry their text; a manifest names what an " +
+				"assembly says it passed, not what it passed")
+		}
+		return nil
 	}
 	for _, r := range orderRecords {
 		if !seen[r.Path] {

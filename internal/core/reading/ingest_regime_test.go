@@ -200,9 +200,12 @@ func TestEvaluativeDocumentOrderIsNeverRefused(t *testing.T) {
 	doc := f.payload(3)
 	// A deliberate arrangement: the three items are ordered, and none carries a
 	// reserved field. Nothing about the ORDER may be refused.
+	// Three DIFFERENT candidates of the derived run, in an order chosen by this
+	// test. The ids are the run's own, because a comparative item names a
+	// candidate the manifest records (spc-2609020626039834); what this case is
+	// about is the ARRANGEMENT, which nothing may inspect.
 	for i, raw := range doc["items"].([]any) {
-		raw.(map[string]any)["candidate_id"] = []string{"the first candidate", "the second candidate",
-			"the third candidate"}[i]
+		raw.(map[string]any)["candidate_id"] = fixtureIngestCandidates[i]
 	}
 	res := f.mustIngest(doc)
 	if len(res.Records) != 3 {

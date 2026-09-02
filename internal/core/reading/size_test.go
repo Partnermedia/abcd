@@ -94,6 +94,14 @@ func TestTestKindIsReachableAtEveryPosition(t *testing.T) {
 	gitCommitAll(t, root)
 
 	for _, p := range AssemblingPositions() {
+		// Not at comparative, and by design rather than by omission: every
+		// shipped-tree row withdraws from that position, whose whole object is
+		// the derived run's candidates and the criteria discipline
+		// (adr-2609021016272867). A test kind reachable there would be the
+		// widening the withdrawal exists to prevent.
+		if p == PositionComparative {
+			continue
+		}
 		res := assembleFixture(t, root, p)
 		found := false
 		for _, m := range res.Manifest.Items {
@@ -274,13 +282,69 @@ func TestBundleGainsNoFieldFromTheReport(t *testing.T) {
 	if err := json.Unmarshal(top["items"], &items); err != nil {
 		t.Fatalf("decode items: %v", err)
 	}
-	wantItem := map[string]bool{"item_key": true, "kind": true, "text": true}
+	// `candidate` and `field` join the bundle ITEM's allow-set with the
+	// comparative channel, and they are the exception that proves the rule: a
+	// comparative body cites a `candidate_id`, so the reading has to be told
+	// which rdi-N each text belongs to and whether it is the configuration or
+	// what admits it. Neither is a repository path — an item id is an ordinal the
+	// ingest verb minted, and a field name is a record's own key — so brief
+	// invariant 15 holds (adr-2609021016272867). They are omitempty and absent
+	// from a widening bundle, which is the assembly this case decodes; the
+	// comparative case below carries them.
+	wantItem := map[string]bool{"item_key": true, "kind": true, "text": true,
+		"candidate": true, "field": true}
 	for i, item := range items {
 		for key := range item {
 			if !wantItem[key] {
 				t.Errorf("bundle item %d carries the key %q", i, key)
 			}
 		}
+		for _, absent := range []string{"candidate", "field"} {
+			if _, present := item[absent]; present {
+				t.Errorf("widening bundle item %d carries %q; both are a candidate item's alone "+
+					"and are omitempty everywhere else", i, absent)
+			}
+		}
+	}
+
+	// The comparative bundle carries the two and nothing more, over the same
+	// allow-set: a field added to that shape is caught here whichever position
+	// introduced it.
+	comparative, err := assembleComparative(t, root)
+	if err != nil {
+		t.Fatalf("assemble at comparative: %v", err)
+	}
+	cRaw, err := EncodeBundle(comparative.Bundle)
+	if err != nil {
+		t.Fatalf("encode the comparative bundle: %v", err)
+	}
+	var cTop map[string]json.RawMessage
+	if err := json.Unmarshal(cRaw, &cTop); err != nil {
+		t.Fatalf("decode the comparative bundle: %v", err)
+	}
+	for key := range cTop {
+		if !want[key] {
+			t.Errorf("the comparative bundle carries the top-level key %q", key)
+		}
+	}
+	var cItems []map[string]json.RawMessage
+	if err := json.Unmarshal(cTop["items"], &cItems); err != nil {
+		t.Fatalf("decode the comparative items: %v", err)
+	}
+	carried := false
+	for i, item := range cItems {
+		for key := range item {
+			if !wantItem[key] {
+				t.Errorf("comparative bundle item %d carries the key %q", i, key)
+			}
+		}
+		if _, present := item["candidate"]; present {
+			carried = true
+		}
+	}
+	if !carried {
+		t.Error("no comparative bundle item carries `candidate`, so the allow-set above is not " +
+			"being exercised by the position that needs it")
 	}
 
 	// The MANIFEST item's allow-set moves where the bundle item's does not.
@@ -302,7 +366,7 @@ func TestBundleGainsNoFieldFromTheReport(t *testing.T) {
 		t.Fatalf("decode manifest items: %v", err)
 	}
 	wantManifestItem := map[string]bool{"item_key": true, "path": true, "field": true,
-		"kind": true, "scan": true, "bytes": true, "sha256": true}
+		"candidate": true, "kind": true, "scan": true, "bytes": true, "sha256": true}
 	sawScan := false
 	for i, item := range mItems {
 		for key := range item {

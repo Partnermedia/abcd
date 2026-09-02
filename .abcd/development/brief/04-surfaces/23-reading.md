@@ -36,8 +36,26 @@ for the position supplies what the reading is handed.
 
 | Operand | Grammar |
 |---|---|
-| `--position` | one of `widening`, `entailment`, `comparative`, `detection` — though `comparative` does not assemble and refuses |
+| `--position` | one of `widening`, `entailment`, `comparative`, `detection` |
 | `--target` | `HEAD`, or a hexadecimal commit sha of 7 to 40 digits |
+
+**The comparative position derives its candidate set from the record**, and the
+invocation gains nothing for it
+([adr-2609021016272867](../../decisions/adrs/2609021016272867-the-comparative-reading-receives-one-widening-run-s-candidat.md)).
+The assembler selects the one committed widening run at the target whose items
+carry no disposition and no admission, and hands the reading that run's items
+projected to two body fields — the configuration and what admits it — keyed by
+the item identifier the comparative body cites. Everything else in the readings
+store stays excluded there as at every other position, and the manifest asserts
+it family by family. None or more than one qualifying run refuses, listing the
+widening runs at the target with each run's item count and the fate of its
+items; a candidate already carrying a disposition or an admission refuses,
+because the candidate set is defined as pre-admission; and a run holding fewer
+than two candidates is the interpretation fixed in advance — the position is not
+exercised, and the assembly stages a run whose ingest commits that outcome as a
+comparative run with an empty item set naming the widening run. This is the one
+positional exception to the prior-run exhaust, and brief invariant 15 states its
+limit: one run, two fields, one position.
 
 **What a run is handed is not an operand.** The assembler applies the committed
 entry for the invoked position, one file and one entry per position, and the

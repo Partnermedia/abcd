@@ -837,8 +837,9 @@ and its hash, so a run is reproducible from the commit it names.
       --out string        an empty or absent directory the assembled input and the manifest are written to
                           (default: the local-tier run directory)
       --position string   the reading position: widening, entailment, comparative, detection
-                          (comparative does not assemble: its object is the widening reading's
-                          pre-admission output, which no channel supplies, so it refuses)
+                          (comparative derives its candidate set from the record: the one committed
+                          widening run at the target whose items carry no disposition and no
+                          admission. None, or more than one, refuses and lists the runs)
       --target string     the commit the assembly describes: HEAD, or a hexadecimal sha of 7 to 40 digits
 ```
 

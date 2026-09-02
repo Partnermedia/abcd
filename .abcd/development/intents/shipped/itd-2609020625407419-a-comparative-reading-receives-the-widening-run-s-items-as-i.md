@@ -90,7 +90,8 @@ None. The flagged decisions are adopted as adr-2609021016272867. The ordering an
 
 ## Audit Notes
 
-_Empty. Populated by intent-auditor when intent moves to shipped/._
+<!-- abcd-review: OWED receipt=rcp-e37a3b69db80 -->
+Fidelity review OWED (receipt rcp-e37a3b69db80).
 
 ## Grounds
 

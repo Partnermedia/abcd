@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/intentdriven/abcd/internal/core/issueschema"
 	"github.com/intentdriven/abcd/internal/core/lint"
 	"github.com/intentdriven/abcd/internal/fsutil"
 	"github.com/intentdriven/abcd/internal/gitutil"
@@ -64,9 +65,22 @@ type AssembleResult struct {
 	ManifestHash     string        `json:"manifest_hash"`
 	Preset           AppliedPreset `json:"preset"`
 	Size             SizeReport    `json:"size"`
-	OutDir           string        `json:"out_dir,omitempty"`
-	Artefacts        []string      `json:"artefacts"`
-	Written          bool          `json:"written"`
+	// CandidateRun is the widening run this assembly derived, and Candidates the
+	// count of items it holds. Both are empty at every position but comparative,
+	// where the operator has to be told which run the reading is about — no
+	// operand named it, so the result is where they learn it
+	// (adr-2609021016272867).
+	CandidateRun string `json:"candidate_run,omitempty"`
+	Candidates   int    `json:"candidates,omitempty"`
+	// NotExercised reports the fixed interpretation: the derived run held fewer
+	// than two candidates, so the comparative reading has nothing to compare and
+	// the position was not exercised. The assembly still stages a run, and
+	// ingesting it commits a comparative run with an empty item set naming that
+	// widening run (the 2026-09-02 interpretations ruling; companion 7.6).
+	NotExercised bool     `json:"not_exercised,omitempty"`
+	OutDir       string   `json:"out_dir,omitempty"`
+	Artefacts    []string `json:"artefacts"`
+	Written      bool     `json:"written"`
 
 	Bundle   Bundle   `json:"-"`
 	Manifest Manifest `json:"-"`
@@ -294,6 +308,11 @@ var (
 var storeNodeType = map[string]string{
 	"itd": "intent",
 	"spc": "spec",
+	// The reading store, reached only by the candidate row at the comparative
+	// position. Its BUCKET is the run directory, which is what lets the assembly
+	// narrow that row to the derived run by setting Row.Bucket rather than by
+	// growing a second selector (adr-2609021016272867).
+	issueschema.ReadingItemFamily: "reading",
 }
 
 // rowClass is how a committed entry's object set narrows the row that admitted
@@ -367,20 +386,23 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 		return AssembleResult{}, err
 	}
 
-	// The comparative position refuses BEFORE anything is resolved or
-	// collected. Its declared object is the widening run's pre-admission
-	// output, which is not repository material and has no channel today, and
-	// the readings family that would hold a prior run is denied to this
-	// assembler structurally. What it did instead was hand back a bundle
-	// byte-identical to detection's and report success: a false green, where
-	// every gate passes and the reading is about the wrong thing. Refusing is
-	// the loud-staging principle applied to a position (itd-199, adr-58).
+	// The comparative position derives its candidate run from the RECORD, before
+	// anything is resolved or collected.
+	//
+	// The position refused outright until adr-2609021016272867: its object is
+	// the widening reading's pre-admission output, and rather than hand it the
+	// detection corpus and let it read the wrong object with every gate green,
+	// itd-199 refused and scoped the channel out. The channel is this. No
+	// operand names the run — the invocation is a position and a target state —
+	// so the rule is the ADR's: the one committed widening run at the target
+	// whose items carry no disposition and no admission, with none or more than
+	// one refusing and listing the runs.
+	var candidateRun WideningRun
 	if position == PositionComparative {
-		return AssembleResult{}, fmt.Errorf("reading: the comparative position does not assemble. "+
-			"Its object is the widening reading's pre-admission output, which is not repository "+
-			"material and has no channel today, so no committed entry is its object. It is "+
-			"refused rather than served the %s corpus, which is not what it is about",
-			PositionDetection)
+		candidateRun, err = DeriveCandidateRun(req.RepoRoot, target)
+		if err != nil {
+			return AssembleResult{}, err
+		}
 	}
 
 	presets, err := LoadPresets(req.RepoRoot)
@@ -396,7 +418,7 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 	}
 	applied := entry.Applied()
 
-	cands, err := collect(req.RepoRoot, position)
+	cands, err := collect(req.RepoRoot, position, candidateRun.ID)
 	if err != nil {
 		return AssembleResult{}, err
 	}
@@ -407,6 +429,14 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 	exclusions := ExclusionsFor(position)
 	if err := assertExclusionsHook(cands, exclusions); err != nil {
 		return AssembleResult{}, err
+	}
+	// The fail-closed half of the readings-store signal row, run over the
+	// unfiltered walk beside the directory assertion for the same reason: a
+	// narrow entry must not be able to quiet a breach a wide one would catch.
+	if position == PositionComparative {
+		if err := assertCandidateProjection(cands, candidateRun.ID); err != nil {
+			return AssembleResult{}, err
+		}
 	}
 
 	// The preset filter runs LAST, after the dirty gate and the exclusion
@@ -437,7 +467,13 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 	}
 	scoped := make([]candidate, 0, len(cands))
 	for _, c := range cands {
-		if entry.selects(c, narrows[c.rowIdx]) {
+		// A CANDIDATE is not selected by an entry and never has been. An entry
+		// names repository material — an object set of records and paths, and the
+		// kinds within it — and the candidate set is selected by the derived run;
+		// `candidate` is refused as a preset kind for exactly that reason, so
+		// running these items through the kind filter would drop every one of
+		// them (spc-2609020626039834, "The candidate row").
+		if c.kind == KindCandidate || entry.selects(c, narrows[c.rowIdx]) {
 			scoped = append(scoped, c)
 		}
 	}
@@ -448,6 +484,35 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 			"Widen the entry in %s", position, PresetConfigPath)
 	}
 	cands = scoped
+
+	// The comparative position's two remaining facts: the criteria it
+	// characterises against, and whether it is exercised at all.
+	var criteria []string
+	notExercised := false
+	if position == PositionComparative {
+		criteria, err = comparativeCriteria(cands)
+		if err != nil {
+			return AssembleResult{}, err
+		}
+		if got := candidateItems(cands); len(got) != candidateRun.Items {
+			return AssembleResult{}, fmt.Errorf("reading: the derived run %s holds %d item(s) in the "+
+				"ledger and the candidate row enumerated %d (%s); the manifest states the run's item "+
+				"count as the count of candidates, and a disagreement means the two readers of one "+
+				"run see different records", candidateRun.ID, candidateRun.Items, len(got),
+				strings.Join(got, ", "))
+		}
+		// The fixed interpretation, ruled in advance and recorded before any
+		// reading ran: where the widening reading returns fewer than two
+		// configurations, the comparative reading has nothing to compare and is
+		// not exercised (the 2026-09-02 interpretations entry; companion 7.6).
+		// The bundle carries no candidate item, and the run is still staged, so
+		// the outcome of a widening run is ONE shape — a committed comparative
+		// run naming it — whether the position ran or not.
+		if candidateRun.Items < 2 {
+			notExercised = true
+			cands = withoutCandidates(cands)
+		}
+	}
 
 	runID, err := mintRunID()
 	if err != nil {
@@ -477,13 +542,31 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 		Items:            make([]ManifestItem, 0, len(cands)),
 		Exclusions:       exclusions,
 	}
+	if position == PositionComparative {
+		exercised := !notExercised
+		manifest.CandidateRun = candidateRun.ID
+		manifest.Candidates = candidateRun.Items
+		manifest.Exercised = &exercised
+		manifest.CandidateFields = append([]string{}, CandidateFields...)
+		manifest.Criteria = criteria
+	}
 	for i, c := range cands {
 		key := fmt.Sprintf("itm-%04d", i+1)
-		bundle.Items = append(bundle.Items, BundleItem{ItemKey: key, Kind: c.kind, Text: c.text})
-		manifest.Items = append(manifest.Items, ManifestItem{
+		item := BundleItem{ItemKey: key, Kind: c.kind, Text: c.text}
+		mItem := ManifestItem{
 			ItemKey: key, Path: c.path, Field: c.field, Kind: c.kind, Scan: c.scan,
 			Bytes: len(c.text), SHA256: sha256Hex([]byte(c.text)),
-		})
+		}
+		// A candidate is told which rdi-N it belongs to and which of the two
+		// fields it is, and nothing else. Neither is a repository path, and both
+		// stay empty on every other kind of item.
+		if c.kind == KindCandidate {
+			id := candidateIDOf(c.path)
+			item.Candidate, item.Field = id, c.field
+			mItem.Candidate = id
+		}
+		bundle.Items = append(bundle.Items, item)
+		manifest.Items = append(manifest.Items, mItem)
 	}
 
 	hash, err := ManifestHash(manifest)
@@ -499,6 +582,9 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 		ManifestHash:     hash,
 		Preset:           applied,
 		Size:             sizeReport(cands, position, PresetWindow(presets, position)),
+		CandidateRun:     candidateRun.ID,
+		Candidates:       candidateRun.Items,
+		NotExercised:     notExercised,
 		Artefacts:        []string{},
 		Bundle:           bundle,
 		Manifest:         manifest,
@@ -507,14 +593,80 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 	outDir, writeIt := resolveOutDir(req, runID)
 	res.OutDir = outDir
 	if !writeIt {
-		return res, nil
+		return res, notExercisedError(notExercised, candidateRun)
 	}
 	if err := writeArtefacts(req.RepoRoot, outDir, outDirLabel(req), bundle, manifest); err != nil {
 		return AssembleResult{}, err
 	}
 	res.Written = true
 	res.Artefacts = []string{BundleFileName, ManifestFileName}
-	return res, nil
+	return res, notExercisedError(notExercised, candidateRun)
+}
+
+// PositionNotExercised is the fixed interpretation as a refusal: the derived
+// widening run holds fewer than two candidates, so the comparative reading has
+// nothing to compare.
+//
+// It is returned BESIDE a populated result, because both halves are true — the
+// assembly refused, and it staged the run whose ingest records the outcome. The
+// front doors render the result and then exit on the error, which is the shape
+// `reading ingest` already carries for a refusal that produced a durable record.
+type PositionNotExercised struct {
+	CandidateRun string
+	Candidates   int
+}
+
+func (e *PositionNotExercised) Error() string {
+	return fmt.Sprintf("the widening run %s returned %d configuration(s), so the comparative "+
+		"reading has nothing to compare and this position is NOT EXERCISED. That is the "+
+		"interpretation fixed in advance, before any reading ran: where the widening reading "+
+		"returns fewer than two configurations the comparative reading is not exercised, and the "+
+		"outcome is recorded as a committed comparative run with an empty item set naming that "+
+		"widening run. The run is staged with an empty candidate set; ingest it to commit that "+
+		"outcome", e.CandidateRun, e.Candidates)
+}
+
+// notExercisedError returns the refusal when the position was not exercised, and
+// nil otherwise, so the two return sites above read as one decision.
+func notExercisedError(notExercised bool, run WideningRun) error {
+	if !notExercised {
+		return nil
+	}
+	return &PositionNotExercised{CandidateRun: run.ID, Candidates: run.Items}
+}
+
+// comparativeCriteria reads the declared slate off the discipline item the
+// assembly is about to hand over.
+//
+// A comparative bundle without the criteria characterises against nothing, and
+// the criteria are never supplied at invocation (itd-191's gate), so an assembly
+// that selected no discipline item REFUSES rather than assembling a reading that
+// would have to invent them.
+func comparativeCriteria(cands []candidate) ([]string, error) {
+	for _, c := range cands {
+		if c.kind == KindDiscipline && pathNamesRecord(c.path, CriteriaDiscipline) {
+			return declaredCriteria(c.text)
+		}
+	}
+	return nil, fmt.Errorf("reading: the comparative assembly selected no item from %s, which "+
+		"declares the selection criteria; the criteria come from the record and never from the "+
+		"invocation, and a comparative reading with no criteria characterises against nothing "+
+		"(itd-191). Name %s in the object set of the comparative entry in %s",
+		CriteriaDiscipline, CriteriaDiscipline, PresetConfigPath)
+}
+
+// withoutCandidates drops the candidate items, leaving the repository material
+// the entry selected. It is what a not-exercised run stages: a bundle with no
+// candidate item, on the same rules as any other assembly.
+func withoutCandidates(cands []candidate) []candidate {
+	out := make([]candidate, 0, len(cands))
+	for _, c := range cands {
+		if c.kind == KindCandidate {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
 }
 
 // outDirLabel is the spelling a refusal quotes back: the operator's own, where
@@ -826,7 +978,7 @@ func assertExclusions(cands []candidate, exclusions []Exclusion) error {
 // collect gathers every admitted (file, field) pair at the position, in
 // lexicographic path order with each file's fields in the order its row names
 // them. The first row that reaches a path owns the projection applied to it.
-func collect(repoRoot string, position Position) ([]candidate, error) {
+func collect(repoRoot string, position Position, candidateRun string) ([]candidate, error) {
 	graph, err := loadGraph(repoRoot)
 	if err != nil {
 		return nil, err
@@ -844,10 +996,12 @@ func collect(repoRoot string, position Position) ([]candidate, error) {
 			continue
 		}
 		class := classOf(row)
+		row = narrowRow(row, position, candidateRun)
 		paths, err := rowPaths(repoRoot, row, graph)
 		if err != nil {
 			return nil, err
 		}
+		paths = narrowPaths(paths, row, position)
 		for _, rel := range paths {
 			if claimed[rel] || !tracked[rel] {
 				continue
@@ -861,6 +1015,16 @@ func collect(repoRoot string, position Position) ([]candidate, error) {
 			// because the artefact tag is a byte signature and needs no parse.
 			if err := refuseOwnArtefact(rel, raw); err != nil {
 				return nil, err
+			}
+			// A candidate is a reading record at the WIDENING position, and the
+			// row's own path cannot establish that: every position's records
+			// live in one family. So each file the candidate row enumerates is
+			// validated as a reading record and refused by name if it was
+			// returned anywhere else (adr-2609021016272867).
+			if row.Kind == KindCandidate {
+				if err := refuseNonWideningCandidate(rel, raw); err != nil {
+					return nil, err
+				}
 			}
 			// The floor runs over the row's DECLARATION, not over the file's
 			// extension. That is the whole of adr-56's third rule made
@@ -906,6 +1070,48 @@ func collect(repoRoot string, position Position) ([]candidate, error) {
 		return out[i].fieldIdx < out[j].fieldIdx
 	})
 	return out, nil
+}
+
+// narrowRow applies the comparative position's two narrowings to one row before
+// it is enumerated. Both run BEFORE the committed entry is applied, which is
+// what makes them un-widenable: an entry intersects what the row admits, so a
+// narrowing here is one no entry can undo.
+//
+//   - The CANDIDATE row is narrowed to the derived run's directory by setting
+//     the row's Bucket. The rdi store's bucket IS the run directory, so this is
+//     the row's existing selector rather than a second mechanism, and the row
+//     then reaches one run and never the family.
+//   - The DISCIPLINES row is narrowed to CriteriaDiscipline, so no committed
+//     entry can widen the comparative material past the criteria. The
+//     consequence is deliberate: at this position an entry naming a record or a
+//     path selects nothing outside that one discipline.
+//
+// At every other position the row is returned unchanged.
+func narrowRow(row Row, position Position, candidateRun string) Row {
+	if position != PositionComparative {
+		return row
+	}
+	if row.Kind == KindCandidate {
+		row.Bucket = candidateRun
+	}
+	return row
+}
+
+// narrowPaths applies the disciplines narrowing, which cannot be expressed on
+// the row itself: the row selects by extension and by store, and the narrowing
+// is to ONE record. It is the same shape a record in an entry's object set
+// takes, applied here rather than there so that no entry can undo it.
+func narrowPaths(paths []string, row Row, position Position) []string {
+	if position != PositionComparative || row.Kind != KindDiscipline {
+		return paths
+	}
+	out := make([]string, 0, 1)
+	for _, rel := range paths {
+		if pathNamesRecord(rel, CriteriaDiscipline) {
+			out = append(out, rel)
+		}
+	}
+	return out
 }
 
 // artefactTags are the two strings that identify this assembler's own output.
@@ -987,6 +1193,18 @@ func requireConfiguredStores(repoRoot string, cfg lint.Config) error {
 		// passes this check and then enumerates nothing, because the record scan
 		// walks the real path. A link is refused rather than followed.
 		info, err := os.Lstat(filepath.Join(repoRoot, filepath.FromSlash(dir)))
+		// The READING store is provisioned on first use, so its absence is a
+		// state and not a retarget: a repository that has commissioned no reading
+		// has no readings directory, exactly as an empty lifecycle bucket is a
+		// legitimate state of a record store. It is also not a silent hole, which
+		// is what this check exists to close — the comparative position derives
+		// its candidate run from the record and refuses BY NAME when no widening
+		// run qualifies, listing what there is. A store pointed at something that
+		// exists and is not a directory is still refused below, for every store
+		// alike (adr-2609021016272867).
+		if os.IsNotExist(err) && row.Store == issueschema.ReadingItemFamily {
+			continue
+		}
 		if err != nil || !info.IsDir() {
 			return fmt.Errorf("reading: %s points the %q record store at %s, which is not a directory "+
 				"(a symlink is not followed), so the include row %q would enumerate nothing",

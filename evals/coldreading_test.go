@@ -57,13 +57,25 @@ func TestReadBlockCatchesAHoledFirewall(t *testing.T) {
 			"be that with no hole in it")
 	}
 	f := materialise(t, variantHoled)
-	want := make([]string, 0, len(holes))
-	for _, h := range holes {
-		want = append(want, h.Class)
-	}
-	sort.Strings(want)
-
+	// The expectation is PER POSITION, because the four positions no longer read
+	// one corpus: a plant relocated into a brief chapter is unreachable at the
+	// comparative position, whose only sources are the derived widening run's
+	// candidates and the criteria discipline, and one relocated into a candidate
+	// is unreachable everywhere else (adr-2609021016272867). A single expectation
+	// would have to be wrong at one end or the other.
 	for _, position := range fullyAsserted {
+		want := []string{}
+		for _, h := range holes {
+			if h.reachesAt(position) {
+				want = append(want, h.Class)
+			}
+		}
+		sort.Strings(want)
+		if len(want) == 0 {
+			t.Fatalf("no hole is reachable at the %s position, so the negative control controls "+
+				"nothing there; a firewall is controlled at every position it is asserted at",
+				position)
+		}
 		t.Run(position, func(t *testing.T) {
 			vs := checkReadBlock(assemble(t, f, position))
 			got := []string{}
@@ -282,6 +294,18 @@ func TestTheAssemblerRefusesAnUnredactableShape(t *testing.T) {
 			}
 
 			for _, position := range assemblingPositions {
+				// The refusal is a property of a POSITION THAT READS THE PLANT.
+				// Every refusal plant sits in repository material, and the
+				// comparative position reads none of it: at that position the
+				// include table is the whole account and no source is admitted
+				// but the derived widening run's candidates and the criteria
+				// discipline (companion 7.2, R3; adr-2609021016272867). A file
+				// the position never opens is a file its floor never had to
+				// refuse, and asserting a refusal there would assert that a
+				// withdrawal did not happen.
+				if position == posComparative {
+					continue
+				}
 				outDir := filepath.Join(t.TempDir(), "run-"+position)
 				args := append(append([]string{}, assembleVerb...),
 					"--position", position, "--target", "HEAD", "--out", outDir, "--dry-run")
@@ -597,47 +621,227 @@ func countSentinels(t *testing.T, f fixture) (map[string]int, map[string][]strin
 	return counts, wheres
 }
 
-// TestComparativeRefusesToAssemble is what replaces the comparative position's
-// bundle assertions, and it is deliberately stronger than they were.
+// TestComparativeChannelCarriesCandidatesAndNothingElse is the read-block
+// eval's comparative case, and it replaces TestComparativeRefusesToAssemble,
+// which held the refusal adr-2609021016272867 withdraws.
 //
-// Those assertions asked whether the bytes the position emitted carried a
-// sentinel. This asks whether it emits anything at all. Since itd-199 the
-// comparative position refuses: its declared object is the widening reading's
-// pre-admission output, which is not repository material and has no channel,
-// so the corpus it used to be handed was never what it was about.
+// The corpus is planted against it: two committed widening runs at the fixture's
+// target, the second with every item dispositioned and admitted and a surprise
+// beside it, so the first is the one the assembler derives. What must arrive is
+// the derived run's two candidate fields and the criteria discipline; what must
+// not is the second run's returned text, any disposition, any admission, any
+// surprise, and the derived items' own envelopes.
 //
-// The failure this guards against is the position quietly starting to assemble
-// again — through a table change, a preset, or a resolution order — without
-// this eval being told. That is exactly the shape that once left six sentinel
-// classes unasserted here, and a refusal nobody checks is a refusal that can be
-// removed silently.
-func TestComparativeRefusesToAssemble(t *testing.T) {
+// The exception this holds is narrow by construction and the assertions follow
+// its shape: the ledger's own leaf bucket, one run inside it, two fields inside
+// each item. Every one of those three boundaries has a plant on the far side of
+// it.
+func TestComparativeChannelCarriesCandidatesAndNothingElse(t *testing.T) {
 	f := materialise(t, variantBaseline)
+	a := assemble(t, f, posComparative)
+
+	// The carrier arrives: without it the channel is a table row that supplies
+	// nothing, and every absence assertion below would pass over an empty bundle.
+	carrier := sentinelPrefix + "CANDIDATE"
+	if !bytes.Contains(a.BundleRaw, []byte(carrier)) {
+		t.Fatalf("the derived run's configurations did not reach the comparative bundle; the "+
+			"channel is the position's whole object, and a bundle without it is a reading about "+
+			"nothing.\n%s", string(a.BundleRaw))
+	}
+	// And so does the discipline the reading characterises against.
+	if !bytes.Contains(a.BundleRaw, []byte("Plausibility")) {
+		t.Error("the criteria discipline did not reach the comparative bundle; a reading with no " +
+			"criteria characterises against nothing (itd-191)")
+	}
+
+	// Nothing else from the store. Each of these is a different boundary.
+	for _, absent := range []struct{ class, why string }{
+		{"ENVELOPE", "the projection is two body fields; the item's pattern is the envelope's"},
+		{"EXHAUST", "the exception admits ONE derived run, and another run's text is exhaust"},
+		{"FATE", "a candidate's disposition and any surprise beside it are the researcher's judgement"},
+		{"GROUNDS", "an admission is the warm half of a candidate's fate"},
+		{"DECISION", "the status directories are excluded family by family at this position"},
+	} {
+		if bytes.Contains(a.BundleRaw, []byte(sentinelPrefix+absent.class)) {
+			t.Errorf("the comparative bundle carries %s: %s", sentinelPrefix+absent.class, absent.why)
+		}
+	}
+
+	// The manifest asserts the exclusions rather than leaving a reader to infer
+	// them from silence, and it names the run it derived.
+	var m struct {
+		CandidateRun    string   `json:"candidate_run"`
+		Candidates      int      `json:"candidates"`
+		Exercised       *bool    `json:"exercised"`
+		CandidateFields []string `json:"candidate_fields"`
+		Criteria        []string `json:"criteria"`
+		Exclusions      []struct {
+			Signal string `json:"signal"`
+			Detail string `json:"detail"`
+		} `json:"exclusions"`
+	}
+	if err := json.Unmarshal(a.ManifestRaw, &m); err != nil {
+		t.Fatalf("decode the comparative manifest: %v", err)
+	}
+	if m.CandidateRun != derivedCandidateRun {
+		t.Errorf("the manifest names the candidate run %q, want %q — the one committed widening "+
+			"run at this target whose items carry no fate", m.CandidateRun, derivedCandidateRun)
+	}
+	if m.Candidates != len(derivedCandidateItems) {
+		t.Errorf("the manifest records %d candidates, want %d", m.Candidates, len(derivedCandidateItems))
+	}
+	if m.Exercised == nil || !*m.Exercised {
+		t.Errorf("the manifest does not state the position as exercised: %v", m.Exercised)
+	}
+	if strings.Join(m.CandidateFields, "|") != "configuration|what_admits_it" {
+		t.Errorf("the manifest states the projected fields as %v", m.CandidateFields)
+	}
+	if len(m.Criteria) == 0 {
+		t.Error("the manifest states no criteria; the slate is what the reading characterises against")
+	}
+	asserted := map[string]bool{}
+	signal := false
+	for _, e := range m.Exclusions {
+		asserted[e.Detail] = true
+		if e.Signal == "readings store" {
+			signal = true
+		}
+	}
+	for _, want := range []string{
+		".abcd/work/issues/dispositions", ".abcd/work/issues/admissions",
+		".abcd/work/issues/surprises", ".abcd/work/issues/open",
+		".abcd/work/issues/resolved", ".abcd/work/issues/wontfix",
+	} {
+		if !asserted[want] {
+			t.Errorf("the manifest does not assert the exclusion of %s", want)
+		}
+	}
+	if !signal {
+		t.Error("the manifest does not assert what the readings store did NOT supply; the " +
+			"directory rows cannot say it, because one run's items do travel")
+	}
+}
+
+// TestComparativeChannelCatchesAPlantedFate is ac-9, and it is the mechanism
+// claim's own falsifier: plant a disposition on a candidate of the DERIVED run
+// and the assembly must refuse.
+//
+// The intent states the claim in one move — "plant a disposition on a candidate
+// and show its text in the comparative bundle" — so this is that move performed.
+// Either outcome is a finding: a refusal is the property holding, and an
+// assembly that succeeded with the disposition's text in the bundle is the
+// mechanism shown wrong.
+func TestComparativeChannelCatchesAPlantedFate(t *testing.T) {
+	planted := sentinelPrefix + "FATE"
+	f := materialise(t, variantBaseline, func(t *testing.T, root string) {
+		t.Helper()
+		dir := filepath.Join(root, ".abcd", "work", "issues", "dispositions", derivedCandidateItems[1])
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		body := "---\nschema_version: 1\nid: \"dsp-901\"\nitem: \"" + derivedCandidateItems[1] +
+			"\"\nstate: \"accepted\"\ndisposition_grounds: \"" + planted +
+			": answered before it was characterised\"\n---\n"
+		if err := os.WriteFile(filepath.Join(dir, "dsp-901.md"), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	})
+
 	outDir := filepath.Join(t.TempDir(), "run-comparative")
 	args := append(append([]string{}, assembleVerb...),
-		"--position", posComparative, "--target", "HEAD",
-		"--out", outDir, "--dry-run")
+		"--position", posComparative, "--target", "HEAD", "--out", outDir, "--dry-run")
 	out, code := runIn(t, f.Root, []string{"HOME=" + f.Home}, args...)
 
 	if code == 0 {
-		t.Fatalf("the comparative position assembled (exit 0). Its object is the widening "+
-			"reading's pre-admission output, which no channel supplies, so anything it returns "+
-			"is about something other than what it was asked to read.\n%s", out)
+		t.Fatalf("a candidate carrying a standing disposition was assembled (exit 0). The "+
+			"candidate set is defined as PRE-ADMISSION and the design fixes the order as "+
+			"characterise first, admit second (companion 8.3).\n%s", out)
 	}
-	for _, want := range []string{"comparative", "channel"} {
-		if !strings.Contains(strings.ToLower(out), want) {
-			t.Errorf("the refusal does not name %q, so an operator cannot tell this refusal "+
-				"from any other:\n%s", want, out)
+	for _, want := range []string{derivedCandidateItems[1], "dsp-901"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the refusal does not name %q, so an operator cannot tell which candidate "+
+				"stopped it:\n%s", want, out)
 		}
 	}
 	// A refusal that still wrote an artefact would leave a bundle on disk that
-	// no assertion in this eval covers.
+	// no assertion in this eval covers — and the disposition's own text would be
+	// one field away from it.
 	for _, name := range []string{bundleFile, manifestFile} {
 		if _, err := os.Stat(filepath.Join(outDir, name)); err == nil {
-			t.Errorf("the comparative refusal still wrote %s; a refused position must leave "+
-				"no artefact behind", name)
+			raw, _ := os.ReadFile(filepath.Join(outDir, name))
+			t.Errorf("the refusal still wrote %s (carries the planted fate: %v)",
+				name, bytes.Contains(raw, []byte(planted)))
 		}
 	}
+}
+
+// TestComparativeEntryFitsItsDeclaredWindow is the comparative half of the
+// preset-windows eval, which exempts this position by name: its object is
+// bounded by the widening run rather than by the tree, so a measurement over the
+// tree says nothing about it (spc-2609020626048722).
+//
+// What is measured instead is a comparative assembly over the fixture's derived
+// widening run, held to the declaration the COMMITTED entry carries. The
+// fixture's run is small, so this is a bound rather than a calibration — which
+// is exactly what the declaration is for.
+func TestComparativeEntryFitsItsDeclaredWindow(t *testing.T) {
+	declared := committedComparativeWindow(t)
+	if declared <= 0 {
+		t.Fatalf("%s declares no window at the comparative position, so this eval would hold "+
+			"the entry to nothing", presetConfigRel)
+	}
+	f := materialise(t, variantBaseline)
+	raw, code := runIn(t, f.Root, []string{"HOME=" + f.Home},
+		append(append([]string{}, assembleVerb...),
+			"--position", posComparative, "--target", "HEAD", "--dry-run", "--json")...)
+	if code != 0 {
+		t.Fatalf("the comparative assembly over the fixture exited %d:\n%s", code, raw)
+	}
+	var res struct {
+		Size struct {
+			Bytes     int `json:"bytes"`
+			TokensEst int `json:"tokens_est"`
+		} `json:"size"`
+	}
+	if err := json.Unmarshal([]byte(raw), &res); err != nil {
+		t.Fatalf("decode the comparative assembly: %v\n%s", err, raw)
+	}
+	if res.Size.TokensEst <= 0 {
+		t.Fatalf("the comparative assembly measured ~%d estimated tokens; a run that measured "+
+			"nothing cannot be held to a declaration", res.Size.TokensEst)
+	}
+	if res.Size.TokensEst > declared {
+		t.Fatalf("the comparative entry measures ~%d estimated tokens over %d bytes against a "+
+			"declaration of %d. Re-measure and move the declaration in %s, or narrow the entry — "+
+			"either is a commit that records why",
+			res.Size.TokensEst, res.Size.Bytes, declared, presetConfigRel)
+	}
+}
+
+// committedComparativeWindow reads the declaration out of the committed preset
+// file with this package's own minimal struct, so the figure the entry is held
+// to comes from the file rather than from the code under test.
+func committedComparativeWindow(t *testing.T) int {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("..", filepath.FromSlash(presetConfigRel)))
+	if err != nil {
+		t.Fatalf("read %s: %v", presetConfigRel, err)
+	}
+	var file struct {
+		Positions map[string]struct {
+			Window *struct {
+				TokensEst int `json:"tokens_est"`
+			} `json:"window"`
+		} `json:"positions"`
+	}
+	if err := json.Unmarshal(raw, &file); err != nil {
+		t.Fatalf("decode %s: %v", presetConfigRel, err)
+	}
+	e, ok := file.Positions[posComparative]
+	if !ok || e.Window == nil {
+		return 0
+	}
+	return e.Window.TokensEst
 }
 
 // TestWideningNeverSeesTheShippedIntents is itd-194 ac-7 (the design framework's
@@ -691,9 +895,25 @@ func TestWideningNeverSeesTheShippedIntents(t *testing.T) {
 				}
 				return
 			}
+			// Comparative withdrew too, and for its own reason: at that position
+			// the include table is the whole account and no source is admitted
+			// but the derived widening run's candidates and the criteria
+			// discipline (companion 7.2, R3; adr-2609021016272867). Its
+			// withdrawal is NOT asserted in the floor, because that position's
+			// ledger rows are what its manifest asserts — an intents row there
+			// would be a claim about a family the position's own rows already
+			// leave behind.
+			if position == posComparative {
+				if present {
+					t.Errorf("the comparative assembly carries an item from %s; every row but "+
+						"the candidates and the criteria discipline withdraws from that position",
+						shipped)
+				}
+				return
+			}
 			if !present {
-				t.Errorf("the %s assembly carries no item from %s; only widening withdraws, and "+
-					"a withdrawal everywhere would destroy the object of this position",
+				t.Errorf("the %s assembly carries no item from %s; only widening and comparative "+
+					"withdraw, and a withdrawal everywhere would destroy the object of this position",
 					position, shipped)
 			}
 			if asserted {
@@ -774,6 +994,17 @@ func TestTheFixtureLeakIsAbsentUnderEveryCommittedPreset(t *testing.T) {
 	}
 
 	for _, position := range assemblingPositions {
+		// Not at comparative, and the reason is a fact about THIS repository
+		// rather than about the entry: that position derives its candidate set
+		// from the record, and this repository holds no committed widening run,
+		// so the assembly refuses and there is no item set to look in. The
+		// entry's own repository material is the criteria discipline alone, which
+		// reaches no package and so can never reach the fixture leak
+		// (adr-2609021016272867). The day a widening run is committed here, this
+		// exclusion is what has to be revisited.
+		if position == posComparative {
+			continue
+		}
 		for _, it := range assembleClone(t, clone, position) {
 			if path.Clean(it.Path) == leak {
 				t.Errorf("the committed %s entry passed %s; no committed entry's object set "+

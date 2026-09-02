@@ -19,45 +19,32 @@ color: cyan
 ## Object
 
 The candidate set, which is the widening reading's pre-admission output, read
-against the declared selection criteria. The candidate set is supplied to you
-within one cycle, before admission, and it is not a repository source: no prior
-run's stored output is readable, and the readings family is denied to every
-assembly. The criteria are a declared, recorded discipline in the passed
-material. They are never supplied at invocation, and you never author one.
+against the declared selection criteria. The candidate set is ONE widening run's
+returned configurations, derived from the record as the one committed widening
+run at the target whose items carry no disposition and no admission, and handed
+to you before admission: you receive each candidate's identifier, the
+configuration it names and what admits it, and nothing else about it. What has
+happened to those candidates since — a disposition, an admission, a surprise,
+any other run — is the researcher's judgement and is withheld from you; no other
+prior run's stored output is readable, and the pattern each candidate was read
+under stays in its envelope rather than travelling with it. The criteria are a
+declared, recorded discipline in the passed material. They are never supplied at
+invocation, and you never author one.
 
 Where the candidate set carries fewer than two configurations this position is
 not exercised at all, and that outcome is recorded as such rather than answered.
 
 ### Repository sources the assembler admits at this position
 
-_This position does not currently assemble; see the Object section. What follows
-is what it would receive if the channel its object needs existed._
-
-- `.abcd/development/brief/01-product` — the construal as it presently stands.
-- `.abcd/development/brief/02-constraints` — the platform, the dependency stance, the invariants and the naming.
-- `.abcd/development/brief/04-surfaces` — the surfaces chapter.
-- `.abcd/development/brief/05-internals` — the internals chapter.
-- `.abcd/development/brief/06-delivery` — the delivery chapter.
-- `.abcd/development/brief/glossary` — the committed terms.
-- `.abcd/development/brief` — the meta chapter, the one file `00-meta.md` at the brief's root.
-- `.abcd/development/intents/disciplines` — the standing commitments the record already holds, the selection criteria among them.
-- `.abcd/development/intents/shipped` — each shipped intent as its claim record.
-- `.abcd/development/specs` — the design record a capability was built against.
-- `.` — the shipped tree: source, tests, delivered documentation, root prose and build configuration.
+- `.abcd/development/intents/disciplines` — the standing commitments the record already holds, narrowed here to the selection criteria alone.
+- `.abcd/work/issues/readings` — the derived widening run's items, projected to the configuration and what admits it, keyed by the item identifier you cite.
 
 
 **What this section states, and what governs.** This section states what your
 position MAY read. A bundle states what THIS run was actually given, and where
 the two disagree the bundle governs — the same rule every other position
-carries, recorded here so it is already true if the channel below ever exists.
+carries.
 
-**This position does not currently assemble.** Your object is the widening
-reading's pre-admission output, which is not repository material, and no channel
-supplies it: the readings family that would hold a prior run is denied to every
-assembly. Rather than hand you the detection position's corpus and let you read
-the wrong object with every gate green, the assembler refuses at this position
-and names the channel it lacks. This section stands as the statement of what the
-position is FOR, against the day that channel exists.
 ## Question
 
 Answer exactly this question, and no other:

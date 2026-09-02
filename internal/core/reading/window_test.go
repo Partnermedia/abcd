@@ -618,10 +618,16 @@ func TestDefaultItemSetsMatchTheRecordedDigests(t *testing.T) {
 
 	// Recorded before the change landed, and moved only in the same diff as a
 	// change to that position's entry.
+	// All four moved with the comparative channel (adr-2609021016272867,
+	// spc-2609020626039834): the fixture gained the criteria discipline itd-191,
+	// which every entry admitting the discipline kind now hands, and the
+	// comparative position has an item set for the first time — its criteria
+	// discipline and the derived run's six candidate items.
 	want := map[Position]string{
-		PositionWidening:   "673aef23b2e92c94944d89c00639284013b078e412eee4909f884034de7ea2cc",
-		PositionEntailment: "c563372cf8a689279a127b5b4303834a8a357930e735c0fa7e66ae591cfec47e",
-		PositionDetection:  "4e4321baa27243cac574c7ff03077d453e70aafd48222b63c06ba2c79ccfd9c3",
+		PositionWidening:    "e5d389881e1c7b30720f31c9a5374755249de77a76f514b37dab82d8f22891bf",
+		PositionEntailment:  "5da9692ac02275e600ee91d48c9b4acbc4697059acfbed7156ee4c79439fd62c",
+		PositionComparative: "5559b8a5d6126cdfa831c866394e5d15a3995f5e87a5f09268883679d2b61cfc",
+		PositionDetection:   "7b37ef14556a385fc65fac148059c815799bfe2aa17a732cd9799ee30aecdb85",
 	}
 	seen := map[string]Position{}
 	for _, p := range AssemblingPositions() {
@@ -781,11 +787,16 @@ func TestPresetV2RefusesAMalformedMeasurement(t *testing.T) {
 		"a negative measurement": `    "widening": {"object": {"records": [], "paths": []}, ` +
 			`"kinds": ["brief-section"], "window": {"tokens_est": 10, ` +
 			`"measured_tokens_est": -1, "measured_bytes": 4, "measured_at": "0abc123"}}`,
-		"an entry for the comparative position": v2Entry("comparative", `"doc"`, "", "", 10),
-		"an unknown kind":                       v2Entry("widening", `"warm-ledger"`, "", "", 10),
-		"a record id that is not one":           v2Entry("widening", `"doc"`, `"nope-1"`, "", 10),
-		"a denied path":                         v2Entry("widening", `"doc"`, "", `".abcd/.work.local"`, 10),
-		"a whole-repository path":               v2Entry("widening", `"doc"`, "", `"."`, 10),
+		// The comparative-entry refusal is withdrawn (adr-2609021016272867), and
+		// TestComparativePresetIsAdmitted holds the withdrawal. What is refused
+		// at that position now is an entry naming the candidate kind, because
+		// the candidate set is derived from the record and never selected by an
+		// entry.
+		"the candidate kind at the comparative position": v2Entry("comparative", `"candidate"`, "", "", 10),
+		"an unknown kind":             v2Entry("widening", `"warm-ledger"`, "", "", 10),
+		"a record id that is not one": v2Entry("widening", `"doc"`, `"nope-1"`, "", 10),
+		"a denied path":               v2Entry("widening", `"doc"`, "", `".abcd/.work.local"`, 10),
+		"a whole-repository path":     v2Entry("widening", `"doc"`, "", `"."`, 10),
 	} {
 		t.Run(name, func(t *testing.T) {
 			root := fixtureRepo(t)

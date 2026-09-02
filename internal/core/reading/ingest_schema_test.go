@@ -65,10 +65,19 @@ func TestMalformedPayloadWritesNothing(t *testing.T) {
 			d["position"] = "speculative"
 			return d
 		}, "speculative"},
-		{"no items", func(f *ingestFixture) any {
+		// An EMPTY item list is not malformed. It was in this table, and the
+		// refusal read the framework's clean-run contingency backwards: a run
+		// that returned nothing is committed as a run with an empty item set, at
+		// every position (framework section 13; the corrections ruling (4) of
+		// 2026-09-02; iss-2609021153269181). What replaces it here is a payload
+		// that is empty AND malformed, so the refusal this test asserts stays
+		// reachable and cannot be read as covering emptiness itself —
+		// TestIngestCommitsAnEmptyRunAtEveryPosition holds the other side.
+		{"no items and no instrument", func(f *ingestFixture) any {
 			d := f.payload(0)
+			d["instrument"] = map[string]any{"model": "", "definition_sha256": "", "assembler_version": ""}
 			return d
-		}, "no items"},
+		}, "instrument"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

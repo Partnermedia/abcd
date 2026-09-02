@@ -115,12 +115,20 @@ func checkInstrument(out Output, def Definition, m Manifest) error {
 // in which nothing survives becomes a list-level refusal, because a run with no
 // items is not a run with an empty item set — it is a run whose every finding
 // was refused, and recording it as the former would lose that.
-func validateItems(out Output, def Definition) ([]capture.ReadingItem, []ItemRefusal, int, error) {
+// It takes the MANIFEST as well as the definition, because the comparative
+// position's two checks are against the manifest and not against the payload: an
+// item names a candidate of the run the manifest records, and a criterion the
+// manifest's parsed slate declares. The function was handed none, and a check
+// that cannot see what the assembly selected can only take the reading's word
+// for what it was given (spc-2609020626039834, "Ingest at the comparative
+// position").
+func validateItems(out Output, m Manifest, def Definition) ([]capture.ReadingItem, []ItemRefusal, int, error) {
 	bodyFields := issueschema.ReadingBodyFields[string(def.Position)]
 	allowed := map[string]bool{PatternField: true}
 	for _, f := range bodyFields {
 		allowed[f] = true
 	}
+	candidates, criteria := manifestCandidates(m), manifestCriteria(m)
 
 	var items []capture.ReadingItem
 	refusals := []ItemRefusal{}
@@ -150,6 +158,14 @@ func validateItems(out Output, def Definition) ([]capture.ReadingItem, []ItemRef
 			continue
 		}
 		if r := checkItem(ordinal, fields, def, allowed, bodyFields); r != nil {
+			refusals = append(refusals, *r)
+			continue
+		}
+		// The two comparative checks, AFTER checkItem so an item missing its
+		// body is refused for that rather than for naming nothing. They run at
+		// the comparative position alone, because the manifest carries a
+		// candidate set and a slate at no other.
+		if r := checkComparativeItem(ordinal, fields, def, candidates, criteria, m); r != nil {
 			refusals = append(refusals, *r)
 			continue
 		}
@@ -197,11 +213,80 @@ func validateItems(out Output, def Definition) ([]capture.ReadingItem, []ItemRef
 
 	total := len(refusals)
 	refusals = boundedRefusals(refusals)
-	if len(items) == 0 {
+	// A payload that CARRIED items and lost every one of them is a run whose
+	// every finding was refused, which is a different fact from a run that
+	// returned nothing, and recording the first as the second would lose it. A
+	// payload that carried none is the clean run the framework's section 13
+	// fixes, and it commits with an empty item list (iss-2609021153269181).
+	if len(items) == 0 && len(out.Items) > 0 {
 		return nil, refusals, total, fmt.Errorf("every one of the %d item(s) was refused, so the "+
 			"run carries nothing to record: %s", len(out.Items), renderRefusals(refusals))
 	}
 	return items, refusals, total, nil
+}
+
+// The two comparative refusal rules, named where they are raised so a literal
+// never drifts out of the message that quotes it.
+const (
+	ruleUnknownCandidate    = "unknown-candidate"
+	ruleUndeclaredCriterion = "undeclared-criterion"
+)
+
+// checkComparativeItem holds the comparative body to the assembly that produced
+// it: the candidate it names must be one of the run the manifest records, and
+// the criterion must be one the discipline declares.
+//
+// Both are checks against the MANIFEST rather than against the payload's own
+// account of itself, which is the same argument the regime check rests on: a
+// reading's claim about what it was given establishes nothing, and the manifest
+// is the artefact that does. An item naming a candidate outside the run is
+// characterising something the reading was not handed; an item naming a
+// criterion the discipline does not declare is characterising against a
+// criterion nobody committed (itd-191's gate).
+func checkComparativeItem(ordinal int, fields map[string]string, def Definition,
+	candidates map[string]bool, criteria map[string]string, m Manifest) *ItemRefusal {
+
+	if def.Position != PositionComparative {
+		return nil
+	}
+	id := fields["candidate_id"]
+	if !candidates[id] {
+		return &ItemRefusal{Ordinal: ordinal, Rule: ruleUnknownCandidate, Field: "candidate_id",
+			Detail: fmt.Sprintf("item %d names the candidate %s, which is not an item of the "+
+				"widening run %s the manifest records; a comparative reading characterises the "+
+				"candidates it was handed and no others", ordinal, echo(id), echo(m.CandidateRun))}
+	}
+	if _, ok := criteria[foldForMatching(fields["criterion"])]; !ok {
+		return &ItemRefusal{Ordinal: ordinal, Rule: ruleUndeclaredCriterion, Field: "criterion",
+			Detail: fmt.Sprintf("item %d states the criterion %s, which %s does not declare; the "+
+				"criteria are a declared, recorded discipline and a reading never authors one "+
+				"(itd-191). The declared criteria are: %s", ordinal, echo(fields["criterion"]),
+				CriteriaDiscipline, strings.Join(echoAll(boundedNames(m.Criteria)), ", "))}
+	}
+	return nil
+}
+
+// manifestCandidates is the candidate set the assembly recorded, as a lookup.
+func manifestCandidates(m Manifest) map[string]bool {
+	out := make(map[string]bool, len(m.Items))
+	for _, it := range m.Items {
+		if it.Candidate != "" {
+			out[it.Candidate] = true
+		}
+	}
+	return out
+}
+
+// manifestCriteria is the declared slate as a lookup, keyed on the matching
+// fold — the same fold the reserved-name check uses — so a criterion respelled
+// in code points that render identically is the same criterion, and case and
+// surrounding space do not decide whether a reading quoted the record correctly.
+func manifestCriteria(m Manifest) map[string]string {
+	out := make(map[string]string, len(m.Criteria))
+	for _, name := range m.Criteria {
+		out[foldForMatching(name)] = name
+	}
+	return out
 }
 
 // boundedRefusals caps how many item refusals are carried into a message and a

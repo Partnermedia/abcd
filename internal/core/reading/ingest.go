@@ -75,11 +75,17 @@ const IngestStageDir = ".abcd/.work.local/scratch/reading-ingest"
 
 // ReadingsRecordDir is the durable home of a run's own artefacts: the promoted
 // manifest, the run metadata, and a refusal.
-const ReadingsRecordDir = ".abcd/development/readings"
+//
+// It is an ALIAS of the constant in core/issueschema, which is where it moved
+// when core/capture gained a reader of it: capture answers "which comparative
+// run characterised this widening run" for the disposition gate, and two
+// packages naming one directory with two string literals is a divergence waiting
+// for a rename (spc-2609020626039834).
+const ReadingsRecordDir = issueschema.ReadingsRecordDir
 
 // The three filenames under a run's durable directory, and the stage's lock.
 const (
-	RunFileName     = "run.json"
+	RunFileName     = issueschema.RunRecordFileName
 	RefusalFileName = "refusal.json"
 	stageFileName   = "stage.json"
 	stageLockName   = ".lock"
@@ -206,6 +212,19 @@ type RunRecord struct {
 	Records        []capture.ReadingRecordRef `json:"records"`
 	RefusedItems   []ItemRefusal              `json:"refused_items"`
 	RefusedCount   int                        `json:"refused_count"`
+	// CandidateRun, Candidates and Exercised are the comparative position's three
+	// facts, carried forward FROM THE MANIFEST so a committed comparative run
+	// says which widening run it characterised, how many candidates that run
+	// held, and whether the position was exercised at all.
+	//
+	// The join is what makes the outcome of a widening run ONE shape: a
+	// committed comparative run naming it, never a mutable file. It is the
+	// probe capture.ComparativeRunFor reads, and through it the gate
+	// spc-2609020626040342 puts in the shared disposition writer
+	// (adr-2609021016272867; the 2026-09-02 interpretations ruling).
+	CandidateRun string `json:"candidate_run,omitempty"`
+	Candidates   int    `json:"candidates,omitempty"`
+	Exercised    *bool  `json:"exercised,omitempty"`
 	// Bounds are the departures this run made from the reading the design
 	// documents state, written by the verb FROM THE MANIFEST and never from the
 	// operator. Ruling M5 is that a reading which departs from the one the
@@ -584,7 +603,7 @@ func ingestUnderLock(root *os.Root, repoRoot string, req IngestRequest, res *Ing
 		return refuse(root, res, out, manifest, def, err)
 	}
 
-	items, refusals, refusedCount, err := validateItems(out, def)
+	items, refusals, refusedCount, err := validateItems(out, manifest, def)
 	res.RefusedItems = refusals
 	res.RefusedCount = refusedCount
 	if err != nil {
@@ -702,10 +721,19 @@ func checkEnvelope(out Output) (Position, error) {
 		return "", errors.New("reading: instrument needs all three of model, definition_sha256 and " +
 			"assembler_version; two runs claiming one instrument are provably the same only if the claim is whole")
 	}
-	if len(out.Items) == 0 {
-		return "", errors.New("reading: the output carries no items; a run that returned nothing is " +
-			"recorded as a run with an empty item set, which is not an ingest")
-	}
+	// A run that returned NO ITEMS is committed, at every position, as a run
+	// with an empty item set.
+	//
+	// This refused once, and the refusal read the framework's contingency
+	// backwards: a null result IS recorded as a run with an empty item set, and
+	// there is no other writer of a run record, so refusing left the outcome
+	// recordable nowhere. The design framework's section 13 and the maintainer's
+	// corrections ruling of 2026-09-02 (4) settle it — the ingest commits such an
+	// output at widening, entailment, comparative and detection alike, and
+	// refusal is reserved for a MALFORMED payload, which every other check in
+	// this function goes on refusing by name. The comparative position's
+	// not-exercised outcome is one instance of the general rule rather than a
+	// carve-out (iss-2609021153269181).
 	return pos, nil
 }
 
@@ -807,6 +835,7 @@ func write(root *os.Root, repoRoot string, res *IngestResult, out Output, m Mani
 		Position: def.Position, Regime: def.Regime, TargetCommit: m.TargetCommit,
 		ManifestSHA256: out.ManifestSHA256, Instrument: sanitizeInstrument(out.Instrument),
 		Records: written.Records, RefusedItems: res.RefusedItems, RefusedCount: res.RefusedCount,
+		CandidateRun: m.CandidateRun, Candidates: m.Candidates, Exercised: m.Exercised,
 		// The bounds are derived AFTER the manifest is promoted, so the prior-run
 		// scan sees every run the readings family holds except this one, and
 		// before the run record is written, because the statement is part of it.
@@ -814,6 +843,12 @@ func write(root *os.Root, repoRoot string, res *IngestResult, out Output, m Mani
 	}
 	if run.RefusedItems == nil {
 		run.RefusedItems = []ItemRefusal{}
+	}
+	// An empty record list is written as `[]` and never as `null`: a run with an
+	// empty item set is the clean-run idiom, and a reader has to be able to tell
+	// it from a record written before the field existed.
+	if run.Records == nil {
+		run.Records = []capture.ReadingRecordRef{}
 	}
 	if err := writeJSONIn(root, runRel+"/"+RunFileName, run); err != nil {
 		return err
@@ -831,6 +866,83 @@ func write(root *os.Root, repoRoot string, res *IngestResult, out Output, m Mani
 				"reports it, and the next ingest of a DIFFERENT run that validates sweeps it — a rerun of "+
 				"this one is refused, because the run already has an outcome",
 			stageRel, err))
+	}
+	return nil
+}
+
+// WriteRunArtefact writes one JSON document beside a COMMITTED run, and it is
+// the one way a package outside this one does so.
+//
+// The containment root and the write belong to this package — it opens the
+// repository root as Ingest does, resolves every component in the kernel, and
+// writes through the canonical encoder — so a second package reaching into a run
+// directory with its own filepath.Join would be a second answer to where a run's
+// artefacts live and how they are written. spc-2609020626045177's `scribe
+// ingest` promotes its own manifest through this; nothing in this delivery calls
+// it, and that is said plainly rather than dressed up as a caller.
+//
+// Four refusals, each closing a way the durable tier could stop being durable:
+// a run with no commit marker never happened and nothing may be filed beside it;
+// a name that is one of the run's own three files would rewrite the run's
+// evidence; a name that is not a plain `.json` basename is a path rather than an
+// artefact; and an existing file is refused outright, because the durable tier
+// is WRITE-ONCE at emission and an amended run record is one nothing can date.
+func WriteRunArtefact(repoRoot, runID, name string, v any) (string, error) {
+	if strings.TrimSpace(repoRoot) == "" {
+		return "", errors.New("reading: writing a run artefact needs a repository root")
+	}
+	if !recordid.ValidReadingRunID(runID) {
+		return "", fmt.Errorf("reading: run %q is not a run identifier (%s-N); a run id becomes a "+
+			"directory name", echo(runID), RunIDFamily)
+	}
+	if err := validArtefactName(name); err != nil {
+		return "", err
+	}
+	root, err := os.OpenRoot(repoRoot)
+	if err != nil {
+		return "", fmt.Errorf("reading: opening the repository root: %w", err)
+	}
+	defer root.Close()
+
+	runRel := ReadingsRecordDir + "/" + runID
+	if _, err := root.Lstat(runRel + "/" + RunFileName); err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("reading: run %s has no commit marker at %s/%s, so it never "+
+				"happened and nothing is filed beside it; its records are the next ingest sweep's "+
+				"to roll back", runID, runRel, RunFileName)
+		}
+		return "", fmt.Errorf("reading: probing the commit marker of run %s: %w", runID, err)
+	}
+	rel := runRel + "/" + name
+	if _, err := root.Lstat(rel); err == nil {
+		return "", fmt.Errorf("reading: %s already exists; the durable tier is write-once at "+
+			"emission, and a run's artefacts are never amended in place", rel)
+	} else if !os.IsNotExist(err) {
+		return "", fmt.Errorf("reading: probing %s: %w", rel, err)
+	}
+	if err := writeJSONIn(root, rel, v); err != nil {
+		return "", err
+	}
+	return rel, nil
+}
+
+// artefactNameRe is the shape a run artefact's basename takes: a plain `.json`
+// file, no separator and no dot beyond the extension, so a name can never be a
+// path.
+var artefactNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]*\.json$`)
+
+// validArtefactName refuses a name that is a path, or that is one of the run's
+// own three files.
+func validArtefactName(name string) error {
+	if !artefactNameRe.MatchString(name) || strings.Contains(name, "..") {
+		return fmt.Errorf("reading: %q is not a run artefact's name; a name is a plain lowercase "+
+			"basename ending in .json, never a path", echo(name))
+	}
+	for _, own := range []string{RunFileName, ManifestFileName, RefusalFileName} {
+		if name == own {
+			return fmt.Errorf("reading: %s is one of the run's own three files; a run's evidence is "+
+				"written by the ingest verb and never overwritten beside it", name)
+		}
 	}
 	return nil
 }

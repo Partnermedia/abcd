@@ -222,6 +222,58 @@ func TestBundleCarriesNoRepositoryPath(t *testing.T) {
 			t.Errorf("item key %q is not an ordinal of the form itm-NNNN", it.ItemKey)
 		}
 	}
+
+	// The same claim over the COMPARATIVE bundle, whose items carry two more
+	// structural fields. Neither may be a location: a candidate id is an ordinal
+	// the ingest verb minted, and a field name is a record's own key, so the
+	// bundle stays pathless with the candidate channel in it
+	// (brief invariant 15; adr-2609021016272867).
+	comparative, err := assembleComparative(t, root)
+	if err != nil {
+		t.Fatalf("assemble at comparative: %v", err)
+	}
+	cSkeleton := comparative.Bundle
+	cSkeleton.Items = nil
+	candidates := 0
+	for _, it := range comparative.Bundle.Items {
+		if it.Kind == KindCandidate {
+			candidates++
+		}
+		it.Text = ""
+		cSkeleton.Items = append(cSkeleton.Items, it)
+	}
+	if candidates == 0 {
+		t.Fatal("the comparative bundle carries no candidate item, so this half asserts nothing " +
+			"about the two structural fields the channel adds")
+	}
+	cRaw, err := EncodeBundle(cSkeleton)
+	if err != nil {
+		t.Fatalf("encode the comparative bundle skeleton: %v", err)
+	}
+	for _, fragment := range []string{"/", "\\", ".abcd", "internal", "docs", root} {
+		if strings.Contains(string(cRaw), fragment) {
+			t.Errorf("the comparative bundle's structure carries %q; `candidate` is an item id and "+
+				"`field` is a record key, and neither is a location", fragment)
+		}
+	}
+	// And neither is a SCOPE SELECTOR: nothing a reading is told can name a
+	// record, a path or a material kind, which are the three clauses a committed
+	// entry is made of.
+	for _, it := range comparative.Bundle.Items {
+		if it.Candidate == "" {
+			continue
+		}
+		if recordIDRe.MatchString(it.Candidate) {
+			t.Errorf("the bundle's candidate id %q is shaped like a record id an entry could name",
+				it.Candidate)
+		}
+		for _, k := range Kinds() {
+			if it.Field == string(k) {
+				t.Errorf("the bundle's field %q collides with the material kind of the same name; "+
+					"one token may not mean two things", it.Field)
+			}
+		}
+	}
 }
 
 // TestWalkIsLexicographicAndByteStable is the determinism precondition itd-187's

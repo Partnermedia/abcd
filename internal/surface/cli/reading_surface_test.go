@@ -49,6 +49,7 @@ func readingRepoAt(t *testing.T, root string) string {
       "positions": {
         "widening": {"kinds": ["brief-section", "glossary-term", "intent-projection", "discipline", "spec", "source", "test", "doc", "config"], "records": [], "paths": []},
         "entailment": {"kinds": ["brief-section", "glossary-term", "intent-projection", "discipline", "spec", "source", "test", "doc", "config"], "records": [], "paths": []},
+        "comparative": {"kinds": ["discipline"], "records": [], "paths": []},
         "detection": {"kinds": ["brief-section", "glossary-term", "intent-projection", "discipline", "spec", "source", "test", "doc", "config"], "records": [], "paths": []}
       }
     }
@@ -56,7 +57,8 @@ func readingRepoAt(t *testing.T, root string) string {
 }
 `)
 	write(".abcd/record-lint.json", `{"schema_version": 1, "rules": {"record_schema": {"enabled": true,
-  "severity": "blocker", "record_stores": {"itd": ".abcd/development/intents", "spc": ".abcd/development/specs"}}}}`)
+  "severity": "blocker", "record_stores": {"itd": ".abcd/development/intents", "spc": ".abcd/development/specs",
+  "rdi": ".abcd/work/issues/readings"}}}}`)
 	write(".abcd/development/brief/01-product/06-framing.md", "# Framing\n\n## Construal\n\nA gap in the record.\n")
 	write(".abcd/development/brief/02-constraints/03-invariants.md", "# Invariants\n\n1. One core.\n")
 	// The rest of brief current text (itd-194). A walk row's source directory
@@ -772,7 +774,13 @@ func TestPluginPageReportsTheSizeAndPreset(t *testing.T) {
 	for _, want := range []string{
 		"size", "by_kind", "tokens_est", "basis",
 		"preset", "preset_hash", "preset.selectors",
-		"comparative position does not assemble",
+		// The comparative position's own fields. The page said "the comparative
+		// position does not assemble" until adr-2609021016272867 gave it a
+		// channel; what a host has to report now is which run the assembler
+		// derived, how many candidates it held, whether the position was
+		// exercised, and — on either derivation refusal — the listing of widening
+		// runs the operator resolves it by.
+		"candidate_run", "candidates", "not_exercised", "widening_runs",
 	} {
 		if !strings.Contains(page, want) {
 			t.Errorf("commands/reading.md does not mention %q, so the host is not told to "+

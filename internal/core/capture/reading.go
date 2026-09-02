@@ -151,10 +151,22 @@ func IngestReading(req IngestReadingRequest) (IngestReadingResult, error) {
 		return IngestReadingResult{}, fmt.Errorf("%w: run %q does not match ^%s-[0-9]+$",
 			ErrMalformedFrontmatter, req.Run, issueschema.ReadingRunFamily)
 	}
-	if len(req.Items) == 0 {
-		return IngestReadingResult{}, fmt.Errorf("%w: a run with no items is recorded as a run with an empty item set, not as an ingest",
-			ErrMissingRequiredField)
-	}
+	// A run with no items is a run with an EMPTY ITEM SET, and it commits.
+	//
+	// This refused once, on the reading that an ingest with nothing to write was
+	// not an ingest. The design framework's section 13 says otherwise and the
+	// maintainer's corrections ruling of 2026-09-02 (4) restates it: a run that
+	// returns no items is committed at every position as a run with an empty item
+	// set, never refused, and refusal is for a malformed payload. The comparative
+	// position's not-exercised outcome is one instance of that rule rather than a
+	// carve-out — a widening run of fewer than two candidates yields a committed
+	// comparative run with no items, which is what makes the outcome of a widening
+	// run one shape whether the position ran or not (iss-2609021153269181).
+	//
+	// Nothing below needs a special path: the staging loop writes no record, the
+	// mint is never called, and the result carries the run with an empty record
+	// list. The run's ledger directory is still provisioned, so a reader finds an
+	// empty bucket rather than an absence it has to interpret.
 	if err := mutationPreamble(repoRoot, issuesRoot); err != nil {
 		return IngestReadingResult{}, err
 	}
@@ -482,6 +494,27 @@ func dispositionFields(repoRoot, id string, req DispositionRequest) ([]kv, map[s
 		fm["hold_moscow"] = req.HoldMoscow
 	}
 	return fields, fm, redacted, degraded, nil
+}
+
+// ValidateReadingRecord parses one committed reading record and validates it
+// against the family's schema, returning its frontmatter.
+//
+// It is the WRITER's own check, offered to a reader. The cold-reading assembler
+// admits one widening run's records as a comparative reading's candidate set
+// (adr-2609021016272867), and it has to know that what it is about to hand over
+// is a reading record at the widening position rather than whatever a file of
+// that name happens to hold. Exporting this check rather than writing a second
+// one is the rule this file's header already states for the two READERS of the
+// disposition question: two readers are tolerable, two answers are not.
+func ValidateReadingRecord(content string) (map[string]any, error) {
+	fm, _, err := parseFrontmatterAndBody(content)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateReadingStrict(fm); err != nil {
+		return nil, err
+	}
+	return fm, nil
 }
 
 // validateReadingStrict validates a reading record's frontmatter against the

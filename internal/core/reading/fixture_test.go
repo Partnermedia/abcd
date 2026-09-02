@@ -64,7 +64,8 @@ func fixtureRepo(t *testing.T) string {
         "adr": ".abcd/development/decisions/adrs",
         "itd": ".abcd/development/intents",
         "spc": ".abcd/development/specs",
-        "iss": ".abcd/work/issues"
+        "iss": ".abcd/work/issues",
+        "rdi": ".abcd/work/issues/readings"
       }
     }
   }
@@ -94,6 +95,16 @@ func fixtureRepo(t *testing.T) string {
 		"# Construal\n\nWhat the situation is treated as.\n")
 	writeFile(t, root, ".abcd/development/intents/disciplines/itd-4-selection-criteria.md",
 		"---\nid: itd-4\n---\n\n# Selection criteria\n\nSix criteria, recorded.\n")
+	// The criteria discipline the comparative position narrows its disciplines
+	// row to. It carries the `## The rule` bullets declaredCriteria parses, so
+	// the fixture's slate is read off a record exactly as the committed one is.
+	writeFile(t, root, ".abcd/development/intents/disciplines/"+fixtureCriteriaFile,
+		"---\nid: "+CriteriaDiscipline+"\n---\n\n# The selection criteria\n\n"+
+			"## The rule\n\nSelection weighs candidates against the criteria this record declares.\n\n"+
+			"- Plausibility — the conjecture could work by a mechanism we can state.\n"+
+			"- Generativity — pursuing it opens further conjectures.\n"+
+			"- Cost — what building and carrying it consumes.\n\n"+
+			"## The gate\n\nThe criteria come from this record and never from an invocation.\n")
 	writeFile(t, root, ".abcd/development/specs/open/spc-1-a-design-record.md",
 		"---\nid: spc-1\nintent: itd-1\norigin: "+sentinelOrigin+"\n---\n\n# A design record\n\nThe mechanics.\n")
 	writeFile(t, root, "README.md", "# The repository\n\nWhat it is.\n")
@@ -140,8 +151,134 @@ func fixtureRepo(t *testing.T) string {
 	writeFile(t, root, "agents/cold-reading-widening.md", "# Widening\n\n"+sentinelDefinition+"\n")
 	writeFile(t, root, "evals/read_block_test.go", "package evals\n\n// "+sentinelDefinition+"\n")
 
+	// The candidate set. Every position assembles, so the fixture carries what
+	// the comparative position needs to assemble AT ALL: one committed widening
+	// run of three undispositioned items at the fixture's HEAD. A test that cares
+	// about the derivation plants its own second run, dispositions an item, or
+	// removes this one.
+	plantWideningItems(t, root, fixtureCandidateRun, 3)
+
+	// The durable readings family is left OUT of the fixture's git index.
+	//
+	// A run record names the commit its reading read, and every fixture that
+	// adds a file and commits it moves HEAD — so the record has to be rewritten
+	// after each commit (restampFixtureRun), and a tracked file rewritten after
+	// every commit would leave the tree permanently dirty. Nothing is lost by
+	// ignoring it: the family is admitted by no include row and excluded at
+	// every position, so it is outside both the walk and the dirty gate, and the
+	// candidate records the assembly actually reads are tracked and committed
+	// like every other admitted path.
+	writeFile(t, root, ".gitignore", ".abcd/development/readings/\n")
+
 	gitInit(t, root)
+
+	// After the commit, because the run's own `target_commit` names the commit
+	// its records landed in. The durable readings family is admitted by no row
+	// and excluded at every position, so it sits outside the dirty gate and can
+	// be written here without chasing HEAD.
+	commitRunRecord(t, root, fixtureCandidateRun, string(PositionWidening), headOf(t, root))
 	return root
+}
+
+// fixtureCandidateRun is the widening run the base fixture commits, and the one
+// a comparative assembly over that fixture derives. fixtureCandidateItems are
+// the three item ids it holds.
+const fixtureCandidateRun = "rdg-2608301200000009"
+
+var fixtureCandidateItems = []string{
+	wideningItemID(fixtureCandidateRun, 1),
+	wideningItemID(fixtureCandidateRun, 2),
+	wideningItemID(fixtureCandidateRun, 3),
+}
+
+// wideningItemID seeds an item id from its run, so two planted runs in one
+// fixture never share one.
+func wideningItemID(run string, i int) string {
+	return fmt.Sprintf("rdi-%s%02d", run[len(run)-3:], i)
+}
+
+// The criteria discipline the fixture carries, and the slate it declares. The
+// names are what declaredCriteria parses out of its `## The rule` bullets, so a
+// test asserting the manifest's `criteria` compares against the record rather
+// than against a second list (itd-191).
+const fixtureCriteriaFile = CriteriaDiscipline + "-the-selection-criteria.md"
+
+var fixtureCriteria = []string{"Plausibility", "Generativity", "Cost"}
+
+// sentinelCandidate classes the fixture's candidate plants: the configuration
+// text a comparative reading must receive, the pattern it must not (provenance
+// is the envelope's), and the disposition text that is the researcher's
+// judgement and never a reading's input.
+const (
+	sentinelCandidate = "SENTINEL-CANDIDATE-CONFIGURATION"
+	sentinelEnvelope  = "SENTINEL-CANDIDATE-PATTERN"
+	sentinelFate      = "SENTINEL-CANDIDATE-FATE"
+)
+
+// plantWideningItems writes n reading records for one run into the LEDGER and
+// returns their ids. Nothing is committed here: the caller commits, because the
+// run's own `target_commit` has to name the commit the records landed in.
+func plantWideningItems(t *testing.T, root, run string, n int) []string {
+	t.Helper()
+	ids := make([]string, 0, n)
+	for i := 1; i <= n; i++ {
+		// The ids are seeded from the RUN so two planted runs never share one.
+		// They would otherwise: a reading item id is unique to the LEDGER, not to
+		// the run that minted it — mintUnusedItemID probes the whole tree — and
+		// the disposition store is keyed by the item alone, so two runs sharing
+		// an id would make one run's disposition the other's fate.
+		id := wideningItemID(run, i)
+		ids = append(ids, id)
+		writeFile(t, root, ".abcd/work/issues/readings/"+run+"/"+id+".md",
+			"---\nschema_version: 1\nid: \""+id+"\"\nrun: \""+run+"\"\n"+
+				"manifest: \""+strings.Repeat("a", 64)+"\"\nposition: \"widening\"\n"+
+				"regime: \"generative\"\npattern: \""+sentinelEnvelope+"-"+id+"\"\n"+
+				"configuration: \""+sentinelCandidate+"-"+id+"\"\n"+
+				"what_admits_it: \"what admits "+id+"\"\n---\n")
+	}
+	return ids
+}
+
+// commitRunRecord writes the run's COMMIT MARKER, naming the position and the
+// commit the run read.
+//
+// It is written after the commit and left untracked on purpose: the durable
+// readings family is excluded at every position and admitted by no row, so it is
+// outside the dirty gate — which is what lets a fixture name the very commit its
+// records landed in without chasing its own HEAD.
+func commitRunRecord(t *testing.T, root, run, position, target string) {
+	t.Helper()
+	writeFile(t, root, ".abcd/development/readings/"+run+"/run.json",
+		fmt.Sprintf(`{"_type":%q,"schema_version":%d,"run_id":%q,"position":%q,"target_commit":%q}`+"\n",
+			RunType, SchemaVersion, run, position, target))
+}
+
+// parkRunManifest writes a run's parked manifest WITHOUT its commit marker: a
+// run that reached the assembler and never reached its ingest.
+func parkRunManifest(t *testing.T, root, run, position, target string) {
+	t.Helper()
+	writeFile(t, root, ".abcd/development/readings/"+run+"/manifest.json",
+		fmt.Sprintf(`{"_type":%q,"run_id":%q,"position":%q,"target_commit":%q}`+"\n",
+			ManifestType, run, position, target))
+}
+
+// plantDisposition writes a standing disposition over one item, by hand. By hand
+// is the point: spc-2609020626040342's gate in the shared disposition writer
+// makes this unreachable through any verb, and the assembler cannot know a
+// record was placed by hand — so it refuses what it finds.
+func plantDisposition(t *testing.T, root, item, id string) {
+	t.Helper()
+	writeFile(t, root, ".abcd/work/issues/dispositions/"+item+"/"+id+".md",
+		"---\nschema_version: 1\nid: \""+id+"\"\nitem: \""+item+"\"\nstate: \"accepted\"\n"+
+			"disposition_grounds: \""+sentinelFate+"\"\n---\n")
+}
+
+// plantAdmission writes an admission of one item under one run, by hand.
+func plantAdmission(t *testing.T, root, run, item, id string) {
+	t.Helper()
+	writeFile(t, root, ".abcd/work/issues/admissions/"+run+"/"+id+".md",
+		"---\nschema_version: 1\nid: \""+id+"\"\nrun: \""+run+"\"\nproposal: \""+item+"\"\n"+
+			"grounds: \""+sentinelFate+"\"\n---\n")
 }
 
 // gitInit turns a fixture directory into a repository with one commit, so HEAD
@@ -215,6 +352,25 @@ func gitCommitAll(t *testing.T, root string) {
 			t.Fatalf("git %s: %v (%s)", strings.Join(args, " "), err, out)
 		}
 	}
+	restampFixtureRun(t, root)
+}
+
+// restampFixtureRun re-points the fixture's committed widening run at the new
+// HEAD.
+//
+// A run record names the commit its reading ACTUALLY read, and the comparative
+// derivation selects on that (adr-2609021016272867). A fixture that adds a file
+// and commits it has moved HEAD, so without this every test that extends the
+// base fixture would find no widening run at its own target — a fixture
+// artefact, not a property, and one that would make the derivation's refusal
+// fire everywhere and prove nothing.
+func restampFixtureRun(t *testing.T, root string) {
+	t.Helper()
+	rel := ".abcd/development/readings/" + fixtureCandidateRun + "/run.json"
+	if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(rel))); err != nil {
+		return // a test that removed the run, or one that never had it
+	}
+	commitRunRecord(t, root, fixtureCandidateRun, string(PositionWidening), headOf(t, root))
 }
 
 // gitRun runs one git command against a fixture repository under the test
@@ -237,6 +393,13 @@ const fixtureScopeName = "everything"
 func fixturePresets() string {
 	kinds := make([]string, 0, len(Kinds()))
 	for _, k := range Kinds() {
+		// `candidate` is a material kind and NOT a preset kind: an entry names
+		// repository material, and the candidate set is derived from the record
+		// (adr-2609021016272867). validateEntries refuses it by name, so
+		// generating it here would make every fixture unloadable.
+		if k == KindCandidate {
+			continue
+		}
 		kinds = append(kinds, strconv.Quote(string(k)))
 	}
 	paths := make([]string, 0, len(fixtureTreePaths))

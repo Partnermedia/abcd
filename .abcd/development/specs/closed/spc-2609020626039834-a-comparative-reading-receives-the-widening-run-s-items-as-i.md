@@ -10,7 +10,7 @@ production_mode: dictated-and-formatted
 ## Summary
 
 spc-2609020626039834 delivers
-[itd-2609020625407419](../../intents/planned/itd-2609020625407419-a-comparative-reading-receives-the-widening-run-s-items-as-i.md).
+[itd-2609020625407419](../../intents/shipped/itd-2609020625407419-a-comparative-reading-receives-the-widening-run-s-items-as-i.md).
 `abcd reading assemble --position comparative --target <commit>` derives from
 the record the one widening run whose candidates await characterisation, and
 the include table gains one row, admitted at the comparative position alone,
@@ -71,7 +71,7 @@ the exported durable-tier writer; the definition's Object section; the eval
 rows, plants and counts; the plugin page and the brief chapter.
 
 Out: Admission itself and the verb that writes it, which are
-[spc-2609020626040342](spc-2609020626040342-an-admission-and-a-surprise-are-written-by-a-verb-and-the-or.md)'s,
+[spc-2609020626040342](../open/spc-2609020626040342-an-admission-and-a-surprise-are-written-by-a-verb-and-the-or.md)'s,
 including the gate in the shared disposition writer that holds the ruled
 ordering; any characterisation performed by the assembler; a candidate set
 drawn from more than one run; the preset file's own version, which
@@ -271,7 +271,7 @@ contingency describes. `TestIngestCommitsAnEmptyRunAtEveryPosition` in
 and reads the run record back with an empty item list, and
 `TestIngestStillRefusesAMalformedEmptyPayload` proves the refusal survives
 for a payload that is empty and malformed. This resolves
-[iss-2609021153269181](../../../work/issues/open/iss-2609021153269181-the-ingest-verb-refuses-an-output-carrying-no-items-where-th.md).
+[iss-2609021153269181](../../../work/issues/resolved/iss-2609021153269181-the-ingest-verb-refuses-an-output-carrying-no-items-where-th.md).
 The outcome of a widening run is therefore one thing whether the position ran
 or was not exercised: A committed comparative run whose manifest names that
 widening run. The durable tier stays write-once at

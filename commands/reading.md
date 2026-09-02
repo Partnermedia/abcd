@@ -68,9 +68,7 @@ its records will be rolled back, because they will not be.
 
 **The invocation is two operands and nothing else.** `--position` takes one of
 four closed tokens — `widening`, `entailment`, `comparative`, `detection`. An
-unknown token is refused by name. **The comparative position does not assemble**
-and refuses, naming the channel it lacks: its object is the widening reading's
-pre-admission output, which is not repository material. `--target`
+unknown token is refused by name. `--target`
 takes `HEAD` or a hexadecimal commit sha of 7 to 40 digits; a branch name or a
 tag is refused, because it moves and the manifest's re-runnability rests on a
 reference that cannot. Both are required, and any other operand is refused by
@@ -89,10 +87,42 @@ other change; there is no override at the invocation and nothing to stamp. One
 file, one entry per position: a repository that wants a wider reading commits a
 wider entry, and the manifest shows which entry a run applied.
 
-**The comparative position does not assemble.** Its object is the widening
-reading's pre-admission output, which is not repository material and has no
-channel today. It refuses and names that, rather than returning the detection
-position's corpus and reporting success.
+**The comparative position derives its candidate set from the record.** Its
+object is the widening reading's pre-admission output, and the run that supplied
+it is not named by any operand: the assembler selects **the one committed
+widening run at the target whose items carry no disposition and no admission**
+(adr-2609021016272867). That run's items travel projected to two body fields —
+the configuration and what admits it — keyed by the item identifier the
+comparative body cites, and nothing else from the readings store travels with
+them: no disposition, no admission, no surprise, no other run, no manifest. The
+committed entry for the position names the repository material passed beside the
+candidates, which at this position is the criteria discipline and nothing else.
+
+Two refusals, and both **list the widening runs at the target** with each run's
+item count and the fate of its items, so the operator can see what to
+disposition:
+
+- **None qualifies.** No committed widening run at the target has every item
+  free of a disposition and an admission — because there is none at all, because
+  one never reached its commit marker, or because one is already answered. The
+  candidate set is defined as pre-admission, and a candidate whose fate is
+  recorded is not one.
+- **More than one qualifies.** Nothing names which, and the remedy is the act
+  the design places after the comparative reading in any case: disposition one
+  run's items, and the selection is unambiguous.
+
+**Fewer than two candidates is the interpretation fixed in advance.** A widening
+run that returned one configuration leaves the comparative reading nothing to
+compare, so the position is **not exercised** — and that outcome is recorded
+rather than left unstated. The verb refuses, names the interpretation, and still
+stages a run whose bundle carries no candidate item and whose manifest carries
+`candidate_run`, `candidates` (the derived run's own item count) and
+`exercised: false`. Ingest that run and it commits a comparative run with an
+empty item set naming the widening run, so the outcome of a widening run is one
+shape either way.
+
+Report from the JSON at this position: `candidate_run`, `candidates`,
+`not_exercised`, and — on either derivation refusal — `widening_runs`.
 
 Assembly reads the working tree, so it refuses unless HEAD resolves to the
 target **and** no included path is uncommitted. The preset configuration is in
@@ -223,7 +253,11 @@ at one.
 
 An **item-level** violation refuses that item and lands the rest: an empty or
 absent `pattern` at any position, a field the position's body does not declare,
-or a reserved name carried as one of the item's own keys. A **list-level**
+or a reserved name carried as one of the item's own keys. At the **comparative**
+position two more, both checked against the run's own manifest rather than
+against the payload's account of itself: a `candidate_id` naming an item the
+recorded widening run does not hold (`unknown-candidate`), and a `criterion` the
+criteria discipline does not declare (`undeclared-criterion`). A **list-level**
 violation refuses the whole run: a wrong `_type`, a run id that resolves to no
 parked manifest, a manifest hash that disagrees, a position whose definition
 does not resolve (absent, malformed, or stating another position's licence), an
@@ -250,6 +284,16 @@ record against.
 **A rerun is a new run with a new run id, never an amendment.** Once a run id
 has an outcome — a commit marker or a refusal record — ingesting it again is
 refused. Assemble again, and ingest the run that assembly parked.
+
+**A run that returned NO items is committed, at every position.** An empty item
+list is the clean-run idiom the design framework's section 13 fixes: the null
+result is recorded as a run with an empty item set, never refused, and refusal
+is reserved for a malformed payload. The comparative position's not-exercised
+outcome is one instance of that rule — its run record carries `candidate_run`,
+`candidates` and `exercised: false` — and an empty output at widening,
+entailment or detection commits the same way. A run whose every item was refused
+is a different fact and is still a list-level refusal: recording it as a run
+that returned nothing would lose what happened.
 
 ### The supply regime is the definition's
 

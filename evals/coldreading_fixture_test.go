@@ -14,6 +14,7 @@ package evals
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -45,33 +46,30 @@ const (
 // preset file and this comment cannot drift apart unnoticed.
 const evalPresetName = "everything"
 
-// assemblingPositions is everyPosition minus comparative, which no longer
-// assembles: its object is the widening reading's pre-admission output, which
-// has no channel, so it refuses (itd-199). everyPosition stays as it is —
-// comparative is still a position with a definition and a regime, and the
-// tables that enumerate positions must keep naming it.
-var assemblingPositions = []string{posWidening, posEntailment, posDetection}
+// assemblingPositions is every position, which is what it was before itd-199
+// took comparative out of it and what adr-2609021016272867 restores.
+//
+// itd-199 removed comparative because the position refused: its object is the
+// widening reading's pre-admission output and no channel supplied it. The
+// channel exists — one derived widening run's items, two body fields each — so
+// the position assembles and every assertion here runs at it again.
+var assemblingPositions = []string{posWidening, posEntailment, posComparative, posDetection}
 
 // everyPosition is the closed set, in charter order.
 var everyPosition = []string{posWidening, posEntailment, posComparative, posDetection}
 
 // fullyAsserted are the positions every bundle assertion runs at.
 //
-// It was all four until itd-199, and the reason comparative was in it is worth
-// keeping: leaving that position out had once left six of the ten sentinel
-// classes unasserted there and left the oracle's drafts-at-comparative
-// exclusion a row that could never fire, so an assembler admitting the
-// candidate set or the local ledger tier at that one position was green.
-//
-// Comparative is out now for a different reason, and the gap that argument
-// warns about is closed a different way rather than reopened. The position no
-// longer assembles at all: it refuses, because its object is the widening
-// reading's pre-admission output and no channel supplies it. There is no
-// bundle to assert over, and a bundle that is never written cannot leak. What
-// replaces the assertion is TestComparativeRefusesToAssemble, which holds the
-// refusal itself and holds that NO artefact is produced — a strictly stronger
-// property than "the artefact contains no sentinel", and one that fails loudly
-// if the position ever starts assembling again without this eval being told.
+// It is all four, and the reason it must be is worth keeping: leaving
+// comparative out had once left six of the ten sentinel classes unasserted
+// there and left the oracle's drafts-at-comparative exclusion a row that could
+// never fire, so an assembler admitting the candidate set or the local ledger
+// tier at that one position was green. It was out for a second time while the
+// position refused, and the refusal itself was what stood in for the
+// assertions. Now that the position assembles, the assertions are back — and
+// they reach further than before, because that position is the one whose object
+// comes OUT of the ledger, so the classes that are warm there are warm by a
+// narrower margin than anywhere else.
 var fullyAsserted = assemblingPositions
 
 // sentinelPrefix is the shape every planted token takes, so a leak names the
@@ -209,19 +207,80 @@ var sentinelClasses = []sentinelClass{
 			"repo:.abcd/development/readings/rdg-2608300900000001/manifest.json",
 			"repo:.abcd/work/issues/readings/rdi-1-a-prior-reading.md",
 			"repo:.abcd/work/issues/dispositions/dsp-1-a-prior-disposition.md",
+			// The SECOND widening run's items. The comparative exception admits
+			// ONE derived run, so another run's returned text is exhaust at every
+			// position including that one — which is the half of the exception a
+			// path rule could not hold, because both runs live in one family
+			// (adr-2609021016272867).
+			"repo:.abcd/work/issues/readings/" + dispositionedWideningRun + "/rdi-201.md",
+			"repo:.abcd/work/issues/readings/" + dispositionedWideningRun + "/rdi-202.md",
 		},
-		Count: 3,
+		Count: 5,
 		Why: "itd-183: manifests, reading records and dispositions are warm on the next " +
-			"run, so the instrument's own output is never its input",
+			"run, so the instrument's own output is never its input — with the one " +
+			"positional exception adr-2609021016272867 states, which reaches ONE run",
 	},
 	{
 		Name: "GROUNDS",
 		Homes: []string{
 			"repo:.abcd/work/issues/admissions/adm-1-admission-grounds.md",
 			"repo:.abcd/work/issues/admissions/adm-2-selection-grounds.md",
+			"repo:.abcd/work/issues/admissions/" + dispositionedWideningRun + "/adm-201.md",
+			"repo:.abcd/work/issues/admissions/" + dispositionedWideningRun + "/adm-202.md",
 		},
-		Count: 2,
-		Why:   "itd-183 exclusion list: admission and selection grounds",
+		Count: 4,
+		Why: "itd-183 exclusion list: admission and selection grounds. The two under a run " +
+			"directory are what the comparative position's derived admissions row excludes: " +
+			"a candidate's fate is the researcher's judgement and never a reading's input",
+	},
+	{
+		// The CARRIER of the comparative channel, and the only class in this table
+		// that must ARRIVE somewhere. Everything else here is a leak when it
+		// appears; this is a leak's inverse — a channel that stopped carrying is
+		// as much a defect as one that carries too much, and an absence oracle
+		// cannot see it (adr-2609021016272867; companion 7.2, R4).
+		Name: "CANDIDATE",
+		Homes: []string{
+			"repo:.abcd/work/issues/readings/" + derivedCandidateRun + "/rdi-301.md",
+			"repo:.abcd/work/issues/readings/" + derivedCandidateRun + "/rdi-302.md",
+			"repo:.abcd/work/issues/readings/" + derivedCandidateRun + "/rdi-303.md",
+		},
+		Count:  3,
+		ColdAt: []string{posComparative},
+		Why: "adr-2609021016272867: at the comparative position and no other, the derived " +
+			"widening run's returned configurations ARE the reading's object; at every " +
+			"other position they are the instrument's own output",
+	},
+	{
+		// The limit inside the exception. The projection is two body fields, and
+		// the item's pattern is not one of them: provenance is the envelope's and
+		// not the candidate's (the intent's third scope condition; divergence
+		// register 23).
+		Name: "ENVELOPE",
+		Homes: []string{
+			"repo:.abcd/work/issues/readings/" + derivedCandidateRun + "/rdi-301.md",
+			"repo:.abcd/work/issues/readings/" + derivedCandidateRun + "/rdi-302.md",
+			"repo:.abcd/work/issues/readings/" + derivedCandidateRun + "/rdi-303.md",
+		},
+		Count: 3,
+		Why: "the candidate projection is two fields; the item's pattern, its manifest " +
+			"reference, its regime and every other field of the record have no row and " +
+			"therefore no item",
+	},
+	{
+		// What has happened to a candidate SINCE it was returned. The candidate
+		// text is cold and its fate is warm, and that separation is the whole
+		// ground the exception rests on (adr-2609021016272867; companion 8.3).
+		Name: "FATE",
+		Homes: []string{
+			"repo:.abcd/work/issues/dispositions/rdi-201/dsp-201.md",
+			"repo:.abcd/work/issues/dispositions/rdi-202/dsp-202.md",
+			"repo:.abcd/work/issues/surprises/srp-1-a-surprise.md",
+		},
+		Count: 3,
+		Why: "the researcher's judgement on a candidate — a disposition, an admission, a " +
+			"surprise — is warm, and a reading that saw it would be reading what it exists " +
+			"to inform",
 	},
 	{
 		Name:  "DEFINITION",
@@ -309,8 +368,30 @@ type hole struct {
 	// To is the included file it lands in, repo-relative. The file's replacement
 	// content lives under testdata/cold-reading/holed/ at the same path.
 	To string
+	// Positions are the positions at which the relocated plant is reachable, and
+	// therefore the positions the negative control must report this class at. It
+	// exists because the four positions no longer read one corpus: at
+	// comparative the include table admits the derived widening run's candidates
+	// and the criteria discipline and nothing else, so a plant relocated into a
+	// brief chapter is unreachable there and a control demanding it would demand
+	// that a correct withdrawal had not happened. Empty means every position.
+	Positions []string
 	// Why states why a correct assembler passes the relocated plant through.
 	Why string
+}
+
+// reachesAt reports whether the relocated plant is reachable at position p, and
+// so whether the negative control must report this class there.
+func (h hole) reachesAt(p string) bool {
+	if len(h.Positions) == 0 {
+		return true
+	}
+	for _, q := range h.Positions {
+		if q == p {
+			return true
+		}
+	}
+	return false
 }
 
 // holes is the negative control: two plants relocated into positively included
@@ -322,16 +403,32 @@ type hole struct {
 // an empty table outright.
 var holes = []hole{
 	{
-		Class: "LEDGER-FRAMING",
-		From:  ".abcd/.work.local/ledger/2026-08-30-declined-construals.md",
-		To:    ".abcd/development/brief/01-product/06-framing.md",
-		Why:   "the 01-product chapters are admitted wholesale at every position",
+		Class:     "LEDGER-FRAMING",
+		From:      ".abcd/.work.local/ledger/2026-08-30-declined-construals.md",
+		To:        ".abcd/development/brief/01-product/06-framing.md",
+		Positions: []string{posWidening, posEntailment, posDetection},
+		Why:       "the 01-product chapters are admitted wholesale at every position that reads the brief",
 	},
 	{
-		Class: "TRANSCRIPT",
-		From:  ".abcd/.work.local/scratch/session-notes.md",
-		To:    "docs/reference/thing.md",
-		Why:   "the shipped tree's delivered documentation is admitted wholesale",
+		Class:     "TRANSCRIPT",
+		From:      ".abcd/.work.local/scratch/session-notes.md",
+		To:        "docs/reference/thing.md",
+		Positions: []string{posWidening, posEntailment, posDetection},
+		Why:       "the shipped tree's delivered documentation is admitted wholesale where the tree is read",
+	},
+	{
+		// The comparative position's own control, and the corpus's only hole into
+		// the LEDGER. Without it that position had no negative control at all —
+		// its two admitted sources are unlike every other position's, so a plant
+		// relocated into a brief chapter proves nothing there — and a firewall
+		// with no control behind it is the shape this whole eval exists to
+		// prevent (adr-2609021016272867).
+		Class:     "FATE",
+		From:      ".abcd/work/issues/dispositions/rdi-201/dsp-201.md",
+		To:        ".abcd/work/issues/readings/" + derivedCandidateRun + "/rdi-301.md",
+		Positions: []string{posComparative},
+		Why: "the derived widening run's items are admitted at the comparative position and " +
+			"projected to two body fields, so a fate relocated into one of those fields travels",
 	},
 }
 
@@ -678,6 +775,37 @@ var carriers = []carrier{
 		Why:     "the brief's delivery chapter, admitted as brief current text",
 	},
 	{
+		// The comparative channel's carrier. It is the one carrier whose path is
+		// inside the LEDGER, and the only one admitted at a single position: at
+		// comparative the derived widening run's items are the reading's object,
+		// and at every other position they are the instrument's own output
+		// (adr-2609021016272867).
+		//
+		// It carries the projection as well as the presence, through Fields: the
+		// two body fields the widening position declares, and no third. A row
+		// whose Fields were emptied would still pass a marker scan — the
+		// configuration's text travels either way once the whole record does —
+		// so the manifest's `field` column is what tells a live projection from a
+		// dead one, exactly as it does on the shipped intent above.
+		Path:      ".abcd/work/issues/readings/" + derivedCandidateRun + "/rdi-301.md",
+		Positions: []string{posComparative},
+		Markers:   []string{sentinelPrefix + "CANDIDATE"},
+		Fields:    []string{"configuration", "what_admits_it"},
+		Scan:      "parsed",
+		Classes:   []string{"CANDIDATE"},
+		Why: "one item of the derived widening run, projected to the two body fields a " +
+			"comparative reading receives; the carrier is what makes the channel's own row " +
+			"falsifiable, because deleting it leaks nothing and an absence oracle cannot see it",
+	},
+	{
+		Path:      ".abcd/development/intents/disciplines/itd-191-the-selection-criteria.md",
+		Positions: []string{posComparative},
+		Markers:   []string{"Plausibility — the conjecture could work by a mechanism we can state."},
+		Scan:      "parsed",
+		Why: "the criteria discipline, which the assembler narrows the disciplines row to at " +
+			"this position; a comparative reading with no criteria characterises against nothing",
+	},
+	{
 		// The live leak's own shape: a Go test file carrying record-shaped
 		// markdown with a literal `## Audit Notes` section. itd-194 does not
 		// stop it travelling — both design documents name the shipped tree's
@@ -736,9 +864,20 @@ func (c carrier) stake() string {
 }
 
 // reachesAt reports whether the carrier must reach the assembly at position p.
+//
+// An empty Positions means every position that reads REPOSITORY MATERIAL, which
+// is the three positions other than comparative. That default moved with the
+// comparative channel and the move is a narrowing, not a loosening: at the
+// comparative position the include table is the whole account and no source is
+// admitted but the derived run's candidates and the criteria discipline
+// (companion 7.2, R3; adr-2609021016272867), so a carrier asserted there would
+// be asserting that a row which correctly withdrew is still arriving.
+//
+// The two carriers that DO reach comparative name it explicitly, so the channel
+// is asserted rather than defaulted into.
 func (c carrier) reachesAt(p string) bool {
 	if len(c.Positions) == 0 {
-		return true
+		return p != posComparative
 	}
 	for _, q := range c.Positions {
 		if q == p {
@@ -810,10 +949,52 @@ func materialise(t *testing.T, variant string, edits ...treeEdit) fixture {
 	}
 	requireFixturePreset(t, f.Root)
 	gitCommitFixture(t, f.Root)
+	stampFixtureRuns(t, f.Root)
 	f.RootSHA = rootCommit(t, f.Root)
 	copyTree(t, fixtureHomeDir, f.Home)
 	renamePlaceholder(t, f.Home, f.RootSHA)
 	return f
+}
+
+// The two widening runs the corpus carries, and the item ids they hold. The
+// comparative position derives the FIRST — its items carry no disposition and no
+// admission — and the second exists so the derivation has something to reject
+// and the exhaust has somewhere to live (adr-2609021016272867).
+const (
+	derivedCandidateRun      = "rdg-2608300900000003"
+	dispositionedWideningRun = "rdg-2608300900000002"
+)
+
+var derivedCandidateItems = []string{"rdi-301", "rdi-302", "rdi-303"}
+
+// stampFixtureRuns writes each planted widening run's COMMIT MARKER, naming the
+// commit the fixture's records landed in.
+//
+// It runs after the commit, and the file is left untracked, because a run record
+// names the commit its reading actually read: written before, it would name the
+// commit before its own records existed. Nothing is lost by leaving it
+// untracked — the durable readings family is admitted by no include row and
+// excluded at every position, so it is outside both the walk and the dirty gate,
+// and the candidate records the assembly reads are committed like every other
+// admitted path.
+//
+// The type tag and the field names are TRANSCRIBED, like every other fact this
+// oracle holds: no file under evals/ imports the assembler.
+func stampFixtureRuns(t *testing.T, root string) {
+	t.Helper()
+	head := gitFixture(t, root, "rev-parse", "HEAD")
+	for _, run := range []string{derivedCandidateRun, dispositionedWideningRun} {
+		dir := filepath.Join(root, ".abcd", "development", "readings", run)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("stamping run %s: %v", run, err)
+		}
+		body := fmt.Sprintf(
+			`{"_type":"abcd.reading.run/1","run_id":%q,"position":"widening","target_commit":%q}`+"\n",
+			run, head)
+		if err := os.WriteFile(filepath.Join(dir, "run.json"), []byte(body), 0o644); err != nil {
+			t.Fatalf("stamping run %s: %v", run, err)
+		}
+	}
 }
 
 // requireFixturePreset holds the materialised corpus to the shape the

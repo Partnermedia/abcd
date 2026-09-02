@@ -117,7 +117,6 @@ func TestTheAssemblersOwnOutputIsNeverItsInput(t *testing.T) {
 		".abcd/development/readings/rdg-2608301200000001/manifest.json",
 		".abcd/development/readings/rdg-2608301200000001/run.json",
 		".abcd/development/readings/README.md",
-		".abcd/work/issues/readings/rdg-2608301200000001/rdi-1.md",
 		"agents/cold-reading-widening.md",
 		"evals/cold_reading_readblock_test.go",
 		"internal/core/reading/include.go",
@@ -128,6 +127,46 @@ func TestTheAssemblersOwnOutputIsNeverItsInput(t *testing.T) {
 			if Admits(p, rel) {
 				t.Errorf("position %s admits %s; the assembler's own output, definition, "+
 					"eval and include table must never become its input", p, rel)
+			}
+		}
+	}
+
+	// The ONE positional exception, and its limit. A reading record is the
+	// instrument's own output, and adr-2609021016272867 admits two body fields of
+	// one derived widening run's items at the comparative position — so the path
+	// is admitted THERE and refused at the other three. itd-186's fourth
+	// criterion gains the same exception, and the read-block eval carries the
+	// case. Both halves are asserted: an exception that widened to another
+	// position would be caught by the loop below, and one that vanished would be
+	// caught by the first check.
+	const candidateRecord = ".abcd/work/issues/readings/rdg-2608301200000001/rdi-1.md"
+	if !Admits(PositionComparative, candidateRecord) {
+		t.Errorf("the comparative position does not admit %s; the candidate channel is the one "+
+			"exception to the prior-run exhaust, and without it the position has no object",
+			candidateRecord)
+	}
+	for _, p := range Positions() {
+		if p == PositionComparative {
+			continue
+		}
+		if Admits(p, candidateRecord) {
+			t.Errorf("position %s admits %s; the exception is the COMPARATIVE position's alone",
+				p, candidateRecord)
+		}
+	}
+	// And the limit inside the exception: the run's own artefacts and the
+	// dispositions, admissions and surprises keyed to its items stay out at every
+	// position, comparative included.
+	for _, rel := range []string{
+		".abcd/work/issues/dispositions/rdi-1/dsp-1.md",
+		".abcd/work/issues/admissions/rdg-2608301200000001/adm-1.md",
+		".abcd/work/issues/surprises/srp-1.md",
+		".abcd/work/issues/open/iss-1-a-defect.md",
+	} {
+		for _, p := range Positions() {
+			if Admits(p, rel) {
+				t.Errorf("position %s admits %s; the comparative reading receives candidates and "+
+					"never their fate", p, rel)
 			}
 		}
 	}
@@ -266,7 +305,7 @@ func TestBriefEvidenceChapterIsNeverAdmitted(t *testing.T) {
 // insufficient no longer matters: updating this literal without moving the core
 // can no longer make a manifest lie, because the manifest's digest is not this
 // literal.
-const includeTableDigest = "69018cc03e293c68ad31e6c0d574bbbb801802d889b6c5781a6536e6b1bf1bde"
+const includeTableDigest = "b7cc427449a3395570d542ee5423b55adf84521cb49e8bda0f695e96962b2f24"
 
 // TestAssemblerVersionCoversTheIncludeTable puts the core semver in front of
 // whoever changed the table. It is ADVISORY by construction — the fix for a red

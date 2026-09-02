@@ -52,7 +52,7 @@ Out: The scanner fix for absence as a class
 [iss-2608301744268001](../../../work/issues/resolved/iss-2608301744268001-a-trailing-comment-on-a-frontmatter-key-defeats-every-blank.md));
 the disposition vocabulary; the comparative channel and the committed
 comparative run it produces, which
-[spc-2609020626039834](spc-2609020626039834-a-comparative-reading-receives-the-widening-run-s-items-as-i.md)
+[spc-2609020626039834](../closed/spc-2609020626039834-a-comparative-reading-receives-the-widening-run-s-items-as-i.md)
 defines and this gate only reads; the reading-item locator leaf, which
 spc-2609020626046252 introduces and this spec calls; enforcing that a session
 ended.

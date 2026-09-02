@@ -28,6 +28,7 @@ func narrowPresets() string {
       "positions": {
         "widening": {"kinds": ["brief-section"], "records": [], "paths": []},
         "entailment": {"kinds": ["intent-projection"], "records": [], "paths": []},
+        "comparative": {"kinds": ["discipline"], "records": [], "paths": []},
         "detection": {"kinds": ["spec"], "records": [], "paths": []}
       }
     }
@@ -65,15 +66,27 @@ func TestThePresetNarrowsNeverWidens(t *testing.T) {
 		if err != nil {
 			continue // an entry selecting nothing at this position refuses, which is its own test
 		}
+		got := map[string]bool{}
 		for _, m := range res.Manifest.Items {
+			got[m.Path] = true
 			if !wide[p][m.Path] {
 				t.Errorf("position %s admitted %s, which the unnarrowed assembly did not: an entry "+
 					"must intersect the table's admission and only narrow it", p, m.Path)
 			}
 		}
-		if len(res.Manifest.Items) >= len(wide[p]) {
-			t.Errorf("position %s did not narrow at all (%d of %d items); the fixture is not "+
-				"exercising the filter", p, len(res.Manifest.Items), len(wide[p]))
+		// The strict half is not asked at the comparative position, and the
+		// reason is the position's own shape rather than a weakening: the only
+		// entry-selectable material there is the criteria discipline, which is
+		// ONE record the assembler has already narrowed the row to, and the
+		// candidates are not an entry's to select at all. An entry that narrowed
+		// further would select nothing and refuse, which is a different test
+		// (adr-2609021016272867). The never-widens half above still runs there.
+		if p == PositionComparative {
+			continue
+		}
+		if len(got) >= len(wide[p]) {
+			t.Errorf("position %s did not narrow at all (%d of %d paths); the fixture is not "+
+				"exercising the filter", p, len(got), len(wide[p]))
 		}
 	}
 }
@@ -143,31 +156,63 @@ func TestPresetForRefusesAMissingPosition(t *testing.T) {
 	}
 }
 
-// TestComparativeRefuses is itd-199 ac-10.
-func TestComparativeRefuses(t *testing.T) {
+// TestComparativePresetIsAdmitted replaces itd-199's ac-10 refusal, which
+// adr-2609021016272867 withdraws.
+//
+// itd-199 refused a comparative preset entry because the position did not
+// assemble: its object was the widening reading's pre-admission output and no
+// channel supplied it, so an entry would have described a run that could not
+// happen. The channel exists, and what an entry names at that position is the
+// repository material passed BESIDE the candidates — the criteria discipline and
+// nothing else, because every other row withdraws.
+func TestComparativePresetIsAdmitted(t *testing.T) {
 	root := fixtureRepo(t)
-	// The refusal must be the POSITION check and not the resolver's. A preset
-	// carries no comparative entry — validatePresets forbids one — so PresetFor
-	// would refuse there too, and a test that could not tell the two apart
-	// would pass while proving nothing about the refusal it names. The position
-	// check runs BEFORE the presets are loaded at all, which is what the
-	// refusal text below distinguishes: it names the missing channel, where the
-	// resolver's names the preset file.
-	_, err := Assemble(AssembleRequest{
+	res, err := Assemble(AssembleRequest{
 		RepoRoot: root, Position: PositionComparative, Target: "HEAD", DryRun: true,
 	})
-	if err == nil {
-		t.Fatal("the comparative position assembled; its object has no channel, so a bundle it " +
-			"returns is about something other than what it was asked to read")
+	if err != nil {
+		t.Fatalf("the comparative position did not assemble: %v", err)
 	}
-	for _, want := range []string{"comparative", "channel"} {
-		if !strings.Contains(strings.ToLower(err.Error()), want) {
+	if res.CandidateRun != fixtureCandidateRun {
+		t.Errorf("the assembly derived %q, want %q", res.CandidateRun, fixtureCandidateRun)
+	}
+	// The entry is loaded and applied like any other, so a file naming one is
+	// no longer refused.
+	presets, err := LoadPresets(root)
+	if err != nil {
+		t.Fatalf("LoadPresets over a file naming a comparative entry: %v", err)
+	}
+	if _, err := PresetFor(presets, PositionComparative); err != nil {
+		t.Fatalf("PresetFor(comparative): %v", err)
+	}
+}
+
+// TestCandidateIsNotAPresetKind is the limit on the withdrawal above: an entry
+// selects repository material, and the candidate set is DERIVED. A file naming
+// the kind is refused by name rather than accepted and quietly ignored, because
+// an entry naming it would read as choosing the candidate set — which nothing at
+// the invocation and nothing in a preset may do (adr-2609021016272867).
+func TestCandidateIsNotAPresetKind(t *testing.T) {
+	root := fixtureRepo(t)
+	writeFile(t, root, PresetConfigPath, `{
+  "schema_version": 2,
+  "positions": {
+    "comparative": {"object": {"records": ["itd-191"], "paths": []},
+      "kinds": ["discipline", "candidate"],
+      "window": {"tokens_est": 1000, "measured_tokens_est": 0, "measured_bytes": 0, "measured_at": "0000000"}}
+  }
+}
+`)
+	gitCommitAll(t, root)
+	_, err := LoadPresets(root)
+	if err == nil {
+		t.Fatal("an entry naming the candidate kind was accepted; a candidate is selected by the " +
+			"derived widening run, never by an entry")
+	}
+	for _, want := range []string{string(KindCandidate), "DERIVED"} {
+		if !strings.Contains(err.Error(), want) {
 			t.Errorf("the refusal does not name %q: %v", want, err)
 		}
-	}
-	if strings.Contains(err.Error(), PresetConfigPath) {
-		t.Errorf("the comparative position was refused by the preset resolver rather than by the "+
-			"position check, so this test proves nothing about the missing channel: %v", err)
 	}
 }
 
@@ -212,6 +257,15 @@ func TestThePresetCannotReachTheLedgerTier(t *testing.T) {
 			continue
 		}
 		for _, m := range res.Manifest.Items {
+			// The ONE exception, and it is not an entry's doing: at the
+			// comparative position the derived widening run's items are the
+			// reading's object, admitted by the table and selected by the record
+			// (adr-2609021016272867). No entry reaches them — `candidate` is
+			// refused as a preset kind — so the property this test holds is
+			// untouched: an ENTRY still cannot reach the ledger tier.
+			if m.Kind == KindCandidate && p == PositionComparative {
+				continue
+			}
 			if strings.Contains(m.Path, ".work.local") || strings.HasPrefix(m.Path, ".abcd/work/") {
 				t.Errorf("the entry at %s admitted %s from the ledger tier", p, m.Path)
 			}
@@ -311,8 +365,12 @@ func TestPresetCollisionsAreRefused(t *testing.T) {
 			{"widening": {"kinds": [], "records": [], "paths": ["/etc"]}}}}}`,
 		"a preset escaping the repository": `{"schema_version": 1, "presets": {"p": {"positions":
 			{"widening": {"kinds": [], "records": [], "paths": ["../elsewhere"]}}}}}`,
-		"a preset scoping the comparative position": `{"schema_version": 1, "presets": {"p": {"positions":
-			{"comparative": {"kinds": ["doc"], "records": [], "paths": []}}}}}`,
+		// The comparative-entry refusal is withdrawn (adr-2609021016272867), and
+		// TestComparativePresetIsAdmitted holds the withdrawal. What is refused
+		// there now is the CANDIDATE KIND, because a candidate is selected by the
+		// derived widening run and never by an entry.
+		"a preset naming the candidate kind": `{"schema_version": 1, "presets": {"p": {"positions":
+			{"comparative": {"kinds": ["candidate"], "records": [], "paths": []}}}}}`,
 		// `extends` retired with the second preset name, so a file still
 		// carrying it is an unknown field rather than a chain to walk.
 		"a preset naming extends": `{"schema_version": 1, "presets": {
@@ -604,7 +662,10 @@ func TestAnUntrackedPresetRefuses(t *testing.T) {
 	// as a MODIFIED tracked file and this test passes for the wrong reason.
 	// So: ignore the directory, remove the fixture's committed preset, commit
 	// that removal, and only then write the forged one.
-	writeFile(t, root, ".gitignore", ".abcd/config/\n")
+	// The readings line is the fixture's own and is carried forward: the durable
+	// run family is ignored so the fixture's run record can follow HEAD without
+	// leaving the tree dirty, and the clean-tree precondition below depends on it.
+	writeFile(t, root, ".gitignore", ".abcd/config/\n.abcd/development/readings/\n")
 	if err := os.Remove(filepath.Join(root, ".abcd", "config", "reading-presets.json")); err != nil {
 		t.Fatal(err)
 	}
@@ -922,6 +983,13 @@ func TestAssemblyAppliesTheCommittedPresetForThePosition(t *testing.T) {
 		}
 		got := map[string]bool{}
 		for _, m := range res.Manifest.Items {
+			// A CANDIDATE is not selected by an entry and no entry may name the
+			// kind: at the comparative position the candidate set is derived from
+			// the record, so it is outside the intersection this test is about
+			// (adr-2609021016272867).
+			if m.Kind == KindCandidate {
+				continue
+			}
 			got[m.Path] = true
 			if !kinds[m.Kind] {
 				t.Errorf("the assembly at %s passed %s of kind %s, which the committed entry does "+

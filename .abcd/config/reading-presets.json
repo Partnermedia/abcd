@@ -65,6 +65,20 @@
         "measured_at": "255543c1fa30ae7a9794e98c896b523586ff29ed"
       }
     },
+    "comparative": {
+      "comment": "The one entry whose object set is a single record. At this position the include table is the whole account of what the reading sees: every other row withdraws, the disciplines row is narrowed by the assembler to itd-191 before this entry is applied, and the candidate set is DERIVED from the record as the one committed widening run at the target whose items carry no disposition and no admission (adr-2609021016272867). So this entry names the repository material passed BESIDE the candidates, which the readings companion's section 7.2 and its ratified position R3 fix as the declared criteria and nothing else; naming a path or another record here would select nothing, because there is nothing else at this position for it to reach. The kind `candidate` is refused as a preset kind for the same reason: a candidate is selected by the derived run, never by an entry. How the window was measured, stated because it could not be measured the way the other three were: a comparative assembly needs a committed widening run to derive, and this repository holds none, so the figure was taken by dry run over a scratch copy of this tree carrying the comparative channel with a three-item widening run planted in it - 1,312 estimated tokens over 5,053 bytes and 7 items, being the criteria discipline at 693 and six candidate fields at 618. `measured_at` names the commit that scratch tree was taken from. The declaration is that rounded up to the next ten thousand, which is where the headroom for a larger widening run sits: the candidate half is bounded by the run rather than by the tree, which is why the preset-windows eval exempts this position by name and the comparative channel's own eval measures it against the fixture run. It is well under the 200,000-token target. Changing any part of this entry is a commit.",
+      "object": {
+        "records": ["itd-191"],
+        "paths": []
+      },
+      "kinds": ["discipline"],
+      "window": {
+        "tokens_est": 10000,
+        "measured_tokens_est": 1312,
+        "measured_bytes": 5053,
+        "measured_at": "c1be0000e7a0117947b1e3fedc08244ca77c9aa9"
+      }
+    },
     "detection": {
       "comment": "The same object set. The kinds are every kind the detection definition reads: its object is the shipped tree read against the claim record, and the tree is code, tests, documentation and configuration alike, with source, test and config items marked unscanned in the manifest. The glossary stands here because the design framework's section 9 lists it among what the input assembler reads for this position and its section 7.2 classes brief/glossary/ as committed vocabulary read cold. The window is what this entry measured on the commit named, over the 200,000-token target by a factor of four and inside a reader with a million-token window; the size report states the figure on every assembly at this position. Two leaner entries are one commit away, measured here: without test about 530,000 estimated tokens, without source and test about 304,000, both still over the target. Changing any part of this entry is a commit.",
       "object": {

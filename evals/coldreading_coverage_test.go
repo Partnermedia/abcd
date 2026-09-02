@@ -648,6 +648,66 @@ var coverage = []coverageRow{
 		Falsifier: "delete the row",
 		Caught:    caughtCarrier,
 	},
+
+	// The comparative channel (adr-2609021016272867; spc-2609020626039834). It
+	// is the one place the assembler reaches INTO the ledger, so every row below
+	// is a limit on that reach rather than a licence for it.
+	{
+		Rule: "the derived candidate run's items are admitted at the comparative position, " +
+			"projected to the configuration and what admits it",
+		Falsifier: "delete the candidate row from Table",
+		Caught:    caughtCarrier,
+		Classes:   []string{"CANDIDATE"},
+	},
+	{
+		Rule:      "the candidate row is admitted at no other position",
+		Falsifier: "add the three other positions to the candidate row",
+		Caught:    caughtFamily,
+		Classes:   []string{"CANDIDATE"},
+	},
+	{
+		Rule:      "the candidate projection drops the item's envelope",
+		Falsifier: "empty the candidate row's Fields, so the whole record travels",
+		Caught:    caughtLeak,
+		Classes:   []string{"ENVELOPE"},
+	},
+	{
+		Rule:      "no run other than the derived candidate run reaches the comparative reading",
+		Falsifier: "drop the run narrowing from narrowRow, so the row reaches the family",
+		Caught:    caughtLeak,
+		Classes:   []string{"EXHAUST"},
+	},
+	{
+		Rule:      "dispositions never reach the comparative reading",
+		Falsifier: "delete the derived dispositions row and add an include row for it",
+		Caught:    caughtLeak,
+		Classes:   []string{"FATE"},
+	},
+	{
+		Rule:      "admissions never reach the comparative reading",
+		Falsifier: "delete the derived admissions row and add an include row for it",
+		Caught:    caughtLeak,
+		Classes:   []string{"GROUNDS"},
+	},
+	{
+		Rule:      "surprises never reach the comparative reading",
+		Falsifier: "delete the derived surprises row and add an include row for it",
+		Caught:    caughtLeak,
+		Classes:   []string{"FATE"},
+	},
+	{
+		Rule:      "the status directories never reach the comparative reading",
+		Falsifier: "delete the three derived status rows and add an include row under .abcd/work/issues",
+		Caught:    caughtLeak,
+		Classes:   []string{"DECISION"},
+	},
+	{
+		Rule: "a candidate carrying a standing disposition or an admission refuses the assembly, " +
+			"because the candidate set is defined as pre-admission",
+		Falsifier: "delete the capture.ItemFate call from WideningRuns",
+		Caught:    caughtRefusal,
+		Classes:   []string{"FATE"},
+	},
 }
 
 // TestEveryAssemblerRuleHasAFalsifier keeps the coverage matrix honest against

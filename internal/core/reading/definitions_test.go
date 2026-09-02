@@ -366,6 +366,15 @@ func TestEntailmentDefinitionIncludesThem(t *testing.T) {
 // TestComparativeObjectIsTheWideningPreAdmissionOutput pins the settled reading
 // of the object the two intents disagreed about, so the disagreement cannot be
 // reintroduced by an edit that reads plausibly.
+//
+// It now pins the CHANNEL as well as the object (adr-2609021016272867;
+// spc-2609020626039834, "The comparative definition"). The object was always the
+// widening reading's pre-admission output; what moved is that the definition can
+// say how the reading receives it, and the two halves the exception rests on
+// have to be in the definition's own words: the candidate set is ONE derived
+// run's items, and what has happened to them since is withheld. A definition
+// stating the first without the second would describe a channel wider than the
+// one the ADR admits.
 func TestComparativeObjectIsTheWideningPreAdmissionOutput(t *testing.T) {
 	root := repoRoot(t)
 	object := flatten(section(t, PositionComparative, definitionText(t, root, PositionComparative), "Object"))
@@ -373,7 +382,10 @@ func TestComparativeObjectIsTheWideningPreAdmissionOutput(t *testing.T) {
 		"widening reading's pre-admission output",
 		"before admission",
 		"never supplied at invocation",
-		"no prior run's stored output is readable",
+		// The exception's limit, stated where the reading reads it.
+		"one committed widening run at the target whose items carry no disposition and no admission",
+		"no other prior run's stored output is readable",
+		"withheld from you",
 	} {
 		if !strings.Contains(object, want) {
 			t.Errorf("the comparative definition's object does not state %q", want)

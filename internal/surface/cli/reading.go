@@ -27,6 +27,7 @@ package cli
 // dirty included path, a free-text operand).
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -125,6 +126,35 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 				DryRun:      dryRun,
 			})
 			if err != nil {
+				// A comparative refusal DISCLOSES what the operator has to act
+				// on, before it exits — the same shape `reading ingest` carries
+				// for a refusal that produced a durable record.
+				//
+				// The derivation's two refusals carry the listing of widening
+				// runs at the target, because the remedy depends on it: with more
+				// than one qualifying the operator dispositions one run's items,
+				// which is the act the design places after the comparative
+				// reading anyway. The plain rendering is the message itself; the
+				// JSON surface needs the listing as data, so it is rendered here.
+				//
+				// The NOT-EXERCISED refusal is the other: the run is staged and
+				// its ingest commits the outcome, so the operator has to be told
+				// where the artefacts went.
+				if runs, ok := wideningRunsOf(err); ok && *asJSON {
+					_ = render(cmd.OutOrStdout(), true,
+						struct {
+							WideningRuns []reading.WideningRun `json:"widening_runs"`
+						}{WideningRuns: runs}, func(io.Writer) {})
+				}
+				var notExercised *reading.PositionNotExercised
+				if errors.As(err, &notExercised) {
+					if outDir != "" {
+						res.OutDir = outDir
+					}
+					_ = render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
+						renderAssembleResult(w, res)
+					})
+				}
 				return readingRefusal("reading assemble", err)
 			}
 			// The core was handed the resolved path so it could write there; the
@@ -141,8 +171,9 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 	}
 	assembleCmd.Flags().StringVar(&position, "position", "",
 		"the reading position: "+positionTokens()+"\n"+
-			"(comparative does not assemble: its object is the widening reading's\n"+
-			"pre-admission output, which no channel supplies, so it refuses)")
+			"(comparative derives its candidate set from the record: the one committed\n"+
+			"widening run at the target whose items carry no disposition and no\n"+
+			"admission. None, or more than one, refuses and lists the runs)")
 	assembleCmd.Flags().StringVar(&target, "target", "",
 		"the commit the assembly describes: HEAD, or a hexadecimal sha of 7 to 40 digits")
 	assembleCmd.Flags().StringVar(&outDir, "out", "",
@@ -270,6 +301,25 @@ func readingAssembleFlagError(_ *cobra.Command, err error) error {
 		"entry for the position, in " + reading.PresetConfigPath}
 }
 
+// wideningRunsOf returns the listing either derivation refusal carries, and
+// whether the error is one of them.
+//
+// One function for the two, because the LISTING is the same disclosure either
+// way: every widening run at the target, with its item count and the fate of its
+// items, so the operator can see what to disposition. Which of the two refusals
+// fired is in the message.
+func wideningRunsOf(err error) ([]reading.WideningRun, bool) {
+	var none *reading.NoCandidateRun
+	if errors.As(err, &none) {
+		return none.Runs, true
+	}
+	var ambiguous *reading.AmbiguousCandidateRun
+	if errors.As(err, &ambiguous) {
+		return ambiguous.Runs, true
+	}
+	return nil, false
+}
+
 // positionTokens renders the closed position set for a flag description and a
 // refusal message, composed from the core rather than spelled twice.
 func positionTokens() string {
@@ -333,6 +383,19 @@ func renderAssembleResult(w io.Writer, res reading.AssembleResult) {
 	fmt.Fprintf(w, "%s: %d item(s) assembled at the %s position of %s\n",
 		res.RunID, res.ItemCount, res.Position, shortSha(res.TargetCommit))
 	fmt.Fprintf(w, "  manifest hash: %s\n", res.ManifestHash)
+	// The candidate run, at the comparative position. No operand named it, so
+	// the result is where the operator learns which widening run this reading is
+	// about, and how many candidates that run holds
+	// (adr-2609021016272867).
+	if res.CandidateRun != "" {
+		fmt.Fprintf(w, "  candidate run: %s (%d candidate(s), derived from the record)\n",
+			res.CandidateRun, res.Candidates)
+		if res.NotExercised {
+			fmt.Fprintln(w, "  exercised:     NO; the widening run returned fewer than two "+
+				"configurations, so this position has nothing to compare. The staged run is the "+
+				"outcome: ingest it to commit a comparative run with an empty item set naming it")
+		}
+	}
 	renderPreset(w, res.Position, res.Preset)
 	renderSizeReport(w, res.Size)
 	if !res.Written {

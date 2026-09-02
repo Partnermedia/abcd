@@ -97,9 +97,49 @@ var excludedFamilies = []excludedFamily{
 	{Path: ".abcd/development/plans", Source: "itd-183 exclusion list: plans/"},
 	{Path: ".abcd/development/research/notes", Source: "itd-183 exclusion list: research/notes/"},
 	{
-		Path: ".abcd/work/issues",
+		Path:      ".abcd/work/issues",
+		Positions: []string{posWidening, posEntailment, posDetection},
 		Source: "itd-183 exclusion list: work/issues/ in every state, reading records and " +
-			"dispositions included, admission and selection grounds, and the lapse log",
+			"dispositions included, admission and selection grounds, and the lapse log. " +
+			"Not at comparative: adr-2609021016272867 admits one derived widening run's " +
+			"items there, so the container row withdraws and the six rows below name each " +
+			"family individually — a narrower assertion, not a weaker one",
+	},
+	// The comparative position's ledger rows, one per family. They mirror the
+	// rows the assembler derives from the ledger's own directory list, and they
+	// are transcribed BY HAND for the reason this file's header states: a table
+	// generated from the assembler's own would agree with it by construction.
+	{
+		Path:      ".abcd/work/issues/open",
+		Positions: []string{posComparative},
+		Source: "adr-2609021016272867: the comparative reading receives candidates and never " +
+			"their fate, so every ledger family but the derived run is excluded by name",
+	},
+	{
+		Path:      ".abcd/work/issues/resolved",
+		Positions: []string{posComparative},
+		Source:    "adr-2609021016272867: as above, for the resolved status directory",
+	},
+	{
+		Path:      ".abcd/work/issues/wontfix",
+		Positions: []string{posComparative},
+		Source:    "adr-2609021016272867: as above, for the wontfix status directory",
+	},
+	{
+		Path:      ".abcd/work/issues/dispositions",
+		Positions: []string{posComparative},
+		Source: "adr-2609021016272867: a candidate's disposition is the researcher's judgement " +
+			"and is exactly what a reading must not see",
+	},
+	{
+		Path:      ".abcd/work/issues/admissions",
+		Positions: []string{posComparative},
+		Source:    "adr-2609021016272867: an admission is the warm half of a candidate's fate",
+	},
+	{
+		Path:      ".abcd/work/issues/surprises",
+		Positions: []string{posComparative},
+		Source:    "adr-2609021016272867: a surprise is the researcher's own act, recorded warm",
 	},
 	{Path: ".abcd/work/DECISIONS.md", Source: "itd-183 assembler rule 1: .abcd/ is excluded but for what the include list names"},
 	{
@@ -187,6 +227,18 @@ var admittedRecordPaths = []admittedRecordPath{
 		Positions: []string{posEntailment},
 		Source:    "itd-183: the entailment reading includes the candidate set, because articulation precedes selection",
 	},
+	{
+		// The one record path under `.abcd/` that is admitted from the LEDGER,
+		// and it is one RUN DIRECTORY rather than the family: the leaf bucket the
+		// readings family keys on, which is what assembler rule 1 permits a row
+		// to name. An item under any other run directory lies beneath no
+		// individually named include and is a violation, which is how the
+		// derivation's narrowing is held by path as well as by plant.
+		Path:      ".abcd/work/issues/readings/" + derivedCandidateRun,
+		Positions: []string{posComparative},
+		Source: "adr-2609021016272867: at the comparative position, two body fields of ONE " +
+			"derived widening run's items are that reading's candidate set",
+	},
 }
 
 // admitsAt reports whether the record path is admitted at position p.
@@ -272,6 +324,16 @@ var materialClasses = []materialClass{
 		Under:  []string{".abcd/development/intents/disciplines"},
 		Match:  []string{".md"},
 		Source: "itd-183 include list: a discipline is a standing commitment, named individually",
+	},
+	{
+		// The candidate kind, reached at the comparative position alone. It sits
+		// under the readings family's leaf bucket, which is the one ledger
+		// directory an include row names (adr-2609021016272867).
+		Kind:  "candidate",
+		Under: []string{".abcd/work/issues/readings"},
+		Match: []string{".md"},
+		Source: "adr-2609021016272867: one derived widening run's items, projected to the " +
+			"configuration and what admits it, are the comparative reading's candidate set",
 	},
 	{
 		Kind: "intent-projection",
@@ -569,16 +631,16 @@ func requireOracleTables(t *testing.T) {
 		got  int
 		want int
 	}{
-		{"sentinelClasses", len(sentinelClasses), 18},
-		{"carriers", len(carriers), 17},
-		{"materialClasses", len(materialClasses), 10},
-		{"holes", len(holes), 2},
+		{"sentinelClasses", len(sentinelClasses), 21},
+		{"carriers", len(carriers), 19},
+		{"materialClasses", len(materialClasses), 11},
+		{"holes", len(holes), 3},
 		{"refusals", len(refusals), 8},
 		{"excludedKeys", len(excludedKeys), 2},
 		{"excludedHeadings", len(excludedHeadings), 4},
-		{"excludedFamilies", len(excludedFamilies), 16},
-		{"admittedRecordPaths", len(admittedRecordPaths), 12},
-		{"coverage", len(coverage), 70},
+		{"excludedFamilies", len(excludedFamilies), 22},
+		{"admittedRecordPaths", len(admittedRecordPaths), 13},
+		{"coverage", len(coverage), 79},
 	} {
 		if tbl.got != tbl.want {
 			t.Fatalf("the %s table holds %d row(s), and this eval is written against %d; "+

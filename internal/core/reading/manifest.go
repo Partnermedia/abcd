@@ -30,8 +30,13 @@ import (
 // departures a run made from the reading the design documents state; the bundle
 // and the manifest are untouched and are restamped by the shared constant once
 // more, which is why `AssemblerVersionCore` does not move with it
-// (spc-2609020626048722).
-const SchemaVersion = 7
+// (spc-2609020626048722). At version 8 BOTH shapes move for the comparative
+// channel: the closed `Kind` vocabulary gains `candidate`, which `DecodeManifest`
+// refuses when it does not know it, the bundle item gains `candidate` and
+// `field`, and the manifest gains `candidate_run`, `candidates`, `exercised`,
+// `candidate_fields` and `criteria` with its item gaining `candidate`
+// (adr-2609021016272867, spc-2609020626039834).
+const SchemaVersion = 8
 
 // The two artefact type tags. They are carried in the documents themselves so a
 // reader of a loose file can tell the two apart without its filename.
@@ -46,7 +51,20 @@ const (
 type BundleItem struct {
 	ItemKey string `json:"item_key"`
 	Kind    Kind   `json:"kind"`
-	Text    string `json:"text"`
+	// Candidate and Field are set on a CANDIDATE item and on nothing else: which
+	// rdi-N of the derived widening run this text belongs to, and whether it is
+	// the configuration or what admits it.
+	//
+	// A comparative reading returns one item per candidate-criterion pair and its
+	// body cites a `candidate_id`, so it has to be able to name the candidate it
+	// is characterising in the terms it was handed. Neither value is a repository
+	// path — an item id is an ordinal minted by the ingest verb, and a field name
+	// is a record's own key — so brief invariant 15 holds, and
+	// TestNoBundleFieldIsAScopeSelector pins both against becoming selectors
+	// (spc-2609020626039834).
+	Candidate string `json:"candidate,omitempty"`
+	Field     string `json:"field,omitempty"`
+	Text      string `json:"text"`
 }
 
 // Bundle is the assembled input: the reading's entire working set.
@@ -120,6 +138,13 @@ type ManifestItem struct {
 	ItemKey string `json:"item_key"`
 	Path    string `json:"path"`
 	Field   string `json:"field,omitempty"`
+	// Candidate is the reading item this text came from, on a candidate item and
+	// on nothing else. It sits beside the Field this item already carried, so an
+	// auditor can resolve a comparative output's `candidate_id` back to the
+	// record it names without re-deriving it from the path — which is what the
+	// ingest's unknown-candidate check compares against
+	// (spc-2609020626039834, "Ingest at the comparative position").
+	Candidate string `json:"candidate,omitempty"`
 	// Kind is the item's material class, carried so a size report is checkable
 	// against the manifest rather than asserted beside it. It is deliberately
 	// NOT omitempty: an item without a kind is a defect, and a shape that can
@@ -178,10 +203,36 @@ type Manifest struct {
 	// presets, which was worth counting while an operand could depart from
 	// them; nothing can now, so a stamp would assert a distinction that does
 	// not exist (adr-2609021016286571).
-	Preset     AppliedPreset  `json:"preset"`
-	PresetHash string         `json:"preset_hash"`
-	Items      []ManifestItem `json:"items"`
-	Exclusions []Exclusion    `json:"exclusions"`
+	Preset     AppliedPreset `json:"preset"`
+	PresetHash string        `json:"preset_hash"`
+	// CandidateRun is the widening run this assembly DERIVED, at the comparative
+	// position and nowhere else. It is on the manifest so a reader can check the
+	// selection against the record rather than take it on trust: the run named is
+	// the one committed widening run at this manifest's target whose items
+	// carried no disposition and no admission when the assembly ran
+	// (adr-2609021016272867).
+	CandidateRun string `json:"candidate_run,omitempty"`
+	// Candidates is the count of items THE DERIVED RUN HOLDS — the count of
+	// candidates the bundle carries when the position is exercised, and still the
+	// run's own count when it is not. It is never written as zero for a run that
+	// holds an item: Exercised is the field that says the position was not
+	// exercised, and conflating the two would lose which of the two facts a
+	// reader is looking at.
+	Candidates int `json:"candidates,omitempty"`
+	// Exercised is false on the staged empty run and true when the bundle carries
+	// the candidates. It is a POINTER so that it is written whenever
+	// CandidateRun is and absent everywhere else: a false value is then a
+	// statement rather than an absence, and no widening manifest asserts an
+	// `exercised` it has no business having an opinion about.
+	Exercised *bool `json:"exercised,omitempty"`
+	// CandidateFields are the two widening body fields projected, and Criteria
+	// the criterion names parsed out of the committed discipline. Together they
+	// are what the assembler SELECTED and what it WEIGHED, so a reader of the
+	// manifest alone can say what the comparative reading was handed.
+	CandidateFields []string       `json:"candidate_fields,omitempty"`
+	Criteria        []string       `json:"criteria,omitempty"`
+	Items           []ManifestItem `json:"items"`
+	Exclusions      []Exclusion    `json:"exclusions"`
 }
 
 // encode is the one definition of canonical bytes for both artefacts: fixed

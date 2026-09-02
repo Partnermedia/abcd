@@ -618,21 +618,29 @@ func validateEntries(pf PresetFile) error {
 	}
 	for _, pos := range sortedPositionKeys(pf) {
 		e := pf.Positions[pos]
-		position, err := ParsePosition(pos)
-		if err != nil {
+		if _, err := ParsePosition(pos); err != nil {
 			return fmt.Errorf("%s: %w", PresetConfigPath, err)
 		}
-		// The comparative position refuses before the presets are loaded at
-		// all, so an entry for it would describe a run that cannot happen.
-		if position == PositionComparative {
-			return fmt.Errorf("%s names an entry for the comparative position, "+
-				"which does not assemble: its object is the widening run's pre-admission "+
-				"output and no channel supplies it", PresetConfigPath)
-		}
+		// The comparative refusal is WITHDRAWN. itd-199's tenth criterion refused
+		// an entry for that position because the position did not assemble;
+		// adr-2609021016272867 gives it a channel, and its entry names the
+		// repository material passed beside the candidates — which at that
+		// position is the criteria discipline and nothing else.
 		for _, k := range e.Kinds {
 			if !kinds[k] {
 				return fmt.Errorf("%s: the entry for %s names the unknown kind %q; "+
 					"the vocabulary is closed", PresetConfigPath, pos, k)
+			}
+			// `candidate` is a member of the vocabulary and NOT a preset kind. An
+			// entry selects repository material; a candidate is selected by the
+			// derived widening run, and an entry naming the kind would read as
+			// choosing the candidate set — which nothing at the invocation, and
+			// nothing in a preset, may do (adr-2609021016272867).
+			if k == KindCandidate {
+				return fmt.Errorf("%s: the entry for %s names the kind %q, which no entry selects: "+
+					"an entry names repository material, and the candidate set is DERIVED from the "+
+					"record as the one committed widening run at the target whose items carry no "+
+					"disposition and no admission", PresetConfigPath, pos, k)
 			}
 		}
 		for _, r := range e.Object.Records {
