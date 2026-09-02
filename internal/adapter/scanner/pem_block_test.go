@@ -21,13 +21,18 @@ func pemFixture() (header, body1, body2, tail, end string) {
 	return
 }
 
-func redactAll(t *testing.T, text string) string {
+func redactAllN(t *testing.T, text string) (string, int) {
 	t.Helper()
 	findings := ScanText(text, Identity{}, DefaultPatterns(), DefaultIdentitySeverities(), "t")
 	if !hasKind(findings, "token:pem_private_key") {
 		t.Fatalf("the PEM header was not detected at all: %v", findings)
 	}
-	out, _ := Redact(text, findings)
+	return Redact(text, findings)
+}
+
+func redactAll(t *testing.T, text string) string {
+	t.Helper()
+	out, _ := redactAllN(t, text)
 	return out
 }
 
@@ -59,24 +64,71 @@ func TestRedactPEMBlockConsumesBodyThroughEnd(t *testing.T) {
 }
 
 // TestRedactPEMHeaderWithoutEndKeepsProse: a header with no END line must not
-// swallow the record after it. Prose lines are not body-shaped, so the
-// consumer stops at the first one.
+// swallow the record after it. A body that demonstrably opened is still taken;
+// a header that is only NAMED — in a rotation note, a runbook, an issue record
+// — opens no block, so nothing after it may be consumed.
+//
+// The shape rule alone cannot tell the two apart. "Body-shaped" accepts a
+// blank line, a code fence, a setext underline, a bare number and a
+// single-token list item, so a sentence mentioning the header used to delete
+// the lines after it from a committed record and could leave an unbalanced
+// fence behind. The consumer therefore demands positive EVIDENCE that a body
+// opened before it takes anything.
 func TestRedactPEMHeaderWithoutEndKeepsProse(t *testing.T) {
 	header, body1, _, _, _ := pemFixture()
-	text := strings.Join([]string{
-		header, body1, "",
-		"The next paragraph is prose that must stay.",
-		"So must this one, with an https://example.com/link in it.",
-	}, "\n")
-	out := redactAll(t, text)
-	if strings.Contains(out, body1) {
-		t.Errorf("the body line after a truncated block survived:\n%s", out)
-	}
-	for _, keep := range []string{"The next paragraph is prose that must stay.", "So must this one, with an https://example.com/link in it."} {
-		if !strings.Contains(out, keep) {
-			t.Errorf("a truncated block swallowed the prose %q:\n%s", keep, out)
+
+	t.Run("truncated block", func(t *testing.T) {
+		text := strings.Join([]string{
+			header, body1, "",
+			"The next paragraph is prose that must stay.",
+			"So must this one, with an https://example.com/link in it.",
+		}, "\n")
+		out := redactAll(t, text)
+		if strings.Contains(out, body1) {
+			t.Errorf("the body line after a truncated block survived:\n%s", out)
 		}
+		for _, keep := range []string{"The next paragraph is prose that must stay.", "So must this one, with an https://example.com/link in it."} {
+			if !strings.Contains(out, keep) {
+				t.Errorf("a truncated block swallowed the prose %q:\n%s", keep, out)
+			}
+		}
+	})
+
+	mention := "Rotate the key: the file still opens with " + header + " and must go."
+	cases := map[string][]string{
+		"blank line":       {"", "The paragraph after the blank must stay."},
+		"code fence":       {"```", "rotate revoke", "```", "after the fence"},
+		"setext underline": {"Rotation", "========================", "The section body must stay."},
+		"bare number":      {"42", "The numbered line must stay."},
+		"single-word item": {"- rotate", "- revoke", "The list must stay."},
 	}
+	for name, after := range cases {
+		t.Run(name, func(t *testing.T) {
+			want := strings.Join(after, "\n")
+			out := redactAll(t, mention+"\n"+want)
+			if !strings.HasSuffix(out, "\n"+want) {
+				t.Errorf("a bare header mention consumed the lines after it:\ngot  %q\nwant suffix %q", out, "\n"+want)
+			}
+		})
+	}
+
+	// The exact reproduction: a mention, a blank line, a fenced snippet, a
+	// blank line and one more prose line. Five lines went, and the closing
+	// fence outlived its opener.
+	t.Run("reproduction", func(t *testing.T) {
+		prose := strings.Join([]string{"", "```", "rotate revoke", "```", "", "Owner: platform."}, "\n")
+		out, n := redactAllN(t, mention+"\n"+prose)
+		if !strings.HasSuffix(out, "\n"+prose) {
+			t.Errorf("prose after a bare header mention is not byte-identical:\ngot  %q\nwant suffix %q", out, "\n"+prose)
+		}
+		if strings.Contains(out, "[redacted-pem-body") {
+			t.Errorf("a block was collapsed where none opened:\n%s", out)
+		}
+		// One rewrite: the header span itself. No block, so no second count.
+		if n != 1 {
+			t.Errorf("Redact reports %d rewrites, want 1 (the header span alone, 0 blocks)", n)
+		}
+	})
 }
 
 // TestRedactPEMOneLineBodyDoesNotSurvive: header, body and END on ONE line —
@@ -167,4 +219,37 @@ func TestRedactPEMBlockWithGutters(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestPEMSameLineBodyStopsAtProse: on the header's own line the body was a
+// chunk of 16+ base64 bytes followed by ANY word-runs to the first
+// punctuation, so a sentence that pastes a key and then keeps talking lost its
+// prose to the mask ("… and it was rotated on Tuesday" went). Every chunk the
+// body claims must be long enough to be key material; a short final chunk is
+// taken only where it closes the line or an END marker follows it.
+func TestPEMSameLineBodyStopsAtProse(t *testing.T) {
+	header, body1, _, tail, end := pemFixture()
+	prose := " and it was rotated on Tuesday, fine."
+	t.Run("open block", func(t *testing.T) {
+		out := redactAll(t, "pasted "+header+" "+body1+prose)
+		if strings.Contains(out, body1) {
+			t.Errorf("the same-line body survived:\n%s", out)
+		}
+		if !strings.HasPrefix(out, "pasted ") || !strings.HasSuffix(out, prose) {
+			t.Errorf("prose around the same-line body is not byte-identical:\ngot %q\nwant suffix %q", out, prose)
+		}
+	})
+	// A closed block still takes its short final padding chunk: the END marker
+	// after it is the evidence that the chunk belongs to the key.
+	t.Run("closed block keeps taking the short tail", func(t *testing.T) {
+		out := redactAll(t, "note: "+header+" "+body1+" "+tail+" "+end+prose)
+		for _, leak := range []string{body1, tail, end} {
+			if strings.Contains(out, leak) {
+				t.Errorf("%q survived a closed one-line block:\n%s", leak[:8], out)
+			}
+		}
+		if !strings.HasSuffix(out, prose) {
+			t.Errorf("prose after the END marker is not byte-identical:\ngot %q", out)
+		}
+	})
 }

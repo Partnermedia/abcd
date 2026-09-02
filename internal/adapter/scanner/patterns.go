@@ -38,6 +38,32 @@ const rpRedactedPlaceholder = "<RP-SESSION-UUID-REDACTED>"
 // masks its span whole (maskedWhole).
 const kindPEMPrivateKey = "token:pem_private_key"
 
+// pemPrivateKeyPattern assembles the bundled pem_private_key regex from named
+// pieces: the two armour markers, the separator a one-line rendering puts
+// between body chunks (a blank, a tab, or the literal \n / \r escape of a JSON
+// or YAML dump), a body chunk long enough to be key material, and the short
+// final padding chunk a real body ends on.
+//
+// The three alternatives are ordered so a CLOSED block wins: only there is a
+// short final chunk safe unconditionally, because the END marker after it is
+// the evidence that it belongs to the key. In an open block the short chunk
+// must end the line instead — otherwise the rule is back to claiming prose
+// words, which is what ate the sentence around a pasted key.
+func pemPrivateKeyPattern() string {
+	const (
+		begin = `-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----`
+		end   = `-----END (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----`
+		sep   = `(?:[ \t]|\\[nr])`
+		chunk = `[A-Za-z0-9+/=]{16,}`
+		short = `[A-Za-z0-9+/=]{1,15}`
+	)
+	body := sep + `*` + chunk + `(?:` + sep + `+` + chunk + `)*`
+	closed := body + `(?:` + sep + `+` + short + `)?` + sep + `*` + end
+	open := body + `(?:` + sep + `+` + short + `$)?`
+	empty := sep + `*` + end
+	return begin + `(?:` + closed + `|` + open + `|` + empty + `)?`
+}
+
 // DefaultPatterns returns the bundled secret pattern set (spec §2.2), ported
 // verbatim from scripts/abcd/defaults/pii.json, plus the network-identifier set
 // from network.go. Every secret pattern is hard_fail and non-sanitisable. This
@@ -107,17 +133,17 @@ func DefaultPatterns() []Pattern {
 			// chunks separated by blanks or the literal \n and \r escapes of a
 			// JSON or YAML dump — through an END marker on that line when there
 			// is one, so Redact masks the body bytes a one-line key carries and
-			// not just the header before them. The body must OPEN with a long
-			// chunk (a real body's first chunk always is), so prose after a bare
-			// header ("… PRIVATE KEY----- and is 3 KiB") is not taken for one;
-			// once a body has opened, every chunk to the END is taken, the short
-			// final one included. Body lines of their own belong to the block
-			// consumer (pem.go); the span is masked whole (maskedWhole).
+			// not just the header before them. EVERY chunk the body claims must
+			// be long enough to be key material: a chunk rule that took any
+			// word-run once a body had opened ate the sentence a paste was
+			// embedded in ("… and it was rotated on Tuesday" went with the key).
+			// A SHORT final chunk — a real body's padding line — is taken only
+			// where the evidence for it is there: an END marker closes the block,
+			// or the chunk ends the line. Body lines of their own belong to the
+			// block consumer (pem.go); the span is masked whole (maskedWhole).
 			Name: "pem_private_key", Kind: kindPEMPrivateKey,
-			Label: "PEM private key",
-			Re: regexp.MustCompile(`-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----` +
-				`(?:(?:[ \t]|\\[nr])*[A-Za-z0-9+/=]{16,}(?:(?:[ \t]|\\[nr])+[A-Za-z0-9+/=]+)*)?` +
-				`(?:(?:[ \t]|\\[nr])*-----END (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----)?`),
+			Label:      "PEM private key",
+			Re:         regexp.MustCompile(pemPrivateKeyPattern()),
 			Severity:   SeverityHardFail,
 			Suggestion: "DELETE AND ROTATE — private key material must never be committed",
 		},

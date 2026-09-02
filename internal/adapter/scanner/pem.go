@@ -22,12 +22,18 @@ import (
 // So the pattern reaches over whatever body shares the header's OWN line (a
 // resolve note, a JSON or K8s secret dump with literal \n escapes — see
 // patterns.go), and Redact consumes the block's FOLLOWING lines through the
-// END line here. The consumer is bounded twice. It takes only body-shaped
-// lines — base64 runs, the armour headers a legacy encrypted PEM or a PGP
-// block carries, blank lines, each behind an optional gutter (indentation, a
-// diff or quote marker, a line number, a quote) — so a truncated block with no
-// END line never swallows the prose after it. And it stops at maxPEMBodyLines,
-// so no block consumes a record without limit. The consumed lines collapse
+// END line here. The consumer is bounded three ways. It consumes NOTHING until
+// a body demonstrably opened — a base64 run long enough to be key material, or
+// an armour header, within a line or two of the header (pemBodyEvidence) —
+// because a header that is only NAMED in a rotation note or a runbook opens no
+// block, and "body-shaped" on its own accepts a blank line, a code fence, a
+// setext underline, a bare number and a single-token list item. Once a body
+// has opened it takes only body-shaped lines — base64 runs, the armour headers
+// a legacy encrypted PEM or a PGP block carries, blank lines, each behind an
+// optional gutter (indentation, a diff or quote marker, a line number, a
+// quote) — so a truncated block with no END line never swallows the prose
+// after it. And it stops at maxPEMBodyLines, so no block consumes a record
+// without limit. The consumed lines collapse
 // into one placeholder that says how many lines went; the header span itself
 // is masked whole (maskedWhole), since a head/tail fingerprint of a span that
 // ends in body bytes would keep two bytes of key.
@@ -51,7 +57,63 @@ var (
 	// pemBodyLineRe is one body-shaped line: an optional gutter, then a base64
 	// run or an armour header or nothing at all, then optional quoting.
 	pemBodyLineRe = regexp.MustCompile(`^[\s\d+\-|>:"'` + "`" + `│]*(?:[A-Za-z0-9+/=]+|(?:Proc-Type|DEK-Info|Version|Comment|Charset|Hash|MessageID):.*)?[\s"',;\\]*$`)
+	// pemBase64RunRe is a run from the base64 alphabet long enough to be key
+	// material — the SAME rule the same-line pattern applies before it reaches
+	// past a header (patterns.go).
+	pemBase64RunRe = regexp.MustCompile(`[A-Za-z0-9+/=]{16,}`)
+	// pemArmourRe is an armour header at the head of a line, behind the same
+	// optional gutter pemBodyLineRe allows.
+	pemArmourRe = regexp.MustCompile(`^[\s\d+\-|>:"'` + "`" + `│]*(?:Proc-Type|DEK-Info|Version|Comment|Charset|Hash|MessageID):`)
 )
+
+// pemEvidenceWindow is how far past the header the consumer looks for evidence
+// that a body opened. A block's first body line follows the header directly, or
+// after one blank line; nothing further out is a block this consumer opened.
+const pemEvidenceWindow = 2
+
+// pemBodyOpened reports whether a line carries positive evidence that a key
+// body opened on it: a base64 run long enough to be key material, or a PEM/PGP
+// armour header. A run of pure padding ("====…", a setext underline) is not
+// evidence — base64 padding is at most two bytes and never stands alone — so
+// the run must carry at least one alphanumeric byte.
+func pemBodyOpened(line string) bool {
+	if pemArmourRe.MatchString(line) {
+		return true
+	}
+	for _, run := range pemBase64RunRe.FindAllString(line, -1) {
+		if strings.ContainsFunc(run, isBase64Alnum) {
+			return true
+		}
+	}
+	return false
+}
+
+func isBase64Alnum(r rune) bool {
+	return (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')
+}
+
+// pemBodyEvidence reports whether a body opened after the header at lines[h].
+// The shape rule alone cannot answer this: "body-shaped" accepts a blank line,
+// a code fence, a setext underline, a bare number and a single-token list item,
+// so a sentence that merely NAMES a BEGIN marker — a rotation note, a runbook,
+// an issue record — used to consume the lines after it and could leave an
+// unbalanced fence where a fenced block had been. Evidence is required before
+// anything is taken; a line that is not even body-shaped ends the search.
+func pemBodyEvidence(lines []string, h int) bool {
+	last := h + pemEvidenceWindow
+	if last >= len(lines) {
+		last = len(lines) - 1
+	}
+	for j := h + 1; j <= last; j++ {
+		if pemBodyOpened(lines[j]) {
+			return true
+		}
+		if !pemBodyLineRe.MatchString(lines[j]) {
+			return false
+		}
+	}
+	return false
+}
 
 // pemBodyPlaceholder is the one line a consumed block collapses to.
 func pemBodyPlaceholder(n int) string {
@@ -99,6 +161,9 @@ func consumePEMBodies(lines []string, findings []Finding) ([]string, int) {
 // the bound, else through the last body-shaped line — with trailing blank
 // lines given back, since they belong to the prose after a truncated block.
 func pemBlockEnd(lines []string, h int) int {
+	if !pemBodyEvidence(lines, h) {
+		return h + 1 // the header was named, not opened: take nothing
+	}
 	limit := h + 1 + maxPEMBodyLines
 	if limit > len(lines) {
 		limit = len(lines)
