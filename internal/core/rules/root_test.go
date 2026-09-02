@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/intentdriven/abcd/internal/gittest"
+	"github.com/intentdriven/abcd/internal/gitutil"
 )
 
 func gitInitAt(t *testing.T, dir string) {
@@ -70,5 +71,99 @@ func TestResolveRootIsBoundedByTheWorkingTree(t *testing.T) {
 	}
 	if got := ResolveRoot(plain); got != plain {
 		t.Errorf("ResolveRoot(%q) = %q, want cwd (no walk outside git)", plain, got)
+	}
+}
+
+// mustDir creates dir (and its parents) or fails the test.
+func mustDir(t *testing.T, dir string) string {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// refuseOwnership stages, deterministically, the state abcd's own isolated git
+// environment cannot be rescued from: a real repository git will not answer
+// for. GIT_TEST_ASSUME_DIFFERENT_OWNER makes git's ownership check fire, and
+// the normal escape — `safe.directory` in the developer's global config — is
+// discarded by the GIT_CONFIG_GLOBAL=/dev/null, GIT_CONFIG_NOSYSTEM=1 that
+// gitutil.Run runs every command under. It is the same shape as a checkout
+// owned by another uid, a container bind mount, or a corrupt .git.
+func refuseOwnership(t *testing.T, dir string) {
+	t.Helper()
+	t.Setenv("GIT_TEST_ASSUME_DIFFERENT_OWNER", "1")
+	if _, err := gitutil.Run(dir, "rev-parse", "--show-toplevel"); err == nil {
+		t.Skip("this git ignores GIT_TEST_ASSUME_DIFFERENT_OWNER; the refusal could not be staged")
+	}
+}
+
+// TestResolveRootFallsBackToTheGitMarkerWhenGitRefuses is the second half of the
+// GHSA-vvqc-3mv2-5p49 bound. "Not a repository" and "a repository git will not
+// answer for" are different states, and only the first is safe to resolve as
+// cwd-with-no-walk: in the second, content here IS version-controlled and the
+// repo's own .abcd is the governing configuration. Collapsing the two dropped
+// it silently — from a subdirectory the root became the subdirectory, so the
+// repo's rules.json, its kill switch and its guard.json all stopped applying
+// and nothing said so. The .git marker bounds the resolution when git will not.
+func TestResolveRootFallsBackToTheGitMarkerWhenGitRefuses(t *testing.T) {
+	outer := mustDir(t, t.TempDir())
+	mustDir(t, filepath.Join(outer, ".abcd"))
+	inner := filepath.Join(outer, "inner-repo")
+	gitInitAt(t, inner)
+	sub := mustDir(t, filepath.Join(inner, "internal", "deep"))
+	wantInner := realPath(t, inner)
+
+	refuseOwnership(t, sub)
+
+	// No .abcd inside the tree: the marker root, never cwd and never the
+	// ancestor's plant.
+	if got := realPath(t, ResolveRoot(sub)); got != wantInner {
+		t.Errorf("ResolveRoot(%q) with git refusing = %q, want the .git-marker root %q", sub, got, wantInner)
+	}
+	// The repo's own .abcd is what a subdirectory session must read.
+	mustDir(t, filepath.Join(inner, ".abcd"))
+	if got := realPath(t, ResolveRoot(sub)); got != wantInner {
+		t.Errorf("ResolveRoot(%q) with git refusing = %q, want the repo's own .abcd at %q", sub, got, wantInner)
+	}
+	// Nearest-first still holds inside the tree.
+	mid := mustDir(t, filepath.Join(inner, "internal"))
+	mustDir(t, filepath.Join(mid, ".abcd"))
+	if got, want := realPath(t, ResolveRoot(sub)), realPath(t, mid); got != want {
+		t.Errorf("ResolveRoot(%q) with git refusing = %q, want the nearest .abcd inside the tree %q", sub, got, want)
+	}
+	// And the bound is still a bound: a genuinely non-repo directory does not
+	// walk to the .abcd planted above it.
+	plain := mustDir(t, filepath.Join(outer, "plain"))
+	if got := ResolveRoot(plain); got != plain {
+		t.Errorf("ResolveRoot(%q) = %q, want cwd (a non-repo directory must not walk)", plain, got)
+	}
+}
+
+// TestResolveRootFallsBackToTheGitMarkerWhenGitIsAbsent is the same bound with
+// the other unanswerable cause: git off the PATH the host hook runs under. A
+// hook launched from a GUI session or a stripped container has no git at all,
+// and every repository on that machine would otherwise resolve its rules and
+// its guard from whatever directory the session happened to start in.
+func TestResolveRootFallsBackToTheGitMarkerWhenGitIsAbsent(t *testing.T) {
+	outer := mustDir(t, t.TempDir())
+	mustDir(t, filepath.Join(outer, ".abcd"))
+	inner := filepath.Join(outer, "inner-repo")
+	gitInitAt(t, inner) // needs git, so it happens before the PATH is emptied
+	mustDir(t, filepath.Join(inner, ".abcd"))
+	sub := mustDir(t, filepath.Join(inner, "pkg"))
+	wantInner := realPath(t, inner)
+
+	t.Setenv("PATH", "/nonexistent")
+	if out, err := gitutil.Run(sub, "rev-parse", "--show-toplevel"); err == nil {
+		t.Fatalf("git answered %q with an emptied PATH; the fixture did not stage the failure", out)
+	}
+
+	if got := realPath(t, ResolveRoot(sub)); got != wantInner {
+		t.Errorf("ResolveRoot(%q) with git absent = %q, want the .git-marker root %q", sub, got, wantInner)
+	}
+	plain := mustDir(t, filepath.Join(outer, "plain"))
+	if got := ResolveRoot(plain); got != plain {
+		t.Errorf("ResolveRoot(%q) with git absent = %q, want cwd (a non-repo directory must not walk)", plain, got)
 	}
 }
