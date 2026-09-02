@@ -90,9 +90,112 @@ None. The flagged decisions are adopted as adr-2609021016272867. The ordering an
 
 ## Audit Notes
 
-<!-- abcd-review: OWED receipt=rcp-e37a3b69db80 -->
-Fidelity review OWED (receipt rcp-e37a3b69db80).
+<!-- abcd-review: INGESTED receipt=rcp-e37a3b69db80 -->
+Fidelity review — receipt rcp-e37a3b69db80 (verifier intent-auditor claude-opus-5).
 
+Provenance: intent-auditor@claude-opus-5 · rubric_hash sha256:44f19418b0b8d56d7b17cbecbd5acd5d2cbed5abc4347428680ce46647f381d5 · prompt_hash sha256:542ed2cd51ff938717a3f47b2b332e8d47910beec0ca7ecdfd238ae7edf5ced5
+Input attestations: diff:3b62c967dae9488813faee5317c167a0045fc715 (single commit; git show 3b62c967)@sha256:38fa04b07272158bb4df9c7af7c10dd80c617f8841e6c913bc836bdac299e579;
+
+Acceptance rollup: MET 8 · MET_WITH_CONCERNS 1 · NOT_MET 0 · INCONCLUSIVE 0
+
+Per-criterion verdicts:
+- ac-1 — MET: DeriveCandidateRun applies the exactly-one rule and both refusals carry the whole listing with each run's item count and disposition state; the manifest and result name the run derived, and the CLI renders the listing plain and as widening_runs; four tests pass, asserting the listing content by string.
+  evidence: internal/core/reading/candidates.go:240 — "func DeriveCandidateRun(repoRoot, target string) (WideningRun, error)"
+  evidence: internal/core/reading/candidates.go:66 — "fmt.Fprintf(&b, "%s — %d item(s)", r.ID, r.Items)"
+  evidence: internal/core/reading/candidates_test.go:83 — "TestTwoUndispositionedWideningRunsRefuseNamingThem — asserts "3 item(s)", "2 item(s)", "disposition" in the refusal"
+  evidence: internal/core/reading/candidates_test.go:62 — "if res.Manifest.CandidateRun != fixtureCandidateRun"
+  evidence: internal/surface/cli/reading.go:150 — "WideningRuns []reading.WideningRun `json:"widening_runs"`"
+- ac-2 — MET: The candidate row projects exactly configuration and what_admits_it keyed by the item id; the test asserts three candidates each travelling as exactly CandidateFields, the CANDIDATE carrier arriving, the ENVELOPE (pattern) sentinel absent, and the discipline present with no other row admitted.
+  evidence: internal/core/reading/candidates_test.go:264 — "if strings.Join(fields, "|") != strings.Join(CandidateFields, "|")"
+  evidence: internal/core/reading/candidates_test.go:275 — "if strings.Contains(text, sentinelEnvelope) { t.Error("the item's pattern reached the bundle") }"
+  evidence: internal/core/reading/assemble.go:557 — "item.Candidate, item.Field = id, c.field"
+  evidence: internal/core/reading/candidates_test.go:288 — "TestComparativeBundleCarriesTheCriteriaDiscipline"
+- ac-3 — MET: capture.ItemFate reports the standing disposition and WideningRuns records it in Fated as a rendered phrase naming the item and the disposition, which the refusal prints; the test asserts the item id, dsp-7 and "standing disposition" appear and that untouched items are not blamed.
+  evidence: internal/core/reading/candidates.go:218 — "run.Fated = append(run.Fated, fmt.Sprintf("%s carries the standing disposition %s", item, strings.Join(fate.Dispositions, ", ")))"
+  evidence: internal/core/reading/candidates_test.go:374 — "for _, want := range []string{fixtureCandidateItems[1], "dsp-7", "standing disposition"}"
+  evidence: internal/core/capture/itemfate.go:67 — "itemDir := filepath.Join(issuesRoot, issueschema.DispositionsDir, item)"
+- ac-4 — MET: The same probe reads admissions keyed on the (run, proposal) pair and the refusal names the item and the admission; a companion test proves non-vacuity by filing an admission under a different run and showing it does not refuse.
+  evidence: internal/core/reading/candidates.go:224 — "run.Fated = append(run.Fated, fmt.Sprintf("%s carries the admission %s", item, strings.Join(fate.Admissions, ", ")))"
+  evidence: internal/core/reading/candidates_test.go:397 — "for _, want := range []string{fixtureCandidateItems[2], "adm-4", "admission"}"
+  evidence: internal/core/reading/candidates_test.go:407 — "TestAnAdmissionUnderAnotherRunDoesNotRefuse"
+- ac-5 — MET: A one-item run returns PositionNotExercised naming the interpretation beside a written result whose bundle carries no candidate item and whose manifest carries candidate_run, candidates:1 and exercised:false; the ingest test reads the committed run record back with those three fields and zero reading records.
+  evidence: internal/core/reading/assemble.go:614 — "so the comparative reading has nothing to compare and this position is NOT EXERCISED"
+  evidence: internal/core/reading/candidates_test.go:480 — "if !res.Written { t.Fatal("the run was not staged") }"
+  evidence: internal/core/reading/ingest_comparative_test.go:183 — "if run.CandidateRun != fixtureIngestCandidateRun"
+  evidence: internal/core/reading/ingest_comparative_test.go:194 — "if len(res.Records) != 0"
+- ac-6 — MET: The test plants a second widening run with dispositions, admissions and a surprise, derives the other, and asserts the FATE sentinel never reaches the bundle while the manifest asserts six derived directory exclusions plus the readings-store signal row; assertCandidateProjection is the fail-closed half and the eval repeats the check at suite level.
+  evidence: internal/core/reading/candidates_test.go:555 — "if text := bundleText(res.Bundle); strings.Contains(text, sentinelFate)"
+  evidence: internal/core/reading/candidates_test.go:563 — ".abcd/work/issues/dispositions", ".abcd/work/issues/admissions", ".abcd/work/issues/surprises""
+  evidence: internal/core/reading/assemble.go:433 — "if err := assertCandidateProjection(cands, candidateRun.ID); err != nil"
+  evidence: evals/coldreading_test.go:639 — "func TestComparativeChannelCarriesCandidatesAndNothingElse(t *testing.T)"
+- ac-7 — MET: validateItems takes the manifest and refuses a candidate_id that names no manifest item as unknown-candidate, naming the ordinal and the id; the test mutates the second of three items so the other two still land, proving the refusal is item-level and not blanket.
+  evidence: internal/core/reading/ingest_comparative_test.go:33 — "if r.Rule != ruleUnknownCandidate"
+  evidence: internal/core/reading/ingest_comparative_test.go:39 — "for _, want := range []string{"rdi-999", fixtureIngestCandidateRun}"
+  evidence: internal/core/reading/ingest_regime.go:1 — "validateItems(out Output, m Manifest, def Definition)"
+- ac-8 — MET: A criterion outside manifest.Criteria is refused as undeclared-criterion naming the field, the offered criterion and the discipline; the criteria are parsed at assembly off the same bytes the bundle carries, and TestEveryDeclaredCriterionIsAccepted proves the check is not refusing everything.
+  evidence: internal/core/reading/ingest_comparative_test.go:59 — "if r.Rule != ruleUndeclaredCriterion"
+  evidence: internal/core/reading/ingest_comparative_test.go:65 — "for _, want := range []string{"Vibes", CriteriaDiscipline, fixtureIngestCriteria[0]}"
+  evidence: internal/core/reading/criteria.go:43 — "func declaredCriteria(doc string) ([]string, error)"
+  evidence: internal/core/reading/ingest_comparative_test.go:75 — "TestEveryDeclaredCriterionIsAccepted"
+- ac-9 — MET_WITH_CONCERNS: The read-block eval case is delivered and passes with a negative control (the holed control's third hole relocates a fate into a projected candidate field), but the eval LANE it lives in is red at the delivered commit and green at its parent, so an operator running ac-9's own command gets a failure.
+  evidence: evals/coldreading_test.go:734 — "func TestComparativeChannelCatchesAPlantedFate(t *testing.T)"
+  evidence: evals/coldreading_oracle_test.go:220 — "{"holes", len(holes), 3}"
+  evidence: evals/coldreading_window_test.go:65 — "2 committed entry(s) measure past the window they declare: widening 809238 vs 800000; detection 818275 vs 810000 — observed running `make evals-cold-reading` at 3b62c967, and PASSING on a scratch copy of the parent c1be0000"
+
+Gap audit:
+- honoured:
+  - The run is derived from the record and the invocation gains nothing: a position and a target state, as adr-2609021016286571 and brief invariant 15 fix it
+    evidence: internal/core/reading/assemble.go:399 — "candidateRun, err = DeriveCandidateRun(req.RepoRoot, target)"
+    evidence: internal/core/reading/candidates.go:9 — "No operand names the run."
+  - Two body fields of one run's items and nothing else; the pattern stays in the envelope
+    evidence: internal/core/reading/candidates_test.go:275 — "if strings.Contains(text, sentinelEnvelope)"
+    evidence: agents/cold-reading-comparative.md:1 — "the pattern each candidate was read under stays in its envelope rather than travelling with it"
+  - Every other include row withdraws from the comparative position and the disciplines row is narrowed to itd-191
+    evidence: internal/core/reading/include_test.go:1 — "TestEveryOtherRowWithdrawsFromComparative"
+    evidence: internal/core/reading/criteria.go:23 — "const CriteriaDiscipline = "itd-191""
+  - The fixed interpretation is delivered as the clean-run idiom the framework's section 13 states: a run recorded with an empty item set, at every position, not a comparative carve-out
+    evidence: internal/core/reading/ingest_regime_test.go:1 — "TestIngestCommitsAnEmptyRunAtEveryPosition"
+    evidence: internal/core/reading/ingest_comparative_test.go:169 — "TestIngestCommitsAnEmptyComparativeRun"
+  - itd-199's ac-10 refusal of a comparative preset entry is withdrawn and the committed entry carries its window declaration
+    evidence: .abcd/config/reading-presets.json:68 — ""comparative": { "object": { "records": ["itd-191"], "paths": [] }, "kinds": ["discipline"]"
+    evidence: internal/core/reading/scope_test.go:1 — "TestComparativePresetIsAdmitted"
+  - The exclusion rows are derived from issueschema.LedgerDirs(), so a family the ledger adds later is excluded the day its constant is declared
+    evidence: internal/core/issueschema/ledgerdirs.go:1 — "func LedgerDirs()"
+    evidence: internal/core/reading/include_test.go:1 — "TestComparativeExclusionRowsAreDerivedFromLedgerDirs"
+- diverged:
+  - The spec put the ordering guard in Assemble as a second pass over every candidate; the delivery folds it into the one derivation probe, so the refusal arrives as NoCandidateRun carrying the item that stopped the run. Same observable outcome, disclosed in the commit message.
+    evidence: internal/core/reading/candidates.go:205 — "run.Fated = append(run.Fated, ...)"
+    evidence: .abcd/development/specs/closed/spc-2609020626039834-a-comparative-reading-receives-the-widening-run-s-items-as-i.md:1 — "`Assemble` asks it for every candidate before anything is minted or written."
+  - WideningRun carries Committed and Fated beyond the spec's four fields (ID, Items, Dispositioned, Admitted). Both serve the spec's own prose — an uncommitted run must be listed and a refusal must name the item that stopped it — and both are documented in place.
+    evidence: internal/core/reading/candidates.go:48 — "Committed reports that the run reached its commit marker (`run.json`)."
+    evidence: internal/core/reading/candidates.go:52 — "Fated names what stands over the items that carry a fate"
+  - Two pinned eval counts the spec's delta list did not name moved: carriers 17 to 19 and materialClasses 10 to 11. Disclosed in the commit message; the spec's delta list named only sentinelClasses, excludedKeys, excludedFamilies, admittedRecordPaths and coverage.
+    evidence: evals/coldreading_oracle_test.go:218 — "{"carriers", len(carriers), 19}, {"materialClasses", len(materialClasses), 11}"
+  - The comparative window could not be measured the way the other three were — this repository holds no committed widening run — so it was taken by dry run over a scratch copy with a three-item run planted, 1,312 estimated tokens rounded up to 10,000. Stated in the entry's own comment with measured_at naming the scratch tree's commit.
+    evidence: .abcd/config/reading-presets.json:79 — ""measured_at": "c1be0000e7a0117947b1e3fedc08244ca77c9aa9""
+    evidence: evals/coldreading_window_test.go:35 — "windowPositions = []string{"widening", "entailment", "detection"}"
+  - requireConfiguredStores tolerates an absent store directory for the rdi (readings) store alone, on the ground that the store is provisioned on first use; every other store still refuses, and a readings path pointing at a non-directory still refuses.
+    evidence: internal/core/reading/assemble.go:1205 — "if os.IsNotExist(err) && row.Store == issueschema.ReadingItemFamily { continue }"
+  - The spec's Tests section claims every test was watched fail before and pass after; the implementer discloses the red-first ordering was partial — leaf helpers watched red, the rest proved by mutation on a scratch copy. Not verifiable from the tree either way.
+    evidence: .abcd/development/specs/closed/spc-2609020626039834-a-comparative-reading-receives-the-widening-run-s-items-as-i.md:1 — "Watched fail before, pass after; each refusal proved by a mutation that removes it."
+- missing:
+  - `make evals-cold-reading` does not pass at the delivered commit. TestEveryCommittedEntryFitsItsDeclaredWindow and TestTheWindowCheckReportsABreach fail because the widening (809238 vs 800000) and detection (818275 vs 810000) entries now measure past their declarations; the same two tests pass on a scratch copy of the parent c1be0000, so the delivery caused the breach by growing the tree those two positions read. Neither the commit message, the spec nor the intent discloses it, and no re-measured declaration ships with the change.
+    evidence: evals/coldreading_window_test.go:60 — "t.Fatalf("%d committed entry(s) measure past the window they declare")"
+    evidence: .abcd/config/reading-presets.json:76 — "the widening and detection entries' tokens_est declarations are unchanged by this commit"
+
+Scope-condition dispositions:
+- cond-2609020626038511 — survived: The candidate set is exactly one widening run's items: the derivation admits exactly one qualifying run and refuses more than one, a record returned at any other position refuses the assembly by name, and assertCandidateProjection refuses to emit a candidate outside the derived run's directory.
+  evidence: internal/core/reading/candidates.go:251 — "case 0: return WideningRun{}, &NoCandidateRun{...}; default: return WideningRun{}, &AmbiguousCandidateRun{...}"
+  evidence: internal/core/reading/candidates_test.go:417 — "TestComparativeRefusesANonWideningRun"
+  evidence: internal/core/reading/candidates_test.go:1 — "TestCandidateProjectionRefusesAForeignRun"
+- cond-2609020626033649 — survived: ItemFate reads exactly the dispositions and admissions stores and nothing else, and the surprises store — a third store that does record something about a candidate — is excluded from the bundle by a derived row while a planted surprise leaves the assembly succeeding, which is the condition's second sentence exercised rather than merely assumed.
+  evidence: internal/core/capture/itemfate.go:67 — "itemDir := filepath.Join(issuesRoot, issueschema.DispositionsDir, item)"
+  evidence: internal/core/capture/itemfate.go:82 — "runDir := filepath.Join(issuesRoot, issueschema.AdmissionsDir, run)"
+  evidence: internal/core/reading/candidates_test.go:546 — "writeFile(t, root, ".abcd/work/issues/surprises/srp-1.md", ... occasioned_by ...) — and the assembly then succeeds"
+- cond-2609020626032295 — survived: The projection is the two declared fields and the pattern stays behind: the ENVELOPE sentinel is planted in every candidate's pattern and asserted never to arrive, the manifest states the projected field names, and the divergence register records the withholding as the deliberate reading of companion 7.4.
+  evidence: internal/core/reading/candidates_test.go:275 — "t.Error("the item's pattern reached the bundle; provenance is the envelope's and not the candidate's, and the projection is two fields")"
+  evidence: internal/core/reading/candidates_test.go:280 — "if strings.Join(res.Manifest.CandidateFields, "|") != strings.Join(CandidateFields, "|")"
+  evidence: .abcd/development/research/notes/2026-09-02-iteration-2-divergence-register.md:39 — "23 | The pattern named, at the comparative position | ... | Withheld | Provenance is the envelope's, not the candidate's"
 ## Grounds
 
 - pursued: we expect a field projection out of one widening run's items to give the comparative reading its ruled object without opening the read block to the rest of the readings store, because the cold half (returned text) and the warm half (dispositions, admissions, other runs) of that store are separable at field and directory grain; a planted disposition reaching the comparative bundle would show it wrong
