@@ -30,8 +30,21 @@ To render the assembler's state:
 
 Summarise the JSON for the user: `assembler_version`, `include_rows` and
 `exclusion_rows` (what the table admits and what it refuses), `definitions`
-(the reading definitions present under `agents/`), and `staged_runs` (runs
-sitting in the local tier). Zero writes.
+(the reading definitions present under `agents/`), `staged_runs` (runs an
+assembly has parked in the local tier), `orphaned_ingests`, and
+`leftover_stages`. Zero writes.
+
+**`orphaned_ingests` is not routine.** Each name is a run whose ingest reached
+the ledger and never reached its commit marker, so its reading records are
+sitting in the committed ledger for a run that never happened. Report it
+whenever it is non-empty, and say that the next ingest that validates rolls
+those records back.
+
+**`leftover_stages` is the other thing a stage can be, and it is not an
+orphan.** Each name is a run that DID commit — its `run.json` is down — and
+whose stage merely failed to clear afterwards. Its records stay. Report it,
+and say that the next ingest that validates clears the stage alone; never say
+its records will be rolled back, because they will not be.
 
 ## Assemble one reading's input
 
@@ -168,7 +181,8 @@ at one.
 
 An **item-level** violation refuses that item and lands the rest: an empty or
 absent `pattern` at any position, a field the position's body does not declare,
-a reserved name, or a body matching a registered signature. A **list-level**
+or a reserved name. A registered signature does not refuse — it flags. A
+**list-level**
 violation refuses the whole run: a wrong `_type`, a run id that resolves to no
 parked manifest, a manifest hash that disagrees, an instrument claiming a
 definition hash or an assembler version the artefacts do not carry, a regime
@@ -176,7 +190,9 @@ disagreeing with the definition, or a payload in which no item survived.
 
 **A refusal leaves a record once the run's identity is proven** — that is, once
 the run id resolves to a parked manifest whose content hash matches. From that
-point a list-level refusal writes `refusal.json` under the run's directory,
+point every list-level refusal writes `refusal.json` under the run's directory,
+including a definition that does not resolve, whose record states no regime
+because there is none to state,
 carrying the run metadata and the named reason and no items, and the refusal
 message and the JSON render both name it. A refusal reached BEFORE that point —
 a wrong `_type`, a run id that resolves to nothing, a manifest hash that
@@ -201,27 +217,40 @@ stated:
 - `registrative`: `fix`, `remedy`, `resolution`.
 - `explicative`: `disposition`, `status`.
 - `generative` has no reserved names. Its licence is the widest, and the
-  constraint on it falls at admission, so a signature hit there raises a review
-  flag on the run record instead of refusing the item.
+  constraint on it falls at admission, so it runs the WHOLE registry as review
+  flags rather than only its own regime's.
 
-Prose that ranks, settles or proposes without the field is caught too, by a
+Prose that ranks, settles or proposes without the field is watched too, by a
 registry of named signatures (`RG-EVAL-ORDERING`, `RG-EVAL-RECOMMENDATION`,
-`RG-REG-FIXPROPOSAL`, `RG-EXPL-DISPOSITION`). That half is bounded by the
-registry: a fix proposal or a disposition phrased outside it is not caught, and
-the structural halves above carry no such bound.
+`RG-REG-FIXPROPOSAL`, `RG-EXPL-DISPOSITION`) reading every text value the item
+carries, `pattern` included. All four are **observed, not enforcing**: a hit raises a review flag on the run record naming the item and
+the signature id, and the item lands. They cannot tell a reading that proposes
+from one reporting that the document proposes, so an enforcing registry refused
+a reading for quoting its own material. Report `review_flags` and read them; the
+structural halves above are the ones that refuse.
 
 ### Where the records land
 
 Nothing durable is written or deleted until the whole payload validates; a
-refusal after the run is proven leaves its refusal record and nothing else. The
-reading records land in the reading-record family, the run's manifest is
-promoted beside its run metadata, and the run metadata is written **last** as
-the commit marker — a run without one never happened. An ingest interrupted
-before that marker leaves a stage in the local tier. Every later invocation
-names that orphan; the next one whose payload validates rolls the run back and
-clears it, and a refused run reports the orphans it left in place. One ingest
-runs at a time in a checkout: a second waits, and reports contention rather
-than sweeping the first one's records away.
+refusal after the run is proven leaves its refusal record and nothing else, and
+before its identity is proven a run writes nothing anywhere. Once the payload
+validates the reading records land in the reading-record family as one batch,
+the run's manifest is promoted beside its run metadata, and the run metadata is
+written **last** as the commit marker — a run without one never happened.
+
+An ingest interrupted before that marker leaves a stage in the local tier.
+Every later invocation names that orphan; the next one whose payload validates
+sweeps it: it **rolls that run's reading records out of the committed ledger** —
+the run never happened, so it must leave none — and clears the stage. Until
+then the bare verb reports it as `orphaned_ingests`. A stage left behind AFTER
+the marker — the commit path could not clear it — is reported as
+`leftover_stages` instead: that run is complete, and the sweep clears the stage
+and leaves its records alone. A refused run destroys no other run's records and
+reports the orphans it left in place; the one rollback a refusal does perform is
+of its OWN earlier crashed attempt, because a refused run leaves no reading
+records. The ids a sweep removed are reported however the invocation ends. One
+ingest runs at a time in a checkout: a second waits, and reports contention
+rather than sweeping the first one's records away.
 
 Report from the JSON: `run_id`, `records`, `refused_items`, `review_flags`,
 `cleared_stages`, `rolled_back_records`, `pending_stages`, and `run_record` —
