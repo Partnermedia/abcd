@@ -431,8 +431,53 @@ func operandMatches(args []string, opIdx []int, n int, want string, glob func(in
 // unexpanded too, so it produces nothing but itself and the literal compare
 // has already had its say.
 func globMatches(pattern, literal string) bool {
-	ok, err := path.Match(pattern, literal)
+	ok, err := path.Match(bashGlobPattern(pattern), literal)
 	return err == nil && ok
+}
+
+// bashGlobPattern rewrites a bash pattern into the dialect path.Match reads.
+// One difference changes an answer: bash spells a negated character class
+// `[!…]`, path.Match spells it `[^…]`, and path.Match reads bash's `!` as an
+// ordinary member of the set. So `git clea[!x] -fd` — which bash expands to
+// `git clean -fd` whenever a file called `clean` is there — compared as "clea
+// followed by `!` or `x`", matched nothing, and allowed.
+//
+// A `]` first in the set is a literal member in both dialects (`[!]a]`), and a
+// `[` inside an open set is literal in both, so the scan walks each class to
+// its close rather than translating every `[!` it sees. An unterminated class
+// is left as it stands: bash leaves such a word unexpanded too, and the literal
+// compare beside this one has already had its say.
+func bashGlobPattern(pattern string) string {
+	if !strings.Contains(pattern, "[!") {
+		return pattern
+	}
+	b := []byte(pattern)
+	for i := 0; i < len(b); i++ {
+		switch b[i] {
+		case '\\':
+			i++ // an escaped byte never opens a class
+		case '[':
+			j := i + 1
+			if j < len(b) && (b[j] == '!' || b[j] == '^') {
+				b[j] = '^'
+				j++
+			}
+			if j < len(b) && b[j] == ']' {
+				j++ // a `]` first in the set is a member, not the close
+			}
+			for j < len(b) && b[j] != ']' {
+				if b[j] == '\\' {
+					j++
+				}
+				j++
+			}
+			if j >= len(b) {
+				return string(b)
+			}
+			i = j
+		}
+	}
+	return string(b)
 }
 
 // argPrefixMatches reports whether some operand carries the prefix. Only

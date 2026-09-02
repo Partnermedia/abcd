@@ -170,11 +170,15 @@ as produced: `git pus? --force origin main` is the force push whenever a file
 called `push` exists, in a directory the guard cannot see, so it blocks. An
 unconstrained position is never compared, which is why `ls *` and `git add
 *.md` do not change; behind zsh's `noglob` nothing expands and the compare is
-literal. The compare is a floor: a glob inside an attached short value
-(`-XDELET?`), extended globs (`extglob`, `**`) and a glob resolved by a
-directory tree (`repos/o/*` for an API path) are not modelled, and a globbed
-*wrapper* name (`sud? rm -rf *`) reaches only the fail-safe's warn. A globbed
-interpreter name (`s? -c '…'`) is opened, because a miss there would be silent.
+literal. Negation is bash's spelling, not Go's: `git clea[!x] -fd` is the same
+force-delete and blocks. The compare is a floor: a glob inside an attached short
+value (`-XDELET?`), extended globs (`?(…)`, `*(…)`, `+(…)`, `@(…)`, `!(…)`),
+POSIX classes (`[[:alpha:]]`) and a glob resolved by a directory tree
+(`repos/o/*` for an API path) are not modelled, and a globbed *wrapper* name
+(`sud? rm -rf *`) reaches only the fail-safe's warn. A globbed interpreter name
+(`s? -c '…'`) is opened, because a miss there would be silent — and opened *in
+addition to* that warn, never instead of it, since which program a pattern
+expands to is a guess.
 
 The same reading extends past the shell to the one program that rewrites its own
 argv from its own arguments: git resolves an alias, and an alias can be declared

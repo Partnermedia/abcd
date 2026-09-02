@@ -80,8 +80,19 @@ func (r Registry) expandGitAliases(segs []segment) ([]segment, []payloadSignal) 
 
 	for _, s := range segs {
 		out = append(out, s)
-		ci, _ := commandIndex(s)
-		if ci < 0 || !strings.EqualFold(path.Base(s.tokens[ci]), "git") {
+		ci, noglob := commandIndex(s)
+		if ci < 0 {
+			continue
+		}
+		// A globbed name reaches this pre-pass for the same reason it reaches
+		// matchSegment's command compare: bash expands the word before exec, so
+		// `g?t -c alias.p='push --force' p` is git whenever a file called `git`
+		// is there. Without the glob reading the two compares disagreed, and the
+		// disagreement fell on the allow side — the entry matched the rewrite
+		// that was never built.
+		base := path.Base(s.tokens[ci])
+		if !strings.EqualFold(base, "git") &&
+			!(!noglob && s.globAt(ci) && globMatches(strings.ToLower(base), "git")) {
 			continue
 		}
 		args := s.tokens[ci+1:]
@@ -115,11 +126,13 @@ func (r Registry) expandGitAliases(segs []segment) ([]segment, []payloadSignal) 
 			tokens: append(append([]string(nil), s.tokens[:ci+1]...), rewritten...),
 			chain:  s.chain,
 		}
-		if globbed != nil {
-			lead := make([]bool, ci+1)
-			for i := 0; i <= ci && i < len(s.globbed); i++ {
-				lead[i] = s.globbed[i]
-			}
+		// The glob record travels onto the rewrite from BOTH ends: from the
+		// alias body's own words, and from the leading tokens, which is where a
+		// glob-spelled `g?t` sits. Carrying only the body's record left the
+		// rewritten segment unglobbed, so matchSegment compared `g?t` with
+		// `git` literally and the rewrite this pre-pass had just built matched
+		// nothing.
+		if lead := globAtRange(s.globbed, 0, ci+1); globbed != nil || anyGlob(lead) {
 			next.globbed = append(lead, globbed...)
 		}
 		out = append(out, next)
@@ -397,6 +410,16 @@ func globAtRange(globs []bool, lo, hi int) []bool {
 		out = append(out, false)
 	}
 	return out
+}
+
+// anyGlob reports whether a record marks any of its tokens as a pattern.
+func anyGlob(globs []bool) bool {
+	for _, g := range globs {
+		if g {
+			return true
+		}
+	}
+	return false
 }
 
 // gitConfigUnreadWarnSignal is the loud-warn verdict for a git command that
