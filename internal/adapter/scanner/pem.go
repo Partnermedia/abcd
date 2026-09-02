@@ -43,11 +43,23 @@ import (
 // is masked whole (maskedWhole), since a head/tail fingerprint of a span that
 // ends in body bytes would keep two bytes of key.
 //
-// Residual, stated rather than hidden: a body line the shape rule declines —
+// Residuals, stated rather than hidden. A body line the shape rule declines —
 // a gutter this list does not know — ends the block early and survives, and
 // the stage-two rescan cannot see a headerless base64 line any more than
 // stage one could (iss-96 tracks the entropy residue). The rule is wide
 // enough for a pasted, indented, quoted, diffed or line-numbered block.
+//
+// Two more, one on each side of the line. The same-line pattern's `open`
+// alternative (patterns.go) takes a short final padding chunk only where it
+// ENDS the line, so a one-line key rendering with no END marker that is
+// followed by prose keeps that chunk — "… QQQ= and then prose" stores "QQQ=".
+// And the evidence rule over-claims in the other direction: pemBodyOpened
+// accepts ANY single run of 16+ base64-alphabet characters carrying an
+// alphanumeric byte, so a header that is merely MENTIONED still opens a block
+// when one long single-token line follows within the window — a CamelCase
+// identifier alone inside a fenced snippet is enough — and the run can end
+// mid-fence and orphan the closing marker. Both shapes belong to
+// iss-2609020127210042; neither is fixed here.
 
 // maxPEMBodyLines bounds the lines one block consumer may take after the
 // header. A PGP private-key block with several subkeys runs to a few hundred
