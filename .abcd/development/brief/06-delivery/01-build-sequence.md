@@ -26,7 +26,7 @@ Stand up the module layout before any command logic:
 each an interface plus a stub native default); `internal/registry`;
 `internal/surface/cli` (Cobra). The plugin manifest
 (`.claude-plugin/plugin.json`, `marketplace.json`) and the markdown surfaces
-(`commands/`, `agents/`, `skills/`) that shell to the binary load cleanly. This
+(`commands/`, `agents/`) that shell to the binary load cleanly. This
 locks the interface seams on day one, so every later milestone fills a native
 default behind an interface the core already depends on.
 

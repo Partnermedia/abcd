@@ -7,8 +7,10 @@ check. It is the write side of the corpus; `/abcd:consult` is the read side and
 the provenance recorder.
 
 It is a **host-delegated command** — a markdown workflow that runs in the host
-agent. **No Go verb backs it**: there is no `abcd ingest` binary sub-verb, no
-bare-status render, and no CLI flags of its own. The determinism it relies on
+agent. **No Go verb backs it**: there is no top-level `abcd ingest` verb, no
+bare-status render, and no CLI flags of its own. (The `reading ingest` and
+`memory ingest` sub-verbs belong to other verbs and validate other inputs — a
+reading's returned output, a source distilled into memory — never this corpus.) The determinism it relies on
 lives in the corpus's own `bin/add-source` registrar; the command supplies the
 judgment half (clean metadata, real keywords, confidentiality, quality check).
 

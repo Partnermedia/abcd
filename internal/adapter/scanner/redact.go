@@ -38,6 +38,13 @@ func Redact(text string, findings []Finding) (string, int) {
 		return text, 0
 	}
 	lines := strings.Split(text, "\n")
+	// The block consumer decides where a key block ENDS by the shape of its
+	// lines, and a seal writes '*' bytes, which are not body-shaped. Judged on
+	// the rewritten slice, a second finding on a body line — an AWS-key-shaped
+	// run inside the base64 is enough — closed the block at that line and left
+	// the rest of the key and its END marker in the record. So the boundaries
+	// are computed on the ORIGINAL lines and applied to the rewritten ones.
+	original := append([]string(nil), lines...)
 
 	byLine := map[int][]Finding{}
 	for _, f := range findings {
@@ -53,7 +60,23 @@ func Redact(text string, findings []Finding) (string, int) {
 		lines[idx] = line
 		rewritten += n
 	}
+	// A PEM private key is the one finding whose leak is not on the line the
+	// pattern matched: the header names the block, and the body it announces
+	// follows on the lines after it. Those are consumed here, through the END
+	// line, bounded (pem.go) — the one place every store's redaction shares.
+	lines, blocks := consumePEMBodies(original, lines, findings)
+	rewritten += blocks
 	return strings.Join(lines, "\n"), rewritten
+}
+
+// maskedWhole reports whether a finding's span is masked with no head/tail
+// fingerprint: every identity kind, where the head and tail are what
+// re-identify the machine, and a PEM private-key span, whose tail is body
+// bytes once the pattern reaches past the header — two bytes of key are two
+// bytes too many, and a header needs no fingerprint to be recognised for
+// what it was.
+func maskedWhole(kind string) bool {
+	return IsIdentityKind(kind) || kind == kindPEMPrivateKey
 }
 
 // redactLine masks every finding on one source line. Secret spans are sealed by

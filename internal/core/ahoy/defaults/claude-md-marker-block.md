@@ -19,7 +19,16 @@ A prompt that matches no domain injects nothing (zero added tokens).
   `{"schema_version": 1, "disabled": false, "domains": {}}` — add a domain key to
   override a default per-field (e.g. `{"ROADMAP": {"state": "dormant"}}` silences
   it while keeping its rules) or to declare a custom domain
-  (`{"recall": [...], "rules": [...]}`).
+  (`{"recall": [...], "rules": [...]}`). A domain left with no rules at all
+  (`{"rules": []}`, or a custom domain declared without any) is SKIPPED with a
+  diagnostic on stderr naming it — it would otherwise inject a heading-only
+  block, which reads as a domain that says nothing. The rest of the file still
+  loads; `{"state": "dormant"}` is the way to silence a domain deliberately.
+- Provenance: a domain the override names (rules replaced, state changed, or a
+  custom domain) renders as `## NAME (repo override)` wherever it appears: the
+  injected block, `abcd rules`, and the hook's diagnostic; `abcd rules --json`
+  carries `"source": "repo"` for it and `"source": "bundled"` for an untouched
+  default.
 - Kill switch: set `"disabled": true` at the top of `.abcd/rules.json`.
 - Explicit activation: start a prompt with `*<DOMAIN>` (e.g. `*COMMITTING`,
   `*PII`) to inject that domain unconditionally — overrides a `dormant` state,

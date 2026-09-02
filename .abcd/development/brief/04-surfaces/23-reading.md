@@ -28,8 +28,8 @@ assembly and diff the result.
 
 `assemble` takes exactly three operands, every one closed in shape. It carries
 no prose: that is the property the 2026-08-28 rulings protected by closing the
-invocation at two, and [adr-58] restates it as the rule that binds now that a
-third has been admitted.
+invocation at two, and [adr-58](../../decisions/adrs/0058-a-reading-is-commissioned-about-something-so-the-invocation-takes-a-scope.md) restates it as the rule that binds with a third
+operand admitted.
 
 | Operand | Grammar |
 |---|---|
@@ -80,6 +80,15 @@ land in
 `.abcd/.work.local/scratch/reading-runs/<run-id>/`. With `--dry-run` and no
 `--out`, nothing is written and the result is rendered only.
 
+## What a reading would cost
+
+Every assembly, `--dry-run` included, reports the size of the item text it
+assembled — bytes and an estimated token count, in total and per kind — so what
+a reading would be handed is known before one is commissioned (itd-198). The
+estimate is byte-derived (bytes divided by 3.85), never a tokenizer's count, and
+the render says so beside the number rather than letting a reader take it for a
+measurement.
+
 Ruling (18) is held on both sides of the run. An output directory the include
 table can reach is refused when it is named, because writing a run where the
 table reaches it commits the next run's contamination. And both artefacts are
@@ -124,11 +133,15 @@ proposal or a disposition phrased outside the registry's signatures is not
 caught. The reserved names carry no such bound, because a field is present or it
 is not.
 
-Writes are staged. Nothing durable exists until the whole payload validates; the
-reading records land in the reading-record family; and the run metadata is
-written **last**, as the commit marker, so a run without one never happened. An
-ingest interrupted before that marker leaves a stage in the local tier, and the
-next invocation names the orphan, rolls the run back and clears it.
+Writes are staged. Nothing durable is written or deleted until the whole payload
+validates — a refusal after the run is proven leaves its refusal record and
+nothing else; the reading records land in the reading-record family; and the run
+metadata is written **last**, as the commit marker, so a run without one never
+happened. An ingest interrupted before that marker leaves a stage in the local
+tier. Every later invocation names the orphan; the next one whose payload
+validates rolls the run back and clears it, and a refused run reports the
+orphans it left in place — the sweep is a delete in the committed tier, and a
+refused run never reaches one.
 
 ## What this surface does not claim
 

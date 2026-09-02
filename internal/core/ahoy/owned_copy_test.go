@@ -43,6 +43,15 @@ func writeUserPathEntry(t *testing.T, body string) {
 func seedDataCache(t *testing.T, body []byte) string {
 	t.Helper()
 	data := t.TempDir()
+	seedDataCacheAt(t, data, body)
+	t.Setenv("CLAUDE_PLUGIN_DATA", data)
+	return data
+}
+
+// seedDataCacheAt writes the self-consistent cache (artefact plus binary-meta)
+// under data, wherever the caller chose to put it; it sets no environment.
+func seedDataCacheAt(t *testing.T, data string, body []byte) {
+	t.Helper()
 	if err := os.MkdirAll(filepath.Join(data, "cache"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -55,8 +64,6 @@ func seedDataCache(t *testing.T, body []byte) string {
 	if err := os.WriteFile(cacheMetaPath(data), []byte(meta), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("CLAUDE_PLUGIN_DATA", data)
-	return data
 }
 
 // TestInstallWritesOwnedCopyFromCache is AC 4's install half: with a verified

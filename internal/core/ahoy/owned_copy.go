@@ -179,16 +179,20 @@ func isOwnedCopyFile(target string) bool {
 // from — the precondition for installing (or healing to) an owned copy. When it
 // does not hold, install degrades loudly to the spc-21 pinned symlink. The data
 // dir is resolved for pluginRoot (a hook's environment, or the root's stamp
-// from a terminal).
-func ownedCopySourceReady(pluginRoot string) bool {
-	return cacheSourceReady(pluginDataDir(pluginRoot).dir)
+// from a terminal); cwd is the repository the verb runs against, which is what
+// dataDirHazard needs to judge the resolved directory's shape.
+func ownedCopySourceReady(cwd, pluginRoot string) bool {
+	return cacheSourceReady(pluginDataDir(pluginRoot).dir, cwd)
 }
 
 // cacheSourceReady reports whether dataDir holds an artefact for this platform
-// together with a parseable recorded hash to re-verify it against; an empty
-// dataDir is no source at all.
-func cacheSourceReady(dataDir string) bool {
-	if dataDir == "" {
+// together with a parseable recorded hash to re-verify it against. An empty
+// dataDir is no source at all, and neither is one of a shape the harness never
+// produces (see dataDirHazard) — the check applies wherever the path came
+// from, the plugin root's stamp included, because neither source examines the
+// value it hands back.
+func cacheSourceReady(dataDir, cwd string) bool {
+	if dataDir == "" || dataDirHazard(dataDir, cwd) != "" {
 		return false
 	}
 	if cacheRecordedSHA(dataDir) == "" {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/intentdriven/abcd/internal/fsutil"
 	"sort"
+	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/identity"
 )
@@ -74,9 +75,10 @@ func Detect(cwd string) (DetectionResult, error) {
 		gaps = append(gaps, detectIdentity(identity, idx)...)
 		gaps = append(gaps, detectGitIdentity(abs)...)
 		gaps = append(gaps, detectHistoryStore(identity.RootSHA)...)
+		gaps = append(gaps, detectConfigIntegrity(abs)...)
 		gaps = append(gaps, detectConfigValues(abs)...)
 		gaps = append(gaps, detectMarkerDrift(abs)...)
-		gaps = append(gaps, detectPathSymlink(pluginRoot, pluginOK)...)
+		gaps = append(gaps, detectPathSymlink(abs, pluginRoot, pluginOK)...)
 		gaps = append(gaps, detectHookManifest(pluginRoot, pluginOK)...)
 		gaps = append(gaps, detectVersion(abs)...)
 		// Guard health is computed for every managed or adoptable repo, so a
@@ -317,14 +319,60 @@ func detectHistoryStore(rootSHA string) []Gap {
 			FixHint: "ahoy install writes the per-repo meta.json.", Required: true, Resolvable: true,
 		})
 	}
-	return gaps
+	return append(gaps, detectStoredCredential(rootSHA, repoDir)...)
+}
+
+// detectStoredCredential raises the one gap for a git credential left at rest in
+// the user-level history store — the state a store written before
+// scrubRemoteUserinfo existed is in (GHSA-qc3w-8pv5-crc3).
+//
+// It exists so the heal is REACHABLE. Without a gap, a repo that is otherwise
+// fully installed short-circuits on the idempotency early return and never runs
+// the history step, so a token sits in ~/.abcd/history for the life of the
+// machine no matter how often the operator re-installs. Required and resolvable,
+// because `ahoy install` closes it.
+//
+// The detail names the FILES only, never the value: a gap detail is rendered by
+// every status board, and quoting the credentialed URL would copy the token onto
+// the operator's terminal to tell them it should not be at rest.
+func detectStoredCredential(rootSHA, repoDir string) []Gap {
+	var where []string
+	// The at-rest file, not loadHistoryIndex's scrubbed view of it.
+	if idx, err := readHistoryIndexFile(); err == nil && idx != nil {
+		for _, r := range idx.Repos {
+			if r.Github != "" && scrubRemoteUserinfo(r.Github) != r.Github {
+				where = append(where, "~/.abcd/history/index.json")
+				break
+			}
+		}
+	}
+	if rootSHA != "" {
+		metaPath := filepath.Join(repoDir, "meta.json")
+		if g := metaGithub(metaPath); g != "" && scrubRemoteUserinfo(g) != g {
+			where = append(where, "~/.abcd/history/"+shortSHA(rootSHA)+"/meta.json")
+		}
+	}
+	if len(where) == 0 {
+		return nil
+	}
+	return []Gap{{
+		ID: credentialAtRestGapID, Category: UserState, Scope: "machine",
+		Title:    "git credential at rest in the history store",
+		Detail:   "A registry value carries userinfo (a token or password in a remote URL): " + strings.Join(where, ", ") + ".",
+		FixHint:  "ahoy install rewrites the affected entries without the credential; revoke the token as well — it has been on disk.",
+		Required: true, Resolvable: true,
+	}}
 }
 
 func detectConfigValues(cwd string) []Gap {
 	var gaps []Gap
 	cfg, err := readConfig(cwd)
 	if err != nil {
-		cfg = nil // malformed config is treated as absent for value checks
+		// A config that cannot be parsed has values that are unknown, not
+		// missing: reporting them missing would arm the value collection, which
+		// then rebuilds the file (GHSA-mchq-gm34-3j34). detectConfigIntegrity
+		// raises the one diagnostic for this state.
+		return nil
 	}
 	repo := subMap(cfg, "repo")
 	docs := subMap(cfg, "docs")
@@ -373,7 +421,12 @@ func cfgGap(id, title, detail string) Gap {
 }
 
 func detectMarkerDrift(cwd string) []Gap {
-	cfg, _ := readConfig(cwd)
+	cfg, err := readConfig(cwd)
+	if err != nil {
+		// docs.target is unknowable, so no marker gap may arm a plant into the
+		// default targets (both files) the user never chose.
+		return nil
+	}
 	docs := subMap(cfg, "docs")
 	target, _ := stringVal(docs, "target")
 	files := markerTargets(target)
@@ -403,7 +456,7 @@ func detectMarkerDrift(cwd string) []Gap {
 // detector can no longer report "not installed" while running as that very
 // binary. Every path it renders goes through displayPath, so a gap pasted into
 // an issue carries no username.
-func detectPathSymlink(pluginRoot string, pluginOK bool) []Gap {
+func detectPathSymlink(cwd, pluginRoot string, pluginOK bool) []Gap {
 	if !pluginOK {
 		return nil
 	}
@@ -465,7 +518,7 @@ func detectPathSymlink(pluginRoot string, pluginOK bool) []Gap {
 			// garbage-collects (spc-35). Heal-able only while a verified cache
 			// artefact exists to copy from — without one there is nothing
 			// better to offer than the symlink that works.
-			if ownedCopySourceReady(pluginRoot) {
+			if ownedCopySourceReady(cwd, pluginRoot) {
 				gaps = append(gaps, Gap{
 					ID: "symlink.legacy", Category: ConfigChange, Scope: "machine",
 					Title:    "PATH entry is a symlink into the plugin root",
@@ -587,8 +640,33 @@ func detectHookManifest(pluginRoot string, pluginOK bool) []Gap {
 	}}
 }
 
+// detectConfigIntegrity raises the one diagnostic for a config.json that is
+// present but cannot be parsed (a merge-conflict marker is the usual cause).
+// It is Required so it shows on the status board, and NOT Resolvable, so it is
+// excluded from Remaining and never arms a step: the file is the user's data
+// and repairing it is theirs to do (GHSA-mchq-gm34-3j34). Every other reader of
+// the config returns no gap on the same error, so this is the only line the
+// state produces.
+func detectConfigIntegrity(cwd string) []Gap {
+	if _, err := readConfig(cwd); err != nil {
+		return []Gap{{
+			ID: malformedConfigGapID, Category: ConfigChange, Scope: "repo",
+			Title:    ".abcd/config.json could not be parsed",
+			Detail:   ".abcd/config.json is present but could not be parsed (" + errText(err) + "); its values are unknown and ahoy install will not rewrite it.",
+			FixHint:  "Repair the file by hand — a merge-conflict marker is the usual cause — and re-run ahoy install.",
+			Required: true, Resolvable: false,
+		}}
+	}
+	return nil
+}
+
 func detectVersion(cwd string) []Gap {
-	cfg, _ := readConfig(cwd)
+	cfg, err := readConfig(cwd)
+	if err != nil {
+		// Never install_meta.missing: that gap arms stepVersionStamp, which would
+		// republish the unparseable file as a meta-only one.
+		return nil
+	}
 	meta := subMap(cfg, "meta")
 	setupVersion, hasVersion := stringVal(meta, "setup_version")
 	setupDate, hasDate := stringVal(meta, "setup_date")

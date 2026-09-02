@@ -354,15 +354,16 @@ abcd/
 │   └── surface/
 │       ├── cli/                        # Cobra front door (ships in the MVP)
 │       └── mcp/                        # MCP front door (later)
-├── commands/                      # markdown command surfaces that shell to the binary — canonical list in ../04-surfaces/README.md
-│   ├── ahoy.md / capture.md / docs.md / history.md / launch.md / memory.md / version.md
-│   └── …                               # plus operator-internal commands
+├── commands/                      # markdown command surfaces that shell to the binary — one file per verb, the
+│   └── <verb>.md                       #   gated list in ../04-surfaces/README.md (abcd.md is the bare /abcd board)
 │   # NOTE: `uninstall` is a sub-verb of /abcd:ahoy (not a standalone command). The ahoy command
-│   # markdown handles the install/uninstall/dry-run/destroy sub-verb dispatch internally.
-├── agents/                             # 10 agents — see 01-agents.md (markdown, host-delegated)
-│   ├── docs-currency-reviewer.md / graveyard-interpreter.md / intent-auditor.md
-│   ├── lifeboat-reviewer.md / press-release-composer.md / principle-distiller.md
-│   ├── release-changelog-composer.md / ruthless-reviewer.md / security-reviewer.md
+│   # markdown dispatches the install/uninstall/dry-run/doctor/remote sub-verbs internally.
+├── agents/                             # 15 agent prompts — see 01-agents.md (markdown, host-delegated)
+│   ├── cold-reading-widening.md / cold-reading-entailment.md / cold-reading-comparative.md
+│   ├── cold-reading-detection.md / docs-currency-reviewer.md / graveyard-interpreter.md
+│   ├── intent-auditor.md / lifeboat-reviewer.md / press-release-composer.md
+│   ├── principle-distiller.md / release-changelog-composer.md / ruthless-reviewer.md
+│   ├── scribe.md / security-reviewer.md
 │   └── sota-researcher.md              # plus per-agent fixtures/ dirs, README.md, CHANGELOG.md
 └── hooks/                              # Claude Code event hooks — every event command runs through a self-provisioning shim
     ├── bootstrap.sh                    # builds/refreshes the plugin-root binary; referenced by every event command
@@ -372,7 +373,8 @@ abcd/
                                         # PreToolUse (matcher Bash) → guard hook; PreCompact → prompt-router-reset; SessionEnd → session-end.
                                         # The four non-SessionStart event shims also self-provision: when $CLAUDE_PLUGIN_ROOT/abcd
                                         # is missing they attempt hooks/bootstrap.sh (throttled by a .bootstrap.attempt marker
-                                        # within a 10-minute window), then fall back to a PATH-resolved abcd before failing loudly
+                                        # within a 10-minute window), then fall back to a PATH-resolved abcd — absolute, outside the
+                                        # working directory, not world-writable, else ignored with a reason — before failing loudly
 ```
 
 The core is organised one package per capability under `internal/core/`, and the

@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/intentdriven/abcd/internal/core/recordid"
 )
 
 // DefinitionsDir is where the four reading definitions live. The assembler never
@@ -19,8 +21,8 @@ const DefinitionsDir = "agents"
 const definitionPrefix = "cold-reading-"
 
 // Status is the read-only render behind the bare verb: what this assembler is,
-// what it would admit, which definitions are present, and which runs are staged
-// in the local tier without having been ingested.
+// what it would admit, which definitions are present, which runs an assembly
+// has parked in the local tier, and which ingests were interrupted.
 type Status struct {
 	AssemblerVersion string     `json:"assembler_version"`
 	SchemaVersion    int        `json:"schema_version"`
@@ -29,7 +31,27 @@ type Status struct {
 	IncludeRows      int        `json:"include_rows"`
 	ExclusionRows    int        `json:"exclusion_rows"`
 	Definitions      []string   `json:"definitions"`
-	StagedRuns       []string   `json:"staged_runs"`
+	// StagedRuns is what an ASSEMBLY parked. It is not filtered by whether the
+	// run was ingested: nothing removes an assembly's directory afterwards, so a
+	// committed run and an unread one appear alike (iss captured separately).
+	StagedRuns []string `json:"staged_runs"`
+	// OrphanedIngests names the runs whose ingest reached the ledger and never
+	// reached its commit marker.
+	//
+	// It is reported because the ingest verb's sweep rides with the COMMIT: an
+	// orphan therefore survives until the next invocation that validates, and
+	// until then its reading records sit in the committed ledger for a run that
+	// never happened. That is a state an operator has to be able to see, and no
+	// other surface shows it — StagedRuns reads the assembly parking area, which
+	// is a different directory.
+	OrphanedIngests []string `json:"orphaned_ingests"`
+	// LeftoverStages names the runs whose stage is still present although their
+	// commit marker landed: the commit path's RemoveAll failed after run.json
+	// was written. Those runs are complete. The next ingest that validates
+	// clears the stage and leaves the records alone — the sweep probes the same
+	// marker (rollbackRun) — so reporting one as an orphan would promise a
+	// rollback that never happens (iss-2609012043437282).
+	LeftoverStages []string `json:"leftover_stages"`
 }
 
 // Describe reports the assembler's state over a repository. It writes nothing.
@@ -43,6 +65,8 @@ func Describe(repoRoot string) (Status, error) {
 		ExclusionRows:    len(Exclusions),
 		Definitions:      []string{},
 		StagedRuns:       []string{},
+		OrphanedIngests:  []string{},
+		LeftoverStages:   []string{},
 	}
 	if repoRoot == "" {
 		return s, nil
@@ -72,5 +96,33 @@ func Describe(repoRoot string) (Status, error) {
 		}
 	}
 	sort.Strings(s.StagedRuns)
+
+	// A stage directory named by a run id is left in one of two states, and the
+	// commit marker is what tells them apart — the same probe the sweep's
+	// rollbackRun makes. No marker: the ingest never finished, the run never
+	// happened, and its records will be rolled back. Marker present: the run
+	// committed and only the stage failed to clear, so the records stay and
+	// only the stage goes. Calling both an orphan would tell an operator that a
+	// committed run's records are about to be deleted.
+	stages, err := os.ReadDir(filepath.Join(repoRoot, filepath.FromSlash(IngestStageDir)))
+	if err != nil && !os.IsNotExist(err) {
+		return Status{}, fmt.Errorf("reading: listing the ingest stage: %w", err)
+	}
+	for _, e := range stages {
+		if !e.IsDir() || !recordid.ValidReadingRunID(e.Name()) {
+			continue
+		}
+		marker := filepath.Join(repoRoot, filepath.FromSlash(ReadingsRecordDir), e.Name(), RunFileName)
+		switch _, err := os.Lstat(marker); {
+		case err == nil:
+			s.LeftoverStages = append(s.LeftoverStages, e.Name())
+		case os.IsNotExist(err):
+			s.OrphanedIngests = append(s.OrphanedIngests, e.Name())
+		default:
+			return Status{}, fmt.Errorf("reading: probing the commit marker of run %s: %w", e.Name(), err)
+		}
+	}
+	sort.Strings(s.OrphanedIngests)
+	sort.Strings(s.LeftoverStages)
 	return s, nil
 }
