@@ -375,6 +375,16 @@ func (r Registry) Check(command string) (Decision, error) {
 	// raises a synthetic (entry-less) signal folded in by severity below.
 	segs, signals := expandPayloads(segs)
 
+	// git rewrites its own subcommand from configuration carried IN the command
+	// line, and the operand walk was built to step exactly those values over
+	// (gh-299). The pre-pass reads them and appends the command git would
+	// actually run, so the entries that already exist match it. It runs after the
+	// payload expansion so a git command inside an `sh -c` payload is reached too
+	// (GHSA-m2r8-fx7r-rq34).
+	aliasSegs, aliasSignals := r.expandGitAliases(segs)
+	segs = aliasSegs
+	signals = append(signals, aliasSignals...)
+
 	// A brace group the tokenizer could not expand is folded in the same way,
 	// and AFTER the payload expansion so a group hidden inside an inspectable
 	// payload counts too. One signal is enough however many segments carry a

@@ -55,6 +55,14 @@ reading gives a trailing backslash a verdict rather than an error: it is parsed
 as bash 3.2 parses it (dropped), the reading under which a hazard executes.
 What stays unparsable is what no shell runs either — an unterminated quote.
 
+A third reserved id is a **warn**: `git-config-rewrite-unread`, raised when a
+git command points at configuration whose body the guard cannot read —
+`GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`, `-c include.path=`, an `includeIf`,
+or a `--config-env` naming a variable the command line does not set. git
+rewrites its own subcommand from an alias found there, so what runs need not be
+what is written; the directive is visible even though the body is not, and a
+warn is what a visible directive with an unreadable value is worth.
+
 A guard that cannot be **evaluated** — an unparsable command line, a registry
 that will not load, a candidate too long to read, a registry switched off — is a
 fourth case, and the two front doors part company on it deliberately:
@@ -156,6 +164,23 @@ literal. The compare is a floor: a glob inside an attached short value
 directory tree (`repos/o/*` for an API path) are not modelled, and a globbed
 *wrapper* name (`sud? rm -rf *`) reaches only the fail-safe's warn. A globbed
 interpreter name (`s? -c '…'`) is opened, because a miss there would be silent.
+
+The same reading extends past the shell to the one program that rewrites its own
+argv from its own arguments: git resolves an alias, and an alias can be declared
+in the command line itself (`-c alias.p='push --force'`, `--config-env`, the
+`GIT_CONFIG_COUNT`/`KEY_n`/`VALUE_n` triple, `GIT_CONFIG_PARAMETERS`). Those are
+exactly the values the operand walk steps over to find the subcommand, so the
+alias NAME reached the compare and its body did not. The values are now read:
+when operand 0 names an alias the same command line declares, the command git
+would actually run is checked against the ordinary entries, following a bounded
+chain of nested aliases, and a `!`-prefixed body — which git hands to a shell —
+is read as an execute-a-string payload. Two costs are taken deliberately. git
+ignores an alias that shadows a builtin, so `git -c alias.push='push --force'
+push` is a plain push that the rewrite refuses: an accepted false positive,
+over-blocking being the fail-safe direction, and cheaper than a builtin table
+that only a probe of the installed git could keep true. And the alias body is
+split on whitespace where git uses its own quote-aware splitter. Configuration
+delivered from a FILE stays unreadable — that is the warn above, not a match.
 
 What an allow still does not see is a hazard that never reaches command position
 at all:

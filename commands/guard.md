@@ -115,6 +115,17 @@ command runs, so a spelling the pattern *can* produce (`git pus? --force`,
 `git push --forc?`) is treated as produced and blocks. A glob anywhere else
 (`ls *`, `git add *.md`) changes nothing, and a quoted one is literal.
 
+A git alias declared in the command line is expanded before the match, because
+git resolves it before it runs: `git -c alias.p='push --force' p origin main` is
+a force push, and so are its `--config-env`, `GIT_CONFIG_KEY_n`/`VALUE_n` and
+`GIT_CONFIG_PARAMETERS` spellings. A `!` body is read as a shell command. Two
+consequences to report accurately: an alias that shadows a git builtin
+(`-c alias.push='push --force' push`) is refused even though git would ignore
+it — an accepted over-block — and configuration delivered from a FILE
+(`GIT_CONFIG_GLOBAL`, `-c include.path=`, an `--config-env` variable the line
+does not set) is a **warn** under `git-config-rewrite-unread`, because the
+directive is visible and its body is not.
+
 What an allow still does not see is a hazard that never reaches command position
 at all: one launched through a known wrapper carrying a value-taking flag the
 guard does not name (`sudo -u bob <hazard>` is seen; the bundled short form
