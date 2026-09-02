@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"os"
 	"os/exec"
 	"regexp"
 	"sort"
@@ -21,9 +22,11 @@ type Identity struct {
 	// identities: every user.name / user.email value git resolves for this
 	// repository in a scope the effective value displaced — the unconditional
 	// global identity under a repo-local persona, or the reverse, or an
-	// includeIf persona keyed on where the repository sits. A persona ADDS an
-	// identity to redact; it never replaces one (GHSA-v826-5jf4-p8xg,
-	// GHSA-gxhr-pmwv-r99p, GHSA-rvhr-3455-c5jw).
+	// includeIf persona keyed on where the repository sits — and the
+	// GIT_AUTHOR_*/GIT_COMMITTER_* persona the environment sets, which no
+	// config listing reports at all. A persona ADDS an identity to redact; it
+	// never replaces one (GHSA-v826-5jf4-p8xg, GHSA-gxhr-pmwv-r99p,
+	// GHSA-rvhr-3455-c5jw).
 	OtherGitUserNames  []string
 	OtherGitUserEmails []string
 	GitRemoteUsername  string
@@ -90,6 +93,19 @@ func ProbeIdentity(repoRoot string) Identity {
 	// unscoped listing rather than a scope-by-scope reassembly.
 	id.GitUserName, id.OtherGitUserNames = splitIdentityValues(git("config", "--get-all", "user.name"))
 	id.GitUserEmail, id.OtherGitUserEmails = splitIdentityValues(git("config", "--get-all", "user.email"))
+	// GIT_AUTHOR_* and GIT_COMMITTER_* are an identity scope `git config` never
+	// reports and that outranks every config file when a commit is written: a CI
+	// runner, a direnv profile and a rebase wrapper all set them. The persona
+	// that AUTHORS the caller's commits was therefore absent from the matcher
+	// set and stored in clear. They are read from the process environment (not
+	// through the scrubbed subprocess env, which deliberately does not carry
+	// them) and folded in as OTHERS: an injected value can only ADD something to
+	// redact, never displace the identity the config resolves, so the
+	// config-injection guard above is not weakened by reading them.
+	id.OtherGitUserNames = addIdentityValues(id.GitUserName, id.OtherGitUserNames,
+		os.Getenv("GIT_AUTHOR_NAME"), os.Getenv("GIT_COMMITTER_NAME"))
+	id.OtherGitUserEmails = addIdentityValues(id.GitUserEmail, id.OtherGitUserEmails,
+		os.Getenv("GIT_AUTHOR_EMAIL"), os.Getenv("GIT_COMMITTER_EMAIL"))
 	if remote := git("config", "--get", "remote.origin.url"); remote != "" {
 		if m := githubRemoteRe.FindStringSubmatch(remote); m != nil {
 			id.GitRemoteUsername = m[1]
@@ -126,6 +142,22 @@ func splitIdentityValues(listing string) (effective string, others []string) {
 		others = append(others, v)
 	}
 	return effective, others
+}
+
+// addIdentityValues folds extra values into an Other* set under the same guards
+// splitIdentityValues applies: trimmed, empties dropped, and dropped again when
+// they only repeat the effective value or one already in the set.
+func addIdentityValues(effective string, others []string, extra ...string) []string {
+	for _, v := range extra {
+		if v = strings.TrimSpace(v); v == "" {
+			continue
+		}
+		if strings.EqualFold(v, effective) || containsFold(others, v) {
+			continue
+		}
+		others = append(others, v)
+	}
+	return others
 }
 
 // identityValues lists one identity field's values to match — the effective
