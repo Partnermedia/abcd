@@ -228,15 +228,29 @@ func RootCommit(root string) string {
 //
 // It walks to the filesystem root, because git does: checking root alone
 // answers "not a repository" for every SUBDIRECTORY of one.
-func RepoShaped(root string) bool {
+func RepoShaped(root string) bool { return RepoShapedRoot(root) != "" }
+
+// RepoShapedRoot is RepoShaped's walk with its answer kept: the nearest
+// directory at or above root carrying a .git entry, or "" when there is none.
+// It is the toplevel a caller can still bound work at when git itself will not
+// name one — the ownership refusal under the isolated env, git absent from
+// PATH, a corrupt .git — where the alternative is treating a real working tree
+// as an unbounded directory.
+//
+// It is a MARKER, not git's answer: it does not read .git, so it cannot tell a
+// valid repository from a directory that merely holds the name, and for a
+// submodule or linked worktree it reports the tree the .git file sits in
+// (which is the working-tree root a config walk wants). A caller that needs
+// git's own answer must ask git.
+func RepoShapedRoot(root string) string {
 	dir := root
 	for {
 		if _, err := os.Lstat(filepath.Join(dir, ".git")); err == nil {
-			return true
+			return dir
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return false
+			return ""
 		}
 		dir = parent
 	}

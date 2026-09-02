@@ -497,12 +497,13 @@ const maxPatternBytes = 8 << 10
 // banlistRoot resolves the repo whose banlist is being read or written. It resolves
 // the GIT WORKING-TREE TOPLEVEL, because that is the exact root the committed
 // pre-commit guard enforces at (`git rev-parse --show-toplevel`), and the store must
-// live where the guard reads it. rulesRoot's "nearest ancestor holding a .abcd dir"
-// disagrees when a repo is nested under a parent that itself has a .abcd/: it would
-// write the store into the PARENT — outside this repo, where the guard never reads it
-// and the root-anchored gitignore does not match it — leaving the layer inactive
-// while `add` reports a repo-relative path. Falls back to rulesRoot (then cwd) only
-// when git cannot answer, so a non-git use still resolves.
+// live where the guard reads it. rulesRoot's "nearest .abcd inside the working
+// tree" would disagree when a subdirectory carries its own .abcd/: it would write
+// the store there — where the guard never reads it and the root-anchored gitignore
+// does not match it — leaving the layer inactive while `add` reports a repo-relative
+// path. Falls back to rulesRoot, which is cwd outside a git working tree (it never
+// walks past one, GHSA-vvqc-3mv2-5p49), only when git cannot answer, so a non-git
+// use still resolves.
 //
 // In a LINKED git worktree it stays the WORKTREE's own root, deliberately. This is
 // the write root, and itd-150 is read-side resolution only: an `add` run in a

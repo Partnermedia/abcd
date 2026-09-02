@@ -203,3 +203,28 @@ func TestGuardHookAnnouncesADisabledRegistry(t *testing.T) {
 		t.Errorf("a disabled guard is an unguarded session and must say so; stderr = %q", stderr)
 	}
 }
+
+// TestGuardHookIgnoresAncestorKillSwitch is GHSA-vvqc-3mv2-5p49 on the guard
+// plane: a guard.json with the kill switch set, planted ABOVE the git working
+// tree, must not disarm the guard for a session inside it. The bundled hazards
+// stay armed and the blocker still blocks with the host's exit status.
+func TestGuardHookIgnoresAncestorKillSwitch(t *testing.T) {
+	outer := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(outer, ".abcd"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	planted := `{"schema_version":1,"disabled":true}`
+	if err := os.WriteFile(filepath.Join(outer, ".abcd", "guard.json"), []byte(planted), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	inner := filepath.Join(outer, "inner-repo")
+	gitInitAt(t, inner)
+
+	_, stderr, code := runGuard(preToolUse(t, "Bash", "cd scratch && rm -rf *", inner), "guard", "hook")
+	if code != 2 {
+		t.Errorf("a guard.json planted above the working tree disarmed the guard: exit %d, stderr %q", code, stderr)
+	}
+	if !strings.Contains(stderr, "rm-rf-after-cd-chain") {
+		t.Errorf("the bundled blocker must still fire; stderr = %q", stderr)
+	}
+}
