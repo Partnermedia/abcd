@@ -7,6 +7,11 @@ way the project organises *what ships together, in what order*. See
 exists and [`01-product/03-mental-model.md`](../../brief/01-product/03-mental-model.md)
 for where it sits among brief / phase / intent / spec.
 
+**Two things are called a phase.** This one, and the brief's numbered
+plumbing-phases that a phase bundles from — the glossary entry
+[`phase`](../../brief/glossary/core/phase.md) names both senses, fixes one
+spelling for each, and records that the two numberings are not a mapping.
+
 ## What a phase document is
 
 Each phase is a **product-reflection point**. A phase doc opens with the product
