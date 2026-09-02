@@ -5,7 +5,7 @@ description: >-
   construes it, what configurations does the construal admit that are not
   present in what has been committed to? Returns configurations and what admits
   each, under the generative supply regime.
-prompt_version: 0.1.0
+prompt_version: 0.2.0
 reads_untrusted_input: true
 capability_scope:
   task_classes: [cold_reading]
