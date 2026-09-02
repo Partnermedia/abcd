@@ -323,6 +323,10 @@ owns preset schema version 2 and the window eval, which every later preset
 entry conforms to. It moves neither `SchemaVersion` nor `AssemblerVersionCore`:
 the preset file and the size report are outside both artefacts.
 
+### The target is stated, not enforced
+
+Two hundred thousand estimated tokens is the target a cold preset aims at; the maintainer ruled on 2026-09-02 that any figure inside the reader's window is acceptable and that a figure over the target is stated to the operator. The size report therefore carries one over-target line and no refusal, and the declared window stays what the preset measures.
+
 ## How the Acceptance Criteria are satisfied
 
 - **ac-1 (version 2 without a window refuses).** The version-2 rule in
@@ -352,6 +356,7 @@ the preset file and the size report are outside both artefacts.
   `TestShippedPresetsDeclareMeasuredFigures` loads the committed file and
   requires every window to carry `measured_tokens_est`, `measured_bytes` and a
   well-formed `measured_at`.
+- **ac-8 (over-target line).** `renderSizeReport` compares the total estimate with `TargetTokens = 200000`, a constant beside the divisor in `assemble.go`, and appends one line, `over target: <estimate> estimated tokens against a target of 200,000; the reader's window decides whether this is acceptable`, when the total exceeds it; under the target the line is absent. The target is a statement to the operator, never a refusal, and the JSON result carries `over_target: true` beside the figures. `TestSizeReportNamesAnOverTargetTotal` renders a result above and one below the constant and asserts the line's presence and absence.
 
 ## Tests
 
