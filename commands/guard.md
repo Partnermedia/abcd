@@ -39,11 +39,12 @@ Then report the JSON to the user:
 Exit codes: `0` for allow and warn, `1` for a block, `2` when the guard could
 not be evaluated at all (an unparsable command line, or a `.abcd/guard.json`
 that does not load). Treat `2` as a fault to report, never as a clearance.
-Unparsable means what no shell would run either — an unterminated quote. Two
-grammar states a shell does run get a verdict instead: a trailing backslash is
-read as bash reads it, and a here-document whose delimiter line never comes is
-a **block** (`heredoc-unterminated`), because the rest of the input may be
-commands the guard did not check.
+Unparsable means an unterminated quote in **command text**, which no shell runs
+either; a quote inside a here-document **body** is document text and is not one.
+Grammar a shell does run gets a verdict instead: a trailing backslash is read as
+bash reads it, and a here-document whose delimiter line never comes is a
+**block** (`heredoc-unterminated`), because the rest of the input may be commands
+the guard did not check.
 
 On a `block`, do not run the command. Tell the user the `why`, then run the
 `successor` instead — the refusal is the lesson, so pass it on in full. On a
@@ -65,7 +66,8 @@ call that is not a shell command, an unparsable command line, a registry that
 does not load — allows the command and warns loudly. A guard that cannot answer
 never stops a session, and is never silently absent. A command line a shell
 would run is never in that set: a trailing backslash and an unterminated
-here-document are decided, not failed open on.
+here-document are decided, not failed open on, and a here-document body is read
+as data however it is quoted, even when the line that opened it ends in `&&`.
 
 ## Registry and overrides
 

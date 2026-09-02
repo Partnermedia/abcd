@@ -198,12 +198,18 @@ func tokenize(line string) ([]segment, error) {
 		case c == '\n':
 			flushSegment()
 			i++
-			// A pending heredoc body starts once the command LINE is complete,
-			// and is DATA, not commands: writing a document that names a hazard
-			// must never read as running one. A line ending in a list operator
-			// is not complete, so the body waits — what follows it is still
-			// command text.
-			if len(pending) > 0 && !lastList {
+			// A pending heredoc body starts on the NEXT LINE, and is DATA, not
+			// commands: writing a document that names a hazard must never read
+			// as running one. It starts there even when the redirection line
+			// ends in a list operator and the command list continues after the
+			// document — bash collects the bodies at the end of the PHYSICAL
+			// line that carried the `<<`, so `cat <<EOF &&` / body / `EOF` /
+			// `echo ok` runs `echo ok` with the body as data. Waiting for the
+			// list to complete read the body as command text instead: an
+			// apostrophe in a document became ErrUnparsableCommand, which the
+			// hook maps to fail-OPEN, and a delimiter line reached early
+			// swallowed the real commands that followed it as body.
+			if len(pending) > 0 {
 				next, ok := skipHeredocBodies(line, i, pending)
 				if !ok {
 					// The delimiter line never came. bash RUNS this (it recovers
@@ -249,31 +255,36 @@ func tokenize(line string) ([]segment, error) {
 			if err != nil {
 				return nil, err
 			}
-			// A real heredoc delimiter is never immediately followed by a bare
-			// paren: its body and terminator line have to come first, so nothing
-			// legitimate places `(` or `)` directly against the delimiter word
-			// with no separator. `$((expr<<ident))` produces exactly this shape
-			// -- readHeredocDelim reads the shift's right-hand identifier as if
-			// it were a delimiter and stops at the arithmetic expression's own
-			// closing paren. Catching this at classification time (rather than
-			// only an unterminated body, below) matters: without it, an
-			// attacker can supply a later line that happens to equal the
-			// misread "delimiter" and have it swallow real commands with no
-			// error at all.
+			// A real heredoc delimiter is followed by its body and terminator
+			// line, so a paren right after the delimiter word is suspect:
+			// `$((expr<<ident))` produces exactly that shape -- readHeredocDelim
+			// reads the shift's right-hand identifier as if it were a delimiter
+			// and stops at the arithmetic expression's own closing paren.
+			// Catching this at classification time (rather than only an
+			// unterminated body, below) matters: without it, an attacker can
+			// supply a later line that happens to equal the misread "delimiter"
+			// and have it swallow real commands with no error at all.
 			//
-			// Blanks before the paren are skipped: `$(( x << y ))` puts a space
-			// between the misread "delimiter" and the closing paren, and testing
-			// only the immediate byte queued the shift as a heredoc, so the
-			// hazard on the next line was swallowed as body. With the
-			// unterminated body now a fail-closed block rather than an error,
-			// that misclassification would have been a false block on ordinary
-			// spaced arithmetic; before it, it was a fail-open.
+			// WHICH paren is what tells the two apart, and blanks before it are
+			// skipped because `$(( x << y ))` puts a space there. An arithmetic
+			// expansion or arithmetic command closes with `))` on the same line
+			// and has no body at all; a subshell closes with a single `)`, and
+			// `( cmd <<EOF )` is a genuine here-document every shell runs with
+			// the following lines as its document. Testing only for "a paren"
+			// read that subshell as arithmetic, so the document was tokenized as
+			// commands: one apostrophe in it became ErrUnparsableCommand, which
+			// the hook maps to fail-OPEN, and a document merely NAMING a hazard
+			// warned as if it ran one. A single paren therefore leaves the
+			// here-document reading in place; where that reading turns out to be
+			// wrong the body simply never terminates, and skipHeredocBodies'
+			// fail-closed block below is the answer -- never an error.
 			k := next
 			for k < len(line) && (line[k] == ' ' || line[k] == '\t') {
 				k++
 			}
-			followedByParen := k < len(line) && (line[k] == '(' || line[k] == ')')
-			if !hd.quoted && (!isDelimStart(hd.delim) || followedByParen) {
+			arithmeticParen := (k < len(line) && line[k] == '(') ||
+				(k+1 < len(line) && line[k] == ')' && line[k+1] == ')')
+			if !hd.quoted && (!isDelimStart(hd.delim) || arithmeticParen) {
 				cur = append(cur, '<', '<')
 				hasCur = true
 				lastList = false

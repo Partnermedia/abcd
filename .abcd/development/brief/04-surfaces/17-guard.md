@@ -53,7 +53,18 @@ hook maps to fail-open — would hand the command through unguarded, and a quiet
 allow would trust a `<<` the classifier has misread before (iss-184). The same
 reading gives a trailing backslash a verdict rather than an error: it is parsed
 as bash 3.2 parses it (dropped), the reading under which a hazard executes.
-What stays unparsable is what no shell runs either — an unterminated quote.
+
+What stays unparsable — and so still fails open loudly on the hook — is exactly
+one class: an unterminated quote (`'`, `"`, `$'…'`, or one in a here-document
+delimiter word) in **command text**, which no shell runs either. Text inside a
+here-document **body** is not command text, so an apostrophe in a document is
+data. Getting that boundary right is what the class rests on: a body starts on
+the line after the redirection even when that line ends in `&&` or `|` (bash
+collects the bodies at the end of the physical line), and a `( cmd <<EOF )`
+subshell opens a genuine document rather than an arithmetic shift — an
+arithmetic expansion closes with `))` on the same line and has no body at all.
+Read either the other way and document text lands in command position, where one
+apostrophe becomes an error the hook hands through unguarded.
 
 A third reserved id is a **warn**: `git-config-rewrite-unread`, raised when a
 git command points at configuration whose body the guard cannot read —

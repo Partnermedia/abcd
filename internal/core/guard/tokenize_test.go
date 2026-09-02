@@ -150,11 +150,19 @@ func TestTokenizeSegments(t *testing.T) {
 			want: []string{"0:cat", "0:ls"},
 		},
 		{
-			// The body starts only once the command line is complete, so the
-			// continuation of a pipeline is still command text, not body text.
-			name: "a heredoc queued on a continued line waits for the command to finish",
+			// The body starts on the next line even when the redirection line
+			// ends in a list operator: bash collects here-document bodies at the
+			// end of the PHYSICAL line, so `grep x` and `rm -rf *` here are
+			// document text and the pipeline's second command is whatever
+			// follows `EOF`. Probed on bash 3.2: this input alone is a syntax
+			// error (the pipeline has no second member) and adding a line after
+			// `EOF` makes THAT the member, with neither body line run. The
+			// earlier reading — body deferred until the list completed — put
+			// document text in command position, where an apostrophe in a
+			// document became ErrUnparsableCommand and the hook failed open.
+			name: "a heredoc body starts despite a trailing list operator",
 			line: "cat <<EOF |\ngrep x\nrm -rf *\nEOF",
-			want: []string{"0:cat", "0:grep|x"},
+			want: []string{"0:cat"},
 		},
 		{
 			name: "a blank line does not break a list continuation",
