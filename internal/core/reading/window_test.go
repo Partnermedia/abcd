@@ -351,11 +351,18 @@ func TestAnObjectSetSelectsOnlyListedRecords(t *testing.T) {
 // the object-set rule turns on (spc-2609020626048722): "a record row is
 // admitted whole when the object set names none of its records".
 //
-// The fixture's drafts and planned intents are named by no object set here, so
-// they arrive whole at entailment — which is what the readings companion's
-// section 6.2 asks, and what keeps this iteration's own planned intents inside
-// the entailment reading while they stay outside the object set's record list
-// (divergence register 1).
+// The fixture's disciplines are named by no object set here, so they arrive
+// whole: a discipline the run is not about is context the reading reads
+// AGAINST, which is what a constraint source is.
+//
+// The drafts and planned rows are the ruled exception, and this test states
+// both halves so the rule and its exception cannot drift apart. The maintainer
+// ruled on 2026-09-02, at the Phase A review, that the entailment reading is
+// handed the object set only: a draft or a planned intent is the claim record
+// the position reads rather than context it reads against, so those two rows
+// narrow by the entry's record list always and the companion's section 6.2
+// admissibility survives as the `admit_drafts_and_planned` switch, default off
+// (divergence register 1 as corrected; objectset_test.go holds the switch).
 func TestAConstraintSourceKindIsHandedWhole(t *testing.T) {
 	root := fixtureRepo(t)
 	writeFile(t, root, PresetConfigPath,
@@ -373,14 +380,18 @@ func TestAConstraintSourceKindIsHandedWhole(t *testing.T) {
 	for _, m := range res.Manifest.Items {
 		whole[path.Dir(m.Path)] = true
 	}
+	if !whole[".abcd/development/intents/disciplines"] {
+		t.Error("no item arrived from .abcd/development/intents/disciplines; the object set " +
+			"names no record under that row's source, so the row is admitted whole")
+	}
 	for _, dir := range []string{
 		".abcd/development/intents/drafts",
 		".abcd/development/intents/planned",
-		".abcd/development/intents/disciplines",
 	} {
-		if !whole[dir] {
-			t.Errorf("no item arrived from %s; the object set names no record under that row's "+
-				"source, so the row is admitted whole", dir)
+		if whole[dir] {
+			t.Errorf("an item arrived from %s under an entry naming no record there; those "+
+				"two rows narrow by the entry's record list always, so a draft or a planned "+
+				"intent travels only when the entry names it (ruled 2026-09-02)", dir)
 		}
 	}
 }
@@ -551,10 +562,11 @@ func TestEntailmentSizeReportStatesTheMechanismProportion(t *testing.T) {
 		t.Fatal("the entailment size report states no mechanism proportion; the readings " +
 			"companion's section 6.6 asks for it beside the findings")
 	}
-	// The drafts and planned rows are admitted whole at this position and carry
-	// no Mechanism section, so they raise the total and the absent count. What
-	// is asserted here is the three counts against the three intents the object
-	// set names plus whatever the whole rows added, summing exactly.
+	// The entry names three shipped intents and no draft or planned one, and
+	// since the ruling of 2026-09-02 those two rows narrow by the entry's
+	// record list, so the fixture's draft and planned intent do not travel
+	// here. What is asserted is the three counts against the three intents the
+	// object set names, summing exactly over whatever the entry hands.
 	if m.Stated != 1 {
 		t.Errorf("the report states %d intent(s) carrying a mechanism claim, want 1", m.Stated)
 	}
@@ -623,9 +635,13 @@ func TestDefaultItemSetsMatchTheRecordedDigests(t *testing.T) {
 	// which every entry admitting the discipline kind now hands, and the
 	// comparative position has an item set for the first time — its criteria
 	// discipline and the derived run's six candidate items.
+	// The entailment digest moved again on 2026-09-02 with the maintainer's
+	// Phase A ruling: the drafts and planned rows narrow by the entry's record
+	// list, so the fixture's draft and planned intent — which that entry does
+	// not name — no longer travel there (divergence register 1 as corrected).
 	want := map[Position]string{
 		PositionWidening:    "e5d389881e1c7b30720f31c9a5374755249de77a76f514b37dab82d8f22891bf",
-		PositionEntailment:  "5da9692ac02275e600ee91d48c9b4acbc4697059acfbed7156ee4c79439fd62c",
+		PositionEntailment:  "43b59fb91071189ee107468272336d20dafbbd53785efb5bc1491b8a3a1fe878",
 		PositionComparative: "5559b8a5d6126cdfa831c866394e5d15a3995f5e87a5f09268883679d2b61cfc",
 		PositionDetection:   "7b37ef14556a385fc65fac148059c815799bfe2aa17a732cd9799ee30aecdb85",
 	}

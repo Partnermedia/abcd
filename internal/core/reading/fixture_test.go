@@ -408,11 +408,22 @@ func fixturePresets() string {
 	}
 	positions := make([]string, 0, len(AssemblingPositions()))
 	for _, p := range AssemblingPositions() {
+		// The entailment entry declares the admissibility switch, which is how
+		// an entry says "every draft and planned intent" now that those two
+		// rows narrow by the entry's record list always (ruled 2026-09-02;
+		// divergence register 1 as corrected). It is the same all-selecting
+		// intent this file has always had — a test written before entries
+		// existed sees the item set it was written against — and a test that
+		// cares about the narrowing names its own preset.
+		switchOn := ""
+		if p == PositionEntailment {
+			switchOn = `"admit_drafts_and_planned": true, `
+		}
 		positions = append(positions, fmt.Sprintf(
-			`    %q: {"object": {"records": [], "paths": [%s]}, "kinds": [%s], `+
+			`    %q: {"object": {"records": [], "paths": [%s]}, "kinds": [%s], %s`+
 				`"window": {"tokens_est": 1000000, "measured_tokens_est": 0, `+
 				`"measured_bytes": 0, "measured_at": "0000000"}}`,
-			string(p), strings.Join(paths, ", "), strings.Join(kinds, ", ")))
+			string(p), strings.Join(paths, ", "), strings.Join(kinds, ", "), switchOn))
 	}
 	return fmt.Sprintf(`{
   "schema_version": %d,

@@ -463,6 +463,16 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 	}
 	narrows := make(map[int]bool, len(byRow))
 	for rowIdx, paths := range byRow {
+		// The drafts and planned rows are the exception, ruled on 2026-09-02:
+		// they narrow to the records the entry NAMES whatever else the object
+		// set names, so a draft or a planned intent travels only when the
+		// committed entry names it. The companion's section 6.2 makes them
+		// admissible here, and admissible is a permission rather than a scope —
+		// the switch is where an entry takes that permission whole.
+		if narrowsToNamedRecordsAlways(Table[rowIdx]) {
+			narrows[rowIdx] = !entry.admitsEveryDraftAndPlanned()
+			continue
+		}
 		narrows[rowIdx] = entry.namesRecordIn(paths)
 	}
 	scoped := make([]candidate, 0, len(cands))

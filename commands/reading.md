@@ -87,6 +87,17 @@ other change; there is no override at the invocation and nothing to stamp. One
 file, one entry per position: a repository that wants a wider reading commits a
 wider entry, and the manifest shows which entry a run applied.
 
+**At entailment, a draft or planned intent travels only when the entry names
+it.** The drafts and planned rows are admitted at that position alone, and they
+narrow by the entry's object-set record list exactly as the shipped row does —
+so the reading is handed the object set's drafts and planned intents and no
+others. The readings companion's section 6.2 makes them *admissible* there, and
+admissible is a permission rather than a scope: an entry that wants the
+permission whole declares `"admit_drafts_and_planned": true`, which hands every
+draft and planned intent in the repository. The key defaults to off, means
+nothing at any other position, and is refused at load if an entry for one
+declares it (ruled 2026-09-02).
+
 **The comparative position derives its candidate set from the record.** Its
 object is the widening reading's pre-admission output, and the run that supplied
 it is not named by any operand: the assembler selects **the one committed

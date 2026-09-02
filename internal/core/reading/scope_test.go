@@ -20,6 +20,12 @@ import (
 // has nothing to choose between them (adr-2609021016286571,
 // cond-2609021004074586). A test that wants an unnarrowed baseline assembles
 // under the fixture's own all-selecting file BEFORE writing this one over it.
+//
+// The entailment entry names the fixture's draft and its planned intent because
+// those two rows narrow by the entry's record list ALWAYS (ruled 2026-09-02;
+// divergence register 1 as corrected), and a version 1 file cannot declare the
+// admissibility switch. The item set is what it was before that rule: the
+// fixture carries exactly one of each.
 func narrowPresets() string {
 	return `{
   "schema_version": 1,
@@ -27,7 +33,7 @@ func narrowPresets() string {
     "default": {
       "positions": {
         "widening": {"kinds": ["brief-section"], "records": [], "paths": []},
-        "entailment": {"kinds": ["intent-projection"], "records": [], "paths": []},
+        "entailment": {"kinds": ["intent-projection"], "records": ["itd-2", "itd-3"], "paths": []},
         "comparative": {"kinds": ["discipline"], "records": [], "paths": []},
         "detection": {"kinds": ["spec"], "records": [], "paths": []}
       }

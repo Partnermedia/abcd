@@ -242,6 +242,29 @@ type PositionEntry struct {
 	Object  ObjectSet `json:"object"`
 	Kinds   []Kind    `json:"kinds"`
 	Window  *Window   `json:"window,omitempty"`
+	// AdmitDraftsAndPlanned hands the entailment position EVERY draft and
+	// planned intent the include table admits there, rather than the object
+	// set's alone. It is a pointer so that declaring it is distinguishable from
+	// omitting it, which is what lets the loader refuse it at a position where
+	// it means nothing rather than accept a key nobody reads.
+	//
+	// The maintainer ruled on 2026-09-02, at the Phase A review, that the
+	// entailment reading is handed the object set only. The framework's section
+	// 13 fixes the object set and the companion's section 6.2 makes drafts and
+	// planned intents ADMISSIBLE there: admissible is a permission, the object
+	// set is the scope, and handing every draft and planned intent in the
+	// repository (147 projected intents on the tree the ruling was given over)
+	// exceeds it. So the companion's admissibility becomes this switch — yes or
+	// no for drafts and planned intents beyond the object set, default no — and
+	// the drafts and planned rows otherwise narrow by the entry's record list
+	// exactly as the shipped row does (divergence register 1 as corrected).
+	AdmitDraftsAndPlanned *bool `json:"admit_drafts_and_planned,omitempty"`
+}
+
+// admitsEveryDraftAndPlanned reports whether the entry declares the switch on.
+// An absent declaration is off, which is the default the ruling fixes.
+func (e PositionEntry) admitsEveryDraftAndPlanned() bool {
+	return e.AdmitDraftsAndPlanned != nil && *e.AdmitDraftsAndPlanned
 }
 
 // PresetFile is the committed configuration, one entry per position.
@@ -276,7 +299,11 @@ func (e PositionEntry) admitsKind(k Kind) bool {
 //     record under that row's source — narrowRecords, decided per row by the
 //     caller — and admitted whole when it names none. That is what hands a
 //     definition's constraint sources whole while handing the spec and
-//     intent-projection kinds for the object set's records alone.
+//     intent-projection kinds for the object set's records alone. The drafts
+//     and planned rows are the exception the caller applies: they narrow
+//     ALWAYS, so a draft or a planned intent travels only when the entry names
+//     it, unless the entry declares the admissibility switch (see
+//     narrowsToNamedRecordsAlways and AdmitDraftsAndPlanned).
 //   - A tree row (the doc, config, source and test rows at the repository root)
 //     is narrowed to the files at or beneath the object set's paths, and an
 //     entry with no path hands nothing from the tree whatever kinds it lists.
@@ -308,6 +335,28 @@ func (e PositionEntry) selects(c candidate, narrowRecords bool) bool {
 	default:
 		return true
 	}
+}
+
+// narrowsToNamedRecordsAlways reports whether a record row hands ONLY the
+// records the entry names, whatever else the object set names.
+//
+// It is the drafts and planned rows and no other, and the ground is the ruling
+// of 2026-09-02. Every other record row is admitted whole when the object set
+// names none of its records, which is right for a constraint source: a spec or
+// a discipline the object set does not name is context the reading reads
+// AGAINST. A draft or a planned intent is not context — it is the claim record
+// the entailment position reads, so an unnamed one is material the run is not
+// about. Under the general rule the entailment entry handed every draft and
+// planned intent in the repository, 147 projected intents on the tree the
+// ruling was given over, where framework 13's object set is the fifteen
+// workstream intents plus the ten Iteration 2 intents the record extends it by.
+//
+// The row is identified by its own declaration — the intent store's drafts and
+// planned buckets — rather than by a path test, for the reason classOf gives:
+// the table says what a row enumerates, and reading that off a path again is
+// how two derivations of one fact come to disagree.
+func narrowsToNamedRecordsAlways(r Row) bool {
+	return r.Store == "itd" && (r.Bucket == "drafts" || r.Bucket == "planned")
 }
 
 // namesRecordIn reports whether the object set names a record whose file is one
@@ -620,6 +669,18 @@ func validateEntries(pf PresetFile) error {
 		e := pf.Positions[pos]
 		if _, err := ParsePosition(pos); err != nil {
 			return fmt.Errorf("%s: %w", PresetConfigPath, err)
+		}
+		// The switch means something at ONE position. The drafts and planned
+		// rows are admitted at entailment and nowhere else (the include table's
+		// two rows; companion 6.2), so the key anywhere else is a permission
+		// over material that position never sees — and a key that reads as
+		// though it does something is exactly what the strict decoder refuses
+		// everywhere else in this file.
+		if e.AdmitDraftsAndPlanned != nil && Position(pos) != PositionEntailment {
+			return fmt.Errorf("%s: the entry for %s declares admit_drafts_and_planned, which "+
+				"means nothing there: the drafts and planned rows are admitted at the %s "+
+				"position alone, so the switch is declared at %s or not at all",
+				PresetConfigPath, pos, PositionEntailment, PositionEntailment)
 		}
 		// The comparative refusal is WITHDRAWN. itd-199's tenth criterion refused
 		// an entry for that position because the position did not assemble;

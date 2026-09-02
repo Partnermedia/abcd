@@ -34,12 +34,16 @@
       }
     },
     "entailment": {
-      "comment": "The same object set. The kinds are the claim record read against the constraint sources, which is what the readings companion's section 6.2 names as this position's object: it holds no tree, so no doc, config, source or test kind stands here and the object set's delivered paths hand this position nothing. The ten Iteration 2 intents are outside the object set's record list and still reach this position, because a record row is admitted whole when the object set names none of its records and the drafts and planned rows are admitted here alone. Measured on the commit named, this entry is over the 200,000-token target and the size report says so on every assembly at this position; the spec's pre-landing estimate of about 121,000 predates itd-194's brief-chapter rows, which add four chapters to every entry naming brief-section, and the figure recorded here is the one measured. Changing any part of this entry is a commit.",
+      "comment": "The object set of the other three entries, extended by the ten Iteration 2 intents the record adds to it. The kinds are the claim record read against the constraint sources, which is what the readings companion's section 6.2 names as this position's object: it holds no tree, so no doc, config, source or test kind stands here and the object set's delivered paths hand this position nothing. The ten Iteration 2 intents are NAMED here rather than reached by admission: the maintainer ruled on 2026-09-02, at the Phase A review, that this position is handed the object set only, so the drafts and planned rows narrow by this record list exactly as the shipped row does and a draft or planned intent travels only when this entry names it. The companion's admissibility is a permission, not the scope, and it survives as the `admit_drafts_and_planned` switch, which this entry does not declare and which defaults to off; with it on, the position would be handed every draft and planned intent in the repository, which on the tree this was measured over is 147 projected intents. Several of the ten are shipped by the time Phase A completes and travel through the shipped row, which is the same object set either way. Measured on the commit named, this entry is over the 200,000-token target and the size report says so on every assembly at this position; the spec's pre-landing estimate of about 121,000 predates itd-194's brief-chapter rows, which add four chapters to every entry naming brief-section, and the figure recorded here is the one measured. Changing any part of this entry is a commit.",
       "object": {
         "records": [
           "itd-177", "itd-178", "itd-179", "itd-180", "itd-181", "itd-182",
           "itd-183", "itd-184", "itd-185", "itd-186", "itd-187", "itd-188",
           "itd-189", "itd-198", "itd-199",
+          "itd-194", "itd-2609021003095168", "itd-2609020625400169",
+          "itd-2609020625400194", "itd-2609020625400445", "itd-2609020625402518",
+          "itd-2609020625402599", "itd-2609020625405170", "itd-2609020625405251",
+          "itd-2609020625407419",
           "spc-55", "spc-56", "spc-57", "spc-58", "spc-59", "spc-60", "spc-61",
           "spc-62", "spc-63", "spc-64", "spc-65", "spc-66", "spc-67", "spc-68",
           "spc-69"
