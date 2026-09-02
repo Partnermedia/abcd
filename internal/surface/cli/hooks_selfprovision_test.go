@@ -71,6 +71,17 @@ func hookCommand(t *testing.T, event string) string {
 // running these tests may itself carry a real `abcd` there.
 func hookRun(t *testing.T, event, root, pathDir string) (string, string, int) {
 	t.Helper()
+	return hookRunIn(t, event, root, pathDir, "")
+}
+
+// hookRunIn is hookRun with an explicit working directory. The PATH rung's
+// containment check is relative to the directory the shim runs in — a hostile
+// clone puts its own `abcd` inside the checkout the session is working on — so
+// a test that plants a binary "inside the working tree" has to choose that
+// tree. An empty dir inherits the test process's own working directory, which
+// is what every pre-existing caller wants.
+func hookRunIn(t *testing.T, event, root, pathDir, dir string) (string, string, int) {
+	t.Helper()
 	if _, err := exec.LookPath("sh"); err != nil {
 		t.Skip("sh unavailable")
 	}
@@ -79,6 +90,7 @@ func hookRun(t *testing.T, event, root, pathDir string) (string, string, int) {
 		pathEnv = pathDir + ":" + pathEnv
 	}
 	cmd := exec.Command("sh", "-c", hookCommand(t, event))
+	cmd.Dir = dir
 	cmd.Stdin = strings.NewReader(`{"session_id":"s1"}`)
 	cmd.Env = []string{
 		"PATH=" + pathEnv,
@@ -332,6 +344,100 @@ func TestBinaryHooksFallBackToAPathBinary(t *testing.T) {
 			if !strings.Contains(callLog(t, filepath.Join(root, "calls.log")), h.verb) {
 				t.Fatalf("%s did not run the PATH binary with verb %q; stderr: %s", h.event, h.verb, stderr)
 			}
+		})
+	}
+}
+
+// The PATH rung is the shims' last resort, and until GHSA-gx3m-3224-qqcv's
+// design fork is settled it stays open to any `abcd` the operator's PATH
+// resolves. Two shapes need no decision to refuse, because the documented
+// install never produces them: a binary the working tree itself controls (a
+// `.` or in-checkout PATH entry, so a hostile clone becomes the guard and the
+// rules loader for the session reading it) and a binary in a world-writable
+// directory (any local user's to replace). Both degrade to the shim's existing
+// loud line, plus one line saying which binary was ignored and why. The full
+// owned-only rung — refusing every PATH binary that `~/.abcd/path-entry` does
+// not vouch for — is the parent record's open decision and is NOT attempted
+// here; the documented rescue through an ordinary directory such as
+// ~/.local/bin keeps working, which TestBinaryHooksFallBackToAPathBinary pins.
+
+// pathStub writes the recording stub binary into dir.
+func pathStub(t *testing.T, dir string) {
+	t.Helper()
+	stub := "#!/bin/sh\ncat >/dev/null\nprintf '%s %s\\n' \"$1\" \"$2\" >> \"$ABCD_CALLS\"\nexit 0\n"
+	if err := os.WriteFile(filepath.Join(dir, "abcd"), []byte(stub), 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// assertPathBinaryRefused: the stub never ran, the shim still failed loudly with
+// its own remedy line, and one line names the ignored PATH binary.
+func assertPathBinaryRefused(t *testing.T, h binaryHook, root, stderr string, code int) {
+	t.Helper()
+	if log := callLog(t, filepath.Join(root, "calls.log")); log != "" {
+		t.Fatalf("%s executed the untrusted PATH binary: %q", h.event, log)
+	}
+	if code == 0 || code == 127 {
+		t.Fatalf("%s exit = %d after refusing the PATH binary; want a non-zero, non-exec-failure exit; stderr: %s", h.event, code, stderr)
+	}
+	if !strings.Contains(stderr, "ignoring the abcd found on PATH") {
+		t.Fatalf("%s did not say that it ignored the PATH binary or why; stderr: %s", h.event, stderr)
+	}
+	if !strings.Contains(stderr, "#install") {
+		t.Fatalf("%s dropped its own degraded line; stderr: %s", h.event, stderr)
+	}
+	if h.event == "PreToolUse" && !strings.Contains(stderr, "UNGUARDED") {
+		t.Fatalf("PreToolUse must still say UNGUARDED when it refuses the PATH binary; stderr: %s", stderr)
+	}
+}
+
+// TestBinaryHooksRefuseAPathBinaryInsideTheWorkingTree: a PATH entry under the
+// checkout (a vendored bin directory, say) hands the session's guard and rules
+// loader to the repository being worked on.
+func TestBinaryHooksRefuseAPathBinaryInsideTheWorkingTree(t *testing.T) {
+	for _, h := range binaryHooks {
+		t.Run(h.event, func(t *testing.T) {
+			root := hookRoot(t, failingBootstrap, false)
+			work := t.TempDir()
+			pathDir := filepath.Join(work, "vendor", "bin")
+			if err := os.MkdirAll(pathDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			pathStub(t, pathDir)
+			_, stderr, code := hookRunIn(t, h.event, root, pathDir, work)
+			assertPathBinaryRefused(t, h, root, stderr, code)
+		})
+	}
+}
+
+// TestBinaryHooksRefuseARelativePathEntry: a `.` (or empty) PATH element
+// resolves `abcd` against whatever directory the hook happens to run in.
+func TestBinaryHooksRefuseARelativePathEntry(t *testing.T) {
+	for _, h := range binaryHooks {
+		t.Run(h.event, func(t *testing.T) {
+			root := hookRoot(t, failingBootstrap, false)
+			work := t.TempDir()
+			pathStub(t, work)
+			_, stderr, code := hookRunIn(t, h.event, root, ".", work)
+			assertPathBinaryRefused(t, h, root, stderr, code)
+		})
+	}
+}
+
+// TestBinaryHooksRefuseAWorldWritablePathBinary: any local user can drop a
+// binary into a world-writable PATH directory, so what is found there is not
+// the operator's choice in the sense the fallback assumes.
+func TestBinaryHooksRefuseAWorldWritablePathBinary(t *testing.T) {
+	for _, h := range binaryHooks {
+		t.Run(h.event, func(t *testing.T) {
+			root := hookRoot(t, failingBootstrap, false)
+			pathDir := t.TempDir()
+			pathStub(t, pathDir)
+			if err := os.Chmod(pathDir, 0o777); err != nil {
+				t.Fatal(err)
+			}
+			_, stderr, code := hookRunIn(t, h.event, root, pathDir, t.TempDir())
+			assertPathBinaryRefused(t, h, root, stderr, code)
 		})
 	}
 }

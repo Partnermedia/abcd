@@ -226,7 +226,13 @@ Steps, run in parallel where independent:
    non-SessionStart shims attempt `hooks/bootstrap.sh` when the plugin-root
    binary is missing (throttled by a `.bootstrap.attempt` marker within a
    10-minute window), then fall back to a PATH-resolved `abcd` before failing
-   loudly. A missing or
+   loudly. The PATH rung accepts only an absolute resolution out of a
+   directory that is neither under the shim's working directory nor
+   world-writable — the shapes the documented install never produces — and
+   says in one line which binary it ignored and why before degrading
+   (iss-2609012039117381); whether a PATH binary should have to be vouched
+   for by `~/.abcd/path-entry` at all is the open question in
+   GHSA-gx3m-3224-qqcv. A missing or
    malformed manifest surfaces as a non-resolvable `plugin-owned` diagnostic
    gap. Neither install nor uninstall ever mutates `hooks.json` — the manifest
    is plugin-static per spc-14 T7.

@@ -65,6 +65,16 @@ shell guard, the transcript capture) and that the [install](#cli) one-liner
 restores it — after which the hooks resolve the `PATH` binary with no session
 restart needed.
 
+That `PATH` rung is narrow on purpose. A hook takes an `abcd` from `PATH` only
+when the lookup yields an absolute path, in a directory outside the one the
+session is working in, that is not world-writable — which is what the
+[install](#cli) one-liner's `~/.local/bin` is, and what a `.` entry, a
+vendored directory inside a checkout, or a shared world-writable directory is
+not. Anything else is ignored with one line naming the binary and the reason,
+and the hook takes its degraded path instead: a repository you have merely
+cloned does not get to supply the shell guard or the rules loader for the
+session that is reading it.
+
 That covers the hooks. For the `abcd` command in your own terminal, keep the
 [install](#cli) below, or put the plugin-root binary on your `PATH` by
 running it once by its absolute path — `'<plugin-root>/abcd' ahoy install`.
