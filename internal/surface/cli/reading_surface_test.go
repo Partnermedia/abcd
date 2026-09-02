@@ -1114,3 +1114,98 @@ func TestRenderSizeReportNamesUnscannedItems(t *testing.T) {
 		t.Errorf("a run with nothing unscanned still discloses one:\n%s", at)
 	}
 }
+
+// TestRenderSizeReportSaysWhetherAWindowIsDeclared is spc-2609020626048722's
+// ac-2 and ac-3 at the surface: the report carries the declaration beside the
+// measurement, says plainly when a run exceeds it, and says "none declared"
+// rather than rendering a zero a reader would take for a bound when the
+// committed file is at schema version 1.
+func TestRenderSizeReportSaysWhetherAWindowIsDeclared(t *testing.T) {
+	render := func(s reading.SizeReport) string {
+		var buf bytes.Buffer
+		renderSizeReport(&buf, s)
+		return buf.String()
+	}
+	base := reading.SizeReport{
+		ByKind:    []reading.KindSize{{Kind: "doc", Items: 4, Bytes: 1200, TokensEst: 311}},
+		Items:     4,
+		Bytes:     1200,
+		TokensEst: 311,
+		Basis:     "estimated: bytes / 3.85",
+	}
+
+	none := render(base)
+	if !strings.Contains(none, "window:        none declared (preset schema version 1)") {
+		t.Errorf("a run under a version 1 file does not say so:\n%s", none)
+	}
+
+	within := base
+	within.Window = &reading.Window{
+		TokensEst: 630000, MeasuredTokensEst: 624000, MeasuredBytes: 2402400,
+		MeasuredAt: "255543c1fa30",
+	}
+	got := render(within)
+	for _, want := range []string{
+		"window:        630,000 tokens declared",
+		"(measured ~624,000 at 255543c1fa30)",
+		"this run is within it",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the declared-window line omits %q:\n%s", want, got)
+		}
+	}
+
+	over := within
+	over.ExceedsWindow = true
+	if got := render(over); !strings.Contains(got, "this run EXCEEDS it") {
+		t.Errorf("a run past its declaration does not say so:\n%s", got)
+	}
+
+	// The over-target line is a separate statement from the declaration: an
+	// entry can be inside its own declared window and still over the target the
+	// maintainer's ruling of 2026-09-02 fixes at two hundred thousand.
+	target := within
+	target.OverTarget = true
+	target.TokensEst = 624000
+	got = render(target)
+	for _, want := range []string{
+		"over target: 624,000 estimated tokens against a target of 200,000",
+		"the reader's window decides whether this is acceptable",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the over-target line omits %q:\n%s", want, got)
+		}
+	}
+	if got := render(within); strings.Contains(got, "over target") {
+		t.Errorf("a run under the target still states one:\n%s", got)
+	}
+}
+
+// TestRenderSizeReportStatesTheMechanismLine is spc-2609020626048722's ac-9 at
+// the surface (the readings companion's section 6.6): the entailment report
+// states how many projected intents carry a mechanism claim beside the figures,
+// and no other position's report carries the statement.
+func TestRenderSizeReportStatesTheMechanismLine(t *testing.T) {
+	base := reading.SizeReport{
+		ByKind:    []reading.KindSize{{Kind: "intent-projection", Items: 4, Bytes: 1200, TokensEst: 311}},
+		Items:     4,
+		Bytes:     1200,
+		TokensEst: 311,
+		Basis:     "estimated: bytes / 3.85",
+	}
+	var buf bytes.Buffer
+	renderSizeReport(&buf, base)
+	if strings.Contains(buf.String(), "mechanism") {
+		t.Errorf("a report carrying no mechanism proportion still states one:\n%s", buf.String())
+	}
+
+	buf.Reset()
+	withIt := base
+	withIt.Mechanism = &reading.MechanismReport{Intents: 23, Stated: 2, NoneStated: 6, Absent: 15}
+	renderSizeReport(&buf, withIt)
+	want := "mechanism: 2 of 23 projected intents carry a mechanism claim; " +
+		"6 state none; 15 carry neither"
+	if !strings.Contains(buf.String(), want) {
+		t.Errorf("the mechanism line is not %q:\n%s", want, buf.String())
+	}
+}

@@ -353,12 +353,16 @@ func TestAPresetSelectingNothingRefuses(t *testing.T) {
 	root := fixtureRepo(t)
 	// A well-formed id of an admitted family that names no record in the
 	// fixture. It must be a selector the loader ACCEPTS, or this tests a
-	// validation refusal instead of the selects-nothing one.
+	// validation refusal instead of the selects-nothing one. The entry names
+	// the intent-projection kind because the kinds ADMIT
+	// (spc-2609020626048722): an entry naming no kind is refused by the
+	// resolver before an assembly is attempted, which is a different refusal
+	// from the one this test is about.
 	writeFile(t, root, ".abcd/config/reading-presets.json", `{
   "schema_version": 1,
   "presets": {
     "default": {"positions": {"widening":
-      {"kinds": [], "records": ["itd-9999"], "paths": []}}}
+      {"kinds": ["intent-projection"], "records": ["itd-9999"], "paths": []}}}
   }
 }`)
 	gitCommitAll(t, root)
@@ -418,10 +422,15 @@ func TestThePresetHashIsOrderIndependent(t *testing.T) {
 func TestBundlePresetCarriesNoRepositoryPath(t *testing.T) {
 	root := fixtureRepo(t)
 	const secret = "internal/core/lint"
+	// Two paths: the one whose spelling must not reach the bundle, and `docs`,
+	// which the fixture carries doc material under. The object set NARROWS the
+	// tree rows (spc-2609020626048722), so an entry naming only a path the
+	// fixture does not hold would select nothing and refuse before the bundle
+	// this test reads existed.
 	writeFile(t, root, ".abcd/config/reading-presets.json", `{
   "schema_version": 1,
   "presets": {"default": {"positions": {"widening":
-    {"kinds": ["doc"], "records": [], "paths": ["`+secret+`"]}}}}
+    {"kinds": ["doc"], "records": [], "paths": ["`+secret+`", "docs"]}}}}
 }`)
 	gitCommitAll(t, root)
 
@@ -732,9 +741,9 @@ func TestTheShippedPresetFileIsValid(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the committed preset file does not load: %v", err)
 	}
-	if len(pf.Presets) != 1 {
-		t.Fatalf("the committed file holds %d presets; one entry per position means one preset",
-			len(pf.Presets))
+	if len(pf.Positions) != len(AssemblingPositions()) {
+		t.Fatalf("the committed file holds %d position entries; one entry per assembling position "+
+			"means %d", len(pf.Positions), len(AssemblingPositions()))
 	}
 	for _, p := range AssemblingPositions() {
 		if _, err := PresetFor(pf, p); err != nil {
@@ -762,7 +771,7 @@ func TestTheShippedPresetScopesEveryAssemblingPositionDistinctly(t *testing.T) {
 				"assemble at all: %v", p, err)
 			continue
 		}
-		key := fmt.Sprintf("%v", applied.Selectors)
+		key := fmt.Sprintf("%v", applied.Applied().Selectors)
 		if other, dup := seen[key]; dup {
 			t.Errorf("the committed file gives %s and %s the same entry; a table that cannot "+
 				"say what a reading is about cannot distinguish readings about different things",
@@ -784,11 +793,15 @@ func TestARecordSelectorAssemblesThatRecordsMaterial(t *testing.T) {
 	root := fixtureRepo(t)
 	wide := assembleFixture(t, root, PositionEntailment)
 
+	// The entry names the projection kind beside the record, because the kinds
+	// ADMIT and the object set NARROWS (spc-2609020626048722): an entry naming
+	// a record and no kind hands nothing, which is a refusal rather than the
+	// selecting path this test exists to run.
 	writeFile(t, root, ".abcd/config/reading-presets.json", `{
   "schema_version": 1,
   "presets": {
     "default": {"positions": {"entailment":
-      {"kinds": [], "records": ["itd-1"], "paths": []}}}
+      {"kinds": ["intent-projection"], "records": ["itd-1"], "paths": []}}}
   }
 }`)
 	gitCommitAll(t, root)
@@ -802,11 +815,28 @@ func TestARecordSelectorAssemblesThatRecordsMaterial(t *testing.T) {
 	if len(res.Manifest.Items) == 0 {
 		t.Fatal("a record selector assembled nothing")
 	}
+	// The narrowing is per ROW, which is spc-2609020626048722's rule and not a
+	// weakening of this one: a record row is narrowed to the object set's
+	// records when the object set names any record under that row's source, and
+	// admitted whole when it names none. itd-1 is the fixture's shipped intent,
+	// so the SHIPPED row narrows to it; the drafts and planned rows, which the
+	// object set names no record under, are handed whole at this position, as
+	// the readings companion's section 6.2 asks.
+	const shipped = ".abcd/development/intents/shipped/"
+	narrowed := 0
 	for _, m := range res.Manifest.Items {
+		if !strings.HasPrefix(m.Path, shipped) {
+			continue
+		}
+		narrowed++
 		if !pathNamesRecord(m.Path, "itd-1") {
 			t.Errorf("the assembly passed %s, which the selector itd-1 does not name; a record "+
 				"selector admits its own record's material and no other", m.Path)
 		}
+	}
+	if narrowed == 0 {
+		t.Fatal("the assembly passed no item from the shipped row, so the record selector " +
+			"carried nothing and this test proves nothing")
 	}
 	// And it must be a genuine narrowing, or the assertion above is trivially
 	// satisfied by an entry that happened to select everything.
@@ -819,21 +849,6 @@ func TestARecordSelectorAssemblesThatRecordsMaterial(t *testing.T) {
 	if len(res.Bundle.Preset.Records) != 1 || res.Bundle.Preset.Records[0] != "itd-1" {
 		t.Errorf("the bundle's preset records are %v, want [itd-1]", res.Bundle.Preset.Records)
 	}
-}
-
-// onlyPreset returns the file's single committed preset. The invocation names
-// no preset, so a file holding more than one has nothing to choose between them
-// (cond-2609021004074586).
-func onlyPreset(t *testing.T, pf PresetFile) Preset {
-	t.Helper()
-	if len(pf.Presets) != 1 {
-		t.Fatalf("the preset file holds %d preset(s); one entry per position means one preset",
-			len(pf.Presets))
-	}
-	for _, p := range pf.Presets {
-		return p
-	}
-	return Preset{}
 }
 
 // decodedManifest decodes one run's manifest as a bare document, so a test can
@@ -878,7 +893,7 @@ func TestAssemblyAppliesTheCommittedPresetForThePosition(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	entry := onlyPreset(t, pf)
+	entry := pf
 
 	for _, p := range AssemblingPositions() {
 		res, err := Assemble(AssembleRequest{
@@ -928,7 +943,7 @@ func TestAssemblyAppliesTheCommittedPresetForThePosition(t *testing.T) {
 		if err := json.Unmarshal(doc["preset"], &applied); err != nil {
 			t.Fatalf("the manifest at %s carries no preset block: %v", p, err)
 		}
-		wantSels := canonicalise(positionSelectors(entry, p))
+		wantSels := entry.Positions[string(p)].Applied().Selectors
 		if fmt.Sprintf("%v", applied.Selectors) != fmt.Sprintf("%v", wantSels) {
 			t.Errorf("the manifest at %s records the preset %v, want %v",
 				p, applied.Selectors, wantSels)
@@ -1045,29 +1060,22 @@ func TestOnlyTheTreePositionsNameSourceOrTest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read %s: %v", PresetConfigPath, err)
 	}
-	var file struct {
-		Presets map[string]struct {
-			Positions map[string]struct {
-				Kinds []string `json:"kinds"`
-				Paths []string `json:"paths"`
-			} `json:"positions"`
-		} `json:"presets"`
-	}
-	if err := json.Unmarshal(raw, &file); err != nil {
-		t.Fatalf("decode %s: %v", PresetConfigPath, err)
-	}
-	if len(file.Presets) != 1 {
-		t.Fatalf("%s holds %d presets; one entry per position means one preset",
-			PresetConfigPath, len(file.Presets))
-	}
+	// Read as raw JSON rather than through the loader, so what is checked is the
+	// file a reviewer reads rather than what the code under test made of it.
 	var preset struct {
 		Positions map[string]struct {
-			Kinds []string `json:"kinds"`
-			Paths []string `json:"paths"`
+			Kinds  []string `json:"kinds"`
+			Object struct {
+				Paths []string `json:"paths"`
+			} `json:"object"`
 		} `json:"positions"`
 	}
-	for _, p := range file.Presets {
-		preset = p
+	if err := json.Unmarshal(raw, &preset); err != nil {
+		t.Fatalf("decode %s: %v", PresetConfigPath, err)
+	}
+	if len(preset.Positions) != len(AssemblingPositions()) {
+		t.Fatalf("%s holds %d position entries; one entry per assembling position means %d",
+			PresetConfigPath, len(preset.Positions), len(AssemblingPositions()))
 	}
 
 	names := func(position string, kind Kind) bool {
@@ -1094,7 +1102,7 @@ func TestOnlyTheTreePositionsNameSourceOrTest(t *testing.T) {
 		}
 	}
 	for position, entry := range preset.Positions {
-		for _, p := range entry.Paths {
+		for _, p := range entry.Object.Paths {
 			if strings.HasPrefix(path.Clean(p), "internal/core/site") {
 				t.Errorf("the committed %s entry names the path %q, which reaches the Go fixture "+
 					"the itd-183 audit found leaking; no committed entry reaches it", position, p)
@@ -1103,11 +1111,16 @@ func TestOnlyTheTreePositionsNameSourceOrTest(t *testing.T) {
 	}
 
 	// The disclosure half. The fixture carries the committed entries verbatim,
-	// so what is applied here is what a run of this repository applies.
+	// so what is applied here is what a run of this repository applies — and the
+	// two Go files are written UNDER one of the entries' own object-set paths,
+	// because a tree row is narrowed to those paths and a file outside them
+	// would be handed to nothing (spc-2609020626048722).
 	root := fixtureRepo(t)
 	writeFile(t, root, PresetConfigPath, string(raw))
-	writeFile(t, root, "main_test.go",
-		"package main\n\n// the fixture's own test file is corpus, never built\n")
+	writeFile(t, root, "internal/core/lint/lint.go",
+		"package lint\n\n// the fixture's own source file is corpus, never built\n")
+	writeFile(t, root, "internal/core/lint/lint_test.go",
+		"package lint\n\n// the fixture's own test file is corpus, never built\n")
 	gitCommitAll(t, root)
 
 	for _, position := range []Position{PositionDetection, PositionWidening} {

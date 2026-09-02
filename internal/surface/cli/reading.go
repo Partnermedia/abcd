@@ -391,6 +391,35 @@ func renderSizeReport(w io.Writer, s reading.SizeReport) {
 		fmt.Fprintf(w, "  unscanned: %d item(s) travel whole, not examined by the exclusion floor\n",
 			s.Unscanned)
 	}
+	// The declaration the committed entry carries, beside the measurement it was
+	// taken from. A version 1 preset file declares none, and the report says so
+	// rather than rendering a zero a reader would take for a bound
+	// (spc-2609020626048722).
+	if s.Window == nil {
+		fmt.Fprintln(w, "  window:        none declared (preset schema version 1)")
+	} else {
+		verdict := "this run is within it"
+		if s.ExceedsWindow {
+			verdict = "this run EXCEEDS it"
+		}
+		fmt.Fprintf(w, "  window:        %s tokens declared (measured ~%s at %s); %s\n",
+			thousands(s.Window.TokensEst), thousands(s.Window.MeasuredTokensEst),
+			termsafe.Sanitize(s.Window.MeasuredAt), verdict)
+	}
+	// The target is stated and never enforced: any figure inside the reader's
+	// window is acceptable, and the operator learns the figure from the tool
+	// rather than from the reader (maintainer's ruling of 2026-09-02).
+	if s.OverTarget {
+		fmt.Fprintf(w, "  over target: %s estimated tokens against a target of %s; the reader's "+
+			"window decides whether this is acceptable\n",
+			thousands(s.TokensEst), thousands(reading.TargetTokens))
+	}
+	// The entailment reading's yield bound, beside the figures rather than left
+	// for the reader to count (readings companion 6.6; iss-2609012259585189).
+	if m := s.Mechanism; m != nil {
+		fmt.Fprintf(w, "  mechanism: %d of %d projected intents carry a mechanism claim; "+
+			"%d state none; %d carry neither\n", m.Stated, m.Intents, m.NoneStated, m.Absent)
+	}
 }
 
 // humanBytes renders a byte count at a readable scale. The unit is decimal, not

@@ -639,11 +639,15 @@ func TestOptedInSourceAndTestsTravelWholeMarkedUnscanned(t *testing.T) {
 		root := fixtureRepo(t)
 		writeFile(t, root, "main_test.go",
 			"package main\n\n// the fixture's own test file is corpus, never built\n")
+		// The entry names the two probe files as its object set: a tree row is
+		// narrowed to the object set's paths, and an entry with no path hands
+		// nothing from the tree whatever kinds it lists
+		// (spc-2609020626048722).
 		writeFile(t, root, ".abcd/config/reading-presets.json", fmt.Sprintf(`{
   "schema_version": 1,
   "presets": {
     "default": {"positions": {"detection":
-      {"kinds": [%q], "records": [], "paths": []}}}
+      {"kinds": [%q], "records": [], "paths": ["main.go", "main_test.go"]}}}
   }
 }`, string(kind)))
 		gitCommitAll(t, root)

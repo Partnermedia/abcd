@@ -45,7 +45,27 @@ const PresetConfigPath = ".abcd/config/reading-presets.json"
 // PresetSchemaVersion is the preset file's own shape version, separate from the
 // artefacts' SchemaVersion: the configuration and the output are different
 // shapes with different reasons to move.
-const PresetSchemaVersion = 1
+//
+// It goes 1 to 2 with the three-part entry: the object set the run is about, the
+// kinds admitted within it, and the window the entry was calibrated for
+// (spc-2609020626048722). The named `presets` map goes with the operand that
+// chose between its keys; a version 2 file names one entry per position at the
+// top level.
+const PresetSchemaVersion = 2
+
+// presetSchemaVersions is every version this loader reads. Version 1 goes on
+// loading because the schema move is opt-in: an adopter's committed file keeps
+// working until they move it, which is the whole of why this change's impact is
+// `fix` and not `breaking` (cond-2609020626048715).
+var presetSchemaVersions = map[int]bool{1: true, 2: true}
+
+// TargetTokens is the size a committed entry AIMS at, stated and never
+// enforced. The maintainer ruled on 2026-09-02 that any figure inside the
+// reader's window is acceptable and that a figure over the target is stated to
+// the operator, so nothing here refuses: the size report carries one line, and
+// the entry's declaration and comment say what reader it was measured for
+// (divergence register 24).
+const TargetTokens = 200_000
 
 // recordIDRe is the record-id token form. It is deliberately narrow: a token
 // that is not one of these shapes is not a record id, and is never guessed at.
@@ -91,20 +111,15 @@ type AppliedPreset struct {
 	Selectors []Selector `json:"selectors"`
 }
 
-// selects reports whether one collected candidate is in the applied entry.
-func (s AppliedPreset) selects(c candidate) bool {
-	for _, sel := range s.Selectors {
-		switch {
-		case sel.Kind != "" && c.kind == sel.Kind:
-			return true
-		case sel.Record != "" && pathNamesRecord(c.path, sel.Record):
-			return true
-		case sel.Path != "" && underPath(c.path, sel.Path):
-			return true
-		}
-	}
-	return false
-}
+// AppliedPreset carries no `selects` of its own, and its absence is the change
+// spc-2609020626048722 makes to how an entry reads. A flat union of selectors
+// said "kind OR record OR path", under which a path clause handed every kind
+// beneath it and a record clause reached material the entry's kinds did not
+// name. The entry's two axes are not a union: the KINDS admit and the OBJECT
+// SET narrows, and that rule needs to know which include-table row admitted a
+// candidate. So it lives on PositionEntry, and this type stays what it always
+// was for the manifest — the applied entry rendered as clauses, in a canonical
+// order, so one entry hashes to one value.
 
 // pathNamesRecord reports whether a repo-relative path is the record's own
 // file. A record's file is named for its id, so the basename either IS the id
@@ -166,32 +181,164 @@ func (s AppliedPreset) Hash() (string, error) {
 	return sha256Hex(data), nil
 }
 
-// PositionScope is one position's scope inside a preset.
-type PositionScope struct {
+// positionScopeV1 is one position's scope inside a version 1 preset. It is the
+// shape spc-69 named, kept because a version 1 file goes on loading; it is read
+// into a PositionEntry and never used past the load.
+type positionScopeV1 struct {
 	Kinds   []Kind   `json:"kinds"`
 	Records []string `json:"records"`
 	Paths   []string `json:"paths"`
 }
 
-// Preset holds the committed entries, one per position.
+// presetV1 holds a version 1 preset's per-position scopes.
 //
 // `extends` retired with the second preset name. It existed to make "warm is
 // cold plus a delta" a property rather than a review note, and there is no
 // second name for it to relate: one entry per position stands, and a repository
 // that wants a wider reading commits a wider entry (adr-2609021016286571).
-type Preset struct {
-	// Positions maps a position token to its entry. A preset carries an entry
-	// PER POSITION rather than one every position shares, because the finding
-	// this exists to fix is that three of the four positions received a
-	// byte-identical item set, and one entry over four near-identical
-	// admissions reproduces it exactly.
-	Positions map[string]PositionScope `json:"positions"`
+type presetV1 struct {
+	Positions map[string]positionScopeV1 `json:"positions"`
 }
 
-// PresetFile is the committed configuration.
+// presetFileV1 is the committed configuration at schema version 1.
+type presetFileV1 struct {
+	SchemaVersion int                 `json:"schema_version"`
+	Presets       map[string]presetV1 `json:"presets"`
+}
+
+// ObjectSet is what a run is ABOUT: which records and which delivered paths.
+// The term is the design framework's own (section 13), and the two lists are
+// one fact shared by every kind the entry admits.
+type ObjectSet struct {
+	Records []string `json:"records"`
+	Paths   []string `json:"paths"`
+}
+
+// Window is the estimated-token figure an entry was calibrated to, beside the
+// measurement it was taken from.
+//
+// TokensEst is the DECLARATION, on the size report's own byte-derived basis
+// (bytes divided by 3.85, spc-68), and the eval holds every entry to it. The
+// three measured_* values are DISCLOSURE and nothing gates on them beyond
+// shape: MeasuredAt must match the assembler's target grammar, and its
+// reachability is deliberately not checked, because a squash or rebase merge
+// rewrites a branch sha out of existence and a disclosure that fails the build
+// after one would teach people to omit it.
+type Window struct {
+	TokensEst         int    `json:"tokens_est"`
+	MeasuredTokensEst int    `json:"measured_tokens_est"`
+	MeasuredBytes     int    `json:"measured_bytes"`
+	MeasuredAt        string `json:"measured_at"`
+}
+
+// PositionEntry is one position's committed entry, in the three parts the
+// design names (spc-2609020626048722; divergence register 25).
+//
+// Comment is free text nothing reads except a reviewer; it is declared so the
+// strict decoder admits it, and it is where the entry says why it names the
+// kinds it does and what reader a figure over the target was measured for.
+type PositionEntry struct {
+	Comment string    `json:"comment,omitempty"`
+	Object  ObjectSet `json:"object"`
+	Kinds   []Kind    `json:"kinds"`
+	Window  *Window   `json:"window,omitempty"`
+}
+
+// PresetFile is the committed configuration, one entry per position.
+//
+// A preset carries an entry PER POSITION rather than one every position shares,
+// because the finding this exists to fix is that three of the four positions
+// received a byte-identical item set, and one entry over four near-identical
+// admissions reproduces it exactly (iss-2608311501240566).
 type PresetFile struct {
-	SchemaVersion int               `json:"schema_version"`
-	Presets       map[string]Preset `json:"presets"`
+	SchemaVersion int                      `json:"schema_version"`
+	Positions     map[string]PositionEntry `json:"positions"`
+}
+
+// admitsKind reports whether the entry names one material kind. The kinds
+// ADMIT: nothing outside the list travels, whatever the object set names.
+func (e PositionEntry) admitsKind(k Kind) bool {
+	for _, want := range e.Kinds {
+		if want == k {
+			return true
+		}
+	}
+	return false
+}
+
+// selects reports whether one collected candidate is in this entry.
+//
+// The kinds admit and the object set narrows, and HOW it narrows depends on the
+// include-table row that admitted the candidate:
+//
+//   - A record row (the shipped, drafts, planned, specs and disciplines rows)
+//     is narrowed to the object set's records when the object set names any
+//     record under that row's source — narrowRecords, decided per row by the
+//     caller — and admitted whole when it names none. That is what hands a
+//     definition's constraint sources whole while handing the spec and
+//     intent-projection kinds for the object set's records alone.
+//   - A tree row (the doc, config, source and test rows at the repository root)
+//     is narrowed to the files at or beneath the object set's paths, and an
+//     entry with no path hands nothing from the tree whatever kinds it lists.
+//   - Everything else — the brief chapters and the glossary — is admitted by
+//     kind alone, because no part of the object set narrows a constraint
+//     source.
+func (e PositionEntry) selects(c candidate, narrowRecords bool) bool {
+	if !e.admitsKind(c.kind) {
+		return false
+	}
+	switch c.rowClass {
+	case rowTree:
+		for _, p := range e.Object.Paths {
+			if underPath(c.path, p) {
+				return true
+			}
+		}
+		return false
+	case rowRecord:
+		if !narrowRecords {
+			return true
+		}
+		for _, r := range e.Object.Records {
+			if pathNamesRecord(c.path, r) {
+				return true
+			}
+		}
+		return false
+	default:
+		return true
+	}
+}
+
+// namesRecordIn reports whether the object set names a record whose file is one
+// of the paths given. It is the per-row question selects takes as narrowRecords:
+// the object set reaches this row, so this row narrows.
+func (e PositionEntry) namesRecordIn(paths []string) bool {
+	for _, p := range paths {
+		for _, r := range e.Object.Records {
+			if pathNamesRecord(p, r) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// Applied renders the entry as the canonical clause list the manifest and the
+// bundle carry. It is provenance, not the filter: what the run applied, in one
+// order, so a reader can tell two runs apart by the entry they had.
+func (e PositionEntry) Applied() AppliedPreset {
+	out := make([]Selector, 0, len(e.Kinds)+len(e.Object.Records)+len(e.Object.Paths))
+	for _, k := range e.Kinds {
+		out = append(out, Selector{Kind: k})
+	}
+	for _, r := range e.Object.Records {
+		out = append(out, Selector{Record: r})
+	}
+	for _, raw := range e.Object.Paths {
+		out = append(out, Selector{Path: path.Clean(raw)})
+	}
+	return AppliedPreset{Selectors: canonicalise(out)}
 }
 
 // LoadPresets reads and validates the committed preset configuration.
@@ -246,7 +393,103 @@ func LoadPresets(repoRoot string) (PresetFile, error) {
 	if err != nil {
 		return PresetFile{}, fmt.Errorf("reading %s: %w", PresetConfigPath, err)
 	}
-	if err := refuseDuplicatePresetKeys(raw); err != nil {
+
+	// The version is read before the shape, because the two shapes are different
+	// documents and a strict decoder cannot be pointed at both at once. A
+	// version 1 file declaring a `window`, or a version 2 file carrying a
+	// `presets` map, is therefore refused as an unknown field by the decoder for
+	// the version it claims — which is what keeps the two shapes from being
+	// mixed into a third nobody specified.
+	var probe struct {
+		SchemaVersion int `json:"schema_version"`
+	}
+	if err := json.Unmarshal(raw, &probe); err != nil {
+		return PresetFile{}, fmt.Errorf("decoding %s: %w", PresetConfigPath, err)
+	}
+	if !presetSchemaVersions[probe.SchemaVersion] {
+		return PresetFile{}, fmt.Errorf("decoding %s: schema_version is %d, want %s",
+			PresetConfigPath, probe.SchemaVersion, joinVersions())
+	}
+
+	var pf PresetFile
+	if probe.SchemaVersion == 1 {
+		pf, err = decodeV1(raw)
+	} else {
+		pf, err = decodeV2(raw)
+	}
+	if err != nil {
+		return PresetFile{}, err
+	}
+	if len(pf.Positions) == 0 {
+		return PresetFile{}, fmt.Errorf("%s names no entry for any position", PresetConfigPath)
+	}
+	if err := validateEntries(pf); err != nil {
+		return PresetFile{}, err
+	}
+	return pf, nil
+}
+
+// joinVersions renders the versions this loader reads, for a refusal that says
+// which shapes exist rather than only which one it wanted.
+func joinVersions() string {
+	out := make([]string, 0, len(presetSchemaVersions))
+	for v := range presetSchemaVersions {
+		out = append(out, fmt.Sprintf("%d", v))
+	}
+	sort.Strings(out)
+	return strings.Join(out, " or ")
+}
+
+// decodeV1 reads spc-69's named shape into the version 2 entry set.
+//
+// A version 1 file holding exactly one preset keeps working: its kinds, records
+// and paths become the position entries, with the records and paths read as the
+// object set and no window declared. A file holding more than one refuses,
+// naming them, because nothing at the invocation can choose between them and
+// the design admits no operand that could (cond-2609021004074586).
+func decodeV1(raw []byte) (PresetFile, error) {
+	if err := refuseDuplicateKeys(raw, "presets"); err != nil {
+		return PresetFile{}, err
+	}
+	dec := json.NewDecoder(strings.NewReader(string(raw)))
+	dec.DisallowUnknownFields()
+	var old presetFileV1
+	if err := dec.Decode(&old); err != nil {
+		return PresetFile{}, fmt.Errorf("decoding %s: %w", PresetConfigPath, err)
+	}
+	if len(old.Presets) == 0 {
+		return PresetFile{}, fmt.Errorf("%s names no preset", PresetConfigPath)
+	}
+	if len(old.Presets) > 1 {
+		return PresetFile{}, fmt.Errorf("%s names %d presets (%s); the invocation names none, so "+
+			"there is nothing to choose between them. Commit one entry per position and keep the "+
+			"other in the file's history", PresetConfigPath, len(old.Presets), joinPresets(old))
+	}
+	for name, p := range old.Presets {
+		// The preset NAME is no longer a token anything resolves, so these three
+		// refusals are about the FILE rather than about resolution: a key named
+		// for a material kind or shaped like a record id reads, to a reviewer, as
+		// the thing it is named after rather than as the entry set, and the one
+		// file whose whole safety argument is that a human reviewed it is the
+		// last place to leave a name that means two things.
+		if err := validPresetName(name); err != nil {
+			return PresetFile{}, err
+		}
+		out := PresetFile{SchemaVersion: 1, Positions: map[string]PositionEntry{}}
+		for pos, ps := range p.Positions {
+			out.Positions[pos] = PositionEntry{
+				Kinds:  ps.Kinds,
+				Object: ObjectSet{Records: ps.Records, Paths: ps.Paths},
+			}
+		}
+		return out, nil
+	}
+	return PresetFile{}, fmt.Errorf("%s names no preset", PresetConfigPath)
+}
+
+// decodeV2 reads the current shape: one entry per position at the top level.
+func decodeV2(raw []byte) (PresetFile, error) {
+	if err := refuseDuplicateKeys(raw, "positions"); err != nil {
 		return PresetFile{}, err
 	}
 	dec := json.NewDecoder(strings.NewReader(string(raw)))
@@ -255,50 +498,82 @@ func LoadPresets(repoRoot string) (PresetFile, error) {
 	if err := dec.Decode(&pf); err != nil {
 		return PresetFile{}, fmt.Errorf("decoding %s: %w", PresetConfigPath, err)
 	}
-	if pf.SchemaVersion != PresetSchemaVersion {
-		return PresetFile{}, fmt.Errorf("decoding %s: schema_version is %d, want %d",
-			PresetConfigPath, pf.SchemaVersion, PresetSchemaVersion)
-	}
-	if len(pf.Presets) == 0 {
-		return PresetFile{}, fmt.Errorf("%s names no preset", PresetConfigPath)
-	}
-	// One preset file, one entry per position (adr-2609021016286571). Nothing
-	// at the invocation names a preset any more, so a file holding two has
-	// nothing to choose between them: whichever the loader picked would be a
-	// resolution ORDER deciding silently, which is the failure this package
-	// refuses everywhere else it can arise. A repository with two calibrations
-	// commits one and records the other in its history
-	// (cond-2609021004074586).
-	if len(pf.Presets) > 1 {
-		return PresetFile{}, fmt.Errorf("%s names %d presets (%s); the invocation names none, so "+
-			"there is nothing to choose between them. Commit one entry per position and keep the "+
-			"other in the file's history", PresetConfigPath, len(pf.Presets), joinPresets(pf))
-	}
-	if err := validatePresets(pf); err != nil {
-		return PresetFile{}, err
+	// Every entry declares the window it was calibrated for. A missing one
+	// refuses by POSITION: an entry with no declaration is one the eval cannot
+	// hold to anything, and a silent absence is how the instrument reached
+	// release measured by nobody (spc-2609020626048722).
+	for _, pos := range sortedPositionKeys(pf) {
+		e := pf.Positions[pos]
+		switch {
+		case e.Window == nil:
+			return PresetFile{}, fmt.Errorf("%s: the entry for %s declares no window; at "+
+				"schema_version 2 every position states the window it was calibrated for",
+				PresetConfigPath, pos)
+		case e.Window.TokensEst <= 0:
+			return PresetFile{}, fmt.Errorf("%s: the entry for %s declares a window of %d "+
+				"estimated tokens; a declaration is a figure an assembly can be held to",
+				PresetConfigPath, pos, e.Window.TokensEst)
+		case e.Window.MeasuredTokensEst < 0 || e.Window.MeasuredBytes < 0:
+			return PresetFile{}, fmt.Errorf("%s: the entry for %s declares a negative "+
+				"measurement", PresetConfigPath, pos)
+		case !targetRe.MatchString(e.Window.MeasuredAt):
+			return PresetFile{}, fmt.Errorf("%s: the entry for %s names %q as the commit it was "+
+				"measured on, which is not a commit sha of 7 to 40 hexadecimal digits",
+				PresetConfigPath, pos, e.Window.MeasuredAt)
+		}
 	}
 	return pf, nil
 }
 
-// refuseDuplicatePresetKeys refuses a preset object naming one key twice.
+// sortedPositionKeys returns the file's position tokens in a stable order, so a
+// refusal over a map names the same position on every run.
+func sortedPositionKeys(pf PresetFile) []string {
+	out := make([]string, 0, len(pf.Positions))
+	for pos := range pf.Positions {
+		out = append(out, pos)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// validPresetName holds a version 1 preset key to a shape that cannot be
+// confused with a path, a record id, prose, or a material kind.
+func validPresetName(name string) error {
+	if !presetNameRe.MatchString(name) {
+		return fmt.Errorf("%s: preset %q is not a valid name", PresetConfigPath, name)
+	}
+	for _, k := range Kinds() {
+		if string(k) == name {
+			return fmt.Errorf("%s: preset %q collides with the material kind of the same name; "+
+				"one token may not mean two things", PresetConfigPath, name)
+		}
+	}
+	if recordIDRe.MatchString(name) {
+		return fmt.Errorf("%s: preset %q is shaped like a record id", PresetConfigPath, name)
+	}
+	return nil
+}
+
+// refuseDuplicateKeys refuses the named top-level object naming one key twice.
 //
 // Go's JSON decoder takes the LAST duplicate silently, and DisallowUnknownFields
 // says nothing about duplicates. Against the one file whose entire safety
 // argument is that a human reviewed it, silent last-wins is a review-evasion
-// vector: a second `"cold"` block low in the file replaces the reviewed one,
-// and a reviewer reading top-down sees the first.
-func refuseDuplicatePresetKeys(raw []byte) error {
-	dec := json.NewDecoder(strings.NewReader(string(raw)))
-	var probe struct {
-		Presets map[string]json.RawMessage `json:"presets"`
-	}
-	if err := json.Unmarshal(raw, &probe); err != nil {
+// vector: a second `"detection"` block low in the file replaces the reviewed
+// one, and a reviewer reading top-down sees the first.
+//
+// The container is named by the caller because the two schema versions put the
+// keys in different places — `presets` at version 1, `positions` at version 2 —
+// and one check over whichever container the version uses is better than two
+// that can drift apart.
+func refuseDuplicateKeys(raw []byte, container string) error {
+	if !json.Valid(raw) {
 		return nil // the strict decode below reports the real parse error
 	}
 	seen := map[string]int{}
-	dec = json.NewDecoder(strings.NewReader(string(raw)))
+	dec := json.NewDecoder(strings.NewReader(string(raw)))
 	depth := 0
-	inPresets := false
+	inside := false
 	for {
 		tok, err := dec.Token()
 		if err != nil {
@@ -312,20 +587,20 @@ func refuseDuplicatePresetKeys(raw []byte) error {
 			case '}':
 				depth--
 				if depth <= 1 {
-					inPresets = false
+					inside = false
 				}
 			}
 		case string:
-			if depth == 1 && t == "presets" {
-				inPresets = true
+			if depth == 1 && t == container {
+				inside = true
 				continue
 			}
-			if inPresets && depth == 2 {
+			if inside && depth == 2 {
 				seen[t]++
 				if seen[t] > 1 {
-					return fmt.Errorf("%s names the preset %q more than once; the last would win "+
+					return fmt.Errorf("%s names %q more than once under %q; the last would win "+
 						"silently, so a reviewed block could be replaced by one further down the file",
-						PresetConfigPath, t)
+						PresetConfigPath, t, container)
 				}
 			}
 		}
@@ -333,58 +608,42 @@ func refuseDuplicatePresetKeys(raw []byte) error {
 	return nil
 }
 
-// validatePresets refuses a configuration that could not mean one thing.
-func validatePresets(pf PresetFile) error {
+// validateEntries refuses a configuration that could not mean one thing. It
+// runs over the version 2 entry set, which a version 1 file has already been
+// read into, so every refusal spc-69 named survives the schema move.
+func validateEntries(pf PresetFile) error {
 	kinds := make(map[Kind]bool, len(Kinds()))
 	for _, k := range Kinds() {
 		kinds[k] = true
 	}
-	for name, p := range pf.Presets {
-		// The name is no longer a token anything resolves — nothing at the
-		// invocation names a preset — so these three refusals are now about the
-		// FILE rather than about resolution: a key named for a material kind or
-		// shaped like a record id reads, to a reviewer, as the thing it is
-		// named after rather than as the entry set, and the one file whose
-		// whole safety argument is that a human reviewed it is the last place
-		// to leave a name that means two things.
-		if !presetNameRe.MatchString(name) {
-			return fmt.Errorf("%s: preset %q is not a valid name", PresetConfigPath, name)
+	for _, pos := range sortedPositionKeys(pf) {
+		e := pf.Positions[pos]
+		position, err := ParsePosition(pos)
+		if err != nil {
+			return fmt.Errorf("%s: %w", PresetConfigPath, err)
 		}
-		if kinds[Kind(name)] {
-			return fmt.Errorf("%s: preset %q collides with the material kind of the same name; "+
-				"one token may not mean two things", PresetConfigPath, name)
+		// The comparative position refuses before the presets are loaded at
+		// all, so an entry for it would describe a run that cannot happen.
+		if position == PositionComparative {
+			return fmt.Errorf("%s names an entry for the comparative position, "+
+				"which does not assemble: its object is the widening run's pre-admission "+
+				"output and no channel supplies it", PresetConfigPath)
 		}
-		if recordIDRe.MatchString(name) {
-			return fmt.Errorf("%s: preset %q is shaped like a record id", PresetConfigPath, name)
+		for _, k := range e.Kinds {
+			if !kinds[k] {
+				return fmt.Errorf("%s: the entry for %s names the unknown kind %q; "+
+					"the vocabulary is closed", PresetConfigPath, pos, k)
+			}
 		}
-		for pos, ps := range p.Positions {
-			position, err := ParsePosition(pos)
-			if err != nil {
-				return fmt.Errorf("%s: preset %q: %w", PresetConfigPath, name, err)
+		for _, r := range e.Object.Records {
+			if !recordIDRe.MatchString(r) {
+				return fmt.Errorf("%s: the entry for %s names %q, which is not a record id",
+					PresetConfigPath, pos, r)
 			}
-			// The comparative position refuses before the presets are loaded at
-			// all, so an entry for it would describe a run that cannot happen.
-			if position == PositionComparative {
-				return fmt.Errorf("%s: preset %q names a scope for the comparative position, "+
-					"which does not assemble: its object is the widening run's pre-admission "+
-					"output and no channel supplies it", PresetConfigPath, name)
-			}
-			for _, k := range ps.Kinds {
-				if !kinds[k] {
-					return fmt.Errorf("%s: preset %q at %s names the unknown kind %q; "+
-						"the vocabulary is closed", PresetConfigPath, name, pos, k)
-				}
-			}
-			for _, r := range ps.Records {
-				if !recordIDRe.MatchString(r) {
-					return fmt.Errorf("%s: preset %q at %s names %q, which is not a record id",
-						PresetConfigPath, name, pos, r)
-				}
-			}
-			for _, raw := range ps.Paths {
-				if err := validPresetPath(raw); err != nil {
-					return fmt.Errorf("%s: preset %q at %s: %w", PresetConfigPath, name, pos, err)
-				}
+		}
+		for _, raw := range e.Object.Paths {
+			if err := validPresetPath(raw); err != nil {
+				return fmt.Errorf("%s: the entry for %s: %w", PresetConfigPath, pos, err)
 			}
 		}
 	}
@@ -444,58 +703,33 @@ func validPresetPath(raw string) error {
 // position refuses rather than defaulting to everything — a position served the
 // whole corpus because its entry was forgotten is exactly the silent widening
 // the presets exist to close.
-func PresetFor(pf PresetFile, position Position) (AppliedPreset, error) {
-	preset, err := solePreset(pf)
-	if err != nil {
-		return AppliedPreset{}, err
-	}
-	sels := canonicalise(positionSelectors(preset, position))
-	if len(sels) == 0 {
-		return AppliedPreset{}, fmt.Errorf("%s names no entry for the %s position, so a run there "+
+func PresetFor(pf PresetFile, position Position) (PositionEntry, error) {
+	e, ok := pf.Positions[string(position)]
+	if !ok || len(e.Kinds) == 0 {
+		return PositionEntry{}, fmt.Errorf("%s names no entry for the %s position, so a run there "+
 			"would assemble nothing; an entry that selects nothing is a refusal rather than an "+
 			"empty bundle. Commit an entry for %s", PresetConfigPath, position, position)
 	}
-	return AppliedPreset{Selectors: sels}, nil
+	return e, nil
 }
 
-// solePreset returns the file's one preset. LoadPresets already refuses a file
-// holding none or more than one, so this is the reader's half of that rule and
-// never the place the count is decided.
-func solePreset(pf PresetFile) (Preset, error) {
-	if len(pf.Presets) != 1 {
-		return Preset{}, fmt.Errorf("%s holds %d presets; one entry per position means one preset",
-			PresetConfigPath, len(pf.Presets))
-	}
-	for _, p := range pf.Presets {
-		return p, nil
-	}
-	return Preset{}, fmt.Errorf("%s holds no preset", PresetConfigPath)
-}
-
-// positionSelectors flattens one preset's own entry at one position.
-func positionSelectors(p Preset, position Position) []Selector {
-	ps, ok := p.Positions[string(position)]
+// PresetWindow returns the declaration the entry for one position carries, or
+// nil where none is declared — which at schema version 2 cannot happen, and at
+// version 1 always does. The size report says which of the two it is looking at
+// rather than rendering a zero.
+func PresetWindow(pf PresetFile, position Position) *Window {
+	e, ok := pf.Positions[string(position)]
 	if !ok {
 		return nil
 	}
-	out := make([]Selector, 0, len(ps.Kinds)+len(ps.Records)+len(ps.Paths))
-	for _, k := range ps.Kinds {
-		out = append(out, Selector{Kind: k})
-	}
-	for _, r := range ps.Records {
-		out = append(out, Selector{Record: r})
-	}
-	for _, raw := range ps.Paths {
-		out = append(out, Selector{Path: path.Clean(raw)})
-	}
-	return out
+	return e.Window
 }
 
-// joinPresets renders the preset names a refusal reports, so a file holding
-// more than one says which ones rather than only how many.
-func joinPresets(pf PresetFile) string {
-	out := make([]string, 0, len(pf.Presets))
-	for name := range pf.Presets {
+// joinPresets renders a version 1 file's preset names for a refusal, so a file
+// holding more than one says which ones rather than only how many.
+func joinPresets(old presetFileV1) string {
+	out := make([]string, 0, len(old.Presets))
+	for name := range old.Presets {
 		out = append(out, name)
 	}
 	sort.Strings(out)

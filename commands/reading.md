@@ -128,6 +128,23 @@ records. There is no budget and no threshold: the assembler cannot know what a
 given reader accepts, so it reports the weight and the operator decides whether
 to dispatch it.
 
+Report `size.window` and `size.exceeds_window` beside those figures. The
+committed entry for the position declares the estimated-token window it was
+calibrated for, together with the figure it measured (`measured_tokens_est`,
+`measured_bytes`) and the commit it measured on (`measured_at`). A file at
+preset schema version 1 declares none, and the report says so rather than
+showing a zero. Nothing is refused for either: `exceeds_window` is what the
+cold-reading eval lane fails on, and the operator is told here. Report
+`size.over_target` too when it is true — the total is over the two hundred
+thousand estimated tokens an entry aims at, which is a target and not a limit,
+and the reader's window decides whether it is acceptable.
+
+At the **entailment** position only, report `size.mechanism`: `stated`,
+`none_stated` and `absent` over `intents`, the projected intent files this run
+carried. It is the yield bound stated beside the findings — how many of the
+intents the reading is about carry a causal claim, how many state none, and how
+many carry neither. No other position's report has the field.
+
 ### Where the artefacts land
 
 ```bash

@@ -742,3 +742,121 @@ func TestManifestMarksWhatTheFloorDidNotExamine(t *testing.T) {
 		}
 	}
 }
+
+// TestTheFixtureLeakIsAbsentUnderEveryCommittedPreset is itd-194 ac-5 over a
+// clone of HEAD, the half `TestOnlyTheTreePositionsNameSourceOrTest` in the
+// assembler's own package cannot take: that test reads which kinds the committed
+// entries name and applies them to a fixture tree, and this one applies them to
+// THIS repository, where the live leak actually sits.
+//
+// The leak is `internal/core/site/fixture_test.go`, a Go test file carrying a
+// record-shaped page with an `## Audit Notes` section in it, found on this
+// repository's corpus by the itd-183 audit (iss-2608301450065320). Two claims,
+// and they are the two halves of adr-56 as refined on 2026-09-02:
+//
+//   - No committed entry reaches it. The detection and widening entries name the
+//     `source` and `test` kinds, but the object set's paths do not reach
+//     `internal/core/site`, so the file is in no assembly this repository runs.
+//   - An entry that DOES reach it gets it whole and marked `unscanned`. The
+//     acceptance is paid for by disclosure: the manifest says, per item, that no
+//     examination stood behind the exclusion assertion over it, which is brief
+//     invariant 16 made a property of the artefact rather than of the run.
+//
+// The second half is proved by committing such an entry IN THE CLONE, so the
+// dirty gate and the tracked-file check are satisfied by construction and this
+// repository's own committed file is untouched.
+func TestTheFixtureLeakIsAbsentUnderEveryCommittedPreset(t *testing.T) {
+	const leak = "internal/core/site/fixture_test.go"
+	clone := cloneHeadDetached(t)
+	if _, err := os.Stat(filepath.Join(clone, filepath.FromSlash(leak))); err != nil {
+		t.Fatalf("%s is not in the clone, so this eval asserts the absence of a file that does "+
+			"not exist: %v", leak, err)
+	}
+
+	for _, position := range assemblingPositions {
+		for _, it := range assembleClone(t, clone, position) {
+			if path.Clean(it.Path) == leak {
+				t.Errorf("the committed %s entry passed %s; no committed entry's object set "+
+					"reaches internal/core/site, and an item the exclusion floor cannot examine "+
+					"must not arrive under an entry that never named it", position, leak)
+			}
+		}
+	}
+
+	// The opted-in half. A detection entry naming the `test` kind under
+	// `internal/core/site` reaches the file, and the manifest discloses that the
+	// floor did not examine it.
+	writeCloneFile(t, clone, presetConfigRel, `{
+  "schema_version": 2,
+  "positions": {
+    "detection": {
+      "comment": "An eval-only entry: it opts the test kind in under the package holding the live fixture leak, so the disclosure the mark carries is asserted over a real item.",
+      "object": {"records": [], "paths": ["internal/core/site"]},
+      "kinds": ["test"],
+      "window": {"tokens_est": 100000000, "measured_tokens_est": 1, "measured_bytes": 1, "measured_at": "0000000"}
+    }
+  }
+}
+`)
+	gitInClone(t, clone, "add", presetConfigRel)
+	gitInClone(t, clone, "-c", "user.name=abcd eval", "-c", "user.email=eval@example.invalid",
+		"commit", "-q", "-m", "opt the test kind in under internal/core/site")
+
+	found := false
+	for _, it := range assembleClone(t, clone, posDetection) {
+		if path.Clean(it.Path) != leak {
+			continue
+		}
+		found = true
+		if it.Scan != "unscanned" {
+			t.Errorf("%s arrived marked %q; the exclusion floor parses markdown alone, so an "+
+				"item from an unscanned row travels whole and the manifest says the key and "+
+				"heading exclusions rest on no examination of it (adr-56 as refined "+
+				"2026-09-02; brief invariant 16)", leak, it.Scan)
+		}
+	}
+	if !found {
+		t.Errorf("an entry naming the test kind under internal/core/site passed no item at %s, "+
+			"so the disclosure was asserted over nothing", leak)
+	}
+}
+
+// assembleClone dry-runs one position over a clone and returns its manifest
+// items. It is separate from `assemble` above, which is bound to the planted
+// fixture and its carrier floor: this one runs over this repository's own tree,
+// where the carriers do not exist.
+func assembleClone(t *testing.T, root, position string) []manifestItem {
+	t.Helper()
+	outDir := filepath.Join(t.TempDir(), "run-"+position)
+	home := t.TempDir()
+	args := append(append([]string{}, assembleVerb...),
+		"--position", position, "--target", "HEAD", "--out", outDir, "--dry-run")
+	out, code := runIn(t, root, []string{"HOME=" + home}, args...)
+	if code != 0 {
+		t.Fatalf("`abcd %s` over a clone of HEAD exited %d\n%s",
+			strings.Join(args, " "), code, out)
+	}
+	var manifest struct {
+		Items []manifestItem `json:"items"`
+	}
+	if err := json.Unmarshal(readArtefact(t, filepath.Join(outDir, manifestFile)), &manifest); err != nil {
+		t.Fatalf("decoding the manifest at %s: %v", position, err)
+	}
+	if len(manifest.Items) == 0 {
+		t.Fatalf("the assembly at %s over a clone of HEAD carried no item, so an absence "+
+			"assertion over it establishes nothing", position)
+	}
+	return manifest.Items
+}
+
+// writeCloneFile writes one file inside a clone, creating its parents.
+func writeCloneFile(t *testing.T, root, rel, body string) {
+	t.Helper()
+	abs := filepath.Join(root, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+		t.Fatalf("mkdir for %s: %v", rel, err)
+	}
+	if err := os.WriteFile(abs, []byte(body), 0o644); err != nil {
+		t.Fatalf("write %s: %v", rel, err)
+	}
+}

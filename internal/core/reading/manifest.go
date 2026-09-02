@@ -26,8 +26,12 @@ import (
 // (adr-2609021016286571). At version 6 the manifest item gains its `scan` mark,
 // the fact of whether the exclusion floor examined that item, so the shared
 // constant restamps the bundle once more (itd-194, adr-56 as refined
-// 2026-09-02).
-const SchemaVersion = 6
+// 2026-09-02). At version 7 the RUN RECORD gains its `bounds` list, the
+// departures a run made from the reading the design documents state; the bundle
+// and the manifest are untouched and are restamped by the shared constant once
+// more, which is why `AssemblerVersionCore` does not move with it
+// (spc-2609020626048722).
+const SchemaVersion = 7
 
 // The two artefact type tags. They are carried in the documents themselves so a
 // reader of a loose file can tell the two apart without its filename.

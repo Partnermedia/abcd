@@ -206,6 +206,107 @@ type RunRecord struct {
 	Records        []capture.ReadingRecordRef `json:"records"`
 	RefusedItems   []ItemRefusal              `json:"refused_items"`
 	RefusedCount   int                        `json:"refused_count"`
+	// Bounds are the departures this run made from the reading the design
+	// documents state, written by the verb FROM THE MANIFEST and never from the
+	// operator. Ruling M5 is that a reading which departs from the one the
+	// documents state is stated as a bound rather than passed off, and nothing
+	// wrote either statement before this field existed
+	// (cond-2609021140329660, cond-2609021140328523; divergence register 17
+	// and 18).
+	//
+	// A run with neither carries an EMPTY list and never an absent key, so a
+	// reader can tell a run that stated no bound from one written before the
+	// field existed.
+	Bounds []string `json:"bounds"`
+}
+
+// glossaryTermBound is the widening reading's stated bound on the glossary, as
+// the readings companion's section 5.6 fixes it: "three to six terms". It is
+// the upper half, which is the half a run can exceed.
+const glossaryTermBound = 6
+
+// statedBounds derives one run's departures from its own manifest and from the
+// runs already committed beside it.
+//
+// Both statements are the verb's, read off the record: the glossary count is
+// the manifest's own item list, and the preset-hash comparison is against the
+// manifests of the runs the readings family already holds. Neither is
+// repairable here — the design asks that a departure be STATED, and a run that
+// silently narrowed the glossary or re-pinned itself to an older entry would be
+// the passing-off ruling M5 forbids.
+func statedBounds(root *os.Root, m Manifest) []string {
+	out := []string{}
+	terms := 0
+	for _, it := range m.Items {
+		if it.Kind == KindGlossaryTerm {
+			terms++
+		}
+	}
+	if terms > glossaryTermBound {
+		out = append(out, fmt.Sprintf("the glossary bound is exceeded: the readings companion's "+
+			"section 5.6 states the bound in advance as three to six terms, and this run was handed "+
+			"%d glossary-term item(s); companion section 5.2 names brief/glossary/ whole, so the "+
+			"departure is stated rather than passed off", terms))
+	}
+	if prior, hash, ok := priorRunUnderAnotherPreset(root, m); ok {
+		out = append(out, fmt.Sprintf("the object set is not the one a prior run at the %s position "+
+			"read: run %s applied the entry hashed %s and this run applied %s. The design "+
+			"framework's section 13 requires a closing run to be over the same object set, so the "+
+			"mismatch is stated as a bound on the comparison rather than repaired here",
+			m.Position, prior, hash, m.PresetHash))
+	}
+	return out
+}
+
+// priorRunUnderAnotherPreset finds a committed run at the same position whose
+// manifest records a different preset hash, returning the earliest such run id
+// by directory order so the statement names one run rather than a set.
+//
+// It reads the RUN records to establish that a run committed, and the manifests
+// beside them for the hash: a parked assembly is not a prior run, and a
+// directory holding a manifest with no run record is exactly that.
+func priorRunUnderAnotherPreset(root *os.Root, m Manifest) (string, string, bool) {
+	entries, err := readDirIn(root, ReadingsRecordDir)
+	if err != nil {
+		return "", "", false
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if e.IsDir() && e.Name() != m.RunID {
+			names = append(names, e.Name())
+		}
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		var run struct {
+			Position Position `json:"position"`
+		}
+		if err := readJSONIn(root, ReadingsRecordDir+"/"+name+"/"+RunFileName, &run); err != nil {
+			continue
+		}
+		if run.Position != m.Position {
+			continue
+		}
+		var prior struct {
+			PresetHash string `json:"preset_hash"`
+		}
+		if err := readJSONIn(root, ReadingsRecordDir+"/"+name+"/"+ManifestFileName, &prior); err != nil {
+			continue
+		}
+		if prior.PresetHash != "" && prior.PresetHash != m.PresetHash {
+			return name, prior.PresetHash, true
+		}
+	}
+	return "", "", false
+}
+
+// readJSONIn decodes one JSON document from inside the containment root.
+func readJSONIn(root *os.Root, rel string, into any) error {
+	raw, err := fsutil.ReadGuardedInRoot(root, rel, MaxFileBytes)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(raw, into)
 }
 
 // RefusalRecord is what a list-level refusal leaves behind: the run metadata and
@@ -706,6 +807,10 @@ func write(root *os.Root, repoRoot string, res *IngestResult, out Output, m Mani
 		Position: def.Position, Regime: def.Regime, TargetCommit: m.TargetCommit,
 		ManifestSHA256: out.ManifestSHA256, Instrument: sanitizeInstrument(out.Instrument),
 		Records: written.Records, RefusedItems: res.RefusedItems, RefusedCount: res.RefusedCount,
+		// The bounds are derived AFTER the manifest is promoted, so the prior-run
+		// scan sees every run the readings family holds except this one, and
+		// before the run record is written, because the statement is part of it.
+		Bounds: statedBounds(root, m),
 	}
 	if run.RefusedItems == nil {
 		run.RefusedItems = []ItemRefusal{}

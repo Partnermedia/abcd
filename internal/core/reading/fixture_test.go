@@ -239,21 +239,36 @@ func fixturePresets() string {
 	for _, k := range Kinds() {
 		kinds = append(kinds, strconv.Quote(string(k)))
 	}
+	paths := make([]string, 0, len(fixtureTreePaths))
+	for _, p := range fixtureTreePaths {
+		paths = append(paths, strconv.Quote(p))
+	}
 	positions := make([]string, 0, len(AssemblingPositions()))
 	for _, p := range AssemblingPositions() {
 		positions = append(positions, fmt.Sprintf(
-			`      %q: {"kinds": [%s], "records": [], "paths": []}`,
-			string(p), strings.Join(kinds, ", ")))
+			`    %q: {"object": {"records": [], "paths": [%s]}, "kinds": [%s], `+
+				`"window": {"tokens_est": 1000000, "measured_tokens_est": 0, `+
+				`"measured_bytes": 0, "measured_at": "0000000"}}`,
+			string(p), strings.Join(paths, ", "), strings.Join(kinds, ", ")))
 	}
 	return fmt.Sprintf(`{
   "schema_version": %d,
-  "presets": {
-    %q: {
-      "positions": {
+  "positions": {
 %s
-      }
-    }
   }
 }
-`, PresetSchemaVersion, fixtureScopeName, strings.Join(positions, ",\n"))
+`, PresetSchemaVersion, strings.Join(positions, ",\n"))
+}
+
+// fixtureTreePaths is every root-level path the fixture carries tree material
+// under. The object set NARROWS the tree rows, and an entry naming no path hands
+// nothing from the tree whatever kinds it lists (spc-2609020626048722), so the
+// all-selecting fixture entry has to name where the fixture's tree material
+// sits. `main_test.go` is listed although the base fixture does not carry it: a
+// test that adds one is naming a path the entry already reaches, rather than
+// having to rewrite the entry to see it.
+var fixtureTreePaths = []string{
+	"Gadget_TEST.go", "Makefile", "README.md", "build", "docs", "fence.go",
+	"go.mod", "ignored.json", "main.go", "main_test.go", "run-dir", "runs",
+	"widget.go", "widget_test.go",
 }

@@ -10,7 +10,7 @@ production_mode: dictated-and-formatted
 ## Summary
 
 spc-2609020626048722 delivers
-[itd-2609020625400445](../../intents/planned/itd-2609020625400445-a-committed-preset-declares-the-window-it-was-calibrated-for.md).
+[itd-2609020625400445](../../intents/shipped/itd-2609020625400445-a-committed-preset-declares-the-window-it-was-calibrated-for.md).
 The committed preset file `.abcd/config/reading-presets.json` moves to schema
 version 2, whose shape is the one the design admits: One entry per position,
 applied by the assembler with no operand
@@ -49,7 +49,7 @@ companion asks for beside the findings, which resolves iss-2609012259585189.
 The maintainer also ruled on 2026-09-02 that the preset entry is the one
 configuration surface for a position's object set, kinds and window, so the
 change that delivers one entry per position resolves
-[iss-2608311501240566](../../../work/issues/open/iss-2608311501240566-three-of-the-four-reading-positions-receive-a-byte-identical.md):
+[iss-2608311501240566](../../../work/issues/resolved/iss-2608311501240566-three-of-the-four-reading-positions-receive-a-byte-identical.md):
 each position is handed its own entry, the default item set at each position
 is pinned by a digest recorded before the change, and two assemblies of one
 entry produce identical bundles, under the tests named below.
@@ -449,7 +449,7 @@ findings. The maintainer ruled on 2026-09-02 that the workstream's own
 fifteen shipped intents keep their absent mechanism claims and their
 `None stated.` conditions as the Iteration 1 baseline, never backfilled, and
 that the yield bound is reported by the size report instead, which is what
-[iss-2609012259585189](../../../work/issues/open/iss-2609012259585189-nothing-reports-the-proportion-of-intents-that-carry-a-mecha.md)
+[iss-2609012259585189](../../../work/issues/resolved/iss-2609012259585189-nothing-reports-the-proportion-of-intents-that-carry-a-mecha.md)
 asks and what this spec resolves.
 
 `SizeReport` gains `Mechanism *MechanismReport` (`json:"mechanism,omitempty"`),

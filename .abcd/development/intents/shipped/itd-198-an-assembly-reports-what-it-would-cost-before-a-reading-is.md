@@ -23,7 +23,7 @@ production_mode: hand-written
 ## Why This Matters
 
 The instrument shipped correct and undeliverable, and the gap that let it was the absence of a number. Measured over this repository at one commit: about 9.8 MB of artefact, roughly 2.3 million estimated tokens of item text, at every position
-([iss-2608311501186646](../../../work/issues/open/iss-2608311501186646-the-assembled-input-for-a-real-reading-of-this-repository-is.md)).
+([iss-2608311501186646](../../../work/issues/resolved/iss-2608311501186646-the-assembled-input-for-a-real-reading-of-this-repository-is.md)).
 Source is 82 per cent of it and test files are 53 per cent of the source; the records a reading is meant to reason about are 9 per cent. Thirteen intents, six adversarial delta reviews and five fidelity audits passed over that, because the evals run against a fixture repository of about thirty files, which is the right corpus for asserting a firewall and the wrong one for learning what an artefact weighs.
 
 This intent adds the number, and the four mechanism changes it needs to be

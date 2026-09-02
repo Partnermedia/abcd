@@ -117,6 +117,90 @@ type SizeReport struct {
 	Bytes     int    `json:"bytes"`
 	TokensEst int    `json:"tokens_est"`
 	Basis     string `json:"basis"`
+	// Window is the declaration the committed entry for this position carries,
+	// nil where none is declared — a version 1 preset file. It rides on the
+	// report rather than on either artefact, so a declaration is a fact about
+	// the run's cost and never a field a reading or an auditor reads
+	// (spc-2609020626048722).
+	Window *Window `json:"window,omitempty"`
+	// ExceedsWindow is whether this assembly measured past that declaration.
+	// Nothing is refused for it: the eval is what fails, and the operator is
+	// told here.
+	ExceedsWindow bool `json:"exceeds_window"`
+	// OverTarget is whether the total estimate exceeds TargetTokens. The target
+	// is a statement to the operator and never a refusal (maintainer's ruling of
+	// 2026-09-02; divergence register 24).
+	OverTarget bool `json:"over_target"`
+	// Mechanism is the entailment position's yield bound: how many projected
+	// intents carry a mechanism claim. It is nil at every other position,
+	// because the readings companion's section 6.6 asks for it beside the
+	// entailment reading's findings and nowhere else.
+	Mechanism *MechanismReport `json:"mechanism,omitempty"`
+}
+
+// MechanismReport is the proportion the readings companion's section 6.6 asks
+// be reported beside the entailment reading's findings (divergence register 16;
+// iss-2609012259585189).
+//
+// The count is per FILE, derived from the candidates by path and field, so it is
+// checkable against the manifest, which already records which fields each file
+// contributed. Nothing is added to the manifest's shape for it.
+//
+// The three lower counts are exhaustive over Intents: a projected intent file
+// either contributed a Mechanism item whose text is the nullity, one whose text
+// is anything else, or no Mechanism item at all. The workstream's own shipped
+// intents keep their absent claims as the Iteration 1 baseline and are reported,
+// never backfilled (maintainer's ruling of 2026-09-02).
+type MechanismReport struct {
+	Intents    int `json:"intents"`
+	Stated     int `json:"stated"`
+	NoneStated int `json:"none_stated"`
+	Absent     int `json:"absent"`
+}
+
+// mechanismField is the projected field a mechanism claim travels as, and
+// mechanismNullity is the text a record writes when it has none. Both are the
+// record's own spelling: the framework's section 7.1 fixes `## Mechanism` as the
+// causal claim's home, and the nullity is what an intent carries in place of one.
+const (
+	mechanismField   = "Mechanism"
+	mechanismNullity = "None stated."
+)
+
+// mechanismReport counts the projected intent files in one assembly by whether
+// they carried a mechanism claim.
+func mechanismReport(cands []candidate) *MechanismReport {
+	// Two passes over paths rather than one, because a file's verdict depends on
+	// whether ANY of its candidates is the Mechanism field, and the candidates
+	// of one file are not guaranteed adjacent to a reader of this function.
+	files := map[string]string{}
+	seen := map[string]bool{}
+	order := make([]string, 0, len(cands))
+	for _, c := range cands {
+		if c.kind != KindIntentProjection {
+			continue
+		}
+		if !seen[c.path] {
+			seen[c.path] = true
+			order = append(order, c.path)
+		}
+		if c.field == mechanismField {
+			files[c.path] = strings.TrimSpace(c.text)
+		}
+	}
+	rep := &MechanismReport{Intents: len(order)}
+	for _, p := range order {
+		text, ok := files[p]
+		switch {
+		case !ok:
+			rep.Absent++
+		case text == mechanismNullity:
+			rep.NoneStated++
+		default:
+			rep.Stated++
+		}
+	}
+	return rep
 }
 
 // sizeBasis names the method and the divisor inside the artefact, so a report
@@ -130,7 +214,7 @@ var sizeBasis = fmt.Sprintf("estimated: bytes / %.2f, byte-derived, not a tokeni
 // vocabulary's order. A kind that passed no item is omitted rather than
 // reported as zero: an absent kind and an empty one are different facts, and
 // the manifest can settle which.
-func sizeReport(cands []candidate) SizeReport {
+func sizeReport(cands []candidate, position Position, window *Window) SizeReport {
 	byKind := make(map[Kind]*KindSize, len(Kinds()))
 	rep := SizeReport{Basis: sizeBasis}
 	for _, c := range cands {
@@ -158,6 +242,12 @@ func sizeReport(cands []candidate) SizeReport {
 		rep.ByKind = append(rep.ByKind, *k)
 	}
 	rep.TokensEst = estimateTokens(rep.Bytes)
+	rep.OverTarget = rep.TokensEst > TargetTokens
+	rep.Window = window
+	rep.ExceedsWindow = window != nil && rep.TokensEst > window.TokensEst
+	if position == PositionEntailment {
+		rep.Mechanism = mechanismReport(cands)
+	}
 	return rep
 }
 
@@ -206,12 +296,50 @@ var storeNodeType = map[string]string{
 	"spc": "spec",
 }
 
+// rowClass is how a committed entry's object set narrows the row that admitted
+// a candidate. It is derived from the row's own declaration and never from the
+// candidate's path: the table says which rows enumerate a record store and
+// which reach the repository root, and reading that off a path again is how two
+// derivations of one fact come to disagree.
+type rowClass int
+
+const (
+	// rowConstraint is a row that is neither a record store nor the tree: the
+	// brief's chapters and the glossary. No part of the object set narrows a
+	// constraint source, so such a row is admitted by kind alone.
+	rowConstraint rowClass = iota
+	// rowRecord is a row routed through the record graph — the shipped, drafts,
+	// planned, specs and disciplines rows.
+	rowRecord
+	// rowTree is a row sourced at the repository root: the doc, config, source
+	// and test rows.
+	rowTree
+)
+
+// classOf reads one row's narrowing class off its own declaration.
+func classOf(row Row) rowClass {
+	if row.Store != "" {
+		return rowRecord
+	}
+	if path.Clean(row.Source) == "." {
+		return rowTree
+	}
+	return rowConstraint
+}
+
 // candidate is one admitted (file, field) pair before it is keyed.
 type candidate struct {
 	path     string
 	field    string
 	fieldIdx int
 	kind     Kind
+	// rowIdx and rowClass are the admitting row's identity and its narrowing
+	// class, carried so the committed entry's object set can narrow per ROW —
+	// a record row is narrowed to the object set's records only when the object
+	// set reaches that row at all, and that question is a row's, not an item's
+	// (spc-2609020626048722).
+	rowIdx   int
+	rowClass rowClass
 	// scan is the admitting row's Scan, carried through so the manifest can
 	// state per item whether the exclusion floor examined it. It is set from
 	// the row and never inferred from the path: the row is the declaration, and
@@ -262,10 +390,11 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 	// The entry follows from the POSITION and from what is committed. No
 	// operand names it, so nothing an operator typed can change what this run
 	// is handed (adr-2609021016286571).
-	applied, err := PresetFor(presets, position)
+	entry, err := PresetFor(presets, position)
 	if err != nil {
 		return AssembleResult{}, fmt.Errorf("reading: %w", err)
 	}
+	applied := entry.Applied()
 
 	cands, err := collect(req.RepoRoot, position)
 	if err != nil {
@@ -288,9 +417,27 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 	// not be able to shrink the set those gates examine. A narrow entry
 	// therefore cannot quiet a dirty-tree refusal or an exclusion breach that
 	// a wide one would have caught (spc-69).
+	//
+	// Within the entry the kinds ADMIT and the object set NARROWS, and the
+	// record half of that narrowing is a question about a ROW rather than about
+	// an item: a record row is narrowed to the object set's records when the
+	// object set names any record under that row's source, and admitted whole
+	// when it names none. So the rows the object set reaches are decided first,
+	// over the whole unfiltered walk, and the per-item filter reads that answer
+	// (spc-2609020626048722).
+	byRow := map[int][]string{}
+	for _, c := range cands {
+		if c.rowClass == rowRecord {
+			byRow[c.rowIdx] = append(byRow[c.rowIdx], c.path)
+		}
+	}
+	narrows := make(map[int]bool, len(byRow))
+	for rowIdx, paths := range byRow {
+		narrows[rowIdx] = entry.namesRecordIn(paths)
+	}
 	scoped := make([]candidate, 0, len(cands))
 	for _, c := range cands {
-		if applied.selects(c) {
+		if entry.selects(c, narrows[c.rowIdx]) {
 			scoped = append(scoped, c)
 		}
 	}
@@ -351,7 +498,7 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 		ItemCount:        len(bundle.Items),
 		ManifestHash:     hash,
 		Preset:           applied,
-		Size:             sizeReport(cands),
+		Size:             sizeReport(cands, position, PresetWindow(presets, position)),
 		Artefacts:        []string{},
 		Bundle:           bundle,
 		Manifest:         manifest,
@@ -692,10 +839,11 @@ func collect(repoRoot string, position Position) ([]candidate, error) {
 	var out []candidate
 
 	exclusions := ExclusionsFor(position)
-	for _, row := range Table {
+	for rowIdx, row := range Table {
 		if !row.AdmittedAt(position) {
 			continue
 		}
+		class := classOf(row)
 		paths, err := rowPaths(repoRoot, row, graph)
 		if err != nil {
 			return nil, err
@@ -729,7 +877,10 @@ func collect(repoRoot string, position Position) ([]candidate, error) {
 				}
 			}
 			if len(row.Fields) == 0 {
-				out = append(out, candidate{path: rel, kind: row.Kind, scan: row.Scan, text: doc})
+				out = append(out, candidate{
+					path: rel, kind: row.Kind, rowIdx: rowIdx, rowClass: class,
+					scan: row.Scan, text: doc,
+				})
 				continue
 			}
 			for i, field := range row.Fields {
@@ -742,7 +893,8 @@ func collect(repoRoot string, position Position) ([]candidate, error) {
 				}
 				out = append(out, candidate{
 					path: rel, field: field, fieldIdx: i,
-					kind: row.Kind, scan: row.Scan, text: text,
+					kind: row.Kind, rowIdx: rowIdx, rowClass: class,
+					scan: row.Scan, text: text,
 				})
 			}
 		}

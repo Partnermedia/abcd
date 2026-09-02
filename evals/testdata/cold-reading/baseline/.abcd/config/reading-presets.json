@@ -3,9 +3,9 @@
   "presets": {
     "everything": {
       "positions": {
-        "widening": {"kinds": ["brief-section", "glossary-term", "intent-projection", "discipline", "spec", "source", "test", "doc", "config"], "records": [], "paths": []},
-        "entailment": {"kinds": ["brief-section", "glossary-term", "intent-projection", "discipline", "spec", "source", "test", "doc", "config"], "records": [], "paths": []},
-        "detection": {"kinds": ["brief-section", "glossary-term", "intent-projection", "discipline", "spec", "source", "test", "doc", "config"], "records": [], "paths": []}
+        "widening": {"kinds": ["brief-section", "glossary-term", "intent-projection", "discipline", "spec", "source", "test", "doc", "config"], "records": [], "paths": ["Makefile", "README.md", "docs", "fence.go", "go.mod", "main.go", "main_test.go", "sitefixture_test.go"]},
+        "entailment": {"kinds": ["brief-section", "glossary-term", "intent-projection", "discipline", "spec", "source", "test", "doc", "config"], "records": [], "paths": ["Makefile", "README.md", "docs", "fence.go", "go.mod", "main.go", "main_test.go", "sitefixture_test.go"]},
+        "detection": {"kinds": ["brief-section", "glossary-term", "intent-projection", "discipline", "spec", "source", "test", "doc", "config"], "records": [], "paths": ["Makefile", "README.md", "docs", "fence.go", "go.mod", "main.go", "main_test.go", "sitefixture_test.go"]}
       }
     }
   }
