@@ -388,7 +388,14 @@ closes stdin and pre-answers: `abcd ahoy install --yes --refuse-adopt
    per-repo `<root-sha>/meta.json` (`root_commit`, `name`, `github`, and a
    `corpus` block pointing at `transcripts/`), and register the repo in
    `index.json` by its immutable `root_commit`, refreshing the entry's mutable
-   `path` if the repo moved. The history `index.json` is the
+   `path` if the repo moved. A remote URL recorded in either file carries no
+   credential: it is scrubbed where the identity is derived, the index is
+   scrubbed again as it is LOADED — so every rewrite drops a credential from
+   every entry, not only from the one being registered — and a `meta.json`,
+   which is otherwise written once and never revisited, is rewritten in place
+   when it holds one. A store that already holds a credential raises
+   `history.credential_at_rest`, so an otherwise up-to-date repo does not
+   short-circuit past the heal. The history `index.json` is the
    **sole user-scope registry** — there is no `workspaces.json`. Transcript
    capture is native — no external tool and no per-repo redirect shim.
 8. **Marker block** (`plugin-owned`) — inject/refresh the block between

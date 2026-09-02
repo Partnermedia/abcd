@@ -7,6 +7,7 @@ import (
 
 	"github.com/intentdriven/abcd/internal/fsutil"
 	"sort"
+	"strings"
 
 	"github.com/intentdriven/abcd/internal/core/identity"
 )
@@ -318,7 +319,49 @@ func detectHistoryStore(rootSHA string) []Gap {
 			FixHint: "ahoy install writes the per-repo meta.json.", Required: true, Resolvable: true,
 		})
 	}
-	return gaps
+	return append(gaps, detectStoredCredential(rootSHA, repoDir)...)
+}
+
+// detectStoredCredential raises the one gap for a git credential left at rest in
+// the user-level history store — the state a store written before
+// scrubRemoteUserinfo existed is in (GHSA-qc3w-8pv5-crc3).
+//
+// It exists so the heal is REACHABLE. Without a gap, a repo that is otherwise
+// fully installed short-circuits on the idempotency early return and never runs
+// the history step, so a token sits in ~/.abcd/history for the life of the
+// machine no matter how often the operator re-installs. Required and resolvable,
+// because `ahoy install` closes it.
+//
+// The detail names the FILES only, never the value: a gap detail is rendered by
+// every status board, and quoting the credentialed URL would copy the token onto
+// the operator's terminal to tell them it should not be at rest.
+func detectStoredCredential(rootSHA, repoDir string) []Gap {
+	var where []string
+	// The at-rest file, not loadHistoryIndex's scrubbed view of it.
+	if idx, err := readHistoryIndexFile(); err == nil && idx != nil {
+		for _, r := range idx.Repos {
+			if r.Github != "" && scrubRemoteUserinfo(r.Github) != r.Github {
+				where = append(where, "~/.abcd/history/index.json")
+				break
+			}
+		}
+	}
+	if rootSHA != "" {
+		metaPath := filepath.Join(repoDir, "meta.json")
+		if g := metaGithub(metaPath); g != "" && scrubRemoteUserinfo(g) != g {
+			where = append(where, "~/.abcd/history/"+shortSHA(rootSHA)+"/meta.json")
+		}
+	}
+	if len(where) == 0 {
+		return nil
+	}
+	return []Gap{{
+		ID: credentialAtRestGapID, Category: UserState, Scope: "machine",
+		Title:    "git credential at rest in the history store",
+		Detail:   "A registry value carries userinfo (a token or password in a remote URL): " + strings.Join(where, ", ") + ".",
+		FixHint:  "ahoy install rewrites the affected entries without the credential; revoke the token as well — it has been on disk.",
+		Required: true, Resolvable: true,
+	}}
 }
 
 func detectConfigValues(cwd string) []Gap {

@@ -565,9 +565,33 @@ type historyRepo struct {
 
 const historyIndexDescription = "abcd history/lifeboat registry. Keyed on each repo's root-commit SHA (immutable under rename, GitHub-handle change, or remote move). Names, GitHub URLs, and paths are mutable labels held in each repo's entry and refreshed by ahoy."
 
-// loadHistoryIndex reads ~/.abcd/history/index.json. Returns (nil,nil) when the
-// store is not bootstrapped yet.
+// loadHistoryIndex reads ~/.abcd/history/index.json and scrubs any credential
+// out of every entry on the way in. Returns (nil,nil) when the store is not
+// bootstrapped yet.
+//
+// The scrub is HERE, at the single load, and not only at the derivation site:
+// scrubRemoteUserinfo cleans what a new registration writes, but a credential
+// that reached the store before it existed is already at rest, and the only
+// thing that ever rewrites the index is a load-modify-write through this
+// function. Scrubbing as it reads therefore means any rewrite drops the
+// credential — including from an entry the writer had no other reason to touch
+// — and no renderer can print one it merely read. The at-rest file is inspected
+// by readHistoryIndexFile, which is the detector's job, not a writer's.
 func loadHistoryIndex() (*historyIndex, error) {
+	idx, err := readHistoryIndexFile()
+	if err != nil || idx == nil {
+		return nil, err
+	}
+	for i := range idx.Repos {
+		idx.Repos[i].Github = scrubRemoteUserinfo(idx.Repos[i].Github)
+	}
+	return idx, nil
+}
+
+// readHistoryIndexFile reads the index exactly as it is on disk, credentials
+// included. Only the detector wants this: everything else goes through
+// loadHistoryIndex, which scrubs.
+func readHistoryIndexFile() (*historyIndex, error) {
 	root, err := historyRoot()
 	if err != nil {
 		return nil, err
@@ -584,6 +608,46 @@ func loadHistoryIndex() (*historyIndex, error) {
 		return nil, err
 	}
 	return &idx, nil
+}
+
+// metaGithub returns the github field of a per-repo meta.json, or "" when the
+// file is absent, unreadable, or holds no such string.
+func metaGithub(path string) string {
+	data, err := fsutil.ReadGuarded(path, maxAhoyFileBytes)
+	if err != nil {
+		return ""
+	}
+	var meta map[string]any
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return ""
+	}
+	g, _ := meta["github"].(string)
+	return g
+}
+
+// scrubMetaCredential rewrites a per-repo meta.json whose github field carries
+// userinfo, in place, preserving every other field. It reports whether it wrote.
+//
+// meta.json needs its own heal because — unlike index.json, which every
+// registration rewrites through loadHistoryIndex — it is written once when the
+// repo first registers and never revisited, so a credential in it outlives every
+// later install on its own.
+func scrubMetaCredential(path string) bool {
+	g := metaGithub(path)
+	clean := scrubRemoteUserinfo(g)
+	if g == "" || clean == g {
+		return false
+	}
+	data, err := fsutil.ReadGuarded(path, maxAhoyFileBytes)
+	if err != nil {
+		return false
+	}
+	var meta map[string]any
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return false
+	}
+	meta["github"] = clean
+	return writeJSON(path, meta) == nil
 }
 
 // indexHasRoot reports whether idx registers rootSHA.

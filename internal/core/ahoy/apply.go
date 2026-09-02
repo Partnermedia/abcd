@@ -709,6 +709,17 @@ func (a *applyCtx) stepHistory() {
 		}
 	}
 	if a.approved[UserState] {
+		// The legacy heal (GHSA-qc3w-8pv5-crc3): a credential that entered the
+		// store before scrubRemoteUserinfo existed is at rest in it, and the write
+		// above is guarded on the file's ABSENCE, so it never revisits one. The
+		// index needs no equivalent line — loadHistoryIndex scrubs every entry as
+		// it reads, so registerRepo's rewrite below writes the whole file back
+		// clean, including entries this repo has nothing to do with.
+		if scrubMetaCredential(metaPath) {
+			a.note(metaPath)
+			a.changes = append(a.changes,
+				"history meta.json: dropped a credential from the recorded remote URL — revoke the token, it has been on disk")
+		}
 		a.registerRepo(sha)
 	}
 }
@@ -1373,6 +1384,11 @@ const OptionalPinGapID = "git_identity.unpinned"
 // it never appears in an actionable count, and both the detector that raises it
 // and the install path that must not short-circuit past it name it from here.
 const malformedConfigGapID = "config.malformed"
+
+// credentialAtRestGapID is the gap that says a git credential is sitting in the
+// user-level history store. Named here because the detector that raises it and
+// the history step that heals it must agree on the string.
+const credentialAtRestGapID = "history.credential_at_rest"
 
 // optionalSkipped lists the optional gaps a --yes run left un-applied. --yes
 // approves every resolvable category but never adopts the identity pin (see
