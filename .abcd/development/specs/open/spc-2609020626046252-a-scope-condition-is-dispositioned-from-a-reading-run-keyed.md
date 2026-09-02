@@ -43,11 +43,14 @@ the disposition enum out of `internal/core/intent/audit.go`; the condition
 block grammar and its coexistence with the verdict block; the standing reader,
 its fold rule and its render; the verdict ingest's report of the
 reading-occasioned blocks it leaves standing; the reading-item locator and
-the occasion resolver both `capture` and `intent` call; the plugin surface
+the occasion resolver both `capture` and `intent` call; the detection
+definition's item-shape guidance on citing a condition's identity and the
+verb's report of the occasion against that citation; the plugin surface
 page, the sub-verbs table and the command-tree snapshot; the assembler test
 that the block never reaches a bundle.
 
-Out: The reading marking a condition itself; a disposition on a draft or
+Out: The reading marking a condition itself, a registered interpretation
+stated under Who marks; a disposition on a draft or
 planned intent; dispatch from a reading item to the conditions it occasioned,
 which lands with the record dispatcher's coverage of reading items; any change
 to the verdict ingest's own block shape or to the exclusion floor.
@@ -56,22 +59,31 @@ to the verdict ingest's own block shape or to the exclusion floor.
 
 ### Landing order
 
-The eight Iteration 2 specs land in the order spc-2609020626048722 (preset
-windows), spc-2609020626046252 (condition verb), spc-2609020626042168
-(reading-occasioned origin), spc-2609020626039834 (comparative channel),
-spc-2609020626040342 (admission and surprise verbs), spc-2609020626048705
-(reframe record), spc-2609020626045177 (scribe verbs), spc-2609020626042471
-(principles). The condition verb lands strictly before the principles; the
-comparative channel before the admission verbs before the scribe; the reframe
-record after the admission verbs and after the comparative channel. Each spec
-names the class of version bump it makes and no target number: The merging
+The Iteration 2 set lands in two phases around the maintainer's readings, on
+the corrections ruling of 2026-09-02. Phase A, before any reading runs: The
+two-operand invocation (spc-2609021004075744), itd-194
+(spc-2609021003136831), the preset windows (spc-2609020626048722), the
+comparative channel (spc-2609020626039834) and the reading-occasioned origin
+(spc-2609020626042168), in that order. The maintainer then runs the four
+readings in the cycle's order, widening, entailment, comparative and
+detection, and dispositions their outputs. Phase B, built at Step 5 after
+those dispositions: The condition disposition (spc-2609020626046252), the
+admission and surprise verbs (spc-2609020626040342), the reframe record
+(spc-2609020626048705), the scribe verbs (spc-2609020626045177) and the
+principles read object (spc-2609020626042471), in that order. No spec names a
+target version number: Each names the class of bump it makes, and the merging
 change sets each constant from the merged base and updates every pinned count
 in the same diff.
 
-This spec lands second. It moves no assembler, manifest or preset version:
-Nothing it adds reaches a bundle, and `internal/core/reading` is untouched.
-It introduces the two leaf packages, `internal/core/condition` and
-`internal/core/readingitem`, that six of the later specs consume.
+This spec lands first in Phase B, at Step 5 after the maintainer's four
+readings and their dispositions; the condition dispositions a reading
+occasions before then are hand-authored in the target format until the verb
+lands. It moves no assembler, manifest or preset version: Nothing it adds
+reaches a bundle, and `internal/core/reading` is untouched. It introduces the
+two leaf packages, `internal/core/condition` and `internal/core/readingitem`,
+that the four Phase B specs after it consume; the reading-occasioned origin,
+which lands before it in Phase A, resolves through `capture.findReadingItem`
+and inherits the leaf when this spec makes that function a wrapper over it.
 
 ### The verb and its grammar
 
@@ -94,7 +106,9 @@ two-operand form writes. Both are front doors onto
 carries `IntentID`, `ConditionID`, `Disposition`, `Narrowing`, `OccasionedBy`,
 `Grounds` and `Date` (the CLI passes today's date in UTC; tests inject one).
 The result, `ConditionResult`, carries the four fields written, the intent
-path, and the standing list after the write. `commands/intent.md` documents
+path, the standing list after the write and, when the occasion is a reading
+item whose citation names a different condition, the `OccasionCitation`
+report stated under Who marks. `commands/intent.md` documents
 both forms with the refusal list, `.abcd/development/brief/04-surfaces/05-intent.md`
 gains the row `condition | — | shipped` in its sub-verbs table, and the
 snapshot at `.abcd/development/release/surface.json` gains the path, which
@@ -213,6 +227,42 @@ with the comparative channel's intent as its occasion once that ships. The
 item's position is not read: An entailment item bears on a context claim as
 readily as a detection does, and the verb takes an item at any position.
 
+### Who marks: A registered interpretation
+
+The reading names a tension and the researcher marks the condition. The
+design framework's letter reads the other way in two places: Section 7.1 has
+the reading mark each scope condition survived, narrowed, falsified or
+untested, and section 14 has each scope condition dispositioned under
+Iteration 2's cold column. This spec reads both as the reading naming the
+condition and the researcher marking it, and registers that as an
+interpretation on three grounds: The readings companion's ratified
+registrative body (section 4.2) carries `tension`, `constraint_in_play` and
+`why_a_tension` and no field for a mark; the companion (section 9) says
+readings do not disposition their own items; and the build sheet's W8 makes
+dispositions warm and never passed to a reading. A body field for a mark
+would have the reading disposition its own item, which is the rule
+[itd-181](../../intents/shipped/itd-181-a-shipped-intent-s-scope-conditions-are-dispositioned-by-the.md)
+adopted against.
+
+The join runs through the item's citation. The item-shape guidance in
+`agents/cold-reading-detection.md` gains one sentence: Where the constraint in
+play is a scope condition, the item cites the condition's identity, `cond-`
+and sixteen digits, in `constraint_in_play`, beside the quoted text. The
+definition's `prompt_version` moves and `agents/CHANGELOG.md` records the
+move under the Iteration 2 heading, which the `agent_contract` rule holds in
+lockstep; the ingest verb's validation of the body is untouched, because
+`constraint_in_play` is free text and the citation sits inside it. The verb
+reads the citation when the occasion is a `rdi-N`: `ResolveOccasion` returns
+the item's path, the verb decodes its `constraint_in_play`, and when the
+field carries a `cond-` identity that is not the one being dispositioned the
+result carries `OccasionCitation` naming both and the CLI prints it as a
+report under the write's summary. A mismatch is reported and never refused,
+because the item is the reading's word and the mark is the researcher's, and
+a researcher who dispositions a condition an item did not cite may be right;
+an item with no citation reports nothing. The definition's guidance binds the
+reading and this report is the researcher's mirror of it, and it is the only
+place the verb reads a reading item's body.
+
 ### What the verb refuses
 
 Every refusal exits 2 with nothing written, in this order: An intent id
@@ -255,7 +305,9 @@ is caught by the block it would expose.
 add it: The join is read from the intent's side by `ConditionStanding`, whose
 `--json` names the occasion of every condition block, which is what the
 intent's third scope condition allows. Dispatch on reading items is the
-record dispatcher's planned coverage of those families (itd-121), and until it
+residual
+[spc-67](../closed/spc-67-what-the-widening-reading-proposes-is-admitted-or-declined-o.md)
+records, as spc-2609020626040342 cites it, and until it
 lands the intent's side is the only side; the intent's In Scope claims
 nothing of the item's dispatch.
 
@@ -272,8 +324,10 @@ nothing of the item's dispatch.
   `TestConditionRefusesOutOfEnum`.
 - ac-5: An occasion that does not resolve is refused in both forms: A `rdi-N`
   no run holds, through `readingitem.Locate`, and an `itd-N` that is absent
-  or not in `shipped/`, through `ResolveOccasion`.
-  `TestConditionOccasionMustResolve`, `TestConditionOccasionIntentMustBeShipped`.
+  or not in `shipped/`, through `ResolveOccasion`. An item that resolves and
+  cites a different condition is not a refusal; it is reported, beside.
+  `TestConditionOccasionMustResolve`, `TestConditionOccasionIntentMustBeShipped`,
+  `TestConditionReportsOccasionCitationMismatch`.
 - ac-6: A planned intent is refused and the message names `planned`.
   `TestConditionRefusesUnshippedBucket`.
 - ac-7: After a verdict block and a condition block naming the same identity,
@@ -304,7 +358,9 @@ presenting the forbidden input and asserting nothing was written.
   forges nothing), `TestConditionRefusesDuplicateIdentity`,
   `TestReviewBlockBoundaryStopsAtConditionMarker`,
   `TestVerdictIngestUnchangedBesideConditionBlocks`,
-  `TestIngestReportsReadingOccasionedStanding`, and the existing
+  `TestIngestReportsReadingOccasionedStanding`,
+  `TestConditionReportsOccasionCitationMismatch`,
+  `TestConditionOccasionWithoutCitationReportsNothing`, and the existing
   `audit_test.go` suite unchanged after the enum moves.
 - `internal/core/readingitem` and `internal/core/capture`:
   `TestLocateFindsOneItemAcrossRuns`, `TestLocateRefusesSymlinkedRun`,
@@ -314,13 +370,17 @@ presenting the forbidden input and asserting nothing was written.
   `TestIntentConditionJSONCarriesStanding`, and the surface snapshot test.
 - `internal/core/reading`: `TestConditionBlockNeverReachesTheBundle`, the
   regression guard.
-- `internal/core/lint`: The sub-verbs row and the snapshot in lockstep.
+- `internal/core/lint`: The sub-verbs row and the snapshot in lockstep, and
+  the `agent_contract` rule holding the detection definition's moved
+  `prompt_version` and its changelog entry in lockstep.
 
 ## Out of scope
 
 - The reading marking conditions itself, on the rule
   [itd-181](../../intents/shipped/itd-181-a-shipped-intent-s-scope-conditions-are-dispositioned-by-the.md)
-  adopted: The reading names tensions and the researcher dispositions.
+  adopted: The reading names tensions and the researcher marks. That is a
+  registered interpretation of the design framework's sections 7.1 and 14,
+  stated under Who marks with its grounds.
 - A disposition on a draft or planned intent.
 - Dispatching `abcd <rdi-N>` to the conditions it occasioned.
 - A superseding disposition record of the kind

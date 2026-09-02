@@ -37,7 +37,7 @@ The join matters for the closing run. The design's purpose-durability reading tu
 
 ## What's Out of Scope
 
-- The reading marking conditions itself. The reading names tensions; the researcher dispositions, on the rule itd-181 adopted.
+- The reading marking conditions itself. The reading names tensions; the researcher marks, on the rule itd-181 adopted. This is a registered interpretation, because the design framework's letter reads the other way: Section 7.1 has the reading mark each condition survived, narrowed, falsified or untested, and section 14 has each scope condition dispositioned under Iteration 2's cold column. The ground for reading both as the reading naming the condition and the researcher marking it is that the readings companion's ratified registrative body (section 4.2) carries tension, constraint in play and why it is a tension, with no field for a mark; that the companion (section 9) says readings do not disposition their own items; and that the build sheet's W8 makes dispositions warm and never passed to a reading. The join from the researcher's mark to the item is by citation: Where the constraint in play is a scope condition, the detection item cites the condition's identity, and the spec states how the verb reads that citation.
 - Dispositioning a condition on a draft or planned intent. Conditions are dispositioned on shipped intents, where there is a delivered state to disposition against.
 
 ## Mechanism

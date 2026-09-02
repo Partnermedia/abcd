@@ -30,12 +30,14 @@ The cold-reading design schedules the knowledge-record extension for Iteration 2
 
 ## Decisions flagged for the maintainer
 
-- **`principles/` becomes a declared record store.** Today the family has no frontmatter, no identifiers and no entry in the record stores the schema gate walks. Declaring it is a record-architecture decision on the pattern of adr-30 and belongs in an ADR, captured as an issue in the same change; the intent carries the keys, the projection, the check and the lifeboat contract.
+Both were adopted by the maintainer on 2026-09-02 as [adr-2609021016270132](../../decisions/adrs/2609021016270132-the-principles-family-is-a-declared-record-store-whose-entri.md), which declares the family a record store with typed claims, read cold by statement and never by citation.
+
+- **`principles/` is a declared record store.** Until the ADR the family had no frontmatter, no identifiers and no entry in the record stores the schema gate walks. Declaring it is a record-architecture decision on the pattern of adr-30, and the ADR makes it; the intent carries the keys, the projection, the check and the lifeboat contract.
 - **The lifeboat contract changes.** `disembark principles` carries the four keys when it distils, which changes the principles payload a packed lifeboat carries; a consumer of that payload is told by the schema version.
 
 ## What's In Scope
 
-- **Four frontmatter keys on principle records**, schema first: `claim_type` (criterion, mechanism or context, the same closed vocabulary intents use), `reference` (the entity the principle is about, as a record id or a named surface), `comparison` (what was compared to produce it, in one sentence), and `evidence` (the record ids it distils, and the scope-condition identities it inherits). A key considered and declined is written as an explicit null; an absent key is a claim not carried; the two are never collapsed, on the rule the intent gradient already uses.
+- **Four frontmatter keys on principle records**, schema first: `claim_type` (criterion, causal or context, the design documents' words for the three claim kinds intents carry; `mechanism`, the shipped intent token for the causal kind, is read as an alias and written back as `causal`, never refused), `reference` (the entity the principle is about, as a record id or a named surface), `comparison` (what was compared to produce it, in one sentence), and `evidence` (the record ids it distils, and the scope-condition identities it inherits). A key considered and declined is written as an explicit null; an absent key is a claim not carried; the two are never collapsed, on the rule the intent gradient already uses.
 - **Forward-only population.** An entry carrying none of the four keys is reported by the lint as untyped, at warn; an entry carrying any of them must carry all four, or state the null, at blocker. Nothing backfills an existing entry.
 - **The projection rule** on the include table: a principle's statement section is projected to the reading; the four keys and every citation are withheld and their exclusion asserted in the manifest. The table admits the projection at every position but the comparative; which of the three receives it is a preset choice measured by the presets' eval, and is not made here.
 - **The inheritance check** in the record lint: a principle whose evidence names a scope condition dispositioned as falsified is reported; one naming a condition dispositioned as narrowed is reported with the narrowing; one naming a condition with no disposition is reported as untested.
@@ -54,7 +56,7 @@ We expect typed evidence on principles to make the knowledge record checkable be
 
 ## Scope Conditions
 
-- The claim vocabulary is the one intents use. A fourth claim type is a ruling this intent does not make. <!-- cond: cond-2609020626047525 -->
+- The claim vocabulary is the three claim kinds intents carry, in the design documents' words. A fourth claim type is a ruling this intent does not make. <!-- cond: cond-2609020626047525 -->
 - Evidence names records in this repository. A principle distilled from a lifeboat cites the packed record ids, which resolve only in the source repository, and the lint reports them as unresolvable rather than as absent. <!-- cond: cond-2609020626048283 -->
 - Existing principles are untyped until their authors type them. The untyped report is a count, not a fault, and it is expected to stay non-zero for some time. <!-- cond: cond-2609020626048565 -->
 
@@ -76,7 +78,7 @@ We expect typed evidence on principles to make the knowledge record checkable be
 
 ## Open Questions
 
-None beyond the flagged decisions above.
+None. The flagged decisions are adopted as adr-2609021016270132.
 
 ## Audit Notes
 
