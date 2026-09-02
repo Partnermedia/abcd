@@ -897,3 +897,92 @@ func TestAWideningRunOnADifferentHistoryDoesNotQualify(t *testing.T) {
 			"target and the listing is of the runs at this target", len(none.Runs))
 	}
 }
+
+// ---------------------------------------------------------------------------
+// The dirty gate over the fate families
+// ---------------------------------------------------------------------------
+//
+// The comparative derivation reads the fate families from the FILESYSTEM:
+// capture.ItemFate walks the ledger's dispositions and admissions directories to
+// decide whether a widening run is still pre-admission (adr-2609021016272867;
+// companion 8.3, the sequence that places dispositioning after the comparative
+// reading). Neither family is admitted by an include row at any position — a
+// fate is the researcher's judgement and never a reading's input — so the
+// include table cannot put them in the dirty gate's set, and the gate has to
+// name them the way it names the two configuration files.
+
+// TestComparativeRefusesAnUncommittedDisposition: the disposition is committed
+// and then deleted in the working tree alone. The derivation reads the working
+// tree, so it would take the run as pre-admission — while the commit the
+// manifest names still carries the fate, and a re-run at that commit would
+// derive a different candidate set. The gate refuses and names the path.
+func TestComparativeRefusesAnUncommittedDisposition(t *testing.T) {
+	root := fixtureRepo(t)
+	item := fixtureCandidateItems[1]
+	plantDisposition(t, root, item, "dsp-7")
+	gitCommitAll(t, root)
+
+	rel := ".abcd/work/issues/dispositions/" + item + "/dsp-7.md"
+	if err := os.Remove(filepath.Join(root, filepath.FromSlash(rel))); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := assembleComparative(t, root)
+	if err == nil {
+		t.Fatal("the comparative assembly ran over a working tree whose fate records differ " +
+			"from the commit it names; the manifest would promise a re-run that derived a " +
+			"different candidate set")
+	}
+	if !strings.Contains(err.Error(), rel) {
+		t.Errorf("the refusal does not name the uncommitted fate record %s: %v", rel, err)
+	}
+}
+
+// TestComparativeRefusesAnUncommittedAdmission: the same gate from the other
+// side — an admission ADDED and not committed, over the SECOND of two runs the
+// commit leaves ambiguous. The working tree makes the selection unambiguous and
+// the commit the manifest names does not, so a re-run at that commit would
+// refuse where this one selected.
+func TestComparativeRefusesAnUncommittedAdmission(t *testing.T) {
+	root := fixtureRepo(t)
+	const other = "rdg-2608301200000014"
+	items := plantWideningItems(t, root, other, 2)
+	gitCommitAll(t, root)
+	commitRunRecord(t, root, other, string(PositionWidening), headOf(t, root))
+
+	rel := ".abcd/work/issues/admissions/" + other + "/adm-3.md"
+	plantAdmission(t, root, other, items[0], "adm-3")
+
+	_, err := assembleComparative(t, root)
+	if err == nil {
+		t.Fatal("the comparative assembly selected a run because an UNCOMMITTED admission " +
+			"disqualified the other; the commit the manifest names holds two qualifying runs " +
+			"and a re-run over it would refuse")
+	}
+	if !strings.Contains(err.Error(), rel) {
+		t.Errorf("the refusal does not name the uncommitted fate record %s: %v", rel, err)
+	}
+}
+
+// TestComparativeStillDerivesOverACleanFateStore: the gate is about the DIFF
+// between the tree and the commit, not about the families being present. A
+// committed disposition over a second run still leaves the first run derivable.
+func TestComparativeStillDerivesOverACleanFateStore(t *testing.T) {
+	root := fixtureRepo(t)
+	const other = "rdg-2608301200000013"
+	items := plantWideningItems(t, root, other, 2)
+	for i, item := range items {
+		plantDisposition(t, root, item, "dsp-"+string(rune('1'+i)))
+	}
+	gitCommitAll(t, root)
+	commitRunRecord(t, root, other, string(PositionWidening), headOf(t, root))
+
+	res, err := assembleComparative(t, root)
+	if err != nil {
+		t.Fatalf("the comparative assembly refused over a clean tree carrying committed fate "+
+			"records: %v", err)
+	}
+	if res.CandidateRun != fixtureCandidateRun {
+		t.Errorf("the assembly derived %q, want %q", res.CandidateRun, fixtureCandidateRun)
+	}
+}

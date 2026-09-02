@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/intentdriven/abcd/internal/core/capture"
 	"github.com/intentdriven/abcd/internal/core/issueschema"
 	"github.com/intentdriven/abcd/internal/core/lint"
 	"github.com/intentdriven/abcd/internal/fsutil"
@@ -872,6 +873,12 @@ func resolveTarget(repoRoot, target string) (string, error) {
 // in the working tree is in neither the assembly nor the walk, yet it is part of
 // the commit the manifest names, so a run over it would describe a target it
 // never read.
+//
+// A third ground is neither of those: material an assembly READS FROM THE
+// FILESYSTEM without ever putting it in a bundle. The two configuration files
+// below decide what the walk collects, and the comparative position's fate
+// families decide which run it collects; an uncommitted change to any of them
+// reshapes the assembly exactly as an uncommitted change to an item does.
 func refuseDirtyIncludedPaths(repoRoot string, position Position, cands []candidate) error {
 	// -uall, not the default -unormal: git collapses an untracked DIRECTORY to a
 	// single entry, and an admitted file inside a newly created directory would
@@ -898,6 +905,22 @@ func refuseDirtyIncludedPaths(repoRoot string, position Position, cands []candid
 	included[PresetConfigPath] = true
 	var dirty []string
 	for _, entry := range dirtyPaths(out) {
+		// The comparative derivation reads the two FATE families off the
+		// filesystem — capture.ItemFate walks the dispositions and the admissions
+		// directories to decide whether a widening run is still pre-admission
+		// (adr-2609021016272867; companion 8.3, which sequences dispositioning
+		// after the comparative reading). So an uncommitted fate selects a
+		// different candidate run than the commit the manifest names holds: a
+		// disposition deleted in the working tree makes a fated run look
+		// pre-admission, and an admission added there disqualifies a run the
+		// commit still admits. Neither family is admitted by an include row at any
+		// position — a fate is the researcher's judgement and never a reading's
+		// input — so no include row can put it in the set above, and it is named
+		// here for the reason the two configuration files are.
+		if position == PositionComparative && underFateFamily(entry) {
+			dirty = append(dirty, entry)
+			continue
+		}
 		if strings.HasSuffix(entry, "/") {
 			for p := range included {
 				if strings.HasPrefix(p, entry) {
@@ -917,6 +940,35 @@ func refuseDirtyIncludedPaths(repoRoot string, position Position, cands []candid
 	return fmt.Errorf("reading: %d included path(s) are uncommitted, starting with %s; "+
 		"a dirty tree cannot be described by a commit reference, so the manifest would promise "+
 		"a re-run it could not deliver", len(dirty), dirty[0])
+}
+
+// fateFamilyRoots names the two ledger families a fate is recorded in, derived
+// from the ledger's own constants rather than written out: a family whose
+// directory name moves must move here with it, or this gate would go on
+// watching a path nothing writes to.
+func fateFamilyRoots() [2]string {
+	return [2]string{
+		capture.LedgerRelPath + "/" + issueschema.DispositionsDir + "/",
+		capture.LedgerRelPath + "/" + issueschema.AdmissionsDir + "/",
+	}
+}
+
+// underFateFamily reports whether one dirty entry touches either fate family.
+//
+// A DIRECTORY entry counts on either side of the boundary: inside a family, and
+// containing one. `-uall` collapses no untracked directory, but a status entry
+// can still name a directory, and a family that arrives or disappears whole
+// changes what the derivation reads just as surely as a single record does.
+func underFateFamily(entry string) bool {
+	for _, root := range fateFamilyRoots() {
+		if strings.HasPrefix(entry, root) {
+			return true
+		}
+		if strings.HasSuffix(entry, "/") && strings.HasPrefix(root, entry) {
+			return true
+		}
+	}
+	return false
 }
 
 // dirtyPaths parses `git status --porcelain=v1 -z` into the paths it reports.
