@@ -487,13 +487,9 @@ func renderIngestResult(w io.Writer, res reading.IngestResult) {
 		fmt.Fprintf(w, "  refused items: %d\n", res.RefusedCount)
 	}
 	for _, r := range res.RefusedItems {
-		// The elision entry names no item, so it is not rendered as one: there
-		// is no item 0, and printing one would send a reader looking for it.
-		if r.Ordinal == 0 {
-			fmt.Fprintf(w, "                 (%s) %s\n", r.Rule, r.Detail)
-			continue
-		}
-		fmt.Fprintf(w, "                 item %d (%s): %s\n", r.Ordinal, r.Rule, r.Detail)
+		// One rule for the list, shared with the refusal record's reason: the
+		// elision entry names no item, so neither surface renders it as one.
+		fmt.Fprintf(w, "                 %s\n", r.Render())
 	}
 	for _, f := range res.ReviewFlags {
 		fmt.Fprintf(w, "  review flag:   item %d matches %s\n", f.Ordinal, f.SignatureID)
