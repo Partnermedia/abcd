@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 	"testing"
@@ -12,6 +13,7 @@ import (
 	"github.com/intentdriven/abcd/internal/core/frontmatter"
 	"github.com/intentdriven/abcd/internal/core/intent"
 	"github.com/intentdriven/abcd/internal/core/issueschema"
+	"github.com/intentdriven/abcd/internal/core/recordid"
 )
 
 // promoteFixture captures one issue into a fresh ledger and returns the roots
@@ -84,8 +86,8 @@ func TestPromoteMintsDraftAndStampsIssue(t *testing.T) {
 	if res.Linked {
 		t.Fatalf("mint mode must report Linked=false")
 	}
-	if res.IntentID != "itd-1" {
-		t.Fatalf("IntentID = %q, want itd-1", res.IntentID)
+	if !reNativeIntentID.MatchString(res.IntentID) {
+		t.Fatalf("IntentID = %q, want a native itd-<yymmddHHMMSS><rrrr> id", res.IntentID)
 	}
 	if filepath.IsAbs(res.IntentPath) || filepath.IsAbs(res.IssuePath) {
 		t.Fatalf("result paths must be repo-relative, got %q / %q", res.IntentPath, res.IssuePath)
@@ -217,19 +219,20 @@ func TestPromoteStampFailureReportsOrphanAndLinkRepairs(t *testing.T) {
 	if err == nil {
 		t.Fatalf("stamp into an unwritable ledger must fail")
 	}
-	if !strings.Contains(err.Error(), "itd-1") {
-		t.Fatalf("orphan report must name the minted draft, got: %v", err)
-	}
-	if !strings.Contains(err.Error(), "--intent itd-1") {
-		t.Fatalf("orphan report must carry the --intent remedy, got: %v", err)
-	}
 	if n := draftCount(t, repo); n != 1 {
 		t.Fatalf("mint-first contract: expected the orphan draft to persist, got %d", n)
+	}
+	orphan := soleDraftID(t, repo)
+	if !strings.Contains(err.Error(), orphan) {
+		t.Fatalf("orphan report must name the minted draft %s, got: %v", orphan, err)
+	}
+	if !strings.Contains(err.Error(), "--intent "+orphan) {
+		t.Fatalf("orphan report must carry the --intent remedy, got: %v", err)
 	}
 
 	// Repair: link the orphan draft. No second mint.
 	stampWriteHook = nil
-	res, err := Promote(PromoteRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: issID, LinkIntent: "itd-1"})
+	res, err := Promote(PromoteRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: issID, LinkIntent: orphan})
 	if err != nil {
 		t.Fatalf("link-mode repair: %v", err)
 	}
@@ -239,9 +242,33 @@ func TestPromoteStampFailureReportsOrphanAndLinkRepairs(t *testing.T) {
 	if n := draftCount(t, repo); n != 1 {
 		t.Fatalf("link mode minted: %d drafts, want 1", n)
 	}
-	if iss := readIssue(t, ir, issID); iss.PromotedTo != "itd-1" {
+	if iss := readIssue(t, ir, issID); iss.PromotedTo != orphan {
 		t.Fatalf("repair did not stamp promoted_to: %q", iss.PromotedTo)
 	}
+}
+
+// reNativeIntentID is the shape of a native itd id (adr-45): the family tag, a
+// 12-digit UTC second stamp and a 4-digit suffix.
+var reNativeIntentID = regexp.MustCompile(`^itd-[0-9]{16}$`)
+
+// soleDraftID returns the id of the one draft in the intent store, derived
+// from its filename through the canonical record-filename grammar.
+func soleDraftID(t *testing.T, repo string) string {
+	t.Helper()
+	entries, err := os.ReadDir(filepath.Join(repo, intent.IntentsRelDir, intent.BucketDrafts))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var ids []string
+	for _, e := range entries {
+		if m := recordid.FilenameNumRe("itd").FindStringSubmatch(e.Name()); m != nil {
+			ids = append(ids, "itd-"+m[1])
+		}
+	}
+	if len(ids) != 1 {
+		t.Fatalf("drafts = %v, want exactly one", ids)
+	}
+	return ids[0]
 }
 
 // TestPromoteSerializesOnLedgerLock: the stamp acquires the same allocator
@@ -514,5 +541,271 @@ func TestPromoteReadingItemRefusesGrounds(t *testing.T) {
 	// discarded value, never about the route.
 	if _, err := Promote(PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: item}); err != nil {
 		t.Fatalf("the reading route must still promote with no grounds: %v", err)
+	}
+}
+
+// TestPromoteRefusesASymlinkedRecordLeaf pins the pre-flight read: a record
+// whose leaf is a symlink is refused before anything is minted, so a committed
+// link in a hostile clone neither seeds a draft from an out-of-tree file nor
+// has its stamp written through the link.
+func TestPromoteRefusesASymlinkedRecordLeaf(t *testing.T) {
+	repo, ir, issID := promoteFixture(t, "a record behind a symlink")
+	src, _, err := findIssue(ir, issID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	moved := filepath.Join(t.TempDir(), filepath.Base(src))
+	if err := os.WriteFile(moved, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(src); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(moved, src); err != nil {
+		t.Skipf("symlink unsupported: %v", err)
+	}
+
+	_, err = Promote(PromoteRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: issID})
+	if !errors.Is(err, ErrPathUnsafe) {
+		t.Fatalf("promote of a symlinked record: want ErrPathUnsafe, got %v", err)
+	}
+	if n := draftCount(t, repo); n != 0 {
+		t.Fatalf("a refused promote must mint nothing, got %d draft(s)", n)
+	}
+}
+
+// TestPromoteRefusesAnInvalidRecordBeforeMinting pins the residue contract in
+// Promote's doc comment to the validators: a record that can never be stamped —
+// its frontmatter fails validateStrict, or disagrees with its filename — is
+// refused from the pre-flight bytes, with nothing minted. Before this, the
+// validators ran only under the lock, after the mint, so every attempt left one
+// more orphan draft and the repair verb refused on the same invariant.
+func TestPromoteRefusesAnInvalidRecordBeforeMinting(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		old, new string
+		want     error
+	}{
+		{"filename slug disagrees with frontmatter slug",
+			`slug: "a-promotable-observation"`, `slug: "attacker-chosen-slug"`, ErrInvariantViolation},
+		{"severity outside the enum",
+			`severity: "minor"`, `severity: "bogus"`, ErrMalformedFrontmatter},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repo, ir, issID := promoteFixture(t, "a legit finding")
+			src, _, err := findIssue(ir, issID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rewriteIssue(t, ir, issID, func(s string) string {
+				if !strings.Contains(s, tc.old) {
+					t.Fatalf("record does not contain %q:\n%s", tc.old, s)
+				}
+				return strings.Replace(s, tc.old, tc.new, 1)
+			})
+
+			for attempt := 1; attempt <= 2; attempt++ {
+				_, err := Promote(PromoteRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: issID})
+				if !errors.Is(err, tc.want) {
+					t.Fatalf("attempt %d: want %v, got %v", attempt, tc.want, err)
+				}
+				if strings.Contains(err.Error(), "orphaned") {
+					t.Fatalf("attempt %d: a pre-flight refusal must not report an orphan: %v", attempt, err)
+				}
+				if n := draftCount(t, repo); n != 0 {
+					t.Fatalf("attempt %d: a refused promote must mint nothing, got %d draft(s)", attempt, n)
+				}
+			}
+			data, err := os.ReadFile(src)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(data), "promoted_to") {
+				t.Fatalf("a refused promote must not stamp the record:\n%s", data)
+			}
+		})
+	}
+}
+
+// shellWords splits a printed command into its words the way a POSIX shell
+// would for the shapes a remedy uses: whitespace-separated, with double quotes
+// grouping a word and a backslash escaping the next character inside them.
+func shellWords(t *testing.T, cmd string) []string {
+	t.Helper()
+	var words []string
+	var cur strings.Builder
+	inWord := false
+	var quote byte // 0, '\'' or '"' — the quoting currently in force
+	for i := 0; i < len(cmd); i++ {
+		c := cmd[i]
+		switch {
+		case quote == '\'':
+			// Inside single quotes a POSIX shell interprets NOTHING, the
+			// backslash included; the only way out is the closing quote.
+			if c == '\'' {
+				quote = 0
+				continue
+			}
+			cur.WriteByte(c)
+		case quote == '"' && c == '\\' && i+1 < len(cmd):
+			i++
+			cur.WriteByte(cmd[i])
+		case quote == '"':
+			if c == '"' {
+				quote = 0
+				continue
+			}
+			cur.WriteByte(c)
+		case c == '\'' || c == '"':
+			quote, inWord = c, true
+		case c == '\\' && i+1 < len(cmd):
+			// An unquoted backslash escapes the next byte — which is how the
+			// '\'' idiom smuggles a single quote between two quoted runs.
+			i++
+			cur.WriteByte(cmd[i])
+			inWord = true
+		case c == ' ' || c == '\t':
+			if inWord {
+				words = append(words, cur.String())
+				cur.Reset()
+				inWord = false
+			}
+		default:
+			cur.WriteByte(c)
+			inWord = true
+		}
+	}
+	if quote != 0 {
+		t.Fatalf("unbalanced quote in remedy: %s", cmd)
+	}
+	if inWord {
+		words = append(words, cur.String())
+	}
+	return words
+}
+
+// hostileGrounds carries every character a shell still interprets: the four the
+// old double-quoted form escaped by hand, plus the history expansion double
+// quotes do NOT stop. Prose grounds test the remedy's shape and nothing about
+// its quoting — with prose, an identity quoter passes.
+const hostileGrounds = "pursued: the printed remedy must survive a \" quote, a ' quote, a \\ backslash, $HOME, `date` and !word intact"
+
+// TestShellQuotedIsInert pins the quoting the orphan remedy prints its grounds
+// with. The remedy is meant to be pasted into a shell as it stands, so the
+// grounds must arrive as ONE literal argument whatever they carry — and must
+// arrive that way in an INTERACTIVE bash or zsh too, where `!word` expands
+// inside double quotes and the pasted remedy either fails or runs on text
+// nobody wrote. Single quotes are the one form a POSIX shell interprets nothing
+// inside, with an embedded quote spelled '\”.
+func TestShellQuotedIsInert(t *testing.T) {
+	for _, s := range []string{
+		"plain text",
+		`a " double quote`,
+		`an ' apostrophe`,
+		`two '' apostrophes`,
+		`a \ backslash`,
+		`$HOME and ${x} and $(id)`,
+		"a `date` substitution",
+		"history !word expansion",
+		"spaces  and\ttabs",
+		hostileGrounds,
+		"",
+	} {
+		quoted := shellQuoted(s)
+		if !strings.HasPrefix(quoted, "'") || !strings.HasSuffix(quoted, "'") {
+			t.Fatalf("shellQuoted(%q) = %s, want a single-quoted argument: inside double quotes an interactive shell still expands !word", s, quoted)
+		}
+		got := shellWords(t, quoted)
+		if len(got) != 1 || got[0] != s {
+			t.Fatalf("shellQuoted(%q) = %s, which a shell splits as %q, want exactly one literal argument", s, quoted, got)
+		}
+	}
+}
+
+// TestPromoteOrphanRemedyRunsAsPrinted runs the repair verb exactly as the
+// orphan error prints it. The issue route requires --grounds, so a remedy that
+// named only `--intent` refused on its own text for every orphan, and the one
+// test of the repair passed grounds the message never mentioned.
+//
+// It runs twice: once over prose, and once over grounds carrying every
+// character a shell interprets. The prose case says nothing about the quoting —
+// it passes against an identity quoter — so the hostile case is the one that
+// holds shellQuoted to delivering the grounds as a single literal argument.
+func TestPromoteOrphanRemedyRunsAsPrinted(t *testing.T) {
+	for _, tc := range []struct{ name, grounds string }{
+		{"prose grounds", testGrounds},
+		{"grounds carrying every character a shell interprets", hostileGrounds},
+	} {
+		t.Run(tc.name, func(t *testing.T) { promoteOrphanRemedyRunsAsPrinted(t, tc.grounds) })
+	}
+}
+
+func promoteOrphanRemedyRunsAsPrinted(t *testing.T, grounds string) {
+	t.Helper()
+	repo, ir, issID := promoteFixture(t, "the stamp will fail after the mint")
+
+	stampWriteHook = func(string, []byte) error {
+		return errors.New("simulated unwritable ledger")
+	}
+	_, err := Promote(PromoteRequest{Grounds: grounds, RepoRoot: repo, IssuesRoot: ir, ID: issID})
+	stampWriteHook = nil
+	if err == nil {
+		t.Fatal("stamp into an unwritable ledger must fail")
+	}
+
+	const lead = "complete the link with `"
+	msg := err.Error()
+	start := strings.Index(msg, lead)
+	if start < 0 {
+		t.Fatalf("orphan report carries no remedy: %v", err)
+	}
+	rest := msg[start+len(lead):]
+	// The LAST backtick, not the first: the message delimits the remedy with
+	// backticks, and grounds may legitimately contain one — which the first-hit
+	// search truncated the remedy at, mid-argument (captured separately as the
+	// message's own ambiguity; the remedy runs correctly when copied whole).
+	end := strings.LastIndex(rest, "`")
+	if end < 0 {
+		t.Fatalf("remedy is not closed: %v", err)
+	}
+	words := shellWords(t, rest[:end])
+	if len(words) < 4 || words[0] != "abcd" || words[1] != "capture" || words[2] != "promote" || words[3] != issID {
+		t.Fatalf("remedy is not `abcd capture promote %s ...`: %q", issID, words)
+	}
+	req := PromoteRequest{RepoRoot: repo, IssuesRoot: ir, ID: words[3]}
+	for i := 4; i < len(words); i++ {
+		switch words[i] {
+		case "--intent":
+			i++
+			req.LinkIntent = words[i]
+		case "--grounds":
+			i++
+			req.Grounds = words[i]
+		default:
+			t.Fatalf("remedy carries an argument this test cannot run: %q in %q", words[i], words)
+		}
+	}
+	// The grounds must survive the printing as ONE argument, byte for byte:
+	// a remedy that splits them, or that lets the shell expand a $ or a
+	// backtick inside them, stamps a conjecture nobody wrote.
+	if req.Grounds != grounds {
+		t.Fatalf("the printed remedy carries grounds %q, want %q — the quoting did not survive a shell split", req.Grounds, grounds)
+	}
+	res, err := Promote(req)
+	if err != nil {
+		t.Fatalf("the remedy as printed refused: %v\nremedy: %s", err, rest[:end])
+	}
+	if !res.Linked || res.IntentID != req.LinkIntent {
+		t.Fatalf("the remedy must link the orphan draft, got %+v", res)
+	}
+	if got := theGround(t, ir, issID); got != grounds {
+		t.Fatalf("the repair must stamp the promotion's own grounds, got %q", got)
+	}
+	if n := draftCount(t, repo); n != 1 {
+		t.Fatalf("the remedy must mint nothing, got %d draft(s)", n)
 	}
 }

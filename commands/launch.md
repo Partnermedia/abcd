@@ -200,8 +200,13 @@ Run the **`release-changelog-composer`** agent
 (`agents/release-changelog-composer.md`) over the emitted cut and the records it
 names. It returns the changelog payload: `schema_version`, `prompt_version`,
 `next_tag` echoed verbatim, and `entries[{section, records, text}]`. The agent owns
-the **wording** and the **Keep a Changelog section**; the version, the date, the
-heading, the section order, and the inclusion set stay the binary's.
+the **wording** and the choice between the two writable **Keep a Changelog
+sections**, `Added` and `Fixed`; the version, the date, the heading, the section
+order, the inclusion set and the writable set stay the binary's. `Changed`,
+`Deprecated`, `Removed` and `Security` are claims about the previous release's
+surface, which the composer cannot see, so the ingest refuses a payload carrying
+one and the dated section says so under its heading (iss-2609011207114761). A
+`breaking` record is an `Added` line that states the break.
 
 **LOUD STAGE — if the composer cannot run in this context, the flow STOPS here.**
 No fallback exists and none may be improvised:

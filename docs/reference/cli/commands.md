@@ -449,7 +449,13 @@ bundled defaults merged with this repo's `.abcd/guard.json` — and reports
 allow, warn, or block. A blocker exits 1 and names the safe successor; a
 warn exits 0 with the warning rendered; an allow exits 0. A guard that
 cannot be evaluated at all (an unparsable command line, a malformed
-registry) exits 2, so a caller never reads silence as clearance.
+registry) exits 2, so a caller never reads silence as clearance. Unparsable
+means an unterminated quote in COMMAND text, which no shell runs either;
+an unterminated quote inside a here-document body is document text and is
+not one. Grammar a shell does run gets a verdict instead: a trailing
+backslash is read as bash reads it, and a here-document whose delimiter
+line never comes is a block, because the rest of the input may be commands
+the guard did not check.
 
 Matching is shell-token-aware and applies in command position only, so a
 hazard named inside a quoted argument never fires.
@@ -514,7 +520,11 @@ Anything the adapter cannot turn into a decision — an unreadable payload, a
 tool call that is not a shell command, an unparsable command line, a
 registry that will not load — allows the command and warns loudly on
 stderr. A guard that cannot answer never stops a session, and is never
-silently absent.
+silently absent. Unparsable means an unterminated quote in COMMAND text,
+which no shell runs either — a quote inside a here-document body is
+document text and is not one. A trailing backslash and a here-document with
+no delimiter line are grammar a shell does run, so each gets a verdict —
+the backslash is read as bash reads it, the unterminated document blocks.
 
 ### `abcd history`
 
@@ -750,9 +760,9 @@ Query memory and synthesise a cited answer
 
 #### `abcd memory ingest`
 
-Distil an external source into cited memory pages
+Distil an external source into cited memory pages (https URLs only)
 
-**Usage:** `abcd memory ingest <path-or-url> [flags]`
+**Usage:** `abcd memory ingest <path-or-https-url> [flags]`
 
 **Flags:**
 
@@ -830,13 +840,26 @@ Validate the JSON a cold reading returned and write its reading records.
 
 The verb checks what the reading was LICENSED to produce, not only what it saw: the
 supply regime is read from the position's definition and compared with the output's own
-claim, each regime's reserved names are refused with the licence stated, and a registry
-of named signatures catches prose that ranks, settles or proposes without the field.
+claim, and the reserved names a regime declares are refused with the licence stated (the
+generative position declares none). A registry of named signatures watches for prose that
+ranks, settles or proposes without the field; those signatures are observed rather than
+enforcing, at every position, so a hit raises a review flag on the run record and the item
+lands.
 
 Item identifiers are minted here. The payload carries none, so a supplied one is refused
-as an unknown field. Nothing durable is written until the whole payload validates, and
-the run metadata is written last as the commit marker: a run without one never happened,
-and an orphaned stage is named and cleared by the next invocation.
+as an unknown field. A refusal becomes DURABLE once the run's identity is proven — the run
+id resolving to a parked manifest whose content hash matches — and from there a list-level
+refusal writes refusal.json under the run's directory; before that point nothing is written
+anywhere. Nothing durable is written or DELETED until the whole payload validates: a refusal
+after the run is proven leaves its refusal record and nothing else. The reading records land
+as one batch and the run metadata is written last as the commit marker: a run without one
+never happened.
+
+An ingest interrupted before that marker leaves an orphaned stage, and every invocation names
+it. Only the next one whose payload validates sweeps it: it ROLLS THAT RUN'S READING RECORDS
+OUT OF THE COMMITTED LEDGER because the run never happened, and clears the stage. A refused
+run reports the orphans it left in place, and the ids a sweep removed are reported as
+rolled_back_records on every exit, including a failing one.
 
 **Flags:**
 
@@ -855,6 +878,17 @@ abcd reading ingest --reading-json ./reading-output.json --json
 Render the active rule set; a positional DOMAIN scopes to one (read-only)
 
 **Usage:** `abcd rules [domain]`
+
+Render the rule set the modular-rules loader injects: the bundled default
+domains merged with this repo's .abcd/rules.json. Bare, it renders every active
+domain; a positional DOMAIN (case-insensitive) renders that one domain regardless
+of its state or the kill switch, so a dormant domain is still inspectable.
+
+Every domain says which layer it came from. A domain the repo override names —
+its rules replaced, its state changed, or a custom domain declared — renders as
+"## NAME (repo override)" here, in the injected block and in the hook's
+diagnostic, and carries "source": "repo" in --json; an untouched bundled domain
+renders bare and carries "source": "bundled". Read-only.
 
 ### `abcd site`
 

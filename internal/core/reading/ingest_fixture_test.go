@@ -257,6 +257,21 @@ func (f *ingestFixture) refusalOf(res IngestResult, ordinal int) ItemRefusal {
 	return ItemRefusal{}
 }
 
+// flagOf returns the review flag raised against the item at one ordinal, and
+// fails the test when nothing was flagged there. A flag is the observed
+// signatures' whole outcome, so a case about one reads the RESULT: the item
+// landed, and the run succeeded.
+func (f *ingestFixture) flagOf(res IngestResult, ordinal int) ReviewFlag {
+	f.t.Helper()
+	for _, fl := range res.ReviewFlags {
+		if fl.Ordinal == ordinal {
+			return fl
+		}
+	}
+	f.t.Fatalf("item %d raised no review flag; the run flagged %v", ordinal, res.ReviewFlags)
+	return ReviewFlag{}
+}
+
 // refusedItem runs a payload whose item at `ordinal` was made illegal and
 // returns that item's refusal, having first established that the run itself
 // landed and that every OTHER item survived. That second half is the point: a

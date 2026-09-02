@@ -16,7 +16,7 @@ func TestCreateFromTextRedactsHomePathBehindAURLHost(t *testing.T) {
 	home := "/Users/zzhomeuser42" // abcd-audit:allow
 	t.Setenv("HOME", home)
 
-	it, _, err := CreateFromText(root, "I want the build log at https://ci.example.com"+home+"/build.log to be reviewable by the whole team", "", "")
+	it, err := CreateFromText(root, "I want the build log at https://ci.example.com"+home+"/build.log to be reviewable by the whole team", "", "")
 	if err != nil {
 		t.Fatalf("CreateFromText: %v", err)
 	}
