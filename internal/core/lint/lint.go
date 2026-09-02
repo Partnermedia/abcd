@@ -1089,6 +1089,10 @@ func checkReceiptGate(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 			add(rel, "'"+gate+"' receipt pins no judge model; a floating judge is not auditable")
 			continue
 		}
+		if why := floatingJudgeModel(r.JudgeModel); why != "" {
+			add(rel, "'"+gate+"' receipt judgeModel '"+r.JudgeModel+"' is "+why+", not a pinned snapshot; a floating judge is not auditable")
+			continue
+		}
 		if !manifestEra {
 			// Pre-manifest era: the receipt is judged by the rules above only, so a
 			// historical receipt that carries no tier/manifestHash/disposition stays
@@ -1114,6 +1118,28 @@ func checkReceiptGate(repoRoot string, cfg RuleConfig) ([]Finding, error) {
 		}
 	}
 	return out, nil
+}
+
+// floatingJudgeModel reports why a receipt's judgeModel is a floating alias
+// rather than a pinned snapshot, or "" when it is pinned. The runbook's rule is
+// that a receipt names the judge that produced it so the pass can be re-run
+// against the same judge; an id that resolves to whatever the vendor serves
+// today cannot be. Pinned means the id carries a version or date component —
+// claude-opus-4-8, Claude Fable 5, a dated suffix — which is what the documented
+// example and every committed receipt satisfy. Refused: a bare family name with
+// no digit anywhere (opus, claude-sonnet), and a rolling alias, which names
+// "latest" whether or not a version fragment precedes it (claude-opus-4-latest
+// floats within the 4 line exactly as claude-opus-latest floats across lines).
+// The check is deliberately shape-only — it knows no vendor's catalogue.
+func floatingJudgeModel(model string) string {
+	m := strings.ToLower(strings.TrimSpace(model))
+	if strings.Contains(m, "latest") {
+		return "a rolling alias"
+	}
+	if !strings.ContainsAny(m, "0123456789") {
+		return "a bare family alias with no version or date"
+	}
+	return ""
 }
 
 // hashManifest renders the release-gate manifest's canonical hash — sha256 over

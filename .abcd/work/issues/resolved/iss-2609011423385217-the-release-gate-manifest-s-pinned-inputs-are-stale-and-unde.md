@@ -9,6 +9,8 @@ found_during: "the v0.7.0 cut, iss35 full-tier crosscheck"
 found_at: ".abcd/development/release-gate/manifest.json"
 origin: researcher-authored
 production_mode: hand-written
+resolution: "The release-gate manifest is held to the tree by TestReleaseGateManifestIsCurrent: the pinned context names all 22 commands/ pages and all 15 agents/ prompts, briefDocs pins every 04-surfaces/ chapter (index included) plus the constraints, internals and delivery chapters where the v0.7.0 findings lived, the context says a surface claim outside the pinned list is in scope, checkerCount equals briefDocs plus surfaces (36), and promptHash is recomputed under the algorithm recovered from the manifest's birth commit (sha256 over the three prompt parts joined by blank lines). The test fails when a command page, agent or surface chapter ships unpinned, when checkerCount disagrees with the lists, or when the prompt is edited without its hash."
+impact: fix
 ---
 
 The release-gate manifest's pinned inputs are stale and under-scope the record
@@ -75,6 +77,8 @@ disagree, and nothing reads `checkerCount` to check them against each other.
 - pursued: recording this before the fix, per the standing rule against fixing
   ahead of an armed detector; the detector here is the gate itself, and the
   finding is evidence about the gate rather than about any release
+
+- pursued: the anchor must reproduce the search it attests, so the pinned inputs are derived from the tree under a test rather than restated by hand; scope widened by naming the chapters where surface claims live plus an in-scope rule for the rest, which is the exclusion shape the record asked for without a design decision about the whole brief
 
 ## Candidate remedies
 
