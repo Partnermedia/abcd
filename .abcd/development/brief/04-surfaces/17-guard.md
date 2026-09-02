@@ -44,6 +44,58 @@ only format it:
 | `warn` | exit 0, warning rendered | exit 0, warning on stderr |
 | `block` | exit 1, why + successor rendered | the host's blocking status, why + successor as the message |
 
+The two front doors differ in how a verdict is REPORTED, never in the verdict
+itself. `guard check` trims a trailing newline off a candidate read on stdin, so
+the same command can reach the two doors one byte apart; a here-document left
+open takes the same block either way, because that state is resolved when the
+input ends and not only when it crosses a newline.
+
+Two verdicts have no registry entry behind them and are the guard's own voice,
+reported under reserved ids no entry may claim: a word the tokenizer cannot
+expand (`brace-expansion-unexpanded`) and a here-document whose delimiter line
+never comes (`heredoc-unterminated`). Both are **blocks**. They are tokenizer
+states, but they are not faults: bash runs both lines, so an error — which the
+hook maps to fail-open — would hand the command through unguarded, and a quiet
+allow would trust a `<<` the classifier has misread before (iss-184). The same
+reading gives a trailing backslash a verdict rather than an error: it is parsed
+as bash 3.2 parses it (dropped), the reading under which a hazard executes.
+
+What stays unparsable — and so still fails open loudly on the hook — is exactly
+one class: an unterminated quote (`'`, `"`, `$'…'`, or one in a here-document
+delimiter word) in **command text**, which no shell runs either. Text inside a
+here-document **body** is not command text, so an apostrophe in a document is
+data. Getting that boundary right is what the class rests on: a body starts on
+the line after the redirection even when that line ends in `&&` or `|` (bash
+collects the bodies at the end of the physical line), and whether a `<<` opens a
+document at all is decided by what ENCLOSES it. Inside a `$(( … ))` expansion or
+a bare `(( … ))` command there is no redirection, so a `<<` there is a shift;
+anywhere else a delimiter-shaped word opens a document, a `( cmd <<EOF )`
+subshell included. Reading the bytes after the delimiter word instead — "does a
+paren pair close right here?" — sees only the flattest shift: `$(( (1 << n) + 1
+))` closes its sub-expression with a single `)`. Read either the other way and
+document text lands in command position, where one apostrophe becomes an error
+the hook hands through unguarded.
+
+The delimiter is a **word**, not an identifier: `cat <<20`, `cat <<$D` and the
+`<<20` of `let mask=1<<20` are all here-documents, because the shell tokenises
+the redirection before any builtin sees an arithmetic expression. The word set
+read is the conservative superset — a letter, a digit, `_`, or a `$`-led word,
+whose value the guard cannot know, so the document never terminates and the
+fail-closed block answers. What is left out is the residual: a delimiter bash
+allows but this set does not (`<<!`, `<</tmp/x`), and a `<<` in an arithmetic
+context the tokenizer does not model — bash's deprecated `$[ … ]` — where a
+delimiter-shaped operand is read as a document and over-blocks. In both the
+body claim above is the thing that gives: for a delimiter the reader does not
+recognise, the lines below it are read as command text after all.
+
+A third reserved id is a **warn**: `git-config-rewrite-unread`, raised when a
+git command points at configuration whose body the guard cannot read —
+`GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`, `-c include.path=`, an `includeIf`,
+or a `--config-env` naming a variable the command line does not set. git
+rewrites its own subcommand from an alias found there, so what runs need not be
+what is written; the directive is visible even though the body is not, and a
+warn is what a visible directive with an unreadable value is worth.
+
 A guard that cannot be **evaluated** — an unparsable command line, a registry
 that will not load, a candidate too long to read, a registry switched off — is a
 fourth case, and the two front doors part company on it deliberately:
@@ -131,6 +183,48 @@ it matched. Never a block — the guard cannot tell whether an unrecognised prog
 runs the rest of the line, and `rg git push --force docs/` is a search. That is
 the fail-safe; the wrapper names below are what upgrade a warn to a precise
 refusal.
+
+A word bash rewrites before exec is read as bash reads it. An unquoted glob
+(`*`, `?`, `[…]`) is a pattern bash expands against the working directory, so
+at every position an entry constrains — the command name, the subcommand, a
+flag or flag-value alternative — a literal the pattern *can* produce is treated
+as produced: `git pus? --force origin main` is the force push whenever a file
+called `push` exists, in a directory the guard cannot see, so it blocks. An
+unconstrained position is never compared, which is why `ls *` and `git add
+*.md` do not change; behind zsh's `noglob` nothing expands and the compare is
+literal. Negation is bash's spelling, not Go's: `git clea[!x] -fd` is the same
+force-delete and blocks. At a FLAG position the pattern must also be
+flag-shaped — its own literal prefix begins with `-` — and the scan stops at a
+`--` operand terminator, because a flag constraint is offered every argument
+rather than one position: without that, a bare `*` matched every long
+alternative at once and `rm *`, `git push origin *` and `git commit -m msg *`
+became blocks. `--forc?` and `--force*` spell the dash and still fire. The
+compare is a floor: a glob inside an attached short value (`-XDELET?`), a glob
+that hides the leading dash itself (`[-]-force`), extended globs (`?(…)`,
+`*(…)`, `+(…)`, `@(…)`, `!(…)`),
+POSIX classes (`[[:alpha:]]`) and a glob resolved by a directory tree
+(`repos/o/*` for an API path) are not modelled, and a globbed *wrapper* name
+(`sud? rm -rf *`) reaches only the fail-safe's warn. A globbed interpreter name
+(`s? -c '…'`) is opened, because a miss there would be silent — and opened *in
+addition to* that warn, never instead of it, since which program a pattern
+expands to is a guess.
+
+The same reading extends past the shell to the one program that rewrites its own
+argv from its own arguments: git resolves an alias, and an alias can be declared
+in the command line itself (`-c alias.p='push --force'`, `--config-env`, the
+`GIT_CONFIG_COUNT`/`KEY_n`/`VALUE_n` triple, `GIT_CONFIG_PARAMETERS`). Those are
+exactly the values the operand walk steps over to find the subcommand, so the
+alias NAME reached the compare and its body did not. The values are now read:
+when operand 0 names an alias the same command line declares, the command git
+would actually run is checked against the ordinary entries, following a bounded
+chain of nested aliases, and a `!`-prefixed body — which git hands to a shell —
+is read as an execute-a-string payload. Two costs are taken deliberately. git
+ignores an alias that shadows a builtin, so `git -c alias.push='push --force'
+push` is a plain push that the rewrite refuses: an accepted false positive,
+over-blocking being the fail-safe direction, and cheaper than a builtin table
+that only a probe of the installed git could keep true. And the alias body is
+split on whitespace where git uses its own quote-aware splitter. Configuration
+delivered from a FILE stays unreadable — that is the warn above, not a match.
 
 What an allow still does not see is a hazard that never reaches command position
 at all:
