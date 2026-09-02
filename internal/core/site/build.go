@@ -455,7 +455,11 @@ func Build(req Request) (Result, error) {
 	if len(lintCfg.Roots) > 0 {
 		recordRoot = lintCfg.Roots[0]
 	}
-	pages, err := newExplorer(c, export, bib, recordRoot).Pages()
+	ex, err := newExplorer(c, export, bib, recordRoot)
+	if err != nil {
+		return Result{}, err
+	}
+	pages, err := ex.Pages()
 	if err != nil {
 		return Result{}, err
 	}
