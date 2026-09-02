@@ -750,9 +750,9 @@ Query memory and synthesise a cited answer
 
 #### `abcd memory ingest`
 
-Distil an external source into cited memory pages
+Distil an external source into cited memory pages (https URLs only)
 
-**Usage:** `abcd memory ingest <path-or-url> [flags]`
+**Usage:** `abcd memory ingest <path-or-https-url> [flags]`
 
 **Flags:**
 

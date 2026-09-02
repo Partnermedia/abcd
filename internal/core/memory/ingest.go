@@ -100,7 +100,8 @@ type sourceMaterial struct {
 	title       string
 }
 
-// Ingest runs the full ingest flow for one source (local path or http(s) URL).
+// Ingest runs the full ingest flow for one source (a local path or an https
+// URL; a plaintext http source is refused — see isURL).
 func Ingest(req IngestRequest) (IngestResult, error) {
 	if req.Distiller == nil {
 		return IngestResult{}, newIngestError("ingest requires a Distiller")
@@ -521,15 +522,55 @@ func existingPageFrontmatter(mem string) map[string]map[string]any {
 // Source acquisition
 // ---------------------------------------------------------------------------
 
+// isURL reports whether source is one abcd will FETCH. Only https qualifies:
+// the store copies a fetched source's text, and the SPDX line or License:
+// header lifted out of it, verbatim into durable provenance, so a plaintext
+// transport would let a man-in-the-middle choose what the store remembers and
+// under what licence (GHSA-35fj-9w6f-7h62). This is the posture of `abcd
+// update` and of the brief's HTTPS-only fetch invariant; unlike update's
+// allowHTTP test seam there is no escape here, and the additive --allow-http
+// alternative is recorded as an open observation.
 func isURL(source string) bool {
 	u, err := url.Parse(source)
 	if err != nil {
 		return false
 	}
-	return u.Scheme == "http" || u.Scheme == "https"
+	return u.Scheme == "https"
+}
+
+// remoteScheme returns the scheme of a source written in absolute-URL form
+// ("<scheme>://…") and "" for anything else, which is how a refused scheme is
+// told apart from a local path. Without it a plaintext http:// source would
+// fall through to the file lookup and be reported as a missing path — a
+// refusal must say what was wrong with the source the caller actually gave.
+func remoteScheme(source string) string {
+	u, err := url.Parse(source)
+	if err != nil || u.Scheme == "" || !strings.HasPrefix(source[len(u.Scheme):], "://") {
+		return ""
+	}
+	return u.Scheme
+}
+
+// redactedSource renders a URL for an error message with any userinfo masked,
+// so a refusal never echoes a credential embedded in the source back to the
+// terminal or the run log.
+func redactedSource(source string) string {
+	u, err := url.Parse(source)
+	if err != nil {
+		return source
+	}
+	return u.Redacted()
 }
 
 func acquireSource(repoRoot, source string, fetcher Fetcher, pdf PDFExtractor) (sourceMaterial, error) {
+	// The scheme gate stands ahead of the fetcher seam, not inside defaultFetch
+	// alone: a caller-supplied Fetcher replaces defaultFetch entirely, and the
+	// admission rule belongs to the core either way.
+	if scheme := remoteScheme(source); scheme != "" && !isURL(source) {
+		return sourceMaterial{}, newIngestError(
+			"refusing to fetch %s: memory ingest requires https, not %s — a plaintext source, and the licence header the store copies into its provenance, can be rewritten in transit",
+			redactedSource(source), scheme)
+	}
 	if isURL(source) {
 		var fetched FetchedSource
 		var err error
@@ -561,10 +602,35 @@ func guardFetchHost(host string) error {
 	return nil
 }
 
+// ingestRedirectPolicy is defaultFetch's CheckRedirect, lifted out so the
+// scheme pin can be tested without a network (a loopback httptest server
+// cannot stand in: urlguard.DialControl refuses loopback by design). Admission
+// checking the scheme is not enough — a redirect chooses the next hop's scheme,
+// so an https source can be walked down to plaintext one Location at a time.
+// The pin per hop mirrors update.go's newUpdater, and it stands AHEAD of the
+// host guard so the refusal names the scheme rather than the host.
+func ingestRedirectPolicy(rawURL string) func(*http.Request, []*http.Request) error {
+	return func(r *http.Request, via []*http.Request) error {
+		if len(via) >= maxRedirects {
+			return newIngestError("too many redirects fetching %s", rawURL)
+		}
+		if r.URL.Scheme != "https" {
+			return newIngestError("redirect left https: %s", r.URL.Redacted())
+		}
+		return guardFetchHost(r.URL.Hostname())
+	}
+}
+
 func defaultFetch(rawURL string) (FetchedSource, error) {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
 		return FetchedSource{}, newIngestError("fetch failed for %s: %v", rawURL, err)
+	}
+	// acquireSource has already refused a non-https source; this is the same
+	// rule stated where the connection is actually made, so the fetcher cannot
+	// be reached over plaintext by a later caller (mirrors update.go's get).
+	if parsed.Scheme != "https" {
+		return FetchedSource{}, newIngestError("refusing to fetch %s: the source origin must be https", parsed.Redacted())
 	}
 	if err := guardFetchHost(parsed.Hostname()); err != nil {
 		return FetchedSource{}, err
@@ -577,14 +643,9 @@ func defaultFetch(rawURL string) (FetchedSource, error) {
 		Control: urlguard.DialControl(urlguard.BlockedIP),
 	}
 	client := &http.Client{
-		Timeout:   fetchTimeoutSeconds * time.Second,
-		Transport: &http.Transport{DialContext: dialer.DialContext},
-		CheckRedirect: func(r *http.Request, via []*http.Request) error {
-			if len(via) >= maxRedirects {
-				return newIngestError("too many redirects fetching %s", rawURL)
-			}
-			return guardFetchHost(r.URL.Hostname())
-		},
+		Timeout:       fetchTimeoutSeconds * time.Second,
+		Transport:     &http.Transport{DialContext: dialer.DialContext},
+		CheckRedirect: ingestRedirectPolicy(rawURL),
 	}
 	req, err := http.NewRequest(http.MethodGet, rawURL, nil)
 	if err != nil {

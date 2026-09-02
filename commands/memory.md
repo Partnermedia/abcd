@@ -1,7 +1,7 @@
 ---
 name: memory
 description: Query and curate the per-project memory substrate at .abcd/memory/ by invoking the abcd binary. Bare invocation is a read-only status render; ingest/ask/lint curate, synthesise, and health-check the store.
-argument-hint: "[<empty>] | ingest <path-or-url> [--keep-original] | ask <question> | lint"
+argument-hint: "[<empty>] | ingest <path-or-https-url> [--keep-original] | ask <question> | lint"
 ---
 
 # `/abcd:memory` — curated knowledge substrate
@@ -22,8 +22,12 @@ render never rebuilds or mutates the coverage index.
 ## Ingest a source
 
 Distil an external source (transcript / article / URL) into typed, cited
-memory pages. PDF is a later-phase seam: the binary rejects a PDF source with a
-clear error, because no text-extraction dependency is wired.
+memory pages. A remote source must be **https**: a plaintext `http://` source
+is refused by name, and a redirect that leaves https is refused per hop, because
+the store copies a fetched source's text — and the licence header lifted out of
+it — verbatim into durable provenance. PDF is a later-phase seam: the binary
+rejects a PDF source with a clear error, because no text-extraction dependency
+is wired.
 
 **You** are the distiller: read the source, produce the
 `DistilledPage` JSON array, and pass it to the binary via `--pages-json`
@@ -31,7 +35,7 @@ clear error, because no text-extraction dependency is wired.
 content hash, validates every page, and writes atomically.
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT}/abcd" memory ingest <path-or-url> --pages-json distilled.json --json
+"${CLAUDE_PLUGIN_ROOT}/abcd" memory ingest <path-or-https-url> --pages-json distilled.json --json
 ```
 
 Add `--keep-original` to retain the source at
