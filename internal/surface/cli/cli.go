@@ -1107,6 +1107,12 @@ func newHookCommand() *cobra.Command {
 				fmt.Fprintf(cmd.ErrOrStderr(), "abcd %v; injecting nothing\n", err)
 				return nil
 			}
+			// A domain Load dropped (no rules of its own) is skipped, not
+			// fatal — but silently missing is the shape the drop exists to
+			// prevent, so each one is named here, out of band.
+			for _, note := range rs.Notes() {
+				fmt.Fprintf(cmd.ErrOrStderr(), "abcd %s\n", note)
+			}
 			session := hookSession(in)
 			// The fixed-N backstop comes from the repo's config (default 15 when
 			// unset); event-driven reset is the primary refresh (D1).
@@ -1444,6 +1450,11 @@ renders bare and carries "source": "bundled". Read-only.`,
 			rs, err := rules.Load(rulesRoot(cwd))
 			if err != nil {
 				return err
+			}
+			// Stderr, never stdout: --json renders one document, and a
+			// diagnostic mixed into it would break every parser reading it.
+			for _, note := range rs.Notes() {
+				fmt.Fprintf(cmd.ErrOrStderr(), "abcd %s\n", note)
 			}
 			// Scoped: inspect one domain's configured content regardless of its
 			// state OR the kill switch — this diagnostic shows what a domain holds,

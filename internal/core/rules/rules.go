@@ -68,7 +68,19 @@ type RuleSet struct {
 	// bundled default is untouched. Unexported so the on-disk schema does not
 	// grow a field a file could forge.
 	origins map[string]string
+	// notes carries the load-time diagnostics a front door must surface: one
+	// line per domain Load dropped rather than failing the whole file over.
+	// Unexported and non-serialized for the same reason as origins — it is
+	// derived from this load, not declared by anyone — and read through
+	// Notes().
+	notes []string
 }
+
+// Notes returns the diagnostics this load produced, in a stable order: a
+// front door prints them out-of-band (stderr, never the injected context) so a
+// dropped domain is loud rather than silently missing. An empty result is the
+// normal case.
+func (rs RuleSet) Notes() []string { return append([]string(nil), rs.notes...) }
 
 // Source labels for ResolvedDomain.Source: where a domain's effective content
 // came from. A repo override that names a domain — replacing its rules,
@@ -204,11 +216,49 @@ func Load(repoRoot string) (RuleSet, error) {
 	if err := json.Unmarshal(data, &over); err != nil {
 		return RuleSet{}, fmt.Errorf("rules: %s is not valid JSON: %w", RepoRelPath, err)
 	}
-	merged := Merge(Defaults(), over)
+	merged := dropRulelessDomains(Merge(Defaults(), over))
 	if err := Validate(merged); err != nil {
 		return RuleSet{}, fmt.Errorf("rules: %s: %w", RepoRelPath, err)
 	}
 	return merged, nil
+}
+
+// dropRulelessDomains removes every domain whose merged rules are empty and
+// records one note per removal.
+//
+// A domain with no rules renders as a heading-only "## NAME" block —
+// suppression wearing the domain's name, which an agent reads as a domain that
+// says nothing (GHSA-22f8-qf5r-gjgq sibling). Validate refuses the shape, and
+// keeps refusing it: it is what guards the BUNDLED defaults, where a ruleless
+// domain is a build error with a build to fix it.
+//
+// A repo's rules.json is not that. `{"rules": []}` is a plausible way to have
+// tried to silence a domain, the file already exists on somebody's disk, and
+// failing the load stops EVERY domain injecting — the safety-shaped ones
+// included — over one malformed entry, on an upgrade that changed the rules
+// under a config that worked yesterday. That is not proportionate to a
+// heading-only block. Dropping the domain removes the misleading render, keeps
+// everything else working, and the note names the domain and the deliberate
+// route ("state": "dormant"), which is the thing the author actually wanted.
+func dropRulelessDomains(rs RuleSet) RuleSet {
+	var dropped []string
+	for name, d := range rs.Domains {
+		if len(d.Rules) == 0 {
+			dropped = append(dropped, name)
+		}
+	}
+	if len(dropped) == 0 {
+		return rs
+	}
+	sort.Strings(dropped) // deterministic diagnostics
+	for _, name := range dropped {
+		delete(rs.Domains, name)
+		delete(rs.origins, name)
+		rs.notes = append(rs.notes, fmt.Sprintf(
+			"rules: %s: domain %q has no rules and was SKIPPED (it would inject a heading-only block, which reads as a domain that says nothing); "+
+				"give it at least one rule, or set \"state\": \"dormant\" to silence a domain deliberately", RepoRelPath, name))
+	}
+	return rs
 }
 
 // checkNoDuplicateKeys walks the JSON token stream and refuses any object that
@@ -344,9 +394,16 @@ func mergeDomain(base, over Domain) Domain {
 // bare contentless "- " bullet in the injected block (iss-2608261550497978),
 // and a domain with no rules at all — an override of {"rules": []}, or a custom
 // domain declared without any — renders as a heading-only "## NAME" block,
-// suppression wearing the domain's name (GHSA-22f8-qf5r-gjgq sibling). A loud
-// refusal at load beats either silent shape; {"state": "dormant"} is the way to
-// silence a domain.
+// suppression wearing the domain's name (GHSA-22f8-qf5r-gjgq sibling). Neither
+// silent shape is acceptable; {"state": "dormant"} is the way to silence a
+// domain.
+//
+// The ruleless-domain rule is a REFUSAL here and a per-domain skip in Load. It
+// refuses here because Validate is what guards the bundled defaults, where a
+// heading-only domain is a build error. Load reaches Validate with the ruleless
+// domains already dropped and a note naming each (see dropRulelessDomains),
+// because failing a repo's whole file — every domain, on an upgrade — is not
+// proportionate to one malformed entry.
 func Validate(rs RuleSet) error {
 	if rs.SchemaVersion != 1 {
 		return fmt.Errorf("schema_version must be 1, got %d", rs.SchemaVersion)
@@ -733,6 +790,7 @@ func Signature(d ResolvedDomain) string {
 
 func cloneRuleSet(rs RuleSet) RuleSet {
 	out := RuleSet{SchemaVersion: rs.SchemaVersion, Disabled: rs.Disabled}
+	out.notes = append([]string(nil), rs.notes...)
 	if rs.origins != nil {
 		out.origins = make(map[string]string, len(rs.origins))
 		for name, src := range rs.origins {

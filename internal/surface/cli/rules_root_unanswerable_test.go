@@ -165,3 +165,33 @@ func TestBanlistFindsTheRepoStoreWhenGitRefuses(t *testing.T) {
 		t.Errorf("the render leaks the private pattern:\n%s", out)
 	}
 }
+
+// TestHookPromptRouterNamesASkippedDomain is the front-door half of the
+// ruleless-domain skip: the drop is per domain, so the rest of the ruleset must
+// still inject — and the skipped domain must be named out of band, because a
+// domain that silently stops existing is the same "suppression nobody sees"
+// the drop exists to prevent. The diagnostic goes to stderr; stdout is the
+// model-facing context and carries nothing about it.
+func TestHookPromptRouterNamesASkippedDomain(t *testing.T) {
+	t.Setenv("ABCD_RULES_STATE_DIR", t.TempDir())
+	repo := t.TempDir()
+	mustMkdirAll(t, filepath.Join(repo, ".abcd"))
+	body := `{"schema_version":1,"domains":{"COMMITTING":{"rules":[]},"MINE":{"recall":["widget"],"rules":["mind the widget"]}}}`
+	if err := os.WriteFile(filepath.Join(repo, ".abcd", "rules.json"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out, errlog := runHook(t, hookInputJSON(t, "s1", repo, "commit the widget"), "hook", "prompt-router")
+	if !strings.Contains(out, "mind the widget") {
+		t.Errorf("one ruleless domain must not stop the rest of the ruleset injecting; stdout:\n%s\nstderr:\n%s", out, errlog)
+	}
+	if strings.Contains(out, "## COMMITTING") {
+		t.Errorf("the ruleless domain must not inject a heading-only block:\n%s", out)
+	}
+	if !strings.Contains(errlog, "COMMITTING") || !strings.Contains(errlog, "SKIPPED") {
+		t.Errorf("the skipped domain must be named out of band; stderr = %q", errlog)
+	}
+	if strings.Contains(out, "SKIPPED") {
+		t.Errorf("the diagnostic must not reach the model-facing context:\n%s", out)
+	}
+}

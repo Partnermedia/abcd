@@ -647,3 +647,75 @@ func TestValidateRefusesDomainWithoutRules(t *testing.T) {
 		t.Fatalf("a dormant state-only override must validate: %v", err)
 	}
 }
+
+// TestLoadSkipsARulelessDomainAndKeepsTheRest is the proportionality half of
+// the ruleless-domain refusal. Validate must still refuse the shape — it is what
+// guards the bundled defaults, where a heading-only domain is a build error —
+// but a repo's rules.json is a file somebody already has, and `{"rules": []}`
+// is a plausible way to have tried to silence a domain. Failing the whole load
+// on it stops EVERY domain injecting, safety rules included, on the strength of
+// one stderr line and a config that worked yesterday. So Load drops the
+// offending domain, keeps the rest, and says which one it dropped and how to
+// silence a domain deliberately.
+func TestLoadSkipsARulelessDomainAndKeepsTheRest(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".abcd"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := `{"schema_version":1,"domains":{
+		"COMMITTING":{"rules":[]},
+		"CUSTOM":{"recall":["widget"]},
+		"MINE":{"recall":["widget"],"rules":["do the thing"]}}}`
+	if err := os.WriteFile(filepath.Join(dir, ".abcd", "rules.json"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	rs, err := Load(dir)
+	if err != nil {
+		t.Fatalf("a ruleless domain must not fail the whole load: %v", err)
+	}
+	if _, ok := rs.Domains["COMMITTING"]; ok {
+		t.Error("the emptied bundled domain must be dropped, not injected as a heading-only block")
+	}
+	if _, ok := rs.Domains["CUSTOM"]; ok {
+		t.Error("a custom domain declared without rules must be dropped")
+	}
+	if d, ok := rs.Domains["MINE"]; !ok || len(d.Rules) != 1 {
+		t.Error("a well-formed domain in the same file must survive")
+	}
+	if _, ok := rs.Domains["PII"]; !ok {
+		t.Error("the untouched bundled domains must survive: one bad domain must not silence the ruleset")
+	}
+	notes := rs.Notes()
+	if len(notes) != 2 {
+		t.Fatalf("one note per dropped domain, got %d: %v", len(notes), notes)
+	}
+	joined := strings.Join(notes, "\n")
+	for _, want := range []string{"COMMITTING", "CUSTOM", "dormant", RepoRelPath} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("the diagnostic must name the domain, the file and the dormant remedy; missing %q in:\n%s", want, joined)
+		}
+	}
+	// Deterministic order, so the diagnostic does not churn between runs.
+	if notes[0] > notes[1] {
+		t.Errorf("notes must be ordered by domain name: %v", notes)
+	}
+	// A clean file carries no notes at all.
+	clean := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(clean, ".abcd"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(clean, ".abcd", "rules.json"), []byte(`{"schema_version":1,"domains":{"PII":{"state":"dormant"}}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	quiet, err := Load(clean)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(quiet.Notes()) != 0 {
+		t.Errorf("a clean load must carry no notes, got %v", quiet.Notes())
+	}
+	if _, ok := quiet.Domains["PII"]; !ok {
+		t.Error("a dormant state-only override keeps its domain: dormant is the documented way to silence one")
+	}
+}
