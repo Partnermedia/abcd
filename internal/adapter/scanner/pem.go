@@ -125,7 +125,18 @@ func pemBodyPlaceholder(n int) string {
 // follow the header through the END line into one placeholder line. It returns
 // the rewritten lines and the number of blocks collapsed. Headers are handled
 // from the last line upward so an earlier header's indices stay valid.
-func consumePEMBodies(lines []string, findings []Finding) ([]string, int) {
+//
+// original is the text as it was BEFORE the per-line redaction; lines is the
+// sealed slice the placeholder is written into. Where a block ends is a
+// question about the source text — a seal writes '*' bytes, which are not
+// body-shaped, so a second finding on a body line would otherwise close the
+// block at that line and leave the rest of the key behind. The two slices are
+// the same length by construction (per-line redaction never adds or removes a
+// line); if they ever diverge, the sealed slice is the safe fallback.
+func consumePEMBodies(original, lines []string, findings []Finding) ([]string, int) {
+	if len(original) != len(lines) {
+		original = lines
+	}
 	var headers []int
 	seen := map[int]bool{}
 	for _, f := range findings {
@@ -145,7 +156,7 @@ func consumePEMBodies(lines []string, findings []Finding) ([]string, int) {
 	sort.Sort(sort.Reverse(sort.IntSlice(headers)))
 	blocks := 0
 	for _, h := range headers {
-		end := pemBlockEnd(lines, h)
+		end := pemBlockEnd(original, h)
 		if end <= h+1 {
 			continue
 		}

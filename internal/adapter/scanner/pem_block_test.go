@@ -131,6 +131,31 @@ func TestRedactPEMHeaderWithoutEndKeepsProse(t *testing.T) {
 	})
 }
 
+// TestRedactPEMBlockSurvivesASealOnABodyLine: the block consumer ran on the
+// lines the per-line redaction had already rewritten, and a seal writes '*'
+// bytes, which are not body-shaped. So a SECOND finding on a body line — an
+// AWS-key-shaped run inside the base64 is enough — ended the block at that
+// line and wrote the rest of the key, and the END marker, verbatim. The
+// boundaries are computed on the original lines instead.
+func TestRedactPEMBlockSurvivesASealOnABodyLine(t *testing.T) {
+	header, _, _, _, end := pemFixture()
+	awsShaped := "AKIA" + strings.Repeat("Z", 16)
+	body1 := awsShaped + strings.Repeat("Q", 40)
+	body2 := strings.Repeat("R", 64)
+	text := strings.Join([]string{"before the key", header, body1, body2, end, "after the key"}, "\n")
+	out := redactAll(t, text)
+	for _, leak := range []string{body2, end, strings.Repeat("Q", 40)} {
+		if strings.Contains(out, leak) {
+			t.Errorf("a seal on a body line ended the block early; %q survived:\n%s", leak[:8], out)
+		}
+	}
+	for _, keep := range []string{"before the key", "after the key"} {
+		if !strings.Contains(out, keep) {
+			t.Errorf("the prose %q was lost:\n%s", keep, out)
+		}
+	}
+}
+
 // TestRedactPEMOneLineBodyDoesNotSurvive: header, body and END on ONE line —
 // a resolve note, a JSON/K8s secret dump with literal \n escapes. Byte-span
 // sealing of the header alone left every body byte after it in place.
