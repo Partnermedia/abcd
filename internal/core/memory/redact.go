@@ -2,6 +2,7 @@ package memory
 
 import (
 	"fmt"
+	"reflect"
 	"strings"
 	"unicode/utf8"
 
@@ -30,7 +31,8 @@ import (
 // --keep-original copy in Ingest; and, transitively, since they are derived
 // from the redacted bodies, index.md and log.md. Page FRONTMATTER and the
 // registry leaves a write introduces go through the same detector by way of
-// redactLeaves (GHSA-x46m-mw9h-5jwj, iss-2608291941064448): a host-supplied
+// redactLeaves / redactRegistryLeaves (GHSA-x46m-mw9h-5jwj,
+// iss-2608291941064448): a host-supplied
 // citation title or recall entry, the licence the core lifts from an SPDX line
 // or a License: header, and a redirect-controlled origin are acquired text as
 // much as a body is, and the one place every verb writes through is where they
@@ -140,23 +142,61 @@ func (r *storeRedactor) redactText(text, label string) (string, int, error) {
 	return redacted, len(findings), nil
 }
 
-// redactLeaves walks target — the nested map[string]any / []any / string shape
+// redactLeaves is the PAGE-FRONTMATTER entry to the leaf walk: nothing in a
+// page's frontmatter is an identifier the store resolves, so every string leaf
+// it introduces is judged. `contradicts:` is deliberately included even though
+// it lists page ids — the entries are host-supplied and validated only for
+// non-emptiness (parseDistilledPage strips a trailing ".md" and checks nothing
+// else), they are copied verbatim into contradictions.md, and NOTHING resolves
+// them against the store, so a rewritten target is a dangling cross-reference
+// rather than a deleted page. The registry's back-links are the opposite case
+// on both counts — see redactRegistryLeaves.
+func (r *storeRedactor) redactLeaves(current, target any, label string) error {
+	return r.walkLeaves(nil, current, target, label, nil)
+}
+
+// redactRegistryLeaves is the REGISTRY entry to the same walk, with the store's
+// page back-links excluded from it. `<content-hash>.consumers.<consumer>.pages`
+// holds filenames the store RESOLVES: pruneOrphans deletes any page on disk
+// that no back-link names, so rewriting one is not a redaction — it unlinks a
+// file that keeps its real name and the next write silently deletes it. An
+// ordinary slug is enough to trigger it, because a page name is prose-shaped:
+// `topic_home_migrating-off-the-nas.md` carries `off-the-nas`, which the
+// canonical scanner matches as a device hostname on the hyphen boundary.
+// Excluding the leaf costs nothing: a back-link's charset is bounded by
+// pageNameRe through validatePageFilename, so it is an identifier, not the
+// acquired text this walk exists to judge.
+func (r *storeRedactor) redactRegistryLeaves(current, target any, label string) error {
+	return r.walkLeaves(nil, current, target, label, registryBackLinkPath)
+}
+
+// registryBackLinkPath reports whether path names the registry's page back-link
+// list, `<content-hash>.consumers.<consumer>.pages`. The consumer is matched by
+// position rather than by the literal "memory" so a later consumer's back-links
+// carry the same protection by construction.
+func registryBackLinkPath(path []string) bool {
+	return len(path) == 4 && path[1] == "consumers" && path[3] == "pages"
+}
+
+// walkLeaves walks target — the nested map[string]any / []any / string shape
 // the frontmatter dumper and the JSON registry share — IN PLACE, and sanitises
 // through redactText every string leaf the write is INTRODUCING. A leaf is
-// introduced when current holds no string at the same path, or a different
-// one; a leaf present and equal in current is the store's already, not this
-// write's to judge, and stays byte-identical — so a legacy registry carrying
-// a dirty cached citation is neither refused on re-ingest (the one verb that
-// repairs it) nor rewritten behind the operator's back; reporting it is the
-// lint's job. A nil current introduces every leaf. An introduced KEY is judged
-// too, by judgeKey — keys are NOT schema-fixed, and a key carrying a secret is
-// refused rather than rewritten; non-string scalars pass through untouched.
+// introduced when current holds no equal string, or none at all; a leaf present
+// and equal in current is the store's already, not this write's to judge, and
+// stays byte-identical — so a legacy registry carrying a dirty cached citation
+// is neither refused on re-ingest (the one verb that repairs it) nor rewritten
+// behind the operator's back; reporting it is the lint's job. A nil current
+// introduces every leaf. An introduced KEY is judged too, by judgeKey — keys
+// are NOT schema-fixed, and a key carrying a secret is refused rather than
+// rewritten; non-string scalars pass through untouched. A subtree structural
+// reports at its map path is skipped whole: it holds identifiers the store
+// resolves, and rewriting one breaks the thing it names.
 //
 // Mutating in place is the contract, not a shortcut: the map a RegistryMerge
 // returned IS what the store then writes, so a caller that kept hold of it —
 // the registry-only fast path reads its result licence and citation off the
 // merged map — sees the written bytes rather than a pre-redaction copy.
-func (r *storeRedactor) redactLeaves(current, target any, label string) error {
+func (r *storeRedactor) walkLeaves(path []string, current, target any, label string, structural func([]string) bool) error {
 	switch v := target.(type) {
 	case map[string]any:
 		cm, _ := current.(map[string]any)
@@ -174,6 +214,10 @@ func (r *storeRedactor) redactLeaves(current, target any, label string) error {
 					return err
 				}
 			}
+			at := append(append([]string(nil), path...), k)
+			if structural != nil && structural(at) {
+				continue
+			}
 			if s, ok := item.(string); ok {
 				red, err := r.judgeLeaf(cv, s, label)
 				if err != nil {
@@ -182,17 +226,14 @@ func (r *storeRedactor) redactLeaves(current, target any, label string) error {
 				v[k] = red
 				continue
 			}
-			if err := r.redactLeaves(cv, item, label); err != nil {
+			if err := r.walkLeaves(at, cv, item, label, structural); err != nil {
 				return err
 			}
 		}
 	case []any:
 		cl, _ := current.([]any)
 		for i, item := range v {
-			var cv any
-			if i < len(cl) {
-				cv = cl[i]
-			}
+			cv := storedListElement(cl, item, i)
 			if s, ok := item.(string); ok {
 				red, err := r.judgeLeaf(cv, s, label)
 				if err != nil {
@@ -201,10 +242,30 @@ func (r *storeRedactor) redactLeaves(current, target any, label string) error {
 				v[i] = red
 				continue
 			}
-			if err := r.redactLeaves(cv, item, label); err != nil {
+			if err := r.walkLeaves(path, cv, item, label, structural); err != nil {
 				return err
 			}
 		}
+	}
+	return nil
+}
+
+// storedListElement pairs one element of a list the write is about to store
+// with its counterpart in the baseline list BY VALUE, falling back to the same
+// index when the baseline holds nothing equal. Index pairing alone contradicts
+// the walk's own contract: a list that gains a front element shifts every later
+// element, so a leaf the store already held is re-judged — and a legacy store's
+// dirty recall entry is then rewritten, or the whole write refused, on a
+// re-ingest that introduced nothing. A list is an unordered set of leaves as
+// far as "did this write introduce it" is concerned; the index says nothing.
+func storedListElement(baseline []any, item any, i int) any {
+	for _, c := range baseline {
+		if reflect.DeepEqual(c, item) {
+			return c
+		}
+	}
+	if i < len(baseline) {
+		return baseline[i]
 	}
 	return nil
 }

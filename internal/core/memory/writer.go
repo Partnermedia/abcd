@@ -281,7 +281,7 @@ func writePagesLocked(repoRoot string, rendered []renderedWrite, merge RegistryM
 		if redactor == nil {
 			return WriteReport{}, newWriterContractError("registry merge without a store redactor")
 		}
-		if err := redactor.redactLeaves(baseline, registry, filepath.Base(SourcesIndexPath(repoRoot))); err != nil {
+		if err := redactor.redactRegistryLeaves(baseline, registry, filepath.Base(SourcesIndexPath(repoRoot))); err != nil {
 			return WriteReport{}, err
 		}
 		if err := writeStringAtomic(SourcesIndexPath(repoRoot), SerializeRegistry(registry)); err != nil {
