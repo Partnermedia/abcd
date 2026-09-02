@@ -638,16 +638,37 @@ func shellWords(t *testing.T, cmd string) []string {
 	t.Helper()
 	var words []string
 	var cur strings.Builder
-	inWord, quoted := false, false
+	inWord := false
+	var quote byte // 0, '\'' or '"' — the quoting currently in force
 	for i := 0; i < len(cmd); i++ {
 		c := cmd[i]
 		switch {
-		case quoted && c == '\\' && i+1 < len(cmd):
+		case quote == '\'':
+			// Inside single quotes a POSIX shell interprets NOTHING, the
+			// backslash included; the only way out is the closing quote.
+			if c == '\'' {
+				quote = 0
+				continue
+			}
+			cur.WriteByte(c)
+		case quote == '"' && c == '\\' && i+1 < len(cmd):
 			i++
 			cur.WriteByte(cmd[i])
-		case c == '"':
-			quoted, inWord = !quoted, true
-		case !quoted && (c == ' ' || c == '\t'):
+		case quote == '"':
+			if c == '"' {
+				quote = 0
+				continue
+			}
+			cur.WriteByte(c)
+		case c == '\'' || c == '"':
+			quote, inWord = c, true
+		case c == '\\' && i+1 < len(cmd):
+			// An unquoted backslash escapes the next byte — which is how the
+			// '\'' idiom smuggles a single quote between two quoted runs.
+			i++
+			cur.WriteByte(cmd[i])
+			inWord = true
+		case c == ' ' || c == '\t':
 			if inWord {
 				words = append(words, cur.String())
 				cur.Reset()
@@ -658,7 +679,7 @@ func shellWords(t *testing.T, cmd string) []string {
 			inWord = true
 		}
 	}
-	if quoted {
+	if quote != 0 {
 		t.Fatalf("unbalanced quote in remedy: %s", cmd)
 	}
 	if inWord {
@@ -667,17 +688,70 @@ func shellWords(t *testing.T, cmd string) []string {
 	return words
 }
 
+// hostileGrounds carries every character a shell still interprets: the four the
+// old double-quoted form escaped by hand, plus the history expansion double
+// quotes do NOT stop. Prose grounds test the remedy's shape and nothing about
+// its quoting — with prose, an identity quoter passes.
+const hostileGrounds = "pursued: the printed remedy must survive a \" quote, a ' quote, a \\ backslash, $HOME, `date` and !word intact"
+
+// TestShellQuotedIsInert pins the quoting the orphan remedy prints its grounds
+// with. The remedy is meant to be pasted into a shell as it stands, so the
+// grounds must arrive as ONE literal argument whatever they carry — and must
+// arrive that way in an INTERACTIVE bash or zsh too, where `!word` expands
+// inside double quotes and the pasted remedy either fails or runs on text
+// nobody wrote. Single quotes are the one form a POSIX shell interprets nothing
+// inside, with an embedded quote spelled '\”.
+func TestShellQuotedIsInert(t *testing.T) {
+	for _, s := range []string{
+		"plain text",
+		`a " double quote`,
+		`an ' apostrophe`,
+		`two '' apostrophes`,
+		`a \ backslash`,
+		`$HOME and ${x} and $(id)`,
+		"a `date` substitution",
+		"history !word expansion",
+		"spaces  and\ttabs",
+		hostileGrounds,
+		"",
+	} {
+		quoted := shellQuoted(s)
+		if !strings.HasPrefix(quoted, "'") || !strings.HasSuffix(quoted, "'") {
+			t.Fatalf("shellQuoted(%q) = %s, want a single-quoted argument: inside double quotes an interactive shell still expands !word", s, quoted)
+		}
+		got := shellWords(t, quoted)
+		if len(got) != 1 || got[0] != s {
+			t.Fatalf("shellQuoted(%q) = %s, which a shell splits as %q, want exactly one literal argument", s, quoted, got)
+		}
+	}
+}
+
 // TestPromoteOrphanRemedyRunsAsPrinted runs the repair verb exactly as the
 // orphan error prints it. The issue route requires --grounds, so a remedy that
 // named only `--intent` refused on its own text for every orphan, and the one
 // test of the repair passed grounds the message never mentioned.
+//
+// It runs twice: once over prose, and once over grounds carrying every
+// character a shell interprets. The prose case says nothing about the quoting —
+// it passes against an identity quoter — so the hostile case is the one that
+// holds shellQuoted to delivering the grounds as a single literal argument.
 func TestPromoteOrphanRemedyRunsAsPrinted(t *testing.T) {
+	for _, tc := range []struct{ name, grounds string }{
+		{"prose grounds", testGrounds},
+		{"grounds carrying every character a shell interprets", hostileGrounds},
+	} {
+		t.Run(tc.name, func(t *testing.T) { promoteOrphanRemedyRunsAsPrinted(t, tc.grounds) })
+	}
+}
+
+func promoteOrphanRemedyRunsAsPrinted(t *testing.T, grounds string) {
+	t.Helper()
 	repo, ir, issID := promoteFixture(t, "the stamp will fail after the mint")
 
 	stampWriteHook = func(string, []byte) error {
 		return errors.New("simulated unwritable ledger")
 	}
-	_, err := Promote(PromoteRequest{Grounds: testGrounds, RepoRoot: repo, IssuesRoot: ir, ID: issID})
+	_, err := Promote(PromoteRequest{Grounds: grounds, RepoRoot: repo, IssuesRoot: ir, ID: issID})
 	stampWriteHook = nil
 	if err == nil {
 		t.Fatal("stamp into an unwritable ledger must fail")
@@ -690,7 +764,11 @@ func TestPromoteOrphanRemedyRunsAsPrinted(t *testing.T) {
 		t.Fatalf("orphan report carries no remedy: %v", err)
 	}
 	rest := msg[start+len(lead):]
-	end := strings.Index(rest, "`")
+	// The LAST backtick, not the first: the message delimits the remedy with
+	// backticks, and grounds may legitimately contain one — which the first-hit
+	// search truncated the remedy at, mid-argument (captured separately as the
+	// message's own ambiguity; the remedy runs correctly when copied whole).
+	end := strings.LastIndex(rest, "`")
 	if end < 0 {
 		t.Fatalf("remedy is not closed: %v", err)
 	}
@@ -711,6 +789,12 @@ func TestPromoteOrphanRemedyRunsAsPrinted(t *testing.T) {
 			t.Fatalf("remedy carries an argument this test cannot run: %q in %q", words[i], words)
 		}
 	}
+	// The grounds must survive the printing as ONE argument, byte for byte:
+	// a remedy that splits them, or that lets the shell expand a $ or a
+	// backtick inside them, stamps a conjecture nobody wrote.
+	if req.Grounds != grounds {
+		t.Fatalf("the printed remedy carries grounds %q, want %q — the quoting did not survive a shell split", req.Grounds, grounds)
+	}
 	res, err := Promote(req)
 	if err != nil {
 		t.Fatalf("the remedy as printed refused: %v\nremedy: %s", err, rest[:end])
@@ -718,7 +802,7 @@ func TestPromoteOrphanRemedyRunsAsPrinted(t *testing.T) {
 	if !res.Linked || res.IntentID != req.LinkIntent {
 		t.Fatalf("the remedy must link the orphan draft, got %+v", res)
 	}
-	if got := theGround(t, ir, issID); got != testGrounds {
+	if got := theGround(t, ir, issID); got != grounds {
 		t.Fatalf("the repair must stamp the promotion's own grounds, got %q", got)
 	}
 	if n := draftCount(t, repo); n != 1 {

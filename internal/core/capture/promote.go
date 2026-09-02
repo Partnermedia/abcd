@@ -84,8 +84,9 @@ var beforeStampHook func()
 // is attempted — the ledger lock alone guards the stamp, exactly as transition
 // does — so a failure after the mint leaves an orphan draft; the returned
 // error names the draft and the stamp-only remedy
-// (`capture promote <iss-N> --intent <itd-N> --grounds "..."`), carrying the
-// promotion's own grounds so the remedy runs as printed.
+// (`capture promote <iss-N> --intent <itd-N> --grounds '...'`), carrying the
+// promotion's own grounds, single-quoted, so the remedy runs as printed in any
+// shell — an interactive one included.
 //
 // Every refusal that can be established from the bytes in hand is therefore
 // raised BEFORE the mint: the grounds text, whether the record is one the
@@ -283,22 +284,19 @@ func Promote(req PromoteRequest) (PromoteResult, error) {
 	}, nil
 }
 
-// shellQuoted wraps s in double quotes for the shell a remedy is pasted into,
-// escaping the four characters a POSIX shell still interprets inside them. It
-// exists so the orphan remedy runs as printed: a repair command a person has to
-// re-quote by hand is a remedy that fails on its own text.
+// shellQuoted wraps s in SINGLE quotes for the shell a remedy is pasted into,
+// spelling an embedded quote the only way single quoting can ('\”: close,
+// escaped quote, reopen). It exists so the orphan remedy runs as printed: a
+// repair command a person has to re-quote by hand is a remedy that fails on its
+// own text.
+//
+// Single, not double: inside double quotes a POSIX shell still interprets four
+// characters, which can be escaped one by one — but an INTERACTIVE bash or zsh
+// also expands `!word` history there, and that one cannot be escaped by the
+// writer of the string. Inside single quotes a shell interprets nothing at all,
+// so the grounds arrive as one literal argument whatever they carry.
 func shellQuoted(s string) string {
-	var b strings.Builder
-	b.WriteByte('"')
-	for _, r := range s {
-		switch r {
-		case '\\', '"', '$', '`':
-			b.WriteByte('\\')
-		}
-		b.WriteRune(r)
-	}
-	b.WriteByte('"')
-	return b.String()
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // issueTitleLine derives the minted draft's title — the issue's one-line
