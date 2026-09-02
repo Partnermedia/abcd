@@ -74,7 +74,8 @@ Run from the repo root.
 
 ```bash
 make preflight      # the pre-push gate: lint-reviews + lint-issues +
-                    # lint-decisions + record-lint + docs-lint + site-render,
+                    # lint-decisions + record-lint + docs-lint + site-render +
+                    # smoke + evals-cold-reading,
                     # then build + vet +
                     # test + race (internal)
 make build          # cross-compiles bin/abcd-<goos>-<arch> (there is no plain bin/abcd)
@@ -204,8 +205,11 @@ irreversible; guessing downward costs nothing.**
 ## Definition of done
 
 - `make preflight` is clean — the six gates (`lint-reviews`, `lint-issues`,
-  `lint-decisions`, `record-lint`, `docs-lint`, `site-render`) plus `go build ./...`,
-  `go vet ./...`, `go test ./...`, and `go test -race ./internal/...`.
+  `lint-decisions`, `record-lint`, `docs-lint`, `site-render`), both tagged eval
+  lanes (`smoke`, `evals-cold-reading`), plus `go build ./...`,
+  `go vet ./...`, `go test ./...`, and `go test -race ./internal/...`. The eval
+  lanes are named separately because their files carry a build tag, so
+  `go test ./...` compiles none of them; each costs about five seconds.
 - `gofmt -l .` reports nothing. The format gate is CI's own step, outside
   `make preflight`, so run it before pushing.
 - Every new behaviour has a test watched fail before the change and pass after.

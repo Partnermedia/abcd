@@ -181,6 +181,12 @@ make evals-cold-reading                # the cold-reading evals alone
 go test -tags coldreading ./evals/...  # the same thing
 ```
 
+`make preflight` runs both targets as prerequisites, so a push carries them. It
+names both even though `smoke` compiles a superset of `evals-cold-reading`'s
+files: the tag sets differ, so a cold-reading file that reaches for a smoke-only
+helper compiles under one and not the other. Each lane costs about five seconds
+on a warm cache.
+
 CI runs the smoke harness as the dedicated `smoke` job, and the release workflow
 smokes the binary built from the tagged commit before publishing. The
 cold-reading evals get their own `cold-reading-evals` job, which carries no

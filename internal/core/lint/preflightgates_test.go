@@ -165,3 +165,68 @@ func TestIssueResolutionGateScopesToStatusDirs(t *testing.T) {
 			got, want)
 	}
 }
+
+// Every tagged eval lane the Makefile declares is a preflight prerequisite
+// (iss-2608311632382737).
+//
+// The eval files sit behind a build tag, so `go test ./...` — preflight's own
+// test step — never compiles them. A lane that preflight does not name
+// therefore runs in no gate a push can be stopped by: a defect in it passes
+// every local gate and surfaces in CI, where the job that executes it is not a
+// required status check. That is not hypothetical. A path-elision defect in the
+// amnesia eval's guard was unsatisfiable wherever the process temp directory is
+// the Linux one; it landed green locally and was found by an adversarial review
+// rather than by any gate.
+//
+// The roster is DERIVED, not listed here: a target is an eval lane when its
+// recipe runs `go test` with `-tags`. So a third lane joins this check by
+// existing, and cannot be added to the Makefile while staying invisible to the
+// push gate. Both current lanes cost about five seconds locally, which is what
+// makes "run them all" the right shape rather than a sampled subset — and the
+// two are not redundant despite `smoke` compiling a superset of
+// `evals-cold-reading`'s files: they are separate tag sets, so a cold-reading
+// file that reaches for a smoke-only helper compiles under one and not the
+// other, exactly the split CI's two jobs cover.
+func TestPreflightRunsEveryTaggedEvalLane(t *testing.T) {
+	root := filepath.Join("..", "..", "..")
+
+	lanes := taggedEvalLanes(t, root)
+	if len(lanes) == 0 {
+		t.Fatal("parsed no `go test -tags ...` lane from the Makefile; the parser or the recipes changed shape")
+	}
+	declared := preflightPrereqs(t, root)
+
+	for _, lane := range lanes {
+		if !slices.Contains(declared, lane) {
+			t.Errorf("the Makefile declares the tagged eval lane %q, but preflight does not run it.\n\n"+
+				"preflight declares: %s\n"+
+				"`go test ./...` does not compile a tagged file, so a lane preflight omits is "+
+				"guarded by nothing a push can fail on.",
+				lane, strings.Join(declared, " "))
+		}
+	}
+}
+
+// taggedEvalLanes returns the Makefile targets whose recipe runs `go test` with
+// a `-tags` selector — hand-parsed, for the reason preflightPrereqs is.
+func taggedEvalLanes(t *testing.T, root string) []string {
+	t.Helper()
+	target := regexp.MustCompile(`^([a-z][a-z-]*):`)
+	var lanes []string
+	var current string
+	for _, line := range strings.Split(readRepoFile(t, root, "Makefile"), "\n") {
+		if m := target.FindStringSubmatch(line); m != nil {
+			current = m[1]
+			continue
+		}
+		if !strings.HasPrefix(line, "\t") || current == "" {
+			continue
+		}
+		body := strings.TrimSpace(strings.TrimPrefix(line, "\t"))
+		if strings.HasPrefix(body, "go test ") && strings.Contains(body, "-tags ") &&
+			!slices.Contains(lanes, current) {
+			lanes = append(lanes, current)
+		}
+	}
+	return lanes
+}
