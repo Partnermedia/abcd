@@ -9,8 +9,12 @@
 // never converge on one id. Captures (iss), intents (itd), specs (spc), the
 // reading families and the scope-condition markers all mint this way; a family
 // adopts the seam by holding a Minter and naming its family tag, never by
-// carrying an allocator of its own (adr-45 ruling 3). ADRs keep their
-// hand-numbered zero-padded filename ordinal, ruled at its own turn.
+// carrying an allocator of its own (adr-45 ruling 3). Decisions (adr) mint here
+// too, per the 2026-09-01 ruling adr-45 ruling 3 deferred: an ADR filed from
+// then on is `adr-<stamp>` in a `<stamp>-<slug>.md` file, while the
+// hand-numbered ordinals `0001`–`0058` keep their ids and their filenames. Both
+// vintages are the same `[0-9]+` grammar, and CanonADRID / ADRFileID (resolve.go)
+// are the one derivation every reader of either takes.
 //
 // The armed record-lint uniqueness rules (issue_id_unique, intent_lifecycle,
 // spec_id_unique) stay as the scheme's fail-safe — the cheap assertion that the
