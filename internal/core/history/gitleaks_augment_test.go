@@ -2,6 +2,8 @@ package history
 
 import (
 	"bytes"
+	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -215,5 +217,104 @@ func TestCaptureFailsClosedOnUnlocatableGitleaksReport(t *testing.T) {
 		if r.SessionID == "sess-unlocated" {
 			t.Error("a record was written despite the refused augmentation")
 		}
+	}
+}
+
+// cannedGitleaks stands in for the gitleaks binary: it returns a fixed JSON
+// report, so the REAL adapter conversion runs (toFindings, the code under test)
+// with no process spawned.
+type cannedGitleaks struct{ report string }
+
+func (c cannedGitleaks) Run(_ context.Context, _, _ string) ([]byte, error) {
+	return []byte(c.report), nil
+}
+
+// armGitleaks points the store's seam at the real adapter driven by a canned
+// report, the way an opted-in repo with a gitleaks binary reaches it. The
+// binary is a mode-0755 file outside the repo root, which is all admitBinary
+// asks of it; cannedGitleaks never executes it.
+func armGitleaks(t *testing.T, report string) {
+	t.Helper()
+	bin := filepath.Join(t.TempDir(), "gitleaks")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	a := &gitleaks.Adapter{
+		LookPath: func(string) (string, error) { return bin, nil },
+		Runner:   cannedGitleaks{report: report},
+	}
+	restore := scanGitleaks
+	t.Cleanup(func() { scanGitleaks = restore })
+	scanGitleaks = func(repoRoot, text, logical string) ([]scanner.Finding, error) {
+		return a.Augment(context.Background(), repoRoot, gitleaks.Config{Enabled: true}, text, logical)
+	}
+}
+
+// TestCaptureSealsEveryRecurrenceOfAnAugmentedFragment pins one scope for
+// detection and verification (iss-2609020231145566). A multi-line reported
+// value is located as a whole and split into one finding per line it crosses,
+// while the store verifies each FRAGMENT by presence anywhere in the redacted
+// text — so a line of the value that also occurs benignly elsewhere (a quoted
+// end-of-key marker, a repeated header) was never sealed at its second site
+// and tripped the residual guard on every capture: the transcript could never
+// be stored, and the drain kept its unredacted staged copy forever. Detection
+// now locates each fragment across the whole text, so every occurrence of every
+// fragment is sealed and the two scopes agree.
+//
+// The markers are deliberately NOT PEM-shaped, as elsewhere in this file: a
+// native pattern that matched them would seal the recurrence for the wrong
+// reason and mask the regression.
+func TestCaptureSealsEveryRecurrenceOfAnAugmentedFragment(t *testing.T) {
+	const begin = "===BEGIN SYNTHETIC KEYBLOCK==="
+	const end = "===END SYNTHETIC KEYBLOCK==="
+	body1 := testsecret.Synthetic(102, 40)
+	body2 := testsecret.Synthetic(103, 40)
+	block := strings.Join([]string{begin, body1, body2, end}, "\n")
+
+	reported, err := json.Marshal([]map[string]string{{"RuleID": "private-key", "Secret": block, "Match": block}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		name    string
+		recurs  string // a line the transcript repeats outside the reported value
+		session string
+	}{
+		{"clean", "", "sess-frag-clean"},
+		{"header repeated", begin, "sess-frag-header"},
+		{"footer repeated", end, "sess-frag-footer"},
+		{"body repeated", body1, "sess-frag-body"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			repoRoot, _ := setupStore(t)
+			armGitleaks(t, string(reported))
+
+			lines := []string{"user: here is the key", block, "assistant: stored"}
+			if tc.recurs != "" {
+				lines = append(lines, "user: and this line again", tc.recurs, "assistant: noted")
+			}
+			transcript := strings.Join(lines, "\n") + "\n"
+
+			res, err := Capture(repoRoot, testRootSHA, tc.session, []byte(transcript), "native")
+			if err != nil {
+				t.Fatalf("Capture refused a transcript it can seal: %v", err)
+			}
+			if !res.Wrote {
+				t.Fatal("expected the record to be written")
+			}
+			onDisk, err := os.ReadFile(res.Record.Path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, secret := range []string{body1, body2} {
+				if bytes.Contains(onDisk, []byte(secret)) {
+					t.Errorf("a line of the reported value survived redaction:\n%s", onDisk)
+				}
+			}
+			if tc.recurs != "" && bytes.Contains(onDisk, []byte(tc.recurs)) {
+				t.Errorf("the recurrence of %q outside the value was never sealed:\n%s", tc.recurs, onDisk)
+			}
+		})
 	}
 }

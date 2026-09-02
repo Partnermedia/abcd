@@ -289,6 +289,12 @@ func Read(rootSHA, sessionOrFile string) (Record, []byte, error) {
 // is the other symmetric shape; it doubles a 30 s-timeout subprocess and is not
 // deterministic across rule sets, so the bytes the adapter reported are what
 // is checked.
+//
+// Presence-anywhere is only safe because the adapter detects at the same scope:
+// it locates every occurrence of every line of a reported value across the
+// whole text, so a line that recurs outside the value is sealed rather than
+// left as a survivor this check would then refuse the write on for good
+// (iss-2609020231145566).
 func unsealedAugmented(redacted string, extra []scanner.Finding) []scanner.Finding {
 	var out []scanner.Finding
 	for _, f := range extra {

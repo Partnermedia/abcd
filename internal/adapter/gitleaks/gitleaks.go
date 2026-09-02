@@ -380,6 +380,20 @@ func parseReport(raw []byte) ([]report, error) {
 // custom multi-line rule is covered the same way. A report that locates
 // nothing is ErrFindingNotLocated: this adapter never drops a finding it was
 // handed (GHSA-j7v5-q7x6-v3rp).
+//
+// Each of those lines is located INDEPENDENTLY across the whole text, not only
+// where the whole value sits, because the store verifies an augmented finding
+// by its bytes anywhere in the redacted text. Detection and verification then
+// share one scope: a line of the value that also occurs benignly elsewhere — a
+// quoted end-of-key marker, a repeated header — becomes its own finding and is
+// sealed there too, instead of surviving as a span nobody reported and refusing
+// the capture forever while the unredacted staged copy waits for a drain that
+// can never succeed (iss-2609020231145566). The cost is over-redaction: a
+// boilerplate line of a reported value is masked wherever it appears and is
+// counted in the record's audit bucket. The value is located only when EVERY
+// non-blank line of it is found, so the fail-closed contract is unchanged — a
+// text holding just part of the reported value falls through to Match and then
+// to ErrFindingNotLocated.
 func toFindings(text, logical string, reports []report) ([]scanner.Finding, error) {
 	lines := strings.Split(text, "\n")
 	// Byte offset at which each line starts, to map a whole-text hit to a
@@ -402,6 +416,49 @@ func toFindings(text, logical string, reports []report) ([]scanner.Finding, erro
 	}
 	seen := map[span]bool{}
 	var out []scanner.Finding
+	// locate returns one candidate finding per occurrence of every non-blank
+	// LINE of needle, searched independently across the whole text. Per LINE
+	// because the redactor is line-scoped; independently because the store
+	// verifies a finding by its bytes anywhere in the redacted text, so a line
+	// of the value that also occurs benignly elsewhere has to be sealed there
+	// too or verification fails on a span detection never reported
+	// (iss-2609020231145566). It reports located only when EVERY non-blank line
+	// was found: a value the text holds only part of is not this needle, and
+	// falls through to the next one rather than half-locating.
+	locate := func(needle, kind string) ([]scanner.Finding, bool) {
+		var cand []scanner.Finding
+		any := false
+		for _, frag := range strings.Split(needle, "\n") {
+			if strings.TrimSpace(frag) == "" {
+				continue // nothing to seal
+			}
+			any = true
+			hits := 0
+			for from := 0; from < len(text); {
+				idx := strings.Index(text[from:], frag)
+				if idx < 0 {
+					break
+				}
+				hit := from + idx
+				from = hit + len(frag)
+				i := lineAt(hit)
+				cand = append(cand, scanner.Finding{
+					File:     logical,
+					Line:     i + 1,
+					Column:   hit - starts[i] + 1, // 1-based byte column, matching sealLine
+					Kind:     kind,
+					Severity: scanner.SeverityHardFail,
+					Matched:  frag,
+					Snippet:  lines[i],
+				})
+				hits++
+			}
+			if hits == 0 {
+				return nil, false
+			}
+		}
+		return cand, any
+	}
 	for _, r := range reports {
 		kind := "gitleaks:" + r.RuleID
 		if r.RuleID == "" {
@@ -412,40 +469,20 @@ func toFindings(text, logical string, reports []report) ([]scanner.Finding, erro
 			if needle == "" {
 				continue
 			}
-			for from := 0; from < len(text); {
-				idx := strings.Index(text[from:], needle)
-				if idx < 0 {
-					break
-				}
-				hit := from + idx
-				from = hit + len(needle)
-				// One finding per line the value crosses; a fragment that is
-				// only whitespace has nothing to seal.
-				pos := hit
-				for _, frag := range strings.Split(needle, "\n") {
-					if strings.TrimSpace(frag) != "" {
-						i := lineAt(pos)
-						col := pos - starts[i]
-						if !seen[span{i, col, frag}] {
-							seen[span{i, col, frag}] = true
-							out = append(out, scanner.Finding{
-								File:     logical,
-								Line:     i + 1,
-								Column:   col + 1, // 1-based byte column, matching sealLine
-								Kind:     kind,
-								Severity: scanner.SeverityHardFail,
-								Matched:  frag,
-								Snippet:  lines[i],
-							})
-						}
-						located = true
-					}
-					pos += len(frag) + 1
-				}
+			cand, ok := locate(needle, kind)
+			if !ok {
+				continue
 			}
-			if located {
-				break
+			for _, f := range cand {
+				key := span{f.Line, f.Column, f.Matched}
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
+				out = append(out, f)
 			}
+			located = true
+			break
 		}
 		if !located {
 			return nil, fmt.Errorf("%w: rule %s reported a value that occurs nowhere in the transcript; fix the rule or set enabled:false",
