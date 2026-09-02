@@ -3291,12 +3291,12 @@ func newMemoryCommand(asJSON *bool) *cobra.Command {
 		},
 	}
 
-	// ingest <path-or-url> [--keep-original] [--pages-json <file|->]
+	// ingest <path-or-https-url> [--keep-original] [--pages-json <file|->]
 	var pagesJSON string
 	var keepOriginalFlag bool
 	ingestCmd := &cobra.Command{
-		Use:   "ingest <path-or-url>",
-		Short: "Distil an external source into cited memory pages",
+		Use:   "ingest <path-or-https-url>",
+		Short: "Distil an external source into cited memory pages (https URLs only)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
