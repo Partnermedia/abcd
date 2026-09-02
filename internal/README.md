@@ -101,6 +101,17 @@ plugin surface, and a future MCP server share one engine.
   row's own source downward, so a record family added later is excluded by
   construction. Record enumeration is `core/lint`'s `LoadRecordGraph`, never a second
   parser. The package assembles input and never runs a reading.
+- **`core/decide/`** — the decision record's WRITE side: `abcd decide "<title>"`
+  mints an `adr-<stamp>` through `core/recordid` and lays the ADR skeleton under
+  `.abcd/development/decisions/adrs/`. It is the last record family to reach that
+  seam (the 2026-09-01 ruling, the turn adr-45 ruling 3 deferred), and it adopts it
+  the way every family before it did — by holding a `recordid.Minter` and naming its
+  family tag, never by carrying an allocator of its own. The presence check that
+  redraws a taken draw calls `recordid.ADRFileID`, the SAME derivation the read-side
+  resolver reads a filename with, so the mint cannot re-issue an id a citation
+  already resolves. It owns the id, the date, the filename and the four sections,
+  and states nothing: the decision is a human's to write, so the record lands
+  `proposed` and the skeleton carries questions rather than answers.
 - **`core/glossary/`** — the brief glossary's index, derived. The term files under
   `.abcd/development/brief/glossary/` are the source of truth for what terms exist
   and in which bounded context; this package renders the directory tree and the

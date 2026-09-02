@@ -128,10 +128,29 @@ asymmetry, tested rather than trusted.
   serialisation of the assembled input, per brief invariant 4; selection of the
   position and the target state as flags, with no free text, per itd-183's ruled
   interface; and a non-zero exit on failure.
-- **Positions exercised:** widening, entailment, and detection are asserted in
-  full. At the comparative position the eval asserts only the read-block over
-  the instrument's own stored prior outputs; the in-cycle candidate set arrives
-  by whatever channel spc-61 defines, and the eval makes no claim about it.
+- **Positions exercised: the full set of assertions at every position that
+  assembles.** Widening, entailment and detection each carry all three
+  assertions over every sentinel class, with only the draft body's
+  position-dependent exemption above carved out. Carving a whole position out
+  of the bundle assertions is what this spec's first review round refused: it
+  left six of the ten sentinel classes unasserted at that position and left the
+  oracle's own drafts-at-comparative exclusion a row that could never fire, so
+  an assembler admitting the local ledger tier at that one position read as
+  green. The comparative position is outside the set for a different reason —
+  it does not assemble at all. Its object is the widening reading's
+  pre-admission output, which is not repository material and which no channel
+  supplies, so the verb refuses
+  ([itd-199](../../intents/shipped/itd-199-a-reading-is-about-something-narrower-than-everything-its.md)).
+  Holding that position is `TestComparativeRefusesToAssemble` in
+  [`evals/coldreading_test.go`](../../../../evals/coldreading_test.go), which
+  asserts the refusal itself and asserts that neither bundle nor manifest is
+  written: a bundle that is never written cannot leak, which is strictly
+  stronger than an absence assertion over emitted bytes, and the test fails
+  loudly if the position starts assembling again without this eval being told.
+  The two position sets are named once, as `assemblingPositions` and
+  `fullyAsserted` in
+  [`evals/coldreading_fixture_test.go`](../../../../evals/coldreading_fixture_test.go),
+  so a table that enumerates positions cannot silently drop one.
 - **The corpus is owned here** and shared with spc-65, so the two evals cannot
   drift apart in the repository state they exercise.
 
@@ -172,7 +191,7 @@ built. The numbering below is the positional authority ac-1..ac-6.
 | ac-1 — the baseline passes only if no planted warm content and no excluded field reaches the output | Assertions 1 to 3 run over the baseline fixture at every asserted position | `TestReadBlockBaselineIsClean` |
 | ac-2 — a relocated plant fails with a non-zero exit and a message naming the class token and the position | The content oracle names no path, so a relocated plant is caught wherever it lands; the `holed/` variant relocates two plants into included material and the failure message carries the class token and position | `TestReadBlockCatchesAHoledFirewall` |
 | ac-3 — a warm field on an already-included record type fails | The `origin` and production-mode plants sit on included record types, and the Audit Notes plant sits inside an included file; each is a real leak path if the key filter or the projection is absent | `TestReadBlockCatchesWarmFieldsOnIncludedTypes` |
-| ac-4 — no prior-run manifest or reading record reaches the output | The exhaust plants, asserted at every position including comparative | `TestPriorRunExhaustNeverReaches` |
+| ac-4 — no prior-run manifest or reading record reaches the output | The exhaust plants, asserted at every position that assembles; comparative, the position most likely to be handed the instrument's own output, refuses instead and is held by `TestComparativeRefusesToAssemble` | `TestPriorRunExhaustNeverReaches` |
 | ac-5 — no file under `evals/` imports the assembler's package or its include list | `go/parser` over every Go file in `evals/`, so the independence claim is checked rather than asserted in a comment | `TestOracleImportsNothingFromTheAssembler` |
 | ac-6 — every declared sentinel class is planted its declared number of times | The anti-vacuity guard: an absence assertion cannot see a corpus that lost a plant, so the corpus is asserted separately from the absence | `TestEverySentinelIsPlanted` |
 
