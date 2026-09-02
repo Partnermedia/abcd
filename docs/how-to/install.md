@@ -155,6 +155,11 @@ line, and copy the binary anywhere on your `PATH`. Every release is built and
 published by CI from the exact tagged commit, with the checksums generated
 over the same bytes that are uploaded.
 
+To move a `~/.local/bin` install to a later release, run `abcd update`; `abcd
+version --check` reports whether one is available and names the command your
+install shape takes, since a plugin-root binary takes a plugin update and a
+package-manager install takes the manager's own upgrade.
+
 ## Build
 
 ```bash
