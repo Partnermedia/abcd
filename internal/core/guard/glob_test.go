@@ -104,6 +104,17 @@ func TestGlobSpelledHazardsMatchTheirExpansion(t *testing.T) {
 		// pattern text is what git sees, and git sees no --force in it.
 		"noglob git push --forc? origin main",
 		"git status --porcelain",
+		// An OPERAND glob is not a flag. A flag constraint is not positional —
+		// every argument is offered to it — so a bare `*` compared as a pattern
+		// satisfied `--recursive`, `--force`, `--no-verify` and `--hard` all at
+		// once, and five of the commonest lines anyone types became blocks.
+		"cd build && rm *",
+		"cd dist && rm -- *",
+		"git commit -m 'fix typo' *",
+		"git push origin *",
+		"git reset HEAD *",
+		// `--` ends the options: what follows is an operand however it is spelled.
+		"git push -- --force origin main",
 	}
 	for _, line := range allowed {
 		t.Run(line, func(t *testing.T) {
