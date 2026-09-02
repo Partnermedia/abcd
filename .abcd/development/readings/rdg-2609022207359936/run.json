@@ -1,0 +1,121 @@
+{
+  "_type": "abcd.reading.run/1",
+  "schema_version": 9,
+  "run_id": "rdg-2609022207359936",
+  "position": "entailment",
+  "regime": "explicative",
+  "target_commit": "84fdad362fb19846f255066a32acefe42e1ba0ae",
+  "manifest_sha256": "28a9613e875be70f2bdce804e63730a2fa16ac4d0dfc857da67fa702f93723af",
+  "instrument": {
+    "model": "claude-opus-5",
+    "definition_sha256": "fe018b4aae11f3037f9e3c4dd3752b180ceaa7e9b07fafa882a107b20c09eccb",
+    "assembler_version": "1.7.0+b7cc427449a3395570d542ee5423b55adf84521cb49e8bda0f695e96962b2f24"
+  },
+  "records": [
+    {
+      "id": "rdi-2609022215134321",
+      "path": ".abcd/work/issues/readings/rdg-2609022207359936/rdi-2609022215134321.md"
+    },
+    {
+      "id": "rdi-2609022215131607",
+      "path": ".abcd/work/issues/readings/rdg-2609022207359936/rdi-2609022215131607.md"
+    },
+    {
+      "id": "rdi-2609022215133361",
+      "path": ".abcd/work/issues/readings/rdg-2609022207359936/rdi-2609022215133361.md"
+    },
+    {
+      "id": "rdi-2609022215134041",
+      "path": ".abcd/work/issues/readings/rdg-2609022207359936/rdi-2609022215134041.md"
+    },
+    {
+      "id": "rdi-2609022215135493",
+      "path": ".abcd/work/issues/readings/rdg-2609022207359936/rdi-2609022215135493.md"
+    },
+    {
+      "id": "rdi-2609022215137033",
+      "path": ".abcd/work/issues/readings/rdg-2609022207359936/rdi-2609022215137033.md"
+    },
+    {
+      "id": "rdi-2609022215139877",
+      "path": ".abcd/work/issues/readings/rdg-2609022207359936/rdi-2609022215139877.md"
+    },
+    {
+      "id": "rdi-2609022215139432",
+      "path": ".abcd/work/issues/readings/rdg-2609022207359936/rdi-2609022215139432.md"
+    },
+    {
+      "id": "rdi-2609022215131553",
+      "path": ".abcd/work/issues/readings/rdg-2609022207359936/rdi-2609022215131553.md"
+    },
+    {
+      "id": "rdi-2609022215138483",
+      "path": ".abcd/work/issues/readings/rdg-2609022207359936/rdi-2609022215138483.md"
+    },
+    {
+      "id": "rdi-2609022215131182",
+      "path": ".abcd/work/issues/readings/rdg-2609022207359936/rdi-2609022215131182.md"
+    },
+    {
+      "id": "rdi-2609022215134151",
+      "path": ".abcd/work/issues/readings/rdg-2609022207359936/rdi-2609022215134151.md"
+    },
+    {
+      "id": "rdi-2609022215136324",
+      "path": ".abcd/work/issues/readings/rdg-2609022207359936/rdi-2609022215136324.md"
+    },
+    {
+      "id": "rdi-2609022215136157",
+      "path": ".abcd/work/issues/readings/rdg-2609022207359936/rdi-2609022215136157.md"
+    },
+    {
+      "id": "rdi-2609022215132401",
+      "path": ".abcd/work/issues/readings/rdg-2609022207359936/rdi-2609022215132401.md"
+    },
+    {
+      "id": "rdi-2609022215133145",
+      "path": ".abcd/work/issues/readings/rdg-2609022207359936/rdi-2609022215133145.md"
+    },
+    {
+      "id": "rdi-2609022215134208",
+      "path": ".abcd/work/issues/readings/rdg-2609022207359936/rdi-2609022215134208.md"
+    },
+    {
+      "id": "rdi-2609022215137951",
+      "path": ".abcd/work/issues/readings/rdg-2609022207359936/rdi-2609022215137951.md"
+    },
+    {
+      "id": "rdi-2609022215133863",
+      "path": ".abcd/work/issues/readings/rdg-2609022207359936/rdi-2609022215133863.md"
+    },
+    {
+      "id": "rdi-2609022215135408",
+      "path": ".abcd/work/issues/readings/rdg-2609022207359936/rdi-2609022215135408.md"
+    },
+    {
+      "id": "rdi-2609022215137684",
+      "path": ".abcd/work/issues/readings/rdg-2609022207359936/rdi-2609022215137684.md"
+    },
+    {
+      "id": "rdi-2609022215139225",
+      "path": ".abcd/work/issues/readings/rdg-2609022207359936/rdi-2609022215139225.md"
+    },
+    {
+      "id": "rdi-2609022215139749",
+      "path": ".abcd/work/issues/readings/rdg-2609022207359936/rdi-2609022215139749.md"
+    },
+    {
+      "id": "rdi-2609022215135034",
+      "path": ".abcd/work/issues/readings/rdg-2609022207359936/rdi-2609022215135034.md"
+    },
+    {
+      "id": "rdi-2609022215134555",
+      "path": ".abcd/work/issues/readings/rdg-2609022207359936/rdi-2609022215134555.md"
+    }
+  ],
+  "refused_items": [],
+  "refused_count": 0,
+  "bounds": [
+    "the glossary bound is exceeded: the readings companion's section 5.6 states the bound in advance as three to six terms, and this run was handed 38 glossary-term item(s); companion section 5.2 names brief/glossary/ whole, so the departure is stated rather than passed off"
+  ]
+}
