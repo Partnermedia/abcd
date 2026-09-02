@@ -145,6 +145,23 @@ func identityValues(effective string, others []string) []string {
 	return out
 }
 
+// minEmailRunes is the shortest value the email matcher will arm on. The
+// shortest address anyone actually holds is a@b.c; anything below that is a
+// placeholder or a fragment, and an alternation is only as safe as its
+// shortest branch.
+const minEmailRunes = 5
+
+// plausibleEmail reports whether a configured value is shaped like an address:
+// an '@' with a non-empty local part before it and a non-empty domain after,
+// and long enough that matching it literally cannot sweep ordinary prose.
+func plausibleEmail(v string) bool {
+	if utf8.RuneCountInString(v) < minEmailRunes {
+		return false
+	}
+	at := strings.IndexByte(v, '@')
+	return at > 0 && at < len(v)-1
+}
+
 func containsFold(list []string, v string) bool {
 	for _, x := range list {
 		if strings.EqualFold(x, v) {
@@ -245,7 +262,20 @@ func newIdentityMatchers(id Identity) identityMatchers {
 		// the (?i) already applied to the email/name/github matchers below.
 		m.homeSelf = regexp.MustCompile(`(?i)` + regexp.QuoteMeta(id.HomePath))
 	}
-	if emails := identityValues(id.GitUserEmail, id.OtherGitUserEmails); len(emails) > 0 {
+	var emails []string
+	for _, e := range identityValues(id.GitUserEmail, id.OtherGitUserEmails) {
+		// A value has to look like an address before it arms the matcher. The
+		// name matcher has always dropped a value under three runes; the email
+		// matcher dropped nothing, so a one-letter placeholder from any scope
+		// — a stub in a CI config, a fragment left by splitting a value with an
+		// embedded newline — compiled into the alternation and every "e" in the
+		// text then scanned as the caller's hard_fail real_email, redacting the
+		// prose it appeared in.
+		if plausibleEmail(e) {
+			emails = append(emails, e)
+		}
+	}
+	if len(emails) > 0 {
 		// Case-insensitive: email addresses are compared case-insensitively in
 		// practice (the domain always, and mailbox providers overwhelmingly), so a
 		// trivial case variant of the caller's own address must not slip the

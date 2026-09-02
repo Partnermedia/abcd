@@ -141,3 +141,39 @@ func TestOtherIdentitiesArmMatchersAndHandleStaysPublic(t *testing.T) {
 		}
 	}
 }
+
+// TestShortIdentityValuesDoNotArmTheEmailMatcher: the name matcher drops a
+// value under three runes, the email matcher dropped nothing. A one-letter or
+// truncated value from ANY scope — a placeholder in a CI config, a fragment
+// left by splitting a value with an embedded newline — compiled straight into
+// the alternation, and every "e" in the text then scanned as the caller's
+// hard-fail real_email. A value must look like an address to arm the matcher.
+func TestShortIdentityValuesDoNotArmTheEmailMatcher(t *testing.T) {
+	id := Identity{
+		GitUserName:        "Real Name",
+		GitUserEmail:       "real@example.com",
+		OtherGitUserEmails: []string{"e", "a@b", "@example.com", "user@", "  "},
+	}
+	text := "There are seven e characters here, and a@b, and user@ on their own."
+	findings := ScanText(text, id, DefaultPatterns(), DefaultIdentitySeverities(), "t")
+	for _, f := range findings {
+		if f.Kind == kindRealEmail {
+			t.Errorf("a value too short to be an address armed real_email: matched %q", f.Matched)
+		}
+	}
+	out, _ := Redact(text, findings)
+	if out != text {
+		t.Errorf("prose was redacted on the strength of a one-letter identity value:\ngot  %q\nwant %q", out, text)
+	}
+
+	// The real address still fires: the guard drops the implausible values, not
+	// the matcher.
+	real := "write to real@example.com about it"
+	rf := ScanText(real, id, DefaultPatterns(), DefaultIdentitySeverities(), "t")
+	if !hasKind(rf, kindRealEmail) {
+		t.Errorf("the caller's own address no longer arms real_email: %v", kindsOf(rf))
+	}
+	if ro, _ := Redact(real, rf); strings.Contains(ro, "real@example.com") {
+		t.Errorf("the caller's own address survives redaction: %q", ro)
+	}
+}
