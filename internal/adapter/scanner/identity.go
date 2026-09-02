@@ -215,8 +215,9 @@ func foldedAlternation(values []string) *regexp.Regexp {
 }
 
 // isPublicHandle reports whether a git user.name is the caller's public GitHub
-// handle rather than a real name: equal to the remote's owner, or to the login
-// one of the caller's noreply addresses carries. The remote-owner comparison
+// handle rather than a real name: equal to the remote's owner, or — for the
+// effective name alone — to the login the effective noreply address carries.
+// The remote-owner comparison
 // alone breaks on an org-owned remote (iss-283): the owner stops being the
 // caller the moment the repo transfers, and the caller's public handle would
 // start scanning as a real name. The noreply address carries the caller's own
@@ -227,12 +228,20 @@ func isPublicHandle(name string, id Identity) bool {
 	if id.GitRemoteUsername != "" && strings.EqualFold(name, id.GitRemoteUsername) {
 		return true
 	}
-	for _, email := range identityValues(id.GitUserEmail, id.OtherGitUserEmails) {
-		if lm := noreplyLoginRe.FindStringSubmatch(email); lm != nil && strings.EqualFold(name, lm[1]) {
-			return true
-		}
+	// The noreply provision is confined to the EFFECTIVE pair — this
+	// repository's user.name against this repository's user.email — because
+	// that pairing is the only one git asserts. Read across the scope union it
+	// becomes a way to DISARM redaction: a global noreply address makes a
+	// repo-local user.name equal to its login a "public handle", and on an
+	// org-owned remote the github_username matcher (the remote's owner alone)
+	// does not cover that name either, so nothing redacts a name the
+	// single-identity probe hard-failed on. Widening the scopes must never
+	// SUBTRACT a value from real_name.
+	if !strings.EqualFold(name, id.GitUserName) {
+		return false
 	}
-	return false
+	lm := noreplyLoginRe.FindStringSubmatch(id.GitUserEmail)
+	return lm != nil && strings.EqualFold(name, lm[1])
 }
 
 var (

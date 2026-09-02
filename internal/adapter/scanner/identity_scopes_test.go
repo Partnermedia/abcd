@@ -177,3 +177,34 @@ func TestShortIdentityValuesDoNotArmTheEmailMatcher(t *testing.T) {
 		t.Errorf("the caller's own address survives redaction: %q", ro)
 	}
 }
+
+// TestNoreplyLoginInAnotherScopeDoesNotDisarmRealName: the public-handle rule
+// is what keeps a GitHub login out of the hard-fail real_name class (iss-283),
+// and it reads a name against an ADDRESS. Once the probe unions every scope,
+// letting any scope's noreply login answer for any scope's name disarms
+// real_name on a value the single-identity probe redacted: a global
+// "<id>+<login>@users.noreply.github.com" made the repo-local user.name equal
+// to that login a "public handle", and with an org-owned remote the
+// github_username matcher — built from the remote's owner alone — does not
+// cover it either, so nothing redacted the name at all.
+//
+// The noreply provision therefore stays where git asserts the pairing: the
+// effective name against the effective address. Every other name is a public
+// handle only when it equals the remote's owner.
+func TestNoreplyLoginInAnotherScopeDoesNotDisarmRealName(t *testing.T) {
+	id := Identity{
+		GitUserName:        "zq8handle",          // repo-local, the effective name
+		GitUserEmail:       "work@corp.example",  // repo-local address: not a noreply
+		OtherGitUserNames:  []string{"Octo Pat"}, // the global name it displaced
+		OtherGitUserEmails: []string{"77722411+zq8handle@users.noreply.github.com"},
+		GitRemoteUsername:  "some-org", // an org-owned remote: not the caller
+	}
+	text := "Reviewed-by: zq8handle"
+	findings := ScanText(text, id, DefaultPatterns(), DefaultIdentitySeverities(), "t")
+	if !hasKind(findings, kindRealName) {
+		t.Errorf("a noreply login in ANOTHER scope disarmed real_name for the effective name: %v", kindsOf(findings))
+	}
+	if out, _ := Redact(text, findings); strings.Contains(out, "zq8handle") {
+		t.Errorf("the effective user.name is redacted by nothing: %q", out)
+	}
+}
