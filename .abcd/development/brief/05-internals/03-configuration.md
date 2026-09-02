@@ -373,7 +373,8 @@ abcd/
                                         # PreToolUse (matcher Bash) → guard hook; PreCompact → prompt-router-reset; SessionEnd → session-end.
                                         # The four non-SessionStart event shims also self-provision: when $CLAUDE_PLUGIN_ROOT/abcd
                                         # is missing they attempt hooks/bootstrap.sh (throttled by a .bootstrap.attempt marker
-                                        # within a 10-minute window), then fall back to a PATH-resolved abcd before failing loudly
+                                        # within a 10-minute window), then fall back to a PATH-resolved abcd — absolute, outside the
+                                        # working directory, not world-writable, else ignored with a reason — before failing loudly
 ```
 
 The core is organised one package per capability under `internal/core/`, and the
@@ -402,7 +403,7 @@ external plug-in — so this brief does not restate it here.
 │   │   └── superseded/                 # retired intents (moved by hand)
 │   ├── principles/                     # distilled cross-cutting design principles (the lifeboat packs these)
 │   ├── decisions/                      # ratified architecture decisions (MADR)
-│   │   ├── adrs/                        # NNNN-<slug>.md (e.g. 0001-three-layer-mental-model.md)
+│   │   ├── adrs/                        # <N>-<slug>.md — the ordinals 0001-0058, then minted stamps (`abcd decide`)
 │   │   └── notes/
 │   ├── roadmap/
 │   │   ├── README.md                   # status dashboard

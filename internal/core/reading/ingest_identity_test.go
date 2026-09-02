@@ -93,6 +93,18 @@ func TestInstrumentIdentityRequiresAllThreeParts(t *testing.T) {
 				t.Fatalf("an instrument missing %s was accepted", part)
 			}
 		})
+		// A part that renders as nothing is missing too. The hash and the
+		// version are compared exactly further on, so only the model could
+		// pass on an invisible rune — but "all three present" is one check,
+		// and it judges blankness the way every other check in this verb does
+		// (iss-2608311518250688).
+		t.Run("invisible "+part, func(t *testing.T) {
+			doc := f.nextRun(f.payload(1))
+			doc["instrument"].(map[string]any)[part] = "\u2800\u200b"
+			if _, err := f.ingest(doc); err == nil {
+				t.Fatalf("an instrument whose %s renders as nothing was accepted", part)
+			}
+		})
 	}
 
 	t.Run("definition hash is recomputed", func(t *testing.T) {

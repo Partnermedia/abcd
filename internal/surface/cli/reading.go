@@ -50,7 +50,7 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			status, err := reading.Describe(captureRoot(mustCwd()))
 			if err != nil {
-				return &exitError{Code: 2, Msg: "reading: " + scrubPaths(err)}
+				return readingRefusal("reading", err)
 			}
 			return render(cmd.OutOrStdout(), *asJSON, status, func(w io.Writer) {
 				renderReadingStatus(w, status)
@@ -105,7 +105,7 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 			}
 			pos, err := reading.ParsePosition(position)
 			if err != nil {
-				return &exitError{Code: 2, Msg: "reading assemble: " + scrubPaths(err)}
+				return readingRefusal("reading assemble", err)
 			}
 			// The core takes a relative output directory against the REPOSITORY
 			// root, which is right for the default it computes itself and wrong
@@ -128,7 +128,7 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 				DryRun:      dryRun,
 			})
 			if err != nil {
-				return &exitError{Code: 2, Msg: "reading assemble: " + scrubPaths(err)}
+				return readingRefusal("reading assemble", err)
 			}
 			// The core was handed the resolved path so it could write there; the
 			// operator is shown the string they typed. A resolved absolute path on
@@ -164,23 +164,24 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 		Long: "Validate the JSON a cold reading returned and write its reading records.\n\n" +
 			"The verb checks what the reading was LICENSED to produce, not only what it saw: the\n" +
 			"supply regime is read from the position's definition and compared with the output's own\n" +
-			"claim, and the reserved names a regime declares are refused with the licence stated (the\n" +
-			"generative position declares none). A registry of named signatures watches for prose that\n" +
-			"ranks, settles or proposes without the field; those signatures are observed rather than\n" +
-			"enforcing, at every position, so a hit raises a review flag on the run record and the item\n" +
-			"lands.\n\n" +
+			"claim, and an item carrying a reserved name as one of its own fields is refused with the\n" +
+			"licence stated. The reserved-name table is read at the run's own regime, one row per\n" +
+			"regime, and the generative regime has no row: no name is reserved at the generative\n" +
+			"position.\n\n" +
 			"Item identifiers are minted here. The payload carries none, so a supplied one is refused\n" +
 			"as an unknown field. A refusal becomes DURABLE once the run's identity is proven — the run\n" +
 			"id resolving to a parked manifest whose content hash matches — and from there a list-level\n" +
-			"refusal writes refusal.json under the run's directory; before that point nothing is written\n" +
-			"anywhere. Nothing durable is written or DELETED until the whole payload validates: a refusal\n" +
-			"after the run is proven leaves its refusal record and nothing else. The reading records land\n" +
-			"as one batch and the run metadata is written last as the commit marker: a run without one\n" +
-			"never happened.\n\n" +
+			"refusal writes refusal.json under the run's directory; before that point nothing durable is\n" +
+			"written anywhere. No OTHER run's durable state is touched until the whole payload validates:\n" +
+			"a refusal after the run is proven writes its refusal record and nothing else, and the one\n" +
+			"delete it makes is on its OWN run id — the records of an earlier attempt at it that never\n" +
+			"committed. The reading records land as one batch and the run metadata is written last as the\n" +
+			"commit marker: a run without one never happened.\n\n" +
 			"An ingest interrupted before that marker leaves an orphaned stage, and every invocation names\n" +
-			"it. Only the next one whose payload validates sweeps it: it ROLLS THAT RUN'S READING RECORDS\n" +
-			"OUT OF THE COMMITTED LEDGER because the run never happened, and clears the stage. A refused\n" +
-			"run reports the orphans it left in place, and the ids a sweep removed are reported as\n" +
+			"it. Only the next one whose payload validates sweeps it: where the run reached no commit\n" +
+			"marker the sweep ROLLS THAT RUN'S READING RECORDS OUT OF THE COMMITTED LEDGER, because the\n" +
+			"run never happened; where the marker is there the run stands and only the stage goes. A\n" +
+			"refused run reports the orphans it left in place, and the ids a sweep removed are reported as\n" +
 			"rolled_back_records on every exit, including a failing one.",
 		Example: "  abcd reading ingest --reading-json ./reading-output.json --json",
 		Args: func(_ *cobra.Command, args []string) error {
@@ -228,7 +229,7 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 						renderIngestResult(w, res)
 					})
 				}
-				return &exitError{Code: 2, Msg: "reading ingest: " + trimCorePrefix(scrubPaths(err))}
+				return readingRefusal("reading ingest", err)
 			}
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				renderIngestResult(w, res)
@@ -398,16 +399,29 @@ func thousands(n int) string {
 	return neg + b.String()
 }
 
+// readingRefusal composes one reading sub-verb's refusal: the verb's own name,
+// then the core's message with the package tag the core already carries dropped.
+//
+// The prefix has ONE owner, and it is the core: `internal/core/reading` tags
+// every error it returns with `reading: `, and those strings are what the JSON
+// envelope, the ledger's refusal records and the core's own tests read. So the
+// front door subtracts rather than adds. Printing both reads as a stutter —
+// `abcd: reading: reading: agents/...` — and the refusal message is load-bearing
+// here: six of itd-185's thirteen criteria require the offending field, the
+// item's ordinal or the signature id to be NAMED, so a message a reader skims
+// past is a criterion half-met rather than a cosmetic complaint.
+//
+// Every sub-verb goes through this, including the ones whose core paths do not
+// tag today (`ParsePosition` returns an untagged message): the rule is a property
+// of the surface, not of the particular strings the core happens to return, and a
+// per-verb exemption is how the stutter survived its first fix
+// (iss-2608311145286014, half-closed by itd-185).
+func readingRefusal(verb string, err error) *exitError {
+	return &exitError{Code: 2, Msg: verb + ": " + trimCorePrefix(scrubPaths(err))}
+}
+
 // trimCorePrefix drops the core package's own tag from a message this front door
 // is about to prefix with the verb's name.
-//
-// Printing both reads as a stutter — `abcd: reading ingest: reading: ...` — and
-// the refusal message is load-bearing for this verb: six of itd-185's thirteen
-// criteria require the offending field, the item's ordinal or the signature id
-// to be NAMED, so a message a reader skims past is a criterion half-met rather
-// than a cosmetic complaint. The `assemble` path above carries the same stutter
-// and is deliberately left alone: it is a change to a shipped verb's output
-// rather than to what this delivery adds, and it is captured separately.
 func trimCorePrefix(msg string) string {
 	return strings.TrimPrefix(msg, "reading: ")
 }
@@ -452,13 +466,9 @@ func renderIngestResult(w io.Writer, res reading.IngestResult) {
 		fmt.Fprintf(w, "  refused items: %d\n", res.RefusedCount)
 	}
 	for _, r := range res.RefusedItems {
-		// The elision entry names no item, so it is not rendered as one: there
-		// is no item 0, and printing one would send a reader looking for it.
-		if r.Ordinal == 0 {
-			fmt.Fprintf(w, "                 (%s) %s\n", r.Rule, r.Detail)
-			continue
-		}
-		fmt.Fprintf(w, "                 item %d (%s): %s\n", r.Ordinal, r.Rule, r.Detail)
+		// One rule for the list, shared with the refusal record's reason: the
+		// elision entry names no item, so neither surface renders it as one.
+		fmt.Fprintf(w, "                 %s\n", r.Render())
 	}
 	for _, f := range res.ReviewFlags {
 		fmt.Fprintf(w, "  review flag:   item %d matches %s\n", f.Ordinal, f.SignatureID)

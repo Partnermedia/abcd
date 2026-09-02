@@ -94,6 +94,22 @@ func Install(cwd string, opts InstallOptions, p Prompter) (InstallResult, error)
 		!overridesWouldChange(abs, opts.ValueOverrides) &&
 		!attributionWouldChange(abs, opts) &&
 		!modeForced {
+		// One state reaches here that is NOT a no-op: a config.json that could not
+		// be parsed. It raises exactly one gap, deliberately non-resolvable — the
+		// file is the user's data — so it counts zero actionable gaps, and
+		// overridesWouldChange reports "no change" because it cannot read the file
+		// to compare against. Reporting that as already_up_to_date is the loudest
+		// possible silence: abcd has stopped touching the repo's config and an
+		// explicit --visibility went nowhere. Say both, and say them here, because
+		// no apply step — and so no applyCtx — will run to say them later.
+		if gapIDSet(det.Gaps)[malformedConfigGapID] {
+			_, cfgErr := loadPersistedInstallConfig(abs)
+			return InstallResult{
+				Status:          "partial",
+				Notes:           malformedConfigNotes(cfgErr, opts.ValueOverrides),
+				OptionalSkipped: optionalSkipped(opts, det.Gaps),
+			}, nil
+		}
 		return InstallResult{
 			Status:          "already_up_to_date",
 			OptionalSkipped: optionalSkipped(opts, det.Gaps),
@@ -157,6 +173,12 @@ func Install(cwd string, opts InstallOptions, p Prompter) (InstallResult, error)
 
 	status := "clean"
 	if len(remaining) > 0 {
+		status = "partial"
+	}
+	if ac.configMalformed {
+		// The config could not be parsed, so nothing that depends on it ran.
+		// config.malformed is a diagnostic (non-resolvable) gap and so never
+		// counts in Remaining, but a run that refused its own config is not clean.
 		status = "partial"
 	}
 	return InstallResult{
@@ -284,6 +306,7 @@ type applyCtx struct {
 	visibilityForced bool     // an explicit --visibility override overwrote a valid value
 	docsTargetForced bool     // an explicit --docs-target override overwrote a valid value
 	markerRetract    []string // marker files a narrowed docs-target override de-selected
+	configMalformed  bool     // config.json could not be parsed; the refusal note was given once
 }
 
 // note is the receipt seam; it lives in receipt.go with the path scrub it
@@ -294,6 +317,56 @@ type applyCtx struct {
 // travels with the install result. Callers pass text already rendered for a
 // human — user-scope paths in tilde form.
 func (a *applyCtx) refuse(reason string) { a.notes = append(a.notes, reason) }
+
+// refuseMalformedConfig records, once per run, that .abcd/config.json could not
+// be parsed and that no step will touch it. Three steps read the file
+// (stepConfigValues, stepMarker, stepVersionStamp) and each must fail safe on
+// the same error — the advisory GHSA-mchq-gm34-3j34 is precisely one of them
+// rebuilding the file another had refused — but the operator needs the reason
+// once, not three times.
+func (a *applyCtx) refuseMalformedConfig(err error) {
+	if a.configMalformed {
+		return
+	}
+	a.configMalformed = true
+	a.notes = append(a.notes, malformedConfigNotes(err, a.overrides)...)
+}
+
+// malformedConfigNotes renders everything a run that could not parse
+// .abcd/config.json owes the operator: the refusal and its cause, and —
+// separately — which explicitly-typed value overrides were dropped with it.
+//
+// It is a free function rather than a method because the SECOND caller has no
+// applyCtx: the idempotency early return in Install fires before the first apply
+// step is built, and config.malformed is a required but non-resolvable gap, so a
+// repo whose config abcd has stopped touching counts zero actionable gaps and
+// reported already_up_to_date with nothing to say at all.
+func malformedConfigNotes(err error, overrides map[string]string) []string {
+	notes := []string{"refused to touch .abcd/config.json: it could not be parsed (" + errText(err) +
+		") — repair the file (a merge-conflict marker is the usual cause) and re-run `abcd ahoy install`; " +
+		"no config value, marker block or setup stamp was written."}
+	if dropped := droppedOverrides(overrides); dropped != "" {
+		notes = append(notes, "the value override(s) this run was given ("+dropped+
+			") were NOT applied: every config value is written into .abcd/config.json, which this run refused to touch.")
+	}
+	return notes
+}
+
+// droppedOverrides renders the explicit value overrides a refused config.json
+// swallowed, as a sorted "key=value" list. A flag the operator typed and abcd
+// silently ignored is the failure mode this closes: `--visibility public` over
+// an unparseable config leaves the repo private and said so nowhere.
+func droppedOverrides(overrides map[string]string) string {
+	pairs := make([]string, 0, len(overrides))
+	for k, v := range overrides {
+		if v == "" {
+			continue
+		}
+		pairs = append(pairs, k+"="+v)
+	}
+	sort.Strings(pairs)
+	return strings.Join(pairs, ", ")
+}
 
 // stepIdentityPin adopts the iss-62 identity gate for an un-pinned repo: it
 // writes .abcd/config/identity.json from the current git author identity (the
@@ -360,8 +433,9 @@ func (a *applyCtx) stepConfigValues() *InstallConfig {
 	// malformed JSON: collecting values and writing them back would rebuild the
 	// file from scratch, DESTROYING whatever the user had. Refuse to touch a file
 	// we cannot parse and report a partial install so the operator repairs it.
-	ic, ok := loadPersistedInstallConfig(a.cwd)
-	if !ok {
+	ic, err := loadPersistedInstallConfig(a.cwd)
+	if err != nil {
+		a.refuseMalformedConfig(err)
 		return nil
 	}
 
@@ -464,12 +538,17 @@ func (a *applyCtx) resolveValue(key string, choices []string, def string) string
 }
 
 // loadPersistedInstallConfig returns the already-valid persisted config values.
-// A missing or invalid slot is left zero; a malformed config.json yields
-// ok=false so callers refuse to touch a file they cannot parse.
-func loadPersistedInstallConfig(cwd string) (*InstallConfig, bool) {
+// A missing or invalid slot is left zero; a malformed config.json yields the
+// parse error so callers refuse to touch a file they cannot parse.
+//
+// The error is RETURNED, not swallowed into a bool: the refusal note quotes it,
+// and a caller that had to re-open the file to recover it would be reading a
+// file that may have changed underneath — a second read that happens to succeed
+// renders the note as "it could not be parsed ()", naming no cause at all.
+func loadPersistedInstallConfig(cwd string) (*InstallConfig, error) {
 	cfgMap, err := readConfig(cwd)
 	if err != nil {
-		return nil, false
+		return nil, err
 	}
 	ic := &InstallConfig{}
 	if v, ok := stringVal(subMap(cfgMap, "repo"), "visibility"); ok && inSet(v, visibilityChoices) {
@@ -485,7 +564,7 @@ func loadPersistedInstallConfig(cwd string) (*InstallConfig, bool) {
 		vv := v
 		ic.ScanDeep = &vv
 	}
-	return ic, true
+	return ic, nil
 }
 
 // applyOverride force-sets *dst to an explicit, valid override for key when it
@@ -545,8 +624,8 @@ func overridesWouldChange(cwd string, overrides map[string]string) bool {
 	if len(overrides) == 0 {
 		return false
 	}
-	ic, ok := loadPersistedInstallConfig(cwd)
-	if !ok {
+	ic, err := loadPersistedInstallConfig(cwd)
+	if err != nil {
 		return false
 	}
 	differs := func(key string, choices []string, cur string) bool {
@@ -630,6 +709,17 @@ func (a *applyCtx) stepHistory() {
 		}
 	}
 	if a.approved[UserState] {
+		// The legacy heal (GHSA-qc3w-8pv5-crc3): a credential that entered the
+		// store before scrubRemoteUserinfo existed is at rest in it, and the write
+		// above is guarded on the file's ABSENCE, so it never revisits one. The
+		// index needs no equivalent line — loadHistoryIndex scrubs every entry as
+		// it reads, so registerRepo's rewrite below writes the whole file back
+		// clean, including entries this repo has nothing to do with.
+		if scrubMetaCredential(metaPath) {
+			a.note(metaPath)
+			a.changes = append(a.changes,
+				"history meta.json: dropped a credential from the recorded remote URL — revoke the token, it has been on disk")
+		}
 		a.registerRepo(sha)
 	}
 }
@@ -761,8 +851,14 @@ func (a *applyCtx) stepMarker(cfg *InstallConfig) {
 	if cfg != nil && cfg.DocsTarget != "" {
 		target = cfg.DocsTarget
 	} else {
-		// fall back to persisted config
-		cm, _ := readConfig(a.cwd)
+		// fall back to persisted config — and when that cannot be read, plant
+		// nothing: the default would write a block into BOTH files against a
+		// docs.target the user chose but this run cannot see.
+		cm, err := readConfig(a.cwd)
+		if err != nil {
+			a.refuseMalformedConfig(err)
+			return
+		}
 		if v, ok := stringVal(subMap(cm, "docs"), "target"); ok {
 			target = v
 		}
@@ -848,19 +944,34 @@ func (a *applyCtx) stepSymlink() {
 // A legacy owned symlink or a dev shim at the target is replaced (the heal); an
 // owned copy already matching is left alone. Without a usable cache it
 // degrades, loudly, to the spc-21 pinned symlink — there is nothing on disk
-// whose provenance a copy could record.
+// whose provenance a copy could record. The cache is reached through the
+// hook's CLAUDE_PLUGIN_DATA or, from the terminal the bootstrap's notice sends
+// the reader to, through the plugin root's .data-dir stamp
+// (iss-2609012111168716); the re-verification below is the same either way.
 func (a *applyCtx) installOwnedEntry(target string, kind binTargetKind) {
-	if !ownedCopySourceReady() {
+	look := pluginDataDir(a.det.pluginRoot)
+	if reason := dataDirHazard(look.dir, a.cwd); reason != "" {
+		// Said before the degradation below, so the operator learns both that
+		// the cache was not used and why this one could never have been the
+		// harness's directory. The story names which source proposed it — the
+		// environment or the plugin root's stamp — because the refusal is the
+		// same either way but the thing to repair is not.
+		a.refuse("ignored the plugin data directory (" + look.story + "): " + reason +
+			". The harness's persistent data directory never has that shape, so nothing in it was trusted as a verified release artefact.")
+	}
+	if !cacheSourceReady(look.dir, a.cwd) {
 		if kind != binTargetOwnedSymlink {
 			// Notes is the loud channel (see refuse): the degradation must be
 			// SAID, because a symlink into the plugin root dies at the next
-			// plugin update and a silent fallback would hide why.
-			a.refuse("no verified release artefact is available in the persistent plugin data directory, so the PATH entry was written as a symlink to the plugin-root binary — it will stop working when a plugin update replaces that directory. Re-run `abcd ahoy install` from a session whose hooks have provisioned the cache to upgrade it to an owned copy.")
+			// plugin update and a silent fallback would hide why — and it names
+			// every source tried, so the reader knows which one to restore.
+			a.refuse("no verified release artefact is available in the persistent plugin data directory (" + look.explainMissingCache() +
+				"), so the PATH entry was written as a symlink to the plugin-root binary — it will stop working when a plugin update replaces that directory. Start a session so the hooks provision the cache and record its location in the plugin root, then re-run `abcd ahoy install` to upgrade it to an owned copy.")
 		}
 		a.installPinnedSymlink(target, kind)
 		return
 	}
-	dataDir := pluginDataDir()
+	dataDir := look.dir
 	artefact := cacheAssetPath(dataDir)
 	want := cacheRecordedSHA(dataDir)
 	data, err := fsutil.ReadGuarded(artefact, maxBinaryArtefactBytes)
@@ -1080,7 +1191,13 @@ func (a *applyCtx) stepVersionStamp() {
 	if !a.has("install_meta.missing") && !a.has("version.upgrade") {
 		return
 	}
-	cfgMap, _ := readConfig(a.cwd)
+	cfgMap, err := readConfig(a.cwd)
+	if err != nil {
+		// The same posture as stepConfigValues: a file that cannot be parsed is
+		// never rebuilt from an empty map (GHSA-mchq-gm34-3j34).
+		a.refuseMalformedConfig(err)
+		return
+	}
 	if cfgMap == nil {
 		cfgMap = map[string]any{}
 	}
@@ -1201,6 +1318,11 @@ func Doctor(cwd string) (DoctorReport, error) {
 }
 
 // auditGaps reports read-only reconciliation issues (a stale registered path).
+// Both paths it quotes render through displayPath, like every other
+// path-bearing gap: doctor's JSON is pasted into issues, and a registered path
+// under the home directory would otherwise carry the username
+// (GHSA-m8pg-chhv-hxvq). A foreign machine's home in the registered path is
+// the user's own cross-machine registry and is left as recorded.
 func auditGaps(cwd string, det DetectionResult) []Gap {
 	var gaps []Gap
 	if det.RootSHA == "" {
@@ -1219,7 +1341,7 @@ func auditGaps(cwd string, det DetectionResult) []Gap {
 		gaps = append(gaps, Gap{
 			ID: "history.path_stale", Category: UserState, Scope: "repo",
 			Title:   "registered path is stale",
-			Detail:  "index.json records " + entry.Path + " but the repo is at " + abs + ".",
+			Detail:  "index.json records " + displayPath(entry.Path) + " but the repo is at " + displayPath(abs) + ".",
 			FixHint: "ahoy install refreshes the registered path.", Required: false, Resolvable: true,
 		})
 	}
@@ -1264,6 +1386,17 @@ func Status(cwd string) (string, error) {
 // OptionalPinGapID is the one optional gap --yes does not cover. Named here so
 // the front doors can point at it without re-deriving the string.
 const OptionalPinGapID = "git_identity.unpinned"
+
+// malformedConfigGapID is the one gap that means "abcd will not touch this
+// repo's config until a human repairs it". It is required and non-resolvable, so
+// it never appears in an actionable count, and both the detector that raises it
+// and the install path that must not short-circuit past it name it from here.
+const malformedConfigGapID = "config.malformed"
+
+// credentialAtRestGapID is the gap that says a git credential is sitting in the
+// user-level history store. Named here because the detector that raises it and
+// the history step that heals it must agree on the string.
+const credentialAtRestGapID = "history.credential_at_rest"
 
 // optionalSkipped lists the optional gaps a --yes run left un-applied. --yes
 // approves every resolvable category but never adopts the identity pin (see

@@ -62,17 +62,8 @@ func userPathEntryPath() string {
 // is absent, unreadable, or not a full lowercase hex digest — a promotion can
 // only re-verify against a hash that actually parses.
 func cacheRecordedSHA(dataDir string) string {
-	data, err := fsutil.ReadGuarded(cacheMetaPath(dataDir), maxPathEntryBytes)
-	if err != nil {
-		return ""
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		if k, v, ok := strings.Cut(strings.TrimSpace(line), "="); ok && k == "binary_sha256" {
-			if hexDigestOK(v) {
-				return v
-			}
-			return ""
-		}
+	if v := metaField(cacheMetaPath(dataDir), "binary_sha256"); hexDigestOK(v) {
+		return v
 	}
 	return ""
 }
@@ -186,10 +177,22 @@ func isOwnedCopyFile(target string) bool {
 
 // ownedCopySourceReady reports whether a verified cache artefact exists to copy
 // from — the precondition for installing (or healing to) an owned copy. When it
-// does not hold, install degrades loudly to the spc-21 pinned symlink.
-func ownedCopySourceReady() bool {
-	dataDir := pluginDataDir()
-	if dataDir == "" {
+// does not hold, install degrades loudly to the spc-21 pinned symlink. The data
+// dir is resolved for pluginRoot (a hook's environment, or the root's stamp
+// from a terminal); cwd is the repository the verb runs against, which is what
+// dataDirHazard needs to judge the resolved directory's shape.
+func ownedCopySourceReady(cwd, pluginRoot string) bool {
+	return cacheSourceReady(pluginDataDir(pluginRoot).dir, cwd)
+}
+
+// cacheSourceReady reports whether dataDir holds an artefact for this platform
+// together with a parseable recorded hash to re-verify it against. An empty
+// dataDir is no source at all, and neither is one of a shape the harness never
+// produces (see dataDirHazard) — the check applies wherever the path came
+// from, the plugin root's stamp included, because neither source examines the
+// value it hands back.
+func cacheSourceReady(dataDir, cwd string) bool {
+	if dataDir == "" || dataDirHazard(dataDir, cwd) != "" {
 		return false
 	}
 	if cacheRecordedSHA(dataDir) == "" {

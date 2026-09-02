@@ -335,6 +335,7 @@ func NewRootCommand() *cobra.Command {
 	root.AddCommand(newDocsCommand(&asJSON))
 	root.AddCommand(newIntentCommand(&asJSON))
 	root.AddCommand(newIdeateCommand(&asJSON))
+	root.AddCommand(newDecideCommand(&asJSON))
 	root.AddCommand(newSpecCommand(&asJSON))
 	root.AddCommand(newDisembarkCommand(&asJSON))
 	root.AddCommand(newEmbarkCommand(&asJSON))
@@ -2143,6 +2144,19 @@ func newAhoyCommand(asJSON *bool) *cobra.Command {
 				fmt.Fprintf(w, "abcd ahoy doctor — %s\n", report.Detection.FolderKind)
 				fmt.Fprintf(w, "  detection gaps: %d\n", len(report.Detection.Gaps))
 				fmt.Fprintf(w, "  audit gaps:     %d\n", len(report.AuditGaps))
+				// A required gap that is NOT resolvable is the one no later
+				// `ahoy install` will ever clear — a config.json abcd refuses to
+				// touch until a human repairs it is the case that matters. Inside
+				// a count it is indistinguishable from work the next install does
+				// for you, so name each one and what is wrong with it. The detail
+				// quotes a parser's own error over the user's file, so it is
+				// sanitised like any other input rendered to a terminal.
+				for _, g := range report.Detection.Gaps {
+					if g.Required && !g.Resolvable {
+						fmt.Fprintf(w, "  diagnostic:     %s — %s\n",
+							termsafe.Sanitize(g.ID), termsafe.Sanitize(g.Detail))
+					}
+				}
 			})
 		},
 	})

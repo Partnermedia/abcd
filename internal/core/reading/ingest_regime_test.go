@@ -40,7 +40,7 @@ func TestRegimeComesFromTheDefinitionNotThePayload(t *testing.T) {
 	doc["run_id"] = "rdg-2608310000000002"
 	doc["manifest_sha256"] = f.manifestHashOf("rdg-2608310000000002")
 
-	_, err := f.ingest(doc)
+	res, err := f.ingest(doc)
 	if err == nil {
 		t.Fatal("a run whose definition is absent was accepted; the regime then came from somewhere " +
 			"other than the definition")
@@ -48,7 +48,40 @@ func TestRegimeComesFromTheDefinitionNotThePayload(t *testing.T) {
 	if !strings.Contains(err.Error(), DefinitionPath("detection")) {
 		t.Errorf("the refusal does not name the definition it could not resolve: %v", err)
 	}
+	// The run's identity was proven before the definition was looked up, so
+	// this is a list-level refusal past the identity point, and it records.
+	assertUnresolvedDefinitionRecorded(t, f, res, err, "rdg-2608310000000002")
 	f.nothingDurableInTheLedger("rdg-2608310000000002")
+}
+
+// assertUnresolvedDefinitionRecorded holds a run whose definition did not
+// resolve to the plugin page's sentence: from the identity point a list-level
+// refusal writes refusal.json, and the message names it. The record states no
+// regime, because the verb could not resolve one — a regime it wrote there would
+// be a claim about a definition it never read.
+func assertUnresolvedDefinitionRecorded(t *testing.T, f *ingestFixture, res IngestResult, err error, runID string) {
+	t.Helper()
+	wantPath := ReadingsRecordDir + "/" + runID + "/" + RefusalFileName
+	if res.RefusalPath != wantPath {
+		t.Fatalf("a list-level refusal after the run's identity was proven wrote no refusal record "+
+			"(refusal_record is %q, want %s); the run was refused and nothing says so", res.RefusalPath, wantPath)
+	}
+	if !strings.Contains(err.Error(), wantPath) {
+		t.Errorf("the refusal message does not name the record it wrote: %v", err)
+	}
+	rec := f.readRefusalRecord(runID)
+	if rec.Type != RefusalType || rec.RunID != runID || rec.Position != "detection" {
+		t.Errorf("the refusal record carries the wrong run metadata: %+v", rec)
+	}
+	if rec.Regime != "" {
+		t.Errorf("the refusal record states the %q regime, which the verb never resolved", rec.Regime)
+	}
+	if !strings.Contains(rec.Reason, DefinitionPath("detection")) {
+		t.Errorf("the recorded reason does not name the definition that did not resolve: %q", rec.Reason)
+	}
+	if strings.HasPrefix(rec.Reason, "reading: ") {
+		t.Errorf("the recorded reason carries the core's own prefix: %q", rec.Reason)
+	}
 }
 
 // TestADriftedDefinitionRefusesTheRunRatherThanChangingTheLicence is the
@@ -95,25 +128,17 @@ func TestADriftedDefinitionRefusesTheRunRatherThanChangingTheLicence(t *testing.
 			t.Errorf("the refusal does not name %q: %v", want, err)
 		}
 	}
-	if res.RefusalPath == "" {
-		t.Fatal("a run refused after its identity was proven left no refusal record; ac-10 and the " +
-			"plugin page both say the event is durable from that point on")
-	}
+	assertUnresolvedDefinitionRecorded(t, f, res, err, "rdg-2608310000000007")
 	rec := f.readRefusalRecord("rdg-2608310000000007")
-	if rec.RunID != "rdg-2608310000000007" || rec.Position != "detection" {
-		t.Errorf("the refusal record carries the wrong run metadata: %+v", rec)
-	}
 	if rec.ManifestSHA256 == "" || rec.TargetCommit == "" {
 		t.Errorf("the refusal record does not carry the run's manifest reference: %+v", rec)
 	}
-	// The regime is the definition's, and the definition did not resolve, so
-	// there is none to state. An empty field is the honest value; a substituted
-	// one would be the verb asserting a licence it refused to read.
-	if rec.Regime != "" {
-		t.Errorf("the refusal record states regime %q for a run whose definition did not resolve", rec.Regime)
-	}
-	if !strings.Contains(rec.Reason, RegimeEvaluative) || !strings.Contains(rec.Reason, "refused rather than resolved") {
-		t.Errorf("the refusal record does not carry the named reason: %q", rec.Reason)
+	// The reason names both regimes and says the definition was refused rather
+	// than resolved: the record has to carry what the message carries.
+	for _, want := range []string{RegimeEvaluative, RegimeRegistrative, "refused rather than resolved"} {
+		if !strings.Contains(rec.Reason, want) {
+			t.Errorf("the recorded reason does not name %q: %q", want, rec.Reason)
+		}
 	}
 	f.nothingDurableInTheLedger("rdg-2608310000000007")
 }
@@ -519,6 +544,12 @@ func TestTheRegimeGateIsNotEvadedByInvisibleRunes(t *testing.T) {
 			"RG-REG-FIXPROPOSAL"},
 		{"variation selector", "detection", "why_a_tension",
 			"the record and the tree disagree; the fix\ufe00 is to restate the constraint",
+			"RG-REG-FIXPROPOSAL"},
+		// U+2800 BRAILLE PATTERN BLANK is a graphic character in none of the
+		// three categories above and not a space either, and it renders as
+		// nothing — the same defect one category further out.
+		{"braille pattern blank inside a keyword", "detection", "why_a_tension",
+			"the record and the tree disagree; the fi\u2800x is to restate the constraint",
 			"RG-REG-FIXPROPOSAL"},
 		// Compatibility forms: the registry's own phrasing in code points that
 		// render the same. NFKC folds them.
