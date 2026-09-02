@@ -9,7 +9,7 @@ found_during: "autonomous-run-2026-09-01"
 origin: researcher-authored
 production_mode: hand-written
 found_at: "internal/core/memory/redact.go"
-resolution: "Fixed in the shared scanner: the pem_private_key span now covers a same-line body through its END marker, is masked whole, and scanner.Redact consumes the following body-shaped lines through the END line into one placeholder, bounded at 4096 lines. The page body and the kept original go through that one primitive, so neither carries a body line: TestIngestRedactsPEMBodyFromPageAndKeptOriginal. The kept original is redacted in place, as every other text-source secret already is, rather than refused; a refusal would be a new policy for one pattern and the redacted copy carries no key bytes."
+resolution: "Fixed in the shared scanner: the pem_private_key span now covers a same-line body through its END marker, is masked whole, and scanner.Redact consumes the following body-shaped lines through the END line into one placeholder, bounded at 4096 lines. The page body and the kept original go through that one primitive, so neither carries a body line in the renderings the shape rule covers: TestIngestRedactsPEMBodyFromPageAndKeptOriginal. It does not cover every one: a body rendered as log-prefixed or CSV lines, one element per XML tag or JSON array, with a trailing comment or double-escaped separators, the tail beyond the bound, and the RFC4716 armour the header pattern does not detect all still reach the page and the kept original verbatim — iss-2609020127210042. The kept original is redacted in place, as every other text-source secret already is, rather than refused; a refusal would be a new policy for one pattern and the redacted copy carries no key bytes."
 impact: fix
 ---
 

@@ -9,7 +9,7 @@ found_during: "autonomous-run-2026-09-01"
 origin: researcher-authored
 production_mode: hand-written
 found_at: "internal/core/history/history.go"
-resolution: "Fixed in the shared scanner: the pem_private_key span now covers a same-line body through its END marker, is masked whole, and scanner.Redact consumes the following body-shaped lines through the END line into one placeholder, bounded at 4096 lines, so the stored record carries no body line and keeps the prose after the block: TestCaptureRedactsPEMBody. Residual stated in pem.go: stage two still cannot see a headerless base64 line (iss-96 tracks the entropy residue), so a body line the shape rule declines survives; the world-readable record mode is iss-2609012029343438."
+resolution: "Fixed in the shared scanner: the pem_private_key span now covers a same-line body through its END marker, is masked whole, and scanner.Redact consumes the following body-shaped lines through the END line into one placeholder, bounded at 4096 lines, so the stored record carries no body line in the renderings the shape rule covers and keeps the prose after the block: TestCaptureRedactsPEMBody. Residual stated in pem.go: stage two still cannot see a headerless base64 line (iss-96 tracks the entropy residue), so a body line the shape rule declines survives — a body rendered as log-prefixed or CSV lines, one element per XML tag or JSON array, with a trailing comment or double-escaped separators, the tail beyond the bound, and the RFC4716 armour the header pattern does not detect are the shapes that still store verbatim (iss-2609020127210042); the world-readable record mode is iss-2609012029343438."
 impact: fix
 ---
 
