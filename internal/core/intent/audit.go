@@ -102,6 +102,12 @@ var (
 	auditPlaceholderRe = regexp.MustCompile(`^\s*[_<]Empty\b.*[_>]\s*$`)
 	// criterionIDRe validates a criterion id shape before it is positionally bounded.
 	criterionIDRe = regexp.MustCompile(`^ac-([0-9]+)$`)
+	// sha256FieldRe is the shape the auditor's contract publishes for the two
+	// policy hashes and for an attestation digest: `sha256:<64 lowercase hex>`.
+	// A field is a validated shape only where a validator says so — the
+	// alternative is free text under a structural name, which is how a home path
+	// arrived in a field the record called a hash (iss-2609022002241168).
+	sha256FieldRe = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 )
 
 // ---------------------------------------------------------------------------
@@ -464,6 +470,31 @@ func validateVerdict(raw []byte, rcp, intentContent string) (verdict, error) {
 	if strings.TrimSpace(v.Policy.RubricHash) == "" || strings.TrimSpace(v.Policy.PromptHash) == "" {
 		return verdict{}, fmt.Errorf("policy.rubric_hash and policy.prompt_hash are both required")
 	}
+	// And both must be the shape the contract publishes. Presence alone left the
+	// two fields as free text under a structural name: the block renders them
+	// unredacted on the stated ground that a hash is a validated shape, and
+	// nothing was validating them.
+	for _, h := range [][2]string{
+		{"policy.rubric_hash", v.Policy.RubricHash},
+		{"policy.prompt_hash", v.Policy.PromptHash},
+	} {
+		if !sha256FieldRe.MatchString(h[1]) {
+			return verdict{}, fmt.Errorf("%s %q is not a sha256 digest (want sha256:<64 lowercase hex>)", h[0], h[1])
+		}
+	}
+	// An attestation digest is `sha256:<if-known>` in the contract, so ABSENCE is
+	// legitimate and a present-but-wrong shape is not. `kind` and `ref` carry no
+	// declared shape — a real ref is a commit range with prose beside it — so
+	// they are free text and are redacted at render rather than validated here.
+	for i, a := range v.InputAttestations {
+		if strings.TrimSpace(a.Digest) == "" {
+			continue
+		}
+		if !sha256FieldRe.MatchString(a.Digest) {
+			return verdict{}, fmt.Errorf("input_attestations[%d].digest %q is not a sha256 digest "+
+				"(want sha256:<64 lowercase hex>, or empty where the digest is not known)", i, a.Digest)
+		}
+	}
 	if len(v.Criteria) == 0 {
 		return verdict{}, fmt.Errorf("criteria is empty")
 	}
@@ -818,17 +849,22 @@ func ingestedBlock(rcp string, v verdict, rollup map[string]int, free proseField
 	var b strings.Builder
 	fmt.Fprintf(&b, "<!-- abcd-review: INGESTED receipt=%s -->\n", rcp)
 	fmt.Fprintf(&b, "Fidelity review — receipt %s (verifier %s %s).\n\n",
-		rcp, orDash(v.Verifier.ID), orDash(v.Verifier.Version))
+		rcp, orFree(v.Verifier.ID, free), orFree(v.Verifier.Version, free))
 	// Pinned provenance: the verifier identity, the policy hashes it attested to,
-	// and every input attestation. All fields are untrusted, so route each through
-	// the oneLine neutraliser before it lands in the committed record.
+	// and every input attestation. All of it is untrusted, and the split is by
+	// whether the contract gives the field a SHAPE. The two hashes and a digest
+	// are validated `sha256:<64 hex>` by the time this runs, so they carry
+	// nothing to redact and keep oneLine alone. The verifier identity, its
+	// version, and an attestation's kind and ref have no declared shape — a real
+	// ref is a commit range with prose beside it — so they are free text and go
+	// through the same redact-then-neutralise path the rationales use.
 	fmt.Fprintf(&b, "Provenance: %s@%s · rubric_hash %s · prompt_hash %s\n",
-		orDash(v.Verifier.ID), orDash(v.Verifier.Version),
+		orFree(v.Verifier.ID, free), orFree(v.Verifier.Version, free),
 		orDash(v.Policy.RubricHash), orDash(v.Policy.PromptHash))
 	if len(v.InputAttestations) > 0 {
 		b.WriteString("Input attestations:")
 		for _, a := range v.InputAttestations {
-			fmt.Fprintf(&b, " %s:%s@%s;", orDash(a.Kind), orDash(a.Ref), orDash(a.Digest))
+			fmt.Fprintf(&b, " %s:%s@%s;", orFree(a.Kind, free), orFree(a.Ref, free), orDash(a.Digest))
 		}
 		b.WriteString("\n")
 	}
@@ -1015,10 +1051,19 @@ func oneLine(s string) string {
 // the masks it is handed (`[redacted-path]` and its siblings) are inert to every
 // rule oneLine applies.
 //
-// It is applied to free text ALONE. An identifier, an enum verdict, a disposition
-// value, a hash and an attestation ref are validated shapes with nothing to
-// redact, and running a name matcher over them would corrupt a value the record
-// is keyed on rather than protect anything. Those keep oneLine by itself.
+// It is applied to free text ALONE, and what counts as free text is decided by
+// whether a VALIDATOR constrains the field — never by whether its name sounds
+// structural. A criterion id, an enum verdict, a disposition value, a condition
+// id, and the two policy hashes and an attestation digest under sha256FieldRe
+// are validated shapes with nothing to redact, and running a name matcher over
+// them would corrupt a value the record is keyed on rather than protect
+// anything. Those keep oneLine by itself.
+//
+// Everything else is free text, the verifier's id and version and an
+// attestation's kind and ref included. Those four were once excused here as
+// validated shapes while nothing validated them, and an attestation ref is prose
+// by construction — the contract's own example is a commit range with a
+// parenthetical beside it (iss-2609022002241168).
 type proseField func(string) string
 
 // newVerdictProse builds the free-text renderer for one ingest, failing closed
@@ -1036,6 +1081,16 @@ func newVerdictProse(repoRoot string) (proseField, error) {
 
 func orDash(s string) string {
 	if s = oneLine(s); s == "" {
+		return "-"
+	}
+	return s
+}
+
+// orFree is orDash for a FREE-TEXT field: the same em-dash for an empty value,
+// with proseField's privacy redaction ahead of oneLine's neutralisation. It is
+// what a provenance field takes when the contract gives it no shape.
+func orFree(s string, free proseField) string {
+	if s = free(s); s == "" {
 		return "-"
 	}
 	return s

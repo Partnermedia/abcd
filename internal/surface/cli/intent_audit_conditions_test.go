@@ -27,7 +27,7 @@ func conditionedVerdict(receiptID string) string {
   "_type": "abcd/intent-fidelity-verdict/v1",
   "receipt_id": "` + receiptID + `",
   "verifier": {"id": "intent-auditor", "version": "test"},
-  "policy": {"rubric_hash": "sha256:aa", "prompt_hash": "sha256:bb"},
+  "policy": {"rubric_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "prompt_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
   "input_attestations": [],
   "criteria": [
     {"criterion_id": "ac-1", "verdict": "MET", "rationale": "the stub is parked",

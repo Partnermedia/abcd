@@ -16,3 +16,23 @@ The intent-audit ingest path applies no privacy scanner to agent-produced prose:
 ## Grounds
 
 - pursued: we expect agent-produced prose to be redacted at the moment it is written into a committed record rather than left to the downstream committed-file lint, so a home path, hostname or person name in a verdict never reaches the shipped intent; a free-text verdict field that still lands verbatim, or a structural field corrupted by the redactor, would show it wrong.
+
+## Correction, 2026-09-02
+
+The resolution's closing clause — "identifiers, enum values and hashes are
+validated shapes and keep the neutraliser alone" — was true of the criterion
+ids, the enum verdicts and the disposition values, and false of everything on
+the provenance line. `verifier.id`, `verifier.version`, `policy.rubric_hash`,
+`policy.prompt_hash` and every `input_attestations[]` field went through
+`orDash` — the neutraliser alone — while nothing validated any of them:
+`validateVerdict` asked the two hashes to be non-empty and asked the other five
+fields nothing at all. An attestation `ref` is prose by construction (the
+auditor's own contract writes it as a commit range with a parenthetical beside
+it), so the excused set included the field most likely to carry a path.
+
+The clause is now true rather than merely restated. `sha256FieldRe` validates
+the two policy hashes and a present attestation digest as `sha256:<64 hex>` — a
+payload failing that is quarantined — and the four fields with no declared
+shape (`verifier.id`, `verifier.version`, an attestation's `kind` and `ref`) go
+through the same `proseField` redaction the rationales use. Carried by
+iss-2609022002241168, which found it.

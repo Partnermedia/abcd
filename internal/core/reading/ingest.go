@@ -30,9 +30,12 @@ package reading
 // its grammar has been checked: the run id is matched against
 // recordid.ValidReadingRunID first, and it is the ONLY payload value any path is
 // built from. Every payload-derived string that reaches a terminal or a durable
-// record passes through termsafe.Sanitize and a length cap; no item body text
-// reaches either, because the bodies belong in the ledger records, which
-// capture.IngestReading redacts.
+// record passes through termsafe.Sanitize and a length cap, and every one bound
+// for a DURABLE record is privacy-redacted before that (payloadField): a refused
+// item's own text is committed material, and it was the half of this verb the
+// redaction did not reach (iss-2609022002241168). Whole item bodies reach
+// neither surface — they belong in the ledger records, which
+// capture.IngestReading redacts on the same terms.
 
 import (
 	"encoding/json"
@@ -159,9 +162,15 @@ type Output struct {
 	Items          []map[string]json.RawMessage `json:"items"`
 }
 
-// ItemRefusal is one item the run refused, and why. It carries no item body
-// text: a refusal names the ordinal, the rule and the offending field, which is
-// everything a reader needs and nothing a redactor would have to clean.
+// ItemRefusal is one item the run refused, and why: the ordinal, the rule, the
+// offending field, and enough of what the item said for the reader to see which
+// rule it broke.
+//
+// That last part is payload text — a criterion the discipline does not declare
+// is quoted back precisely BECAUSE nothing constrains it — and the refusal is
+// committed, so every such quotation is redacted and then neutralised by the
+// ingest's payloadField before it lands here. It carries no whole item BODY at
+// any point: a body belongs in the ledger record, and this names a field.
 //
 // Ordinal is omitted when it is zero, because zero is not an ordinal: items are
 // numbered from one, and the one entry carrying none is the elision entry a
@@ -583,6 +592,15 @@ func ingestUnderLock(root *os.Root, repoRoot string, req IngestRequest, res *Ing
 		return err
 	}
 
+	// The redactor for everything payload-derived that this invocation may now
+	// commit, built ONCE and here: the identity is proven, so from this line on
+	// a refusal is recordable, and a recordable refusal is durable committed
+	// material. Constructing it earlier would make every payload that never
+	// reaches a recordable state pay for a scanner that probes the machine
+	// identity (iss-2609022002241168).
+	free, degraded := newPayloadField(repoRoot)
+	noteDegraded(res, degraded)
+
 	// A definition that does not resolve refuses the run, and the refusal is
 	// RECORDED like every other one from this point on: the identity is proven
 	// above, so the run happened. The record states no regime, because the
@@ -592,22 +610,22 @@ func ingestUnderLock(root *os.Root, repoRoot string, req IngestRequest, res *Ing
 	// refused run with nothing durable to find it by (iss-2608311518250688).
 	def, err := LoadDefinition(repoRoot, pos)
 	if err != nil {
-		return refuse(root, res, out, manifest, Definition{Position: pos}, err)
+		return refuse(root, res, out, manifest, Definition{Position: pos}, free, err)
 	}
 	res.Regime = def.Regime
 
-	if err := checkRegime(out, def); err != nil {
-		return refuse(root, res, out, manifest, def, err)
+	if err := checkRegime(out, def, free); err != nil {
+		return refuse(root, res, out, manifest, def, free, err)
 	}
-	if err := checkInstrument(out, def, manifest); err != nil {
-		return refuse(root, res, out, manifest, def, err)
+	if err := checkInstrument(out, def, manifest, free); err != nil {
+		return refuse(root, res, out, manifest, def, free, err)
 	}
 
-	items, refusals, refusedCount, err := validateItems(out, manifest, def)
+	items, refusals, refusedCount, err := validateItems(out, manifest, def, free)
 	res.RefusedItems = refusals
 	res.RefusedCount = refusedCount
 	if err != nil {
-		return refuse(root, res, out, manifest, def, err)
+		return refuse(root, res, out, manifest, def, free, err)
 	}
 
 	// The whole payload has validated: this is the first point at which the
@@ -634,7 +652,7 @@ func ingestUnderLock(root *os.Root, repoRoot string, req IngestRequest, res *Ing
 		return err
 	}
 
-	return write(root, repoRoot, res, out, manifest, def, items)
+	return write(root, repoRoot, res, out, manifest, def, free, items)
 }
 
 // leftPending is the orphans found minus the stages that were cleared: what a
@@ -787,7 +805,8 @@ func resolveParkedManifest(root *os.Root, out Output) (Manifest, error) {
 
 // write is the staged-write protocol. Nothing durable exists for the run until
 // step 1 has already validated everything, and the run metadata is written last.
-func write(root *os.Root, repoRoot string, res *IngestResult, out Output, m Manifest, def Definition, items []capture.ReadingItem) error {
+func write(root *os.Root, repoRoot string, res *IngestResult, out Output, m Manifest, def Definition,
+	free payloadField, items []capture.ReadingItem) error {
 	stageRel := IngestStageDir + "/" + out.RunID
 	marker := stageMarker{Type: StageType, RunID: out.RunID, Records: []string{}}
 	if err := writeJSONIn(root, stageRel+"/"+stageFileName, marker); err != nil {
@@ -807,7 +826,7 @@ func write(root *os.Root, repoRoot string, res *IngestResult, out Output, m Mani
 	})
 	res.Records = written.Records
 	res.Redacted = written.Redacted
-	res.Degraded = written.Degraded
+	noteDegraded(res, written.Degraded)
 	if err != nil {
 		return fmt.Errorf("reading: writing the records of run %s: %w", out.RunID, err)
 	}
@@ -833,7 +852,7 @@ func write(root *os.Root, repoRoot string, res *IngestResult, out Output, m Mani
 	run := RunRecord{
 		Type: RunType, SchemaVersion: SchemaVersion, RunID: out.RunID,
 		Position: def.Position, Regime: def.Regime, TargetCommit: m.TargetCommit,
-		ManifestSHA256: out.ManifestSHA256, Instrument: sanitizeInstrument(out.Instrument),
+		ManifestSHA256: out.ManifestSHA256, Instrument: sanitizeInstrument(out.Instrument, free),
 		Records: written.Records, RefusedItems: res.RefusedItems, RefusedCount: res.RefusedCount,
 		CandidateRun: m.CandidateRun, Candidates: m.Candidates, Exercised: m.Exercised,
 		// The bounds are derived AFTER the manifest is promoted, so the prior-run
@@ -992,7 +1011,8 @@ func refuseARerun(root *os.Root, runID string) error {
 // its ledger write and its commit marker, and ac-10 says a refused run leaves
 // no reading records — so the one delete a refusal performs is rollbackThisRun
 // on the id it was already proven to carry no outcome for.
-func refuse(root *os.Root, res *IngestResult, out Output, m Manifest, def Definition, cause error) error {
+func refuse(root *os.Root, res *IngestResult, out Output, m Manifest, def Definition,
+	free payloadField, cause error) error {
 	// ac-10's other half: a refused run leaves a refusal record and NO reading
 	// records. Usually there are none to leave, because nothing has been staged
 	// yet — but a PREVIOUS ingest of this run id can have died between its
@@ -1019,7 +1039,7 @@ func refuse(root *os.Root, res *IngestResult, out Output, m Manifest, def Defini
 	rec := RefusalRecord{
 		Type: RefusalType, SchemaVersion: SchemaVersion, RunID: out.RunID,
 		Position: def.Position, Regime: def.Regime, TargetCommit: m.TargetCommit,
-		ManifestSHA256: out.ManifestSHA256, Instrument: sanitizeInstrument(out.Instrument),
+		ManifestSHA256: out.ManifestSHA256, Instrument: sanitizeInstrument(out.Instrument, free),
 		Reason: reason,
 	}
 	rel := ReadingsRecordDir + "/" + out.RunID + "/" + RefusalFileName
@@ -1266,6 +1286,18 @@ func echoAll(names []string) []string {
 	return out
 }
 
+// freeAll is one payloadField over a list of payload-chosen strings: echoAll
+// with the privacy redaction the durable tier requires. A payload-chosen KEY is
+// payload text as much as a value is, and a list of them lands in a committed
+// refusal exactly as a single field does.
+func freeAll(free payloadField, names []string) []string {
+	out := make([]string, 0, len(names))
+	for _, n := range names {
+		out = append(out, free(n))
+	}
+	return out
+}
+
 // boundedNames caps how many payload-chosen names one refusal quotes. Each name
 // is capped by echo; the LIST is not, and a payload carrying ten thousand
 // unknown keys would otherwise put a megabyte of model-chosen text into a
@@ -1278,13 +1310,17 @@ func boundedNames(names []string) []string {
 	return append(out, fmt.Sprintf("and %d more", len(names)-maxQuotedNames))
 }
 
-// sanitizeInstrument is echo applied to the one payload-supplied identity that
-// lands in a durable record. No item body text ever does: bodies belong in the
-// ledger records, which capture.IngestReading redacts on the way in.
-func sanitizeInstrument(i Instrument) Instrument {
+// sanitizeInstrument is the ingest's payloadField applied to the payload-supplied
+// identity that lands in a durable record: redacted, then neutralised. A model
+// name is agent-supplied text and not a validated shape, so echo alone let a
+// locally hosted model named by its absolute path land in `run.json` verbatim.
+// An item BODY never reaches here: bodies belong in the ledger records, which
+// capture.IngestReading redacts on the way in — and this is what makes the two
+// halves of one ingest agree (iss-2609022002241168).
+func sanitizeInstrument(i Instrument, free payloadField) Instrument {
 	return Instrument{
-		Model:            echo(i.Model),
-		DefinitionSHA256: echo(i.DefinitionSHA256),
-		AssemblerVersion: echo(i.AssemblerVersion),
+		Model:            free(i.Model),
+		DefinitionSHA256: free(i.DefinitionSHA256),
+		AssemblerVersion: free(i.AssemblerVersion),
 	}
 }

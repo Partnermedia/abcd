@@ -48,7 +48,7 @@ func leakyVerdict(t *testing.T, rcp, conditionID string) string {
 		"_type":      "abcd/intent-fidelity-verdict/v1",
 		"receipt_id": rcp,
 		"verifier":   map[string]any{"id": "intent-fidelity-reviewer", "version": "claude-opus-4-8"},
-		"policy":     map[string]any{"rubric_hash": "sha256:aa", "prompt_hash": "sha256:bb"},
+		"policy":     map[string]any{"rubric_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "prompt_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
 		"criteria": []any{
 			map[string]any{
 				"criterion_id": "ac-1",
@@ -186,4 +186,132 @@ func TestDeadLetterRedactsAgentProse(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertNoLeak(t, string(body))
+}
+
+// The PROVENANCE half of the same block was left out of that fix, and the
+// resolution record said the opposite: the verifier identity, the policy hashes
+// and every input attestation went through orDash — oneLine alone — on the
+// stated ground that they are "validated shapes". Nothing validated them.
+// validateVerdict required the two hashes to be non-empty and asked nothing at
+// all of verifier.id, verifier.version, or an attestation's kind, ref and
+// digest; and a real attestation ref is free prose (a commit range with a
+// parenthetical beside it), which is why this is the field that leaks.
+//
+// So the fields split two ways. What the auditor's contract gives a SHAPE —
+// `sha256:<64 hex>` for the two policy hashes and for a digest — is validated,
+// and a payload that does not carry that shape is quarantined rather than
+// rendered. What has no declared shape is free text and is redacted like the
+// rest (AGENTS.md's privacy rule; framework 7.1; brief invariant 16).
+func TestIngestVerdictRedactsTheProvenanceLine(t *testing.T) {
+	root := identityRepo(t)
+	const rcp = "rcp-0123456789ab"
+	writeFile(t, root, shippedDir+"/itd-10-alpha.md",
+		shippedWithMarker("itd-10", "alpha", "spc-1", "OWED", rcp))
+
+	var m map[string]any
+	if err := json.Unmarshal([]byte(leakyVerdict(t, rcp, "cond-2609021016272867")), &m); err != nil {
+		t.Fatal(err)
+	}
+	// The two shapes the review named: a hostname in the verifier identity, and
+	// a third party's absolute home path in an attestation ref.
+	m["verifier"] = map[string]any{"id": "auditor@buildbox.local", "version": "claude-opus-4-8"}
+	m["input_attestations"] = []any{map[string]any{
+		"kind":   "diff",
+		"ref":    "main..auto/x (run by Jonathan Kensington-Pryce from /Users/zzotherperson/checkouts/abcd)",
+		"digest": "sha256:" + strings.Repeat("ab", 32),
+	}}
+	// The intent records no scope condition here, so the verdict must dispose none.
+	m["scope_conditions"] = []any{}
+	raw, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := IngestVerdict(root, writeVerdict(t, root, string(raw)))
+	if err != nil {
+		t.Fatalf("IngestVerdict: %v", err)
+	}
+	if res.Status != "ingested" {
+		t.Fatalf("status = %q, want ingested", res.Status)
+	}
+	body, err := os.ReadFile(filepath.Join(root, shippedDir, "itd-10-alpha.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertNoLeak(t, string(body))
+	// The provenance line is still a provenance line: only what identifies a
+	// machine or a person was rewritten.
+	for _, want := range []string{"Provenance:", "Input attestations:", "sha256:" + strings.Repeat("ab", 32)} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("the provenance line no longer carries %q:\n%s", want, body)
+		}
+	}
+}
+
+// A policy hash or an attestation digest that is not the sha256 shape the
+// auditor's contract publishes is QUARANTINED rather than rendered. The claim
+// "hashes are validated shapes" has to be made true by a validator, not by a
+// comment: an unvalidated field is free text whatever it is named, and this is
+// the check that decides which of the two it is.
+func TestVerdictHashesAreValidatedShapes(t *testing.T) {
+	const rcp = "rcp-0123456789ab"
+	for name, mutate := range map[string]func(m map[string]any){
+		"a truncated rubric hash": func(m map[string]any) {
+			m["policy"] = map[string]any{"rubric_hash": "sha256:aa", "prompt_hash": "sha256:" + strings.Repeat("bb", 32)}
+		},
+		"a prompt hash that is prose": func(m map[string]any) {
+			m["policy"] = map[string]any{
+				"rubric_hash": "sha256:" + strings.Repeat("aa", 32),
+				"prompt_hash": "computed on buildbox.local",
+			}
+		},
+		"an attestation digest that is not sha256": func(m map[string]any) {
+			m["input_attestations"] = []any{map[string]any{
+				"kind": "diff", "ref": "main..auto/x", "digest": "md5:0123456789abcdef"}}
+		},
+	} {
+		root := identityRepo(t)
+		writeFile(t, root, shippedDir+"/itd-10-alpha.md",
+			shippedWithMarker("itd-10", "alpha", "spc-1", "OWED", rcp))
+		var m map[string]any
+		if err := json.Unmarshal([]byte(validVerdict(rcp)), &m); err != nil {
+			t.Fatal(err)
+		}
+		mutate(m)
+		raw, err := json.MarshalIndent(m, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := IngestVerdict(root, writeVerdict(t, root, string(raw)))
+		if err != nil {
+			t.Fatalf("%s: IngestVerdict: %v", name, err)
+		}
+		if res.Status != "dead_letter" {
+			t.Errorf("%s: status = %q, want dead_letter; an unvalidated hash is free text, and "+
+				"the record claims it is a validated shape", name, res.Status)
+		}
+	}
+
+	// An attestation with NO digest is the contract's own `sha256:<if-known>`
+	// and stays acceptable: absence is not a bad shape.
+	root := identityRepo(t)
+	writeFile(t, root, shippedDir+"/itd-10-alpha.md",
+		shippedWithMarker("itd-10", "alpha", "spc-1", "OWED", rcp))
+	var m map[string]any
+	if err := json.Unmarshal([]byte(validVerdict(rcp)), &m); err != nil {
+		t.Fatal(err)
+	}
+	m["input_attestations"] = []any{map[string]any{"kind": "diff", "ref": "main..auto/x", "digest": ""}}
+	raw, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := IngestVerdict(root, writeVerdict(t, root, string(raw)))
+	if err != nil {
+		t.Fatalf("IngestVerdict: %v", err)
+	}
+	if res.Status != "ingested" {
+		t.Errorf("status = %q, want ingested; the contract writes the digest as sha256:<if-known>, "+
+			"so an unknown digest is empty rather than wrong", res.Status)
+	}
 }

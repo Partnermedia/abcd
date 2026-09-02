@@ -43,7 +43,7 @@ func verdictWithAttestation(rcp, kind, ref, digest string) string {
 		"_type":      "abcd/intent-fidelity-verdict/v1",
 		"receipt_id": rcp,
 		"verifier":   map[string]any{"id": "intent-fidelity-reviewer", "version": "claude-opus-4-8"},
-		"policy":     map[string]any{"rubric_hash": "sha256:aa", "prompt_hash": "sha256:bb"},
+		"policy":     map[string]any{"rubric_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "prompt_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
 		"input_attestations": []any{
 			map[string]any{"kind": kind, "ref": ref, "digest": digest},
 		},
@@ -96,7 +96,7 @@ func TestIngestedAttestationLineCannotRePairACodeSpan(t *testing.T) {
 	const rcp = "rcp-0123456789ab"
 	writeAt(t, root, shippedIntentsDir+"/itd-10-alpha.md", owedIntent("itd-10", "alpha", "spc-1", rcp))
 
-	payload := verdictWithAttestation(rcp, "diff`", "`<script>alert(1)`", "sha256:cc")
+	payload := verdictWithAttestation(rcp, "diff`", "`<script>alert(1)`", "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc")
 	p := filepath.Join(root, "verdict.json")
 	if err := os.WriteFile(p, []byte(payload), 0o644); err != nil {
 		t.Fatal(err)
@@ -181,7 +181,7 @@ func verdictWithEvidenceQuote(rcp, quote string) string {
 		"_type":      "abcd/intent-fidelity-verdict/v1",
 		"receipt_id": rcp,
 		"verifier":   map[string]any{"id": "intent-fidelity-reviewer", "version": "claude-opus-4-8"},
-		"policy":     map[string]any{"rubric_hash": "sha256:aa", "prompt_hash": "sha256:bb"},
+		"policy":     map[string]any{"rubric_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "prompt_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
 		"criteria": []any{
 			map[string]any{
 				"criterion_id": "ac-1",

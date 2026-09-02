@@ -299,3 +299,91 @@ func TestWriteRunArtefactRefusesTheRunsOwnFiles(t *testing.T) {
 		}
 	}
 }
+
+// A refused item's payload text reaches the DURABLE tier — the run record's
+// `refused_items`, and the refusal record's `reason` when every item was refused
+// — and it was echoed there through the neutraliser alone, with no privacy
+// redaction. The same ingest redacts an ACCEPTED item's body on the way into the
+// ledger, so one payload string was treated two ways by one verb depending only
+// on whether the verb liked it (AGENTS.md's privacy rule; framework 7.1; brief
+// invariant 16; iss-2609022002241168).
+//
+// The criterion is the field the review named, and it is the worst case: it is
+// free text by construction, and it is quoted back verbatim precisely BECAUSE
+// the discipline does not declare it.
+func TestARefusedItemsTextIsRedactedInTheDurableRecord(t *testing.T) {
+	const leak = "/Users/zzotherperson/checkouts/abcd/notes.md"
+	f := newIngestFixture(t, PositionComparative)
+	doc := f.payload(3)
+	doc["items"].([]any)[2].(map[string]any)["criterion"] = "read from " + leak
+
+	res := f.mustIngest(doc)
+	r := f.refusalOf(res, 3)
+	if r.Rule != ruleUndeclaredCriterion {
+		t.Fatalf("the refusal cites rule %q, want %q", r.Rule, ruleUndeclaredCriterion)
+	}
+	if strings.Contains(r.Detail, "zzotherperson") {
+		t.Errorf("the refusal detail carries a third party's home path: %s", r.Detail)
+	}
+	if !strings.Contains(r.Detail, "[redacted-path]") {
+		t.Errorf("the refusal detail carries no redaction mask, so the text was dropped rather "+
+			"than redacted: %s", r.Detail)
+	}
+
+	// The durable record is the point: a result a surface prints is transient
+	// and run.json is committed.
+	raw, err := os.ReadFile(filepath.Join(f.root, filepath.FromSlash(
+		ReadingsRecordDir+"/"+f.runID+"/"+RunFileName)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "zzotherperson") {
+		t.Errorf("the committed run record carries a third party's home path:\n%s", raw)
+	}
+}
+
+// The refusal RECORD is the other durable surface: when every item is refused
+// the run is refused whole, and the per-item details are carried into
+// refusal.json's reason. Redacting one and not the other would leave the leak on
+// the path a failed run takes.
+func TestARefusedRunsReasonIsRedacted(t *testing.T) {
+	const leak = "/Users/zzotherperson/checkouts/abcd/notes.md"
+	f := newIngestFixture(t, PositionComparative)
+	doc := f.payload(1)
+	doc["items"].([]any)[0].(map[string]any)["criterion"] = "read from " + leak
+
+	if _, err := f.ingest(doc); err == nil {
+		t.Fatal("a run whose every item was refused was committed")
+	}
+	rec := f.readRefusalRecord(f.runID)
+	if strings.Contains(rec.Reason, "zzotherperson") {
+		t.Errorf("the committed refusal record carries a third party's home path: %s", rec.Reason)
+	}
+	if !strings.Contains(rec.Reason, "[redacted-path]") {
+		t.Errorf("the refusal reason carries no redaction mask: %s", rec.Reason)
+	}
+}
+
+// The payload-supplied INSTRUMENT identity lands in both durable records
+// verbatim, and it is the same class: sanitizeInstrument neutralised it and
+// nothing redacted it. A model name is agent-supplied text, not a validated
+// shape.
+func TestTheRecordedInstrumentIsRedacted(t *testing.T) {
+	const leak = "/Users/zzotherperson/models/local.gguf"
+	f := newIngestFixture(t, PositionComparative)
+	doc := f.payload(1)
+	doc["instrument"].(map[string]any)["model"] = "local model at " + leak
+
+	res := f.mustIngest(doc)
+	if len(res.Records) != 1 {
+		t.Fatalf("the run landed %d record(s), want 1", len(res.Records))
+	}
+	run := f.readRunRecord(f.runID)
+	if strings.Contains(run.Instrument.Model, "zzotherperson") {
+		t.Errorf("the committed run record names a third party's home path as the model: %s",
+			run.Instrument.Model)
+	}
+	if !strings.Contains(run.Instrument.Model, "[redacted-path]") {
+		t.Errorf("the recorded model carries no redaction mask: %s", run.Instrument.Model)
+	}
+}

@@ -22,9 +22,9 @@ func validVerdict(receiptID string) string {
 		// verdicts and their markers are format-frozen across the spc-28 rename,
 		// so this fixture doubles as the stays-valid assertion.
 		"verifier": map[string]any{"id": "intent-fidelity-reviewer", "version": "claude-opus-4-8"},
-		"policy":   map[string]any{"rubric_hash": "sha256:aa", "prompt_hash": "sha256:bb"},
+		"policy":   map[string]any{"rubric_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "prompt_hash": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
 		"input_attestations": []any{
-			map[string]any{"kind": "diff", "ref": "main..auto/x", "digest": "sha256:cc"},
+			map[string]any{"kind": "diff", "ref": "main..auto/x", "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"},
 		},
 		"criteria": []any{
 			map[string]any{
@@ -153,10 +153,10 @@ func TestIngestHappyPath(t *testing.T) {
 		t.Fatalf("gap-audit honoured claim not rendered:\n%s", s)
 	}
 	// The pinned provenance (policy hashes + input-attestation digest) is rendered.
-	if !strings.Contains(s, "Provenance:") || !strings.Contains(s, "sha256:aa") {
+	if !strings.Contains(s, "Provenance:") || !strings.Contains(s, "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa") {
 		t.Fatalf("provenance line (verifier + rubric_hash) not rendered:\n%s", s)
 	}
-	if !strings.Contains(s, "sha256:cc") {
+	if !strings.Contains(s, "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc") {
 		t.Fatalf("input-attestation digest not rendered:\n%s", s)
 	}
 }
@@ -347,7 +347,7 @@ func TestIngestPartialCriteriaDeadLetters(t *testing.T) {
 func TestIngestMissingPolicyHashDeadLetters(t *testing.T) {
 	root := t.TempDir()
 	rcp := shipOne(t, root)
-	payload := strings.Replace(validVerdict(rcp), `"rubric_hash": "sha256:aa"`, `"rubric_hash": ""`, 1)
+	payload := strings.Replace(validVerdict(rcp), `"rubric_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"`, `"rubric_hash": ""`, 1)
 	vp := writeVerdict(t, root, payload)
 
 	r, err := IngestVerdict(root, vp)
