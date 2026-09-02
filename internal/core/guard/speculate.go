@@ -152,13 +152,23 @@ func (r Registry) speculateSegment(before []segment, s segment, ids []string, bu
 	}
 	budget.starts -= len(starts)
 	truncated := false
+	// zsh's noglob switches expansion off for the whole command line behind it,
+	// and a window that starts after the wrapper no longer holds it — so the
+	// glob record is withheld from every window of such a segment, or Tier 2
+	// would re-arm the compare Tier 1 correctly stood down.
+	_, noglob := commandIndex(s)
 	for _, start := range starts {
 		tokens := s.tokens[start:]
 		if len(tokens) > maxSpeculativeWindow {
 			tokens = tokens[:maxSpeculativeWindow]
 			truncated = true
 		}
+		// The glob record travels with the window: a globbed flag behind an
+		// unrecognised launcher is still a pattern bash expands.
 		cand := segment{tokens: tokens, chain: s.chain}
+		if !noglob {
+			cand.globbed = s.globSlice(start, start+len(tokens))
+		}
 
 		// Expand the suffix's own payloads, so `busybox sh -c "<hazard>"` is
 		// reached: stepping busybox leaves `sh -c …` in command position, and the

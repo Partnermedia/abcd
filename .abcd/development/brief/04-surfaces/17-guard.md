@@ -143,6 +143,20 @@ runs the rest of the line, and `rg git push --force docs/` is a search. That is
 the fail-safe; the wrapper names below are what upgrade a warn to a precise
 refusal.
 
+A word bash rewrites before exec is read as bash reads it. An unquoted glob
+(`*`, `?`, `[…]`) is a pattern bash expands against the working directory, so
+at every position an entry constrains — the command name, the subcommand, a
+flag or flag-value alternative — a literal the pattern *can* produce is treated
+as produced: `git pus? --force origin main` is the force push whenever a file
+called `push` exists, in a directory the guard cannot see, so it blocks. An
+unconstrained position is never compared, which is why `ls *` and `git add
+*.md` do not change; behind zsh's `noglob` nothing expands and the compare is
+literal. The compare is a floor: a glob inside an attached short value
+(`-XDELET?`), extended globs (`extglob`, `**`) and a glob resolved by a
+directory tree (`repos/o/*` for an API path) are not modelled, and a globbed
+*wrapper* name (`sud? rm -rf *`) reaches only the fail-safe's warn. A globbed
+interpreter name (`s? -c '…'`) is opened, because a miss there would be silent.
+
 What an allow still does not see is a hazard that never reaches command position
 at all:
 

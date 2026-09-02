@@ -109,6 +109,12 @@ is a **warn** naming the entry it matched, because the guard cannot tell whether
 that program runs the rest of the line. Report it like any other warn — the
 command may run, and the user decides.
 
+An unquoted glob (`*`, `?`, `[…]`) at a position an entry constrains is read as
+the pattern it is: bash expands it against the working directory before the
+command runs, so a spelling the pattern *can* produce (`git pus? --force`,
+`git push --forc?`) is treated as produced and blocks. A glob anywhere else
+(`ls *`, `git add *.md`) changes nothing, and a quoted one is literal.
+
 What an allow still does not see is a hazard that never reaches command position
 at all: one launched through a known wrapper carrying a value-taking flag the
 guard does not name (`sudo -u bob <hazard>` is seen; the bundled short form

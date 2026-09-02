@@ -28,6 +28,41 @@ type segment struct {
 	// classifier misread has swallowed every later command. Check turns the
 	// flag into a fail-closed block, the braceGroup precedent.
 	heredocUnterminated bool
+	// globbed is parallel to tokens and records, per token, that it carried an
+	// UNQUOTED, unescaped `*`, `?` or `[` — a word bash expands against the
+	// working directory before the command runs, so the bytes here are a
+	// PATTERN and the argv may be any word it matches. nil when no token is
+	// globbed, which is nearly every segment. Like braceGroup it is a record of
+	// what the tokenizer could not resolve, per token instead of per segment,
+	// because a glob's expansion IS decidable at the positions an entry
+	// constrains (match.go) where a brace group's is not.
+	globbed []bool
+}
+
+// globAt reports whether token i carried an unquoted glob metacharacter.
+func (s segment) globAt(i int) bool {
+	return i >= 0 && i < len(s.globbed) && s.globbed[i]
+}
+
+// globSlice returns the globbed record for tokens[lo:hi], or nil when nothing in
+// the range is globbed — the shape a sub-segment built from a token window
+// (Tier 2) carries forward.
+func (s segment) globSlice(lo, hi int) []bool {
+	if s.globbed == nil {
+		return nil
+	}
+	if hi > len(s.globbed) {
+		hi = len(s.globbed)
+	}
+	if lo >= hi {
+		return nil
+	}
+	for _, g := range s.globbed[lo:hi] {
+		if g {
+			return s.globbed[lo:hi]
+		}
+	}
+	return nil
 }
 
 // tokenize splits a candidate command line into command-position segments,
@@ -55,6 +90,12 @@ func tokenize(line string) ([]segment, error) {
 		// anywhere in it makes the whole command unexpandable, so the flag is
 		// raised once and lands on the segment flushSegment emits.
 		braceGroup bool
+		// curGlob rides with the WORD being built and globs with the segment:
+		// an unquoted `*`, `?` or `[` marks the word as a pattern bash expands.
+		// Only the default branch sets it — bytes that arrive through a quote,
+		// a backslash or an ANSI-C decode are literal to bash too.
+		curGlob bool
+		globs   []bool
 		// braceBudget is the look-ahead braceExpansionAt may spend across this
 		// whole call. See braceScanBudget: without a shared cap the per-`{`
 		// forward scan is quadratic in the length of one word.
@@ -67,15 +108,18 @@ func tokenize(line string) ([]segment, error) {
 	flushToken := func() {
 		if hasCur {
 			toks = append(toks, string(cur))
+			globs = append(globs, curGlob)
 			cur = nil
 			hasCur = false
+			curGlob = false
 		}
 	}
 	flushSegment := func() {
 		flushToken()
 		if len(toks) > 0 {
-			segs = append(segs, segment{tokens: toks, chain: chain, braceGroup: braceGroup})
+			segs = append(segs, segment{tokens: toks, chain: chain, braceGroup: braceGroup, globbed: globsOrNil(globs)})
 			toks = nil
+			globs = nil
 			braceGroup = false
 		}
 	}
@@ -272,6 +316,7 @@ func tokenize(line string) ([]segment, error) {
 			if hasCur && isAllDigits(cur) {
 				cur = nil
 				hasCur = false
+				curGlob = false
 			} else {
 				flushToken()
 			}
@@ -364,6 +409,15 @@ func tokenize(line string) ([]segment, error) {
 			lastList = false
 			i++
 		default:
+			// An unquoted glob metacharacter makes the word a PATTERN: bash
+			// expands it against the working directory before exec, so
+			// `pus?` is `push` whenever a file called push exists. The bytes are
+			// kept — the matcher compares them as a pattern where an entry
+			// constrains the position (GHSA-3w99-pgv4-8g55) — and the record
+			// is what lets it tell this `*` from a quoted one.
+			if c == '*' || c == '?' || c == '[' {
+				curGlob = true
+			}
 			cur = append(cur, c)
 			hasCur = true
 			lastList = false
@@ -372,6 +426,17 @@ func tokenize(line string) ([]segment, error) {
 	}
 	flushSegment()
 	return segs, nil
+}
+
+// globsOrNil returns the per-token glob record, or nil when no token in it is
+// globbed — the common case, kept allocation-free for the matcher's compares.
+func globsOrNil(globs []bool) []bool {
+	for _, g := range globs {
+		if g {
+			return globs
+		}
+	}
+	return nil
 }
 
 const (
