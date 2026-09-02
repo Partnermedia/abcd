@@ -881,7 +881,14 @@ func (a *applyCtx) stepSymlink() {
 // degrades, loudly, to the spc-21 pinned symlink — there is nothing on disk
 // whose provenance a copy could record.
 func (a *applyCtx) installOwnedEntry(target string, kind binTargetKind) {
-	if !ownedCopySourceReady() {
+	if reason := dataDirHazard(pluginDataDir(), a.cwd); reason != "" {
+		// Said before the degradation below, so the operator learns both that
+		// the cache was not used and why this one could never have been the
+		// harness's directory.
+		a.refuse("ignored the plugin data directory named by CLAUDE_PLUGIN_DATA: " + reason +
+			". The harness's persistent data directory never has that shape, so nothing in it was trusted as a verified release artefact.")
+	}
+	if !ownedCopySourceReady(a.cwd) {
 		if kind != binTargetOwnedSymlink {
 			// Notes is the loud channel (see refuse): the degradation must be
 			// SAID, because a symlink into the plugin root dies at the next

@@ -77,7 +77,7 @@ func Detect(cwd string) (DetectionResult, error) {
 		gaps = append(gaps, detectConfigIntegrity(abs)...)
 		gaps = append(gaps, detectConfigValues(abs)...)
 		gaps = append(gaps, detectMarkerDrift(abs)...)
-		gaps = append(gaps, detectPathSymlink(pluginRoot, pluginOK)...)
+		gaps = append(gaps, detectPathSymlink(abs, pluginRoot, pluginOK)...)
 		gaps = append(gaps, detectHookManifest(pluginRoot, pluginOK)...)
 		gaps = append(gaps, detectVersion(abs)...)
 		// Guard health is computed for every managed or adoptable repo, so a
@@ -413,7 +413,7 @@ func detectMarkerDrift(cwd string) []Gap {
 // detector can no longer report "not installed" while running as that very
 // binary. Every path it renders goes through displayPath, so a gap pasted into
 // an issue carries no username.
-func detectPathSymlink(pluginRoot string, pluginOK bool) []Gap {
+func detectPathSymlink(cwd, pluginRoot string, pluginOK bool) []Gap {
 	if !pluginOK {
 		return nil
 	}
@@ -475,7 +475,7 @@ func detectPathSymlink(pluginRoot string, pluginOK bool) []Gap {
 			// garbage-collects (spc-35). Heal-able only while a verified cache
 			// artefact exists to copy from — without one there is nothing
 			// better to offer than the symlink that works.
-			if ownedCopySourceReady() {
+			if ownedCopySourceReady(cwd) {
 				gaps = append(gaps, Gap{
 					ID: "symlink.legacy", Category: ConfigChange, Scope: "machine",
 					Title:    "PATH entry is a symlink into the plugin root",
