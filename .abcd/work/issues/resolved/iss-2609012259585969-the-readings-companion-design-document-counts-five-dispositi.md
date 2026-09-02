@@ -8,6 +8,8 @@ source: "agent-finding"
 found_during: "iteration-2 conformance audit against the design framework v4 and the readings companion v4, 2026-09-01"
 origin: researcher-authored
 production_mode: dictated-and-formatted
+resolution: "The corrections are carried in the maintainer's amendment list for the two design documents, held outside the repository, with one of this record's own asks reversed the same day: the invocation stays position and target state, as section 4.1 says, and the scope operand this record asked the document to carry is withdrawn; the record's own account is the decision log's 2026-09-02 entries."
+impact: internal
 ---
 
 The readings companion design document counts five disposition states over a four-row table and still describes a two-operand invocation
@@ -39,3 +41,7 @@ section 4.1, and until it does a reader holding the document against the binary
 will find the binary wrong where it is the document. The governing framework's
 own pending amendments (the companion's section 12 plus adr-58 and ingest-time
 minting) are held separately and are not this record's.
+
+## Grounds
+
+- deferred: the document lives outside the repository, so the record can only point at what it owes; the maintainer amends it
