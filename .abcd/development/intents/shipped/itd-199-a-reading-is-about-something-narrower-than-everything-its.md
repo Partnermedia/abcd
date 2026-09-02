@@ -29,7 +29,7 @@ No selection between those two figures both fits a reader and preserves a positi
 The originating intent, [itd-86](../drafts/itd-86-cold-reading-surface.md), scoped a cold reading to "exactly one target document ... the constraints visible in that document alone". The shipped verb's `--target` names a commit, not a document, and the word survived while its referent changed. That is not a reversal of anything ruled — the four corpus-shaped objects follow from a ruling that stands — but it does mean the instrument lost the ability to be pointed at something, and the size is the consequence.
 
 The second finding is the same root seen from the other side: three of the four positions receive a byte-identical item set
-([iss-2608311501240566](../../../work/issues/open/iss-2608311501240566-three-of-the-four-reading-positions-receive-a-byte-identical.md)).
+([iss-2608311501240566](../../../work/issues/resolved/iss-2608311501240566-three-of-the-four-reading-positions-receive-a-byte-identical.md)).
 A table that cannot say what a reading is about cannot distinguish four readings that are about different things.
 
 ## What's In Scope
