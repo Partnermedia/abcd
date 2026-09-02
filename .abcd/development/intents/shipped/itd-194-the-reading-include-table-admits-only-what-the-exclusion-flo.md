@@ -261,9 +261,122 @@ instead.
 
 ## Audit Notes
 
-<!-- abcd-review: OWED receipt=rcp-11891aee84a6 -->
-Fidelity review OWED (receipt rcp-11891aee84a6).
+<!-- abcd-review: INGESTED receipt=rcp-11891aee84a6 -->
+Fidelity review — receipt rcp-11891aee84a6 (verifier intent-auditor claude-opus-5[1m]).
 
+Provenance: intent-auditor@claude-opus-5[1m] · rubric_hash sha256:44f19418b0b8d56d7b17cbecbd5acd5d2cbed5abc4347428680ce46647f381d5 · prompt_hash sha256:542ed2cd51ff938717a3f47b2b332e8d47910beec0ca7ecdfd238ae7edf5ced5
+Input attestations: diff:c0baaff4~1..c1be0000@sha256:0913f8672a2568fe0f7970a3f03189bc2df67f3d953cf2c18c349009f18bdf89;
+
+Acceptance rollup: MET 6 · MET_WITH_CONCERNS 2 · NOT_MET 0 · INCONCLUSIVE 0
+
+Per-criterion verdicts:
+- ac-1 — MET: verifyRedaction raises each unresolvable shape as a refusal naming the path and the shape and collect returns nil on the error, so the assembly stops and no item of the document reaches the bundle; the test asserts both the naming and the empty result
+  evidence: internal/core/reading/project.go:359 — "if line, shape, ok := displacedFrontmatter(lines); ok {"
+  evidence: internal/core/reading/assemble.go:874 — "doc, err = redactExcluded(rel, doc, exclusions)"
+  evidence: internal/core/reading/project_test.go:341 — "if len(res.Bundle.Items) != 0 || len(res.Manifest.Items) != 0 {"
+- ac-2 — MET: all six shapes plus the CRLF blank-line bound are implemented and each has a unit test that I watched pass, and six refusal plants run the same shapes through the eval at every assembling position
+  evidence: internal/core/reading/project.go:1031 — "return i + 1, "a fence delimiter inside the frontmatter block", true"
+  evidence: internal/core/reading/project.go:1134 — "a frontmatter block displaced from line 0 by %d line(s)"
+  evidence: internal/core/reading/project.go:1037 — "return i + 1, "a mapping nested in a block sequence", true"
+  evidence: internal/core/reading/project.go:1039 — "return i + 1, "an explicit key in a flow mapping", true"
+  evidence: internal/core/reading/project.go:835 — "shape = "an attribute value that opens on the line after its equals sign""
+  evidence: internal/core/reading/project.go:200 — "rawHeadingBoundRe = regexp.MustCompile(`(?is)</([a-z] [a-z0-9-]*)\s*>|<h[1-6] (?:\s[^>]*)?/?>|\n[ \t\r]*\n`)"
+  evidence: internal/core/reading/project_test.go:288 — "func TestAnUnboundedRawHeadingRefusesAndACRLFBlankLineBounds(t *testing.T) {"
+- ac-3 — MET: collect calls redactExcluded only for a ScanParsed row and passes an unscanned row's document through untouched, stamping the row's Scan onto each candidate; the two tests assert byte identity plus the unscanned mark, and that no .md item is marked unscanned
+  evidence: internal/core/reading/assemble.go:873 — "if row.Scan == ScanParsed {"
+  evidence: internal/core/reading/size_test.go:637 — "func TestOptedInSourceAndTestsTravelWholeMarkedUnscanned(t *testing.T) {"
+  evidence: internal/core/reading/size_test.go:690 — "func TestNoParsedItemCarriesTheUnscannedMark(t *testing.T) {"
+- ac-4 — MET_WITH_CONCERNS: DecodeManifest refuses an item whose scan mark is absent or outside the closed vocabulary, and each item now carries the mark; the concern is that the emitted exclusions array is unchanged in shape and carries no per-item scoping of its own, so the per-item narrowing lives in include.go's doc comment and in the eval oracle rather than on the artefact's face
+  evidence: internal/core/reading/manifest.go:263 — "if it.Scan == "" {"
+  evidence: internal/core/reading/manifest.go:141 — "Scan Scan `json:"scan"`"
+  evidence: internal/core/reading/include.go:469 — "asserted for the items the manifest marks `parsed` and for no other"
+  evidence: internal/core/reading/include.go:545 — "Positions []Position `json:"-"`"
+  evidence: evals/coldreading_oracle_test.go:800 — "func checkFieldAbsence(a assembled) []violation {"
+- ac-5 — MET_WITH_CONCERNS: both halves are demonstrated over a detached clone of this repository's HEAD and the eval lane passes, but three caveats are owed: the assembler could not run over this corpus at the intent's own commit at all, the proving test landed one commit later, and the item is identified by path rather than by the run-scoped key itm-0736 the criterion names
+  evidence: evals/coldreading_test.go:768 — "func TestTheFixtureLeakIsAbsentUnderEveryCommittedPreset(t *testing.T) {"
+  evidence: evals/coldreading_test.go:811 — "if it.Scan != "unscanned" {"
+  evidence: internal/core/reading/scope_test.go:1058 — "func TestOnlyTheTreePositionsNameSourceOrTest(t *testing.T) {"
+  evidence: .abcd/development/brief/glossary/core/construal.md:11 — "the attribution comment repaired below the frontmatter in 255543c1; assemble refused every position before it"
+- ac-6 — MET: Row gains Scan, every row declares one, Render emits a Floor column between Kind and Admitting rule, and the regenerated charter carries it, so a reader sees the claimed coverage without opening the floor
+  evidence: internal/core/reading/include.go:230 — "Scan Scan"
+  evidence: internal/core/reading/include.go:580 — "| Positions | Source | Matches | Suffixes | Fields | Store | Bucket | Kind | Floor | Admitting rule |"
+  evidence: .abcd/development/readings/README.md:120 — "| Positions | Source | Matches | Suffixes | Fields | Store | Bucket | Kind | Floor | Admitting rule |"
+  evidence: internal/core/reading/include_test.go:429 — "func TestParsedRowsAdmitOnlyMarkdown(t *testing.T) {"
+- ac-7 — MET: the shipped intent row's Positions drop widening, a widening-scoped exclusion row asserts the withdrawal into the manifest, the widening definition loses its shipped line, and both the unit test and the eval assert the family is absent at widening and present at entailment and detection
+  evidence: internal/core/reading/include.go:363 — "Positions: []Position{PositionEntailment, PositionComparative, PositionDetection},"
+  evidence: internal/core/reading/include.go:527 — "Rule: "the widening object as the design documents state it","
+  evidence: evals/coldreading_test.go:657 — "func TestWideningNeverSeesTheShippedIntents(t *testing.T) {"
+  evidence: internal/core/reading/include_test.go:195 — "func TestWideningExcludesDraftsAndPlannedEntailmentIncludesThem(t *testing.T) {"
+- ac-8 — MET: all six brief chapters are admitted as brief sections at every position the brief rows admit, the meta row reaches 00-meta.md alone, and the evidence chapter's exclusion row now states the verdict-material ground in the table's own rule text
+  evidence: internal/core/reading/include.go:296 — "Source: ".abcd/development/brief/04-surfaces","
+  evidence: internal/core/reading/include.go:337 — "Match: []string{"00-meta.md"},"
+  evidence: internal/core/reading/include.go:487 — "Rule: "verdict material: a prior verdict is revision history, the ground the Audit Notes exclusion rests on","
+  evidence: internal/core/reading/include_test.go:492 — "func TestBriefChaptersAreAdmittedAsBriefSections(t *testing.T) {"
+  evidence: internal/core/reading/include_test.go:549 — "func TestTheEvidenceChapterIsExcludedAsVerdictMaterial(t *testing.T) {"
+
+Gap audit:
+- honoured:
+  - a markdown document the floor cannot resolve is refused at admission and named, never passed through unscanned
+    evidence: internal/core/reading/project.go:364 — "if line, shape, ok := unresolvableFrontmatterShape(lines, fenced); ok {"
+    evidence: internal/core/reading/project_test.go:320 — "func TestAnUnresolvableDocumentIsRefusedByName(t *testing.T) {"
+  - admission and examination are one declaration: the extension test is gone and the floor runs over the row's Scan
+    evidence: internal/core/reading/project.go:50 — "There is no file-extension test here any more, and its absence is the point."
+    evidence: internal/core/reading/assemble.go:873 — "if row.Scan == ScanParsed {"
+  - a source or test file is admitted only where a committed preset entry opts it in, travels whole, and is marked unscanned in the manifest
+    evidence: internal/core/reading/include.go:419 — "Scan: ScanUnscanned,"
+    evidence: .abcd/config/reading-presets.json:92 — ""kinds": ["brief-section", "glossary-term", "discipline", "spec", "intent-projection", "doc", "config", "source", "test"],"
+    evidence: internal/core/reading/size_test.go:637 — "func TestOptedInSourceAndTestsTravelWholeMarkedUnscanned(t *testing.T) {"
+  - a scan that ran and a scan that never ran no longer produce byte-identical attestations: every manifest item carries a closed scan mark and the decoder refuses one without it
+    evidence: internal/core/reading/manifest.go:141 — "Scan Scan `json:"scan"`"
+    evidence: internal/core/reading/manifest.go:268 — "if !knownScans[it.Scan] {"
+  - the widening position stops receiving the shipped intents, which neither design document lists in its object, and the floor asserts the withdrawal there
+    evidence: internal/core/reading/include.go:524 — "Detail: ".abcd/development/intents/shipped","
+    evidence: agents/cold-reading-widening.md:8 — "prompt_version moved PATCH and the shipped line removed from the admitted-sources list"
+  - the include table admits the brief's six chapters as brief sections and keeps the evidence chapter out as verdict material, with the ground stated in the table's rule text
+    evidence: internal/core/reading/include.go:330 — "this one contains the glossary — which keeps its own row above."
+    evidence: internal/core/reading/include.go:487 — "Rule: "verdict material: a prior verdict is revision history, the ground the Audit Notes exclusion rests on","
+  - the narrowing the include table performs is stated in the table itself and carried into the rendered charter and the plugin page
+    evidence: .abcd/development/readings/README.md:134 — "| `test` | `unscanned` | Admitted where a committed preset entry names this kind, and never examined"
+    evidence: commands/reading.md:120 — "every manifest item carries a `scan` mark saying `parsed` or `unscanned`."
+  - the size report counts what was not examined and the CLI names it above zero
+    evidence: internal/core/reading/assemble.go:116 — "Unscanned int `json:"unscanned"`"
+    evidence: internal/surface/cli/reading.go:391 — "unscanned: %d item(s) travel whole, not examined by the exclusion floor"
+- diverged:
+  - the spec's assertion that none of the six shapes appears in a committed record the include table admits, checked over the record at the named tree
+    evidence: .abcd/development/specs/closed/spc-2609021003136831-the-reading-include-table-admits-only-what-the-exclusion-flo.md:211 — "None of the six shapes appears in a committed record the include table admits"
+    evidence: .abcd/development/brief/glossary/core/construal.md:11 — "21 glossary records carried the displaced-block shape; assemble refused this corpus at every position until 255543c1 moved the attribution comment below the frontmatter (iss-2609021457186209)"
+  - ac-5's second half, proved in the intent's own change
+    evidence: evals/coldreading_test.go:768 — "TestTheFixtureLeakIsAbsentUnderEveryCommittedPreset landed in c1be0000, one commit after c0baaff4, because the committed entries carried no paths until the preset-windows intent"
+  - the eval's carriers move +2 and the spec names no move of materialClasses
+    evidence: evals/coldreading_oracle_test.go:244 — "{"carriers", len(carriers), 17},"
+    evidence: evals/coldreading_oracle_test.go:245 — "{"materialClasses", len(materialClasses), 10},"
+  - only the widening definition's prompt_version moves PATCH
+    evidence: agents/cold-reading-detection.md:7 — "prompt_version 0.1.1 to 0.1.2; all four definitions gained the four brief-chapter sources and all four moved PATCH"
+    evidence: internal/core/reading/definitions_test.go:252 — "TestDefinitionHoldsItsFiveParts holds every definition's admitted sources against the table, so the four moved together"
+  - each refusal plant's Names name the path, the shape's wording and the excluded thing it hides
+    evidence: evals/coldreading_fixture_test.go:378 — "the plants' Names carry the path and the shape wording only; the hidden key moved to Why, because naming it would mean resolving it"
+  - the manifest's exclusion assertion is made per item
+    evidence: internal/core/reading/include.go:545 — "Positions []Position `json:"-"`"
+    evidence: internal/core/reading/include.go:467 — "What each entry asserts, and over WHICH items, is fixed here rather than left to a reader"
+- missing:
+  - the measurement adr-56 assigns to itd-194: how much corpus the narrowing costs, taken before a reading runs
+    evidence: .abcd/development/decisions/adrs/0056-an-exclusion-control-asserts-only-what-it-can-prove.md:101 — "The corpus a reading sees gets smaller, by an amount nobody has measured."
+    evidence: .abcd/development/intents/shipped/itd-194-the-reading-include-table-admits-only-what-the-exclusion-flo.md:249 — "None. The two questions the draft carried are answered by the ruling."
+
+Scope-condition dispositions:
+- cond-2609021003132586 — narrowed: the corpus was this repository's committed record, but the record had to move for the claim to hold: 21 glossary records carried the displaced-block shape and the assembler refused every assembling position over the corpus as it stood at the intent's own commit
+  narrowing: holds over this repository's committed record as repaired by 255543c1, not over the corpus as it stood when the intent's own commit landed
+  evidence: .abcd/development/brief/glossary/core/construal.md:11 — "the mattpocock/skills attribution comment moved below the frontmatter block in 255543c1"
+  evidence: internal/core/reading/project.go:1134 — "a frontmatter block displaced from line 0 by %d line(s)"
+- cond-2609021003134464 — survived: every parsed row admits markdown and nothing else, every other admitted kind declares ScanUnscanned and is disclosed by the mark, and the parseable set was not widened
+  evidence: internal/core/reading/include_test.go:429 — "func TestParsedRowsAdmitOnlyMarkdown(t *testing.T) {"
+  evidence: internal/core/reading/include.go:450 — "Scan: ScanUnscanned,"
+- cond-2609021003130127 — survived: the committed detection and widening entries name source and test, the entailment entry names neither, and the test asserts every such item in each entry's manifest carries the unscanned mark
+  evidence: .abcd/config/reading-presets.json:28 — ""kinds": ["brief-section", "glossary-term", "discipline", "spec", "doc", "config", "source", "test"],"
+  evidence: .abcd/config/reading-presets.json:60 — ""kinds": ["brief-section", "glossary-term", "discipline", "spec", "intent-projection"],"
+  evidence: internal/core/reading/scope_test.go:1058 — "func TestOnlyTheTreePositionsNameSourceOrTest(t *testing.T) {"
+- cond-2609021003139989 — survived: no reading ran in the delivered range: the readings family holds only its charter, and every criterion above was judged against the assembler's output and its manifest
+  evidence: .abcd/development/readings/README.md:120 — "the readings family carries the rendered include table and no reading record"
 ## Grounds
 
 - pursued: we expect refusing markdown the floor cannot resolve, and marking every item the floor did not parse as unscanned in the manifest, to close the container-shape class that nine rounds of added patterns did not, because every leak shared one shape, a scan that declined with nothing downstream told; a leak in a document the manifest marks as parsed, or an unparsed item arriving without the mark, would show it wrong
