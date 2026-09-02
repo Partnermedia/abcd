@@ -27,6 +27,14 @@ func TestScrubRemoteUserinfo(t *testing.T) {
 		{"ssh://git:secret@github.com/owner/repo.git", "ssh://github.com/owner/repo.git"},
 		{"git@github.com:owner/repo.git", "git@github.com:owner/repo.git"},
 		{"user:secret@example.com:owner/repo.git", "example.com:owner/repo.git"},
+		// A password may itself carry a slash; the host:path colon after the
+		// userinfo is what makes this scp-like, so it is still a credential.
+		{"user:pa/ss@example.com:owner/repo.git", "example.com:owner/repo.git"},
+		// No userinfo at all: the colon is the host:path separator and the @ is
+		// inside the PATH. Splitting on the @ here would rewrite a repository's
+		// address into "po.git" and lose the host.
+		{"example.com:owner/re@po.git", "example.com:owner/re@po.git"},
+		{"git@example.com:owner/re@po.git", "git@example.com:owner/re@po.git"},
 		{"/srv/git/repo.git", "/srv/git/repo.git"},
 		{"", ""},
 	} {
