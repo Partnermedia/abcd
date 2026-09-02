@@ -30,7 +30,9 @@ The scribe exists so that machine assistance in maintaining the ledger remains a
 
 ## Decisions flagged for the maintainer
 
-- **The invariant exists; its mechanism does not.** Brief invariant 15 already states that no session holds both a reading and the ledger. What is owed, captured as an issue in the same change, is the ADR stating the mechanism and the invariant's amendment naming the stamp and the check. The per-run stamp is a change to the reading bundle's shape and moves the assembler version, as itd-199 did for the scope block.
+Both were adopted by the maintainer on 2026-09-02 as [adr-2609021016275803](../../decisions/adrs/2609021016275803-no-session-holds-both-a-reading-and-the-ledger-and-a-per-run.md), which states the mechanism behind brief invariant 15 and amends the invariant to name the stamp and the check.
+
+- **The invariant exists, and the ADR states its mechanism.** Brief invariant 15 states that no session holds both a reading and the ledger; the ADR states the per-run context stamp and the session check as the mechanism, and the invariant's amendment names them. The per-run stamp is a change to the reading bundle's shape and moves the assembler version, as itd-199 did for the bundle's selector block.
 - **A new top-level verb.** `scribe` is a verb of its own rather than a sub-verb of `reading`, because the two contexts must never share a front door. The surface coverage and index gates require its plugin page, its brief surface chapter row and its entry in the released surface snapshot, all in scope below.
 
 ## What's In Scope
@@ -63,7 +65,7 @@ We expect an assembler with an allow list to hold the inverse access rule for th
 - **Given** a scribe payload carrying a disposition the researcher supplied, **when** `scribe ingest` runs, **then** a disposition record exists through the disposition validator and nothing else was written.
 - **Given** a scribe payload carrying a ground or a resolution the researcher did not supply, **when** `scribe ingest` runs, **then** it refuses and names the field.
 - **Given** a scribe payload naming an item it was given no disposition for, **when** `scribe ingest` runs, **then** the item appears in the outstanding report and no record was written for it.
-- **Given** a retained transcript carrying a reading stamp and a scribe stamp, **when** the session check runs, **then** it reports the transcript by name.
+- **Given** a retained transcript carrying a reading stamp and a scribe stamp of one run, **when** the session check runs, **then** it reports the transcript by name.
 - **Given** two retained transcripts, one carrying each stamp of one run, **when** the session check runs, **then** it reports that no retained transcript carries two stamps of one run.
 - **Given** an empty store, **when** the session check runs, **then** it reports that the property is unobserved rather than clean.
 - **Given** the read-block eval over a repository holding a scribe manifest, **when** it runs, **then** the manifest does not reach any reading.
@@ -75,7 +77,7 @@ We expect an assembler with an allow list to hold the inverse access rule for th
 
 ## Open Questions
 
-None beyond the flagged decisions above.
+None. The flagged decisions are adopted as adr-2609021016275803.
 
 ## Audit Notes
 

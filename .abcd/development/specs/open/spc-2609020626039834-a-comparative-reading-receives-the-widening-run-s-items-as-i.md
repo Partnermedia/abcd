@@ -11,11 +11,13 @@ production_mode: dictated-and-formatted
 
 spc-2609020626039834 delivers
 [itd-2609020625407419](../../intents/planned/itd-2609020625407419-a-comparative-reading-receives-the-widening-run-s-items-as-i.md).
-`abcd reading assemble --position comparative` gains a fourth operand naming one
-widening run, and the include table gains one row, admitted at the comparative
-position alone, that reaches that run's reading records and projects each to
-the two body fields the widening position declares, keyed by the item
-identifier the comparative body must cite. At the comparative position the
+`abcd reading assemble --position comparative --target <commit>` derives from
+the record the one widening run whose candidates await characterisation, and
+the include table gains one row, admitted at the comparative position alone,
+that reaches that run's reading records and projects each to the two body
+fields the widening position declares, keyed by the item identifier the
+comparative body must cite. The invocation stays a position and a target
+state: No operand names the run. At the comparative position the
 include table is the whole account of what the reading sees: The candidates
 pass through the table and the walk as every other row does, every other row
 withdraws from the position except the criteria discipline, and the rest of the
@@ -34,20 +36,29 @@ preset refusal of
 [spc-69](../closed/spc-69-a-reading-is-about-something-narrower-than-everything-its.md)
 is withdrawn, and the read-block eval gains the comparative rows and plants.
 
-This spec builds under the two flagged readings and does not ship until the ADR
-is adopted. The positional exception to the prior-run exhaust is a
-trust-boundary rule and belongs in an ADR with a brief invariant amendment;
-[iss-2609020626100041](../../../work/issues/open/iss-2609020626100041-adr-owed-the-comparative-channel-admits-two-fields-of-one-wi.md)
-carries that decision and the withdrawal of itd-199's ac-10 with it. The same
-ADR carries the fourth operand: It supersedes adr-58's "to that extent and to
-no other" to the extent of one more closed operand, `--candidate-run <rdg-N>`,
-and amends brief invariant 15's operand enumeration to name it; the binding
-property, that no operand carries prose, is unchanged.
+The decision this spec builds on is adopted:
+[adr-2609021016272867](../../decisions/adrs/2609021016272867-the-comparative-reading-receives-one-widening-run-s-candidat.md)
+carries `status: accepted`, adopted by the maintainer on 2026-09-02 at the
+planning interview after being checked against the design framework and the
+readings companion, and
+[iss-2609020626100041](../../../work/issues/resolved/iss-2609020626100041-adr-owed-the-comparative-channel-admits-two-fields-of-one-wi.md)
+is resolved by it. The positional exception to the prior-run exhaust is the
+ADR's decision, with the withdrawal of itd-199's ac-10; the same ADR, corrected
+on 2026-09-02, fixes the selection of the widening run as a derivation from
+the record and adds no operand, because the design fixes the invocation at a
+position and a target state
+([adr-2609021016286571](../../decisions/adrs/2609021016286571-the-invocation-is-a-position-and-a-target-state-and-the-comm.md))
+and brief invariant 15's operand enumeration names two. The assembler selects
+the one committed widening run at the target whose items carry no disposition
+and no admission; none or more than one refuses, listing the widening runs at
+the target with each run's item count and disposition state. The ambiguous
+case, two undispositioned widening runs after the closing run, is resolved by
+dispositioning one run's items, which is the act the design sequences next.
 
 ## Scope
 
-In: The candidate-run operand and its refusals; the candidate row of the
-include table, its two-field projection and its selector; the withdrawal of
+In: The derivation of the candidate run and its two refusals; the candidate
+row of the include table, its two-field projection and its selector; the withdrawal of
 every other row from the comparative position and the criteria narrowing of
 the disciplines row; the ordering guard; the fewer-than-two branch and the
 empty comparative run it stages; the candidate kind, the bundle and manifest
@@ -55,7 +66,7 @@ additions, and the version classes that move with them; the derived exclusion
 rows the comparative position asserts; the committed preset entry and the
 withdrawal of the loader's comparative refusal; the criteria discipline as a
 required part of the comparative bundle; the two comparative ingest checks and
-the empty-item carve-out; the comparative-run probe the admission gate reads;
+the empty-run rule; the comparative-run probe the admission gate reads;
 the exported durable-tier writer; the definition's Object section; the eval
 rows, plants and counts; the plugin page and the brief chapter.
 
@@ -71,14 +82,28 @@ maintainer's.
 
 ### Landing order
 
-The eight Iteration 2 specs land in this order: PRE (spc-2609020626048722),
-CND (spc-2609020626046252), ORG (spc-2609020626042168), CMP
-(spc-2609020626039834), ADM (spc-2609020626040342), RFM (spc-2609020626048705),
-SCR (spc-2609020626045177), PRN (spc-2609020626042471). CND lands strictly
-before PRN; CMP before ADM before SCR; RFM after ADM and after CMP. No spec
-names a target version number: Each names the class of bump it makes, and the
-merging change sets each constant from the merged base and updates every
-pinned count in the same diff.
+The Iteration 2 set lands in two phases around the maintainer's readings, on
+the corrections ruling of 2026-09-02. Phase A, before any reading runs: The
+two-operand invocation (spc-2609021004075744), itd-194
+(spc-2609021003136831), the preset windows (spc-2609020626048722), the
+comparative channel (spc-2609020626039834) and the reading-occasioned origin
+(spc-2609020626042168), in that order. The maintainer then runs the four
+readings in the cycle's order, widening, entailment, comparative and
+detection, and dispositions their outputs. Phase B, built at Step 5 after
+those dispositions: The condition disposition (spc-2609020626046252), the
+admission and surprise verbs (spc-2609020626040342), the reframe record
+(spc-2609020626048705), the scribe verbs (spc-2609020626045177) and the
+principles read object (spc-2609020626042471), in that order. No spec names a
+target version number: Each names the class of bump it makes, and the merging
+change sets each constant from the merged base and updates every pinned count
+in the same diff.
+
+This spec lands fourth in Phase A, after the preset windows, whose version 2
+shape its entry conforms to, and before the reading-occasioned origin. The
+admission and surprise verbs, whose gate reads the probe this spec adds, land
+in Phase B; between the phases the maintainer's comparative reading runs over
+the channel this spec lands, and the first admissions are hand-authored in
+the target format until the verb lands.
 
 This spec's classes: `SchemaVersion` on the bundle and the manifest moves by
 one, because the closed `Kind` vocabulary gains `candidate` and both shapes
@@ -86,38 +111,55 @@ gain fields (`DecodeManifest` refuses an unknown kind, so an old binary refuses
 the new manifest); `AssemblerVersionCore` moves MINOR, because `Table`,
 `Exclusions`, `Kinds()` and the bundle shape all move. The comparative preset
 entry conforms to the preset file's committed version at landing, so it
-carries the `window` spc-2609020626048722's version 2 requires.
+carries the three parts spc-2609020626048722's version 2 requires.
 
-### The operand
+### The derived run
 
-`AssembleRequest` in `internal/core/reading/assemble.go` gains
-`CandidateRun string`, and the front door in `internal/surface/cli/reading.go`
-gains `--candidate-run <rdg-N>`. The value is validated by
-`recordid.ValidReadingRunID` before it is joined into any path, exactly as the
-ingest verb validates a payload's run id. It is a closed form, never prose, so
-adr-58's binding property holds with a fourth operand as it held with a third;
-the ADR named above is what makes the fourth operand a ruled one rather than
-an accretion.
+`AssembleRequest` in `internal/core/reading/assemble.go` gains nothing, and
+the front door in `internal/surface/cli/reading.go` gains no flag: The
+invocation is `--position` and `--target`, and `readingOperands` in
+`internal/surface/cli/regime_surface_test.go` stays pinned to the two, failing
+closed on any addition. At the comparative position `Assemble` derives the
+candidate run from the record before anything is resolved.
 
-The comparative position refuses without it, naming the operand and its shape.
-Every other position refuses with it: A candidate set is the comparative
-reading's object and nobody else's, so the operand elsewhere is a misdirected
-invocation rather than a harmless extra. `readingOperands` in
-`internal/surface/cli/regime_surface_test.go` is the pin that fails closed on
-the addition, and this spec is the statement the pin asks for. The block in
-`Assemble` that refuses the comparative position before anything is resolved is
-removed, and `AssemblingPositions()` returns all four positions.
+`reading` gains `WideningRuns(repoRoot, target string) ([]WideningRun, error)`,
+with `WideningRun{ID string; Items int; Dispositioned bool; Admitted bool}`;
+it walks `.abcd/development/readings/*/run.json` behind the symlink-refusing
+walk, keeps the committed runs whose `position` is `widening` and whose
+`target_commit` is the resolved target, counts each run's reading records,
+and asks `capture.ItemFate` for every item, which `reading` may call because
+it already imports `capture` for the ingest. `DeriveCandidateRun(repoRoot,
+target string) (WideningRun, error)` applies the ADR's rule over that list: A
+run qualifies when it holds items and none of them carries a disposition or an
+admission, and exactly one must qualify. With none, the refusal is the typed
+error `NoCandidateRun{Runs []WideningRun}`; with more than one it is
+`AmbiguousCandidateRun{Runs []WideningRun}`. Both carry the whole listing,
+every widening run at the target with its run id, its item count and its
+disposition state, rendered one run per line, so the JSON surface carries it
+under `widening_runs` and the plain rendering prints it, and the operator sees
+what to disposition to make the selection unambiguous; a target with no
+committed widening run at all says so in the first refusal. A run whose items
+already carry a fate is listed rather than hidden, because that is what the
+operator needs to see to understand why it was not selected. The result and
+the manifest name the run derived: `AssembleResult` gains `CandidateRun` and
+the manifest carries it, below, so a reader of either knows what the assembler
+selected and why. `commands/reading.md` documents the rule and the two
+refusals, and says that the remedy for an ambiguous selection is to
+disposition one run's items, which is the act the design places after the
+comparative reading in any case. The block in `Assemble` that refuses the
+comparative position before anything is resolved is removed, and
+`AssemblingPositions()` returns all four positions.
 
 ### The candidate row
 
 `Table` in `internal/core/reading/include.go` gains one row: Positions
 `PositionComparative` alone, Source `.abcd/work/issues/readings`, Store `rdi`,
 Fields `configuration` and `what_admits_it`, Kind `KindCandidate`, and a Rule
-citing the ADR iss-2609020626100041 carries. The row's selector is the
-`--candidate-run` operand: The assembly narrows the row's enumeration to the
-named run's directory before the scope filter runs, the way a record-id scope
-narrows a row to one record, so the row reaches one run directory and never
-the family. That directory is the leaf bucket the readings family keys on,
+citing adr-2609021016272867. The row's selector is the derived run: The
+assembly narrows the row's enumeration to that run's directory before the
+preset entry is applied, the way a record in an entry's object set narrows a
+row to one record, so the row reaches one run directory and never the
+family. That directory is the leaf bucket the readings family keys on,
 which is what assembler rule 1 permits an include row to name (ruling (18)),
 and the row is refused at every other position by `AdmittedAt` as every row
 is. Each item carries the item id as its key, and the two fields resolve
@@ -127,15 +169,15 @@ other field of the record have no row and therefore no item: The projection is
 the include table's, not a caller's memory.
 
 Because the row is a table row, the rest follows without a second mechanism.
-`Admits` answers true for the named run's records at the comparative position
-and false everywhere else; `Render()` carries the row, so the charter names
-the channel and `AssemblerVersion` digests it; the comparative definition's
-source list is regenerated from the table, which `TestDefinitionHoldsItsFiveParts`
-in `internal/core/reading/definitions_test.go` holds through `statedSources`
-against `admittedSources`. `Kinds()` gains `KindCandidate` (`"candidate"`),
-and the kind is refused as a `--scope` token by `ResolveScope` and as a preset
-kind by `validatePresets`, naming it: A scope selects repository material, and
-a candidate is selected by the operand, never by a scope.
+`Admits` answers true for the derived run's records at the comparative
+position and false everywhere else; `Render()` carries the row, so the charter
+names the channel and `AssemblerVersion` digests it; the comparative
+definition's source list is regenerated from the table, which
+`TestDefinitionHoldsItsFiveParts` in `internal/core/reading/definitions_test.go`
+holds through `statedSources` against `admittedSources`. `Kinds()` gains
+`KindCandidate` (`"candidate"`), and the kind is refused as a preset kind by
+`validatePresets`, naming it: An entry selects repository material, and a
+candidate is selected by the derived run, never by an entry.
 
 The run must have committed: `Assemble` probes
 `.abcd/development/readings/<rdg-N>/run.json` and refuses a run without its
@@ -153,16 +195,18 @@ assemblies of one run produce a byte-identical bundle.
 
 At the comparative position the include table is the whole account, and the
 readings companion admits no source but the candidates and the criteria. Every
-row whose Positions is `allPositions` today loses the comparative position:
-The three brief rows, the shipped-intents row, the specs row and the four
-shipped-tree rows. The disciplines row keeps it, and at the comparative
+row that still carries the comparative position loses it: The seven brief and
+glossary rows (itd-194's six chapter rows and the glossary row), the
+shipped-intents row, which after itd-194 carries entailment, comparative and
+detection, the specs row and the four shipped-tree rows. The disciplines row keeps it, and at the comparative
 position the assembler narrows that row's enumeration to `CriteriaDiscipline`
-(`"itd-191"`) before the scope filter, so no scope token can widen the
-comparative material past the criteria. The consequence is deliberate: `--scope
-source` or `--scope warm` at the comparative position selects nothing outside
-the criteria discipline, and the scope's meaning at this position is exactly
-what the preset entry below names. `TestThreePositionsCarryDistinctItemSets`
-extends to four positions on that basis.
+(`"itd-191"`) before the preset entry is applied, so no entry can widen the
+comparative material past the criteria. The consequence is deliberate: An
+entry naming `source` or a path at the comparative position selects nothing
+outside the criteria discipline, and the entry's meaning at this position is
+exactly what the committed entry below names.
+`TestThreePositionsCarryDistinctItemSets` extends to four positions on that
+basis.
 
 ### The ordering guard
 
@@ -203,16 +247,34 @@ Fewer than two candidates refuses the assembly, and the refusal names the
 interpretation: The comparative reading has nothing to compare and is not
 exercised. Unless the invocation is a dry run, the assembly still stages a run
 directory, on the same rules as any other, whose bundle carries no candidate
-item and whose manifest carries `candidate_run: <rdg-N>` and `candidates: 0`,
-and the result reports `NotExercised` with the count the run holds. That run
+item and whose manifest carries `candidate_run: <rdg-N>`, `candidates` at the
+count of items the derived run holds, which is one for a one-item run, and
+`exercised: false`, and the result reports `NotExercised` with the same count.
+The count is never written as zero for a run that holds an item: `candidates`
+is defined as the derived run's item count, and `exercised` is the field that
+says the position was not exercised. That run
 is committed by `abcd reading ingest` with an empty item list, which is the
 clean-run idiom ruling (3) already fixed: A run recorded with an empty item
 set. `checkEnvelope` in `internal/core/reading/ingest.go` refuses an empty item
-set today; the refusal gains one carve-out, taken after the parked manifest is
-resolved, for a comparative manifest whose `candidates` is zero, and no other
-run may be empty. The outcome of a widening run is therefore one thing whether
-the position ran or was not exercised: A committed comparative run whose
-manifest names that widening run. The durable tier stays write-once at
+set today, and on correction (4) of the 2026-09-02 ruling that refusal goes:
+The framework's section 13 records a run that returns no items as a run with
+an empty item set at every position, so the ingest commits such an output as
+a run record with an empty item list at widening, entailment, comparative and
+detection alike, and never refuses it. Refusal is reserved for a malformed
+payload, which `checkEnvelope` goes on refusing by name (a missing field, an
+unknown key, a regime the position does not declare, an item that fails
+`checkItem`). The not-exercised comparative run is one instance of the
+general rule and not a carve-out: Its manifest carries `exercised: false`,
+and an empty item set at any other position is the clean run the framework's
+contingency describes. `TestIngestCommitsAnEmptyRunAtEveryPosition` in
+`ingest_regime_test.go` commits an empty output at each of the four positions
+and reads the run record back with an empty item list, and
+`TestIngestStillRefusesAMalformedEmptyPayload` proves the refusal survives
+for a payload that is empty and malformed. This resolves
+[iss-2609021153269181](../../../work/issues/open/iss-2609021153269181-the-ingest-verb-refuses-an-output-carrying-no-items-where-th.md).
+The outcome of a widening run is therefore one thing whether the position ran
+or was not exercised: A committed comparative run whose manifest names that
+widening run. The durable tier stays write-once at
 emission; no other run's directory is ever amended, and a second assembly over
 the same one-item run is a second run.
 
@@ -240,7 +302,7 @@ because the durable tier is write-once at emission, and writes through
 through it; nothing in this spec calls it, and it exists here because the root
 and the write are this package's.
 
-### The bundle, the kind, the scope, and the criteria
+### The bundle, the kind, the entry, and the criteria
 
 `BundleItem` in `internal/core/reading/manifest.go` gains `Candidate string`
 and `Field string`, both `omitempty`, both set only for a candidate item: The
@@ -254,22 +316,25 @@ gains `candidate` and `field`; the bundle's own allow-set there does not move
 for this spec.
 
 `validatePresets` in `internal/core/reading/scope.go` stops refusing a
-comparative entry, and `.abcd/config/reading-presets.json` gains one under
-`cold` at `comparative` naming `records: ["itd-191"]` and no kind and no path,
-in the shape the committed preset version requires at landing, so it carries a
-`window` measured in a clean clone. `warm` adds nothing there, and the union
-keeps warm containing cold. spc-2609020626048722's window eval iterates the
-three assembling positions by name and states that the comparative entry is
-exempt, because its object is bounded by the widening run rather than by the
-tree; this spec's own eval covers the comparative position. The scope stays
-required and keeps its meaning: It selects the repository material passed
-beside the candidates, which at this position is the discipline and nothing
-else.
+comparative entry, and `.abcd/config/reading-presets.json` gains the entry
+for `comparative` in the three-part shape spc-2609020626048722 fixes: An
+object set of `records: ["itd-191"]` and no path, kinds `["discipline"]`, and
+a `window` measured in a clean clone. spc-2609020626048722's window eval
+iterates the three assembling positions by name and states that the
+comparative entry is exempt, because its object is bounded by the widening
+run rather than by the tree; this spec's own eval covers the comparative
+position: `TestComparativeEntryFitsItsDeclaredWindow` in
+`evals/coldreading_test.go` assembles the comparative position over the
+fixture widening run by dry run and compares the measured figure against the
+committed entry's declaration, failing on a breach with the same three facts
+the window eval names. The entry keeps its meaning: It selects the repository material
+passed beside the candidates, which at this position is the discipline and
+nothing else, and a change to it is a commit.
 
 The criteria are never supplied at invocation and a comparative bundle without
 them characterises against nothing, so `reading` declares
 `CriteriaDiscipline = "itd-191"` and `Assemble` refuses a comparative assembly
-whose scoped items carry no item whose path names that record. The declared
+whose selected items carry no item whose path names that record. The declared
 criteria are read at assembly by `declaredCriteria` in
 `internal/core/reading/criteria.go`: The bullets of the discipline's
 `## The rule` section, each name being the text before the first em dash. A
@@ -278,7 +343,7 @@ test pins the committed
 to its six names, so an amendment to the slate is a recorded change here too.
 
 The comparative definition's Object section in `agents/cold-reading-comparative.md`
-names both the candidate run and the discipline and loses its two
+names both the derived candidate run and the discipline and loses its two
 does-not-assemble paragraphs; the precedence sentence stays, and its source
 list is regenerated from the table.
 `TestComparativeObjectIsTheWideningPreAdmissionOutput` in
@@ -286,13 +351,24 @@ list is regenerated from the table.
 
 ### The manifest and the exclusions it asserts
 
-`Manifest` gains `CandidateRun`, `Candidates` (the count of candidates the
-bundle carries), `CandidateFields` (the two projected field names) and
-`Criteria` (the parsed names), all `omitempty`, and `ManifestItem` gains
-`Candidate` beside the `Field` it already carries. `RunRecord` in
-`internal/core/reading/ingest.go` carries `CandidateRun` and `Candidates`
-forward, so a committed comparative run says which widening run it
-characterised and whether it was exercised.
+`Manifest` gains `CandidateRun` (the run derived, with the JSON key
+`candidate_run`), `Candidates` (the count of items the derived run holds,
+which is the count of candidates the bundle carries when the position is
+exercised and stays the run's count when it is not), `Exercised` (with the
+JSON key `exercised`: True when the run holds two or more candidates and the
+bundle carries them, false on the staged empty run; written whenever
+`candidate_run` is, so a false value is a statement and not an absence),
+`CandidateFields` (the two projected field names) and `Criteria` (the parsed
+names), the last two `omitempty`, and `ManifestItem` gains `Candidate` beside
+the `Field` it already carries. The
+manifest therefore records what the assembler selected and what it weighed,
+and a reader can check the selection against the record: The run named is the
+one committed widening run at the manifest's target whose items carried no
+fate when the assembly ran. `RunRecord` in
+`internal/core/reading/ingest.go` carries `CandidateRun`, `Candidates` and
+`Exercised` forward, so a committed comparative run says which widening run it
+characterised, how many candidates that run held, and whether it was
+exercised.
 
 The exclusion floor's row for `.abcd/work/issues` narrows to the three other
 positions. At the comparative position the directory rows are derived, never
@@ -308,7 +384,7 @@ allow list in spc-2609020626045177 derives from the same function, so the two
 instruments describe one set. `assertExclusions` enforces the directory rows
 as it does today; `assertCandidateProjection` is the fail-closed half of the
 signal row, refusing to emit any candidate item whose path is not under the
-named run's directory or whose field is not one of the two. An assertion the
+derived run's directory or whose field is not one of the two. An assertion the
 manifest declares and the assembler cannot violate is what adr-56 asks of an
 exclusion control. `.abcd/development/readings` stays excluded at every
 position: A run's own manifest and `run.json` never travel.
@@ -324,7 +400,10 @@ item, refused as `unknown-candidate` naming the item's ordinal and the id.
 `criterion` must equal, after `foldForMatching`, one of `manifest.Criteria`,
 refused as `undeclared-criterion` naming the ordinal and the criterion. The
 reserved names and the ordering signatures of the evaluative regime are
-untouched.
+untouched. The supply-regime check as this tree stands is the reserved-name
+refusals, enforced, and the four prose detectors, flagging; the case report
+describes whichever state the opening target carries, on correction (6) of
+the 2026-09-02 ruling.
 
 On the commit path nothing outside the run's own directory is written: The run
 record carries `candidate_run`, and the admission gate finds it through
@@ -333,10 +412,11 @@ record carries `candidate_run`, and the admission gate finds it through
 ### The read-block eval
 
 The fixture under `evals/testdata/cold-reading/baseline/` gains a committed
-widening run of three items, a second widening run, dispositions, admissions
-and a surprise on the second run's items, and a variant carrying a disposition
-on one candidate of the named run. Three sentinel classes are added:
-`CANDIDATE`, the carrier, planted in the `configuration` of the named run's
+widening run of three items at the fixture's target, a second widening run at
+the same target whose items all carry dispositions, admissions and a surprise
+(so the first run is the one the assembler derives), and a variant carrying a
+disposition on one candidate of the derived run. Three sentinel classes are added:
+`CANDIDATE`, the carrier, planted in the `configuration` of the derived run's
 items and required to arrive at the comparative position; `ENVELOPE`, planted
 in every candidate's `pattern` and required never to arrive; and `FATE`,
 planted in the second run's dispositions and surprise (the leak check) and in
@@ -345,14 +425,16 @@ the second run's items as homes. The oracle stays transcribed: No file under
 `evals/` imports the assembler, so `excludedFamilies` is edited by hand to
 mirror the derived rows, and spc-2609020626048705 adds its row when it lands.
 
-The pinned counts move as follows. `sentinelClasses` 18 to 21.
-`excludedKeys` stays at 2: The envelope's keys are excluded by the candidate
-row's projection and caught by plant, not by the key table. `excludedFamilies`
-15 to 21: The `.abcd/work/issues` row gains the three other positions, and six
-comparative-only rows are added for `open`, `resolved`, `wontfix`,
-`dispositions`, `admissions` and `surprises`. `admittedRecordPaths` 8 to 9:
-The fixture's candidate run directory at the comparative position. `coverage`
-56 to 65, with these rows:
+The pinned counts move as follows, each stated as the delta this spec makes,
+since itd-194 and the preset windows move some of the same tables first and
+the merging change sets each literal from the merged base. `sentinelClasses`
++3. `excludedKeys` unchanged: The envelope's keys are excluded by the
+candidate row's projection and caught by plant, not by the key table.
+`excludedFamilies` +6: The `.abcd/work/issues` row gains the three other
+positions, and six comparative-only rows are added for `open`, `resolved`,
+`wontfix`, `dispositions`, `admissions` and `surprises`. `admittedRecordPaths`
++1: The fixture's candidate run directory at the comparative position.
+`coverage` +9, with these rows:
 
 - The candidate run's items are admitted at the comparative position,
   projected to configuration and what admits it. Falsifier: Delete the
@@ -361,9 +443,9 @@ The fixture's candidate run directory at the comparative position. `coverage`
   other positions to the row. Caught by family absence; class `CANDIDATE`.
 - The candidate projection drops the envelope. Falsifier: Empty the row's
   `Fields`. Caught by sentinel absence; class `ENVELOPE`.
-- No run other than the candidate run reaches the comparative reading.
-  Falsifier: Drop the run narrowing from the candidate selector. Caught by
-  sentinel absence; class `EXHAUST`.
+- No run other than the derived candidate run reaches the comparative
+  reading. Falsifier: Drop the run narrowing from the candidate selector.
+  Caught by sentinel absence; class `EXHAUST`.
 - Dispositions never reach the comparative reading. Falsifier: Delete the
   derived dispositions row and add an include row for it. Caught by sentinel
   absence; class `FATE`.
@@ -380,17 +462,25 @@ The fixture's candidate run directory at the comparative position. `coverage`
   assembly. Falsifier: Delete the `ItemFate` call. Caught by refusal; class
   `FATE`.
 
-`declaredGaps` stays at 7: Every row above is caught. `evals/coldreading_test.go`
+`declaredGaps` unchanged: Every row above is caught. `evals/coldreading_test.go`
 gains the comparative cases named below; `TestComparativeRefusesToAssemble` is
 retired with the refusal it guarded, and `TestEverySentinelIsPlanted` counts
 the three new classes.
 
 ## How the Acceptance Criteria are satisfied
 
-- **ac-1**: `Assemble` refuses a comparative request whose `CandidateRun` is
-  empty, naming `--candidate-run` and the `rdg-N` shape. Test:
-  `TestComparativeRequiresACandidateRun`.
-- **ac-2**: The candidate row enumerates the named run and projects two fields;
+- **ac-1**: `DeriveCandidateRun` selects the one committed widening run at
+  the target whose items carry no disposition and no admission; with none it
+  refuses as `NoCandidateRun` and with more than one as
+  `AmbiguousCandidateRun`, each listing the widening runs at the target with
+  their item counts and disposition state, and the manifest records the run
+  derived. Tests: `TestComparativeDerivesTheOneUndispositionedWideningRun`
+  (two runs planted, one with a dispositioned item; the other is selected and
+  the manifest names it), `TestTwoUndispositionedWideningRunsRefuseNamingThem`
+  (both listed with counts and state), `TestNoQualifyingWideningRunRefuses`
+  (one run planted, every item dispositioned; listed, and the refusal says why
+  it did not qualify), and `TestNoWideningRunAtTheTargetRefusesSayingSo`.
+- **ac-2**: The candidate row enumerates the derived run and projects two fields;
   `candidates.go` emits two items per candidate; the bundle carries
   `Candidate` and `Field` and the discipline item, and no other row is
   admitted. Tests: `TestComparativeBundleCarriesTwoFieldsPerCandidate`,
@@ -405,7 +495,8 @@ the three new classes.
   stages a comparative run with an empty candidate set whose manifest names
   the widening run; `reading ingest` commits it with an empty item list.
   Tests: `TestOneCandidateStagesAnEmptyComparativeRun`,
-  `TestIngestCommitsAnEmptyComparativeRun`.
+  `TestIngestCommitsAnEmptyComparativeRun`, and the general rule it is one
+  instance of, `TestIngestCommitsAnEmptyRunAtEveryPosition`.
 - **ac-6**: The candidate row reaches one run directory and two fields; the
   derived exclusion rows assert the rest; `assertCandidateProjection` refuses
   any breach. Tests: `TestComparativeManifestAssertsTheDerivedExclusions`,
@@ -425,8 +516,11 @@ Watched fail before, pass after; each refusal proved by a mutation that removes
 it.
 
 - `internal/core/reading/candidates_test.go`:
-  `TestComparativeRequiresACandidateRun`,
-  `TestCandidateRunIsRefusedAtEveryOtherPosition`,
+  `TestComparativeDerivesTheOneUndispositionedWideningRun`,
+  `TestTwoUndispositionedWideningRunsRefuseNamingThem`,
+  `TestNoQualifyingWideningRunRefuses`,
+  `TestNoWideningRunAtTheTargetRefusesSayingSo`,
+  `TestAWideningRunAtAnotherTargetIsNotDerived`,
   `TestComparativeBundleCarriesTwoFieldsPerCandidate`,
   `TestComparativeBundleCarriesTheCriteriaDiscipline`,
   `TestComparativeAdmitsNoOtherRow`,
@@ -449,17 +543,18 @@ it.
   `TestDeclaredCriteriaReadsTheCommittedDiscipline` (six names),
   `TestDeclaredCriteriaRefusesAnEmptySlate`.
 - `internal/core/reading/scope_test.go`: `TestComparativeRefuses` is replaced by
-  `TestComparativePresetIsAdmitted`; `TestWarmContainsCold` and
-  `TestThreePositionsCarryDistinctItemSets` extend to four positions;
+  `TestComparativePresetIsAdmitted`;
+  `TestThreePositionsCarryDistinctItemSets` extends to four positions;
   `TestNoBundleFieldIsAScopeSelector` covers `Candidate` and `Field`;
-  `TestCandidateIsNotAScopeToken` and `TestCandidateIsNotAPresetKind`.
+  `TestCandidateIsNotAPresetKind`.
 - `internal/core/reading/size_test.go`: `TestBundleGainsNoFieldFromTheReport`
   with the item allow-set extended.
 - `internal/core/reading/ingest_regime_test.go`:
   `TestIngestRefusesACandidateOutsideTheRun`,
   `TestIngestRefusesAnUndeclaredCriterion`,
   `TestIngestCommitsAnEmptyComparativeRun`,
-  `TestIngestStillRefusesAnEmptyRunAtEveryOtherPosition`.
+  `TestIngestCommitsAnEmptyRunAtEveryPosition`,
+  `TestIngestStillRefusesAMalformedEmptyPayload`.
 - `internal/core/reading/ingest_test.go`: `TestWriteRunArtefactIsWriteOnce`,
   `TestWriteRunArtefactRefusesAnUncommittedRun`,
   `TestWriteRunArtefactRefusesTheRunsOwnFiles`.
@@ -468,15 +563,20 @@ it.
   `TestComparativeRunForIsEmptyBeforeAnyRun`.
 - `internal/core/issueschema/disposition_test.go`: `TestItemFateJudgement`;
   `internal/core/issueschema/statusdirs_test.go`: `TestLedgerDirsNamesEveryConstant`.
-- `internal/surface/cli/regime_surface_test.go`: `readingOperands` gains
-  `candidate-run`; `TestCandidateRunIsAClosedForm` refuses a value that is not
-  an `rdg-N`.
+- `internal/surface/cli/regime_surface_test.go`: `readingOperands` stays at
+  `position`, `target`, and the pin fails closed if this spec's landing adds
+  one; `TestComparativeRefusalRendersTheWideningRuns` asserts the plain and
+  JSON renderings of both refusals carry the listing.
 - `evals/coldreading_test.go`:
   `TestComparativeChannelCarriesCandidatesAndNothingElse` (dispositions,
-  admissions, a surprise and a second run planted; the bundle carries the named
-  run's two candidate fields and the discipline, the carrier arrives, no other
+  admissions, a surprise and a second run planted, the second run's items all
+  dispositioned so the first is the one derived; the bundle carries that run's
+  two candidate fields and the discipline, the carrier arrives, no other
   sentinel does, and the manifest asserts the derived exclusions),
-  `TestComparativeChannelCatchesAPlantedFate` (ac-9).
+  `TestComparativeChannelCatchesAPlantedFate` (ac-9),
+  `TestComparativeEntryFitsItsDeclaredWindow` (the fixture widening run
+  assembled at the comparative position, measured against the committed
+  entry's declaration).
   `TestComparativeRefusesToAssemble` is retired with the refusal it guarded;
   `TestEverySentinelIsPlanted` and `TestEveryAssemblerRuleHasAFalsifier`
   carry the counts above.
@@ -485,15 +585,18 @@ it.
 
 - The verb that admits a candidate, and the gate in the shared disposition
   writer that holds the ruled ordering, which spc-2609020626040342 builds.
-- A candidate set from more than one run, or from a run at any other position.
+- A candidate set from more than one run, or from a run at any other position;
+  and any operand that names the run, which adr-2609021016286571 closes.
 - The pattern named by a widening item. It stays behind on the ground the
   intent's scope condition states; widening the projection is a manifest change
   and a recorded one.
 - The preset file's version and the window eval, which spc-2609020626048722
   owns; this spec adds one entry in the committed shape.
-- The ADR and the amendment to brief invariant 15 that
-  iss-2609020626100041 carries, including the fourth operand's supersession of
-  adr-58. This spec is buildable and not shippable until they are adopted.
+- The ADR and the amendment to brief invariant 15, both adopted on
+  2026-09-02 (adr-2609021016272867, `status: accepted`); this spec builds on them and does
+  not restate them.
 - The re-disposition of itd-199's surviving condition cond-2608312031028702,
   which this spec's delivery moves. spc-2609020626046252's verb records it with
-  the shipped intent as the occasion.
+  the shipped intent as the occasion, and that verb lands first in Phase B, so
+  the re-disposition waits for it: Between this spec's landing and the
+  condition verb's, the condition stands as itd-199's verdict left it.

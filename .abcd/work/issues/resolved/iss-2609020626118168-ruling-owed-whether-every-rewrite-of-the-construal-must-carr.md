@@ -9,6 +9,8 @@ found_during: "iteration-2 planning, decomposition of the cold-reading intents, 
 origin: researcher-authored
 production_mode: dictated-and-formatted
 found_at: ".abcd/development/brief/01-product/06-framing.md"
+resolution: "Adopted by the maintainer on 2026-09-02 as an ADR in this change, in the form that fingerprints the three frame surfaces adr-55 enumerates, not the single-section reading this record took first; the rule over every frame edit stays unadopted."
+impact: internal
 ---
 
 Ruling owed: whether every rewrite of the construal must carry a reframe record, which refines adr-55 and reaches rewrites no reading occasioned
@@ -40,3 +42,7 @@ section alone, so a rewrite of the glossary or of committed scope is not a
 reframe by its definition. Either the frame is ruled to be the construal
 section and adr-55's wording is narrowed to match, or the record hashes all
 three surfaces. The intent takes the first reading and flags it.
+
+## Grounds
+
+- pursued: we expect a decision record adopted before the intent that waits on it to keep the trust rule out of the intent's scope list, which the decompose-before-filing rule requires; an intent shipping ahead of its ADR would show it wrong

@@ -106,3 +106,16 @@ the control's job.
   invariant so a new control cannot be written without meeting it.
 - The rejected branch stays live as a revisit path, so a later widening is an
   amendment to this ADR rather than a rediscovery of the argument.
+
+## Refinement (2026-09-02)
+
+The third rule above, that admission and comprehension describe one set, is
+refined by the maintainer's ruling that source and tests are opt-in to a
+reading and that an opted-in item travels whole and marked unscanned in the
+manifest. Where a control admits an input it cannot examine, it may pass the
+input only if its attestation says, per item, that the examination did not
+run; the second rule then carries what the third rule carried, and the two
+surfaces are made to agree by disclosure rather than by refusal. Refusal
+remains the rule for an input the control claims to have examined and could
+not. Recorded in the decision log on 2026-09-02; implemented by itd-194.
+

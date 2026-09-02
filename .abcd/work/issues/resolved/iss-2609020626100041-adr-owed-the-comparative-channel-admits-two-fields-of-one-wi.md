@@ -9,6 +9,8 @@ found_during: "iteration-2 planning, decomposition of the cold-reading intents, 
 origin: researcher-authored
 production_mode: dictated-and-formatted
 found_at: "internal/core/reading/include.go"
+resolution: "Adopted by the maintainer on 2026-09-02 as an ADR in this change, with the operand this record proposed withdrawn the same day: the ADR derives the widening run from the record and the invocation stays position and target state; the exception to the exhaust and the preset refusal's withdrawal stand as proposed."
+impact: internal
 ---
 
 ADR owed: the comparative channel admits two fields of one widening run's items from the readings family at one position, a positional exception to the prior-run exhaust
@@ -42,3 +44,7 @@ prose, untouched.
 The intent that carries the operand, the projection and the refusals is the
 comparative-channel intent filed the same day; it does not ship until this ADR
 is adopted.
+
+## Grounds
+
+- pursued: we expect a decision record adopted before the intent that waits on it to keep the trust rule out of the intent's scope list, which the decompose-before-filing rule requires; an intent shipping ahead of its ADR would show it wrong

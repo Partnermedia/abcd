@@ -28,9 +28,10 @@ has a lint that resolves it (`checkRecordProvenance` in
 writer.
 
 This spec gives it the writer. The pair is taken from where the item was found:
-`readingitem.Locate` returns the run and the path `readings/<rdg-N>/<rdi-N>.md`,
-so the run is the directory the item sits in, which is the same join the lint
-checks. The stamp primitive gains a constructor that takes the pair and refuses
+`capture.findReadingItem` returns the run and the path
+`readings/<rdg-N>/<rdi-N>.md` (through `readingitem.Locate` once the
+condition spec lands), so the run is the directory the item sits in, which is
+the same join the lint checks. The stamp primitive gains a constructor that takes the pair and refuses
 it unshaped, and `NewStamp` keeps refusing the kind without one. Link mode
 writes both edges and leaves the draft's `origin` untouched. The issue route is
 not changed. The promoted draft's Press Release seed carries no item id, so the
@@ -145,13 +146,14 @@ made falsifiable.
 
 ### The promote path for a reading item derives the pair from the store
 
-In `promoteReadingItem`, the run comes from `readingitem.Locate(issuesRoot, req.ID)`,
-which returns the run and the path together; `capture.findReadingItem` stays
-as a thin wrapper over it until every caller has moved, and this spec calls the
-leaf directly, since the leaf lands before this spec does (see the landing
-order). `readingitem.Paths` admits only a run directory whose name passes
-`recordid.ValidReadingRunID`, so the derived run is well formed by the rule
-the store enforces, and the pair resolves by construction: It was read off
+In `promoteReadingItem`, the run comes from
+`capture.findReadingItem(issuesRoot, req.ID)`, which returns the run and the
+path together. This spec lands before the condition spec (see the landing
+order), so it calls the `capture` function as it stands, and when that spec
+makes the function a thin wrapper over `readingitem.Locate` this path
+resolves through the leaf without an edit. `readingItemPaths` admits only a
+run directory whose name passes `recordid.ValidReadingRunID`, so the derived
+run is well formed by the rule the store enforces, and the pair resolves by construction: It was read off
 `readings/<run>/<item>.md`, which is the store read that delivers the
 resolution half of the fourth criterion. Belt and braces: The record's own
 `run` field, which `issueschema.ReadingRequired` makes mandatory, must equal
@@ -231,17 +233,36 @@ value is derived from which command ran, as before.
 
 ### Landing order
 
-The eight Iteration 2 specs land in this order: The preset window (PRE), the
-condition verb (CND), this spec (ORG), the comparative channel (CMP),
-admission and surprise (ADM), the reframe record (RFM), the scribe (SCR) and
-principles (PRN). CND lands strictly before PRN; CMP before ADM before SCR;
-RFM after ADM and after CMP. This spec lands third because it calls
-`readingitem.Locate`, which CND introduces, and because the gate it inherits
-on a widening item's promotion arrives with CMP and ADM after it: Until they
-land, no widening item can be `accepted`, so nothing this spec ships is
-reachable at that position ahead of the gate. This spec moves neither
-`SchemaVersion` nor `AssemblerVersionCore`: It changes no artefact field, no
-kind and no include row, and the eval plant is a fixture, not a table row.
+The Iteration 2 set lands in two phases around the maintainer's readings, on
+the corrections ruling of 2026-09-02. Phase A, before any reading runs: The
+two-operand invocation (spc-2609021004075744), itd-194
+(spc-2609021003136831), the preset windows (spc-2609020626048722), the
+comparative channel (spc-2609020626039834) and the reading-occasioned origin
+(spc-2609020626042168), in that order. The maintainer then runs the four
+readings in the cycle's order, widening, entailment, comparative and
+detection, and dispositions their outputs. Phase B, built at Step 5 after
+those dispositions: The condition disposition (spc-2609020626046252), the
+admission and surprise verbs (spc-2609020626040342), the reframe record
+(spc-2609020626048705), the scribe verbs (spc-2609020626045177) and the
+principles read object (spc-2609020626042471), in that order. No spec names a
+target version number: Each names the class of bump it makes, and the merging
+change sets each constant from the merged base and updates every pinned count
+in the same diff.
+
+This spec lands last in Phase A, on the corrections ruling: The framework's
+section 6.3 has the origin key written only by commands, and no promotion of
+an accepted reading item may precede its writer, so the writer is in place
+before the first reading runs. Because it lands before the condition
+disposition, it calls `capture.findReadingItem` as that function stands and
+inherits the leaf without an edit when the condition spec makes the function
+a thin wrapper over `readingitem.Locate`. The gate it inherits on a widening
+item's promotion is the comparative channel's, which lands before it, and the
+admission verb's, which lands in Phase B; between the phases an `accepted`
+disposition on a widening item is hand-authored in the target format after
+the comparative run, and the promote path reads it as it reads a verb-written
+one. This spec moves neither `SchemaVersion` nor `AssemblerVersionCore`: It
+changes no artefact field, no kind and no include row, and the eval plant is
+a fixture, not a table row.
 
 ## How the Acceptance Criteria are satisfied
 

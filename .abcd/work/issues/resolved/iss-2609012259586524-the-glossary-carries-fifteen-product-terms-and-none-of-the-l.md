@@ -9,6 +9,8 @@ found_during: "iteration-2 conformance audit against the design framework v4 and
 origin: researcher-authored
 production_mode: dictated-and-formatted
 found_at: ".abcd/development/brief/glossary"
+resolution: "The ledger bounded context lands in this change with nine terms as they presently stand, under adr-55's admissibility rule."
+impact: additive
 ---
 
 The glossary carries fifteen product terms and none of the ledger's own vocabulary, so the widening reading reads against terms that do not name its object
@@ -43,3 +45,7 @@ stands, never the dispute that settled it), and state the bound the companion
 asks for. Whether fifteen product terms should also travel to the widening
 reading, against a bound of three to six, is a scope question the presets can
 answer once the terms exist.
+
+## Grounds
+
+- pursued: we expect committed ledger vocabulary to let a widening reading name the vocabulary element that admits each configuration, which the companion requires of every returned item; a widening run whose items cannot cite a committed term would show the terms were the wrong ones

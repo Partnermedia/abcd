@@ -95,7 +95,6 @@ gate. That is what keeps "not hand-counted" true after the day it was written.
 - `itd-163` — Reference-closure and acknowledgements-mirror gate: every citation resolves to the CSL references, the references and acknowledgements mirror both ways, and a committed influence registry backs the Inspirations list (supersedes itd-145; filed from the 2026-08-28 attribution review with the backfill issue iss-2608280824478819)
 - `itd-164` — Licence vetting at source admission: `docs cite refresh` records each source's licence verdict into the committed baseline, and the zero-network gate refuses a new entry without one (builds on itd-163)
 - `itd-159` — the repo visibility model has a committed-record mode between private and public, with the matching fence-suppression (graduated from iss-223)
-- `itd-194` — the reading include table admits only what the exclusion floor can read, so a document the floor cannot parse is refused at admission rather than passed through unscanned and asserted over (carries itd-183's ten-record exclusion residue; the recognition fork ruled 2026-08-30 for narrowing admission)
 - `itd-201` — every question abcd's agents put to a human is asked one at a time, in plain language, in the addressee's register, with options that widen
 <!-- /index -->
 
