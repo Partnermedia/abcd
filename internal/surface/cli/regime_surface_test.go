@@ -30,10 +30,15 @@ package cli
 //     list ON PURPOSE and it fails CLOSED: any addition to that verb turns this
 //     red, so it cannot fall behind the surface — it is a tripwire, not an
 //     enumeration.
-//  2. generatedBaselineSuffix, the one exclusion from the file walk. It fails
-//     OPEN: it can only ever REMOVE the machine-written baselines from the walk,
-//     and a configuration file added anywhere under .abcd/ is walked unless it is
-//     named for a baseline.
+//  2. generatedBaselineSuffix, the one WRITTEN exclusion from the file walk. It
+//     fails OPEN: it can only ever REMOVE the machine-written baselines from the
+//     walk, and a configuration file added anywhere under .abcd/ is walked unless
+//     it is named for a baseline.
+//
+// The file walk carries one further exclusion, and it is not a written list: the
+// readings record family, taken from issueschema.ReadingsRecordDir rather than
+// from a literal, so it moves when the directory moves. See readingsRecordPrefix
+// for why a record a verb writes is not an operator surface.
 //
 // Disclosed residue, as itd-184 states it: what the walk cannot see is a channel
 // that was never registered — an environment variable read ad hoc, say. Nothing
@@ -56,6 +61,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/intentdriven/abcd/internal/core/issueschema"
 	"github.com/intentdriven/abcd/internal/core/lint"
 	"github.com/intentdriven/abcd/internal/core/rules"
 	"github.com/intentdriven/abcd/internal/core/surface"
@@ -140,9 +146,31 @@ func allCommands(cmd *cobra.Command) []*cobra.Command {
 //
 // This suffix is the ONE written rule in the enumeration, and it is stated here
 // rather than implied. It fails OPEN: a configuration file added anywhere under
-// .abcd/ is walked without an edit here, and the only way out of the walk is to
-// be named for a baseline.
+// .abcd/ is walked without an edit here, and the only ways out of the walk are to
+// be named for a baseline or to sit in the readings record family below.
 const generatedBaselineSuffix = "-baseline.json"
+
+// readingsRecordPrefix is the readings record family, the second thing the
+// configuration walk skips — and unlike the baseline suffix it is DERIVED, from
+// issueschema.ReadingsRecordDir rather than from a literal, so it follows the
+// directory if the directory ever moves.
+//
+// A run record is not configuration. `abcd reading ingest` writes
+// .abcd/development/readings/<run>/run.json and refusal.json itself, from the
+// position's agent definition, and each carries the supply regime the definition
+// stamped: the regime is the definition's property and the run record is the
+// output contract's durable half (framework v4 section 4 and 8.5; brief
+// 04-surfaces/23-reading). An operator cannot set a regime by editing one —
+// there is nothing to edit until the verb has already written it — so the family
+// is not an operator surface and reading it as one reports a key nobody can
+// write. It failed exactly that way on Iteration 2's first committed run
+// (iss-2609022252265901); before then no run record was tracked, so the
+// over-reach was latent.
+//
+// Like the suffix above it fails OPEN, and it is narrower: it names one record
+// family by its own constant, so nothing outside that directory can fall out of
+// the walk through it.
+const readingsRecordPrefix = issueschema.ReadingsRecordDir + "/"
 
 // configKey is one configuration key as the walk found it, with the path through
 // the file or schema that reaches it.
@@ -165,7 +193,7 @@ type configKey struct {
 func walkConfigFiles(t *testing.T, repoRoot string) []configKey {
 	t.Helper()
 	var out []configKey
-	var files, excluded, belowTheOldGlobs int
+	var files, excluded, records, belowTheOldGlobs int
 	var walk func(file string, v any, prefix string)
 	walk = func(file string, v any, prefix string) {
 		switch node := v.(type) {
@@ -199,6 +227,13 @@ func walkConfigFiles(t *testing.T, repoRoot string) []configKey {
 			excluded++
 			continue
 		}
+		// A record the verb writes is not an operator surface; see
+		// readingsRecordPrefix. Counted apart from `excluded`, whose guard is
+		// about the baseline rule swallowing the configuration tree.
+		if strings.HasPrefix(rel, readingsRecordPrefix) {
+			records++
+			continue
+		}
 		raw, err := os.ReadFile(filepath.Join(repoRoot, filepath.FromSlash(rel)))
 		if err != nil {
 			t.Fatalf("read %s: %v", rel, err)
@@ -218,8 +253,8 @@ func walkConfigFiles(t *testing.T, repoRoot string) []configKey {
 	// Three guards, each against a way this walk could report the criterion
 	// satisfied by seeing nothing.
 	if files < 40 {
-		t.Fatalf("the configuration walk found %d tracked .abcd json file(s); the repository carries more, "+
-			"so the walk is broken", files)
+		t.Fatalf("the configuration walk found %d tracked .abcd json file(s) (%d baseline(s) and %d readings "+
+			"record(s) skipped); the repository carries more, so the walk is broken", files, excluded, records)
 	}
 	if belowTheOldGlobs == 0 {
 		t.Fatalf("every one of the %d walked files sits in .abcd/ or .abcd/config/, which is the two-directory "+
@@ -362,5 +397,76 @@ func TestNoOperatorSurfaceSetsARegime(t *testing.T) {
 			t.Errorf("%s carries the key %q: a configuration file is an operator surface too, and the "+
 				"regime is not settable from one", k.schema, k.path)
 		}
+	}
+}
+
+// TestConfigurationWalkSkipsTheReadingsRecordFamily fixes the BOUNDARY of what
+// walkConfigFiles reads as configuration, in both directions.
+//
+// A run record is not a configuration file. `abcd reading ingest` writes
+// .abcd/development/readings/<run>/run.json and its refusal.json itself, from
+// the position's agent definition, and each one carries the supply regime the
+// definition stamped: framework v4 section 4 puts the regime on the definition
+// and carries it on the output contract, and 8.5 makes the run record that
+// contract's durable half (brief 04-surfaces/23-reading: the supply regime is
+// the definition's, "with no operand and no configuration key able to reach
+// it"). An operator cannot set a regime by editing one — there is nothing to
+// edit before the verb writes it — so the record family is not an operator
+// surface, and the guard has no business reading it as one. The over-reach went
+// unnoticed only because no real run had been committed yet
+// (iss-2609022252265901).
+//
+// The second half is the one that matters: narrowing the walk must not narrow it
+// over configuration. A regime key in .abcd/config/ is still reported.
+func TestConfigurationWalkSkipsTheReadingsRecordFamily(t *testing.T) {
+	repo := t.TempDir()
+	gitCmd(t, repo, "init", "-q", "-b", "main")
+
+	writeJSON := func(rel, body string) {
+		t.Helper()
+		full := filepath.Join(repo, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// The walk carries three anti-vacuity guards of its own, and they are the
+	// point of it: a fixture below their thresholds would prove the skip by
+	// making the walk see nothing at all.
+	for i := 0; i < 45; i++ {
+		writeJSON(fmt.Sprintf(".abcd/config/pad-%02d.json", i), `{"outer": {"inner": 1}}`)
+	}
+	writeJSON(".abcd/work/rulesets/main.json", `{"rules": []}`)
+
+	// What the verb writes, from the definition.
+	readings := issueschema.ReadingsRecordDir
+	writeJSON(readings+"/rdg-x/run.json", `{"run_id": "rdg-x", "position": "widening", "regime": "generative"}`)
+	writeJSON(readings+"/rdg-x/refusal.json", `{"run_id": "rdg-x", "regime": "generative", "reason": "no items"}`)
+
+	// What an operator edits.
+	writeJSON(".abcd/config/x.json", `{"regime": "generative"}`)
+
+	gitCmd(t, repo, "add", "-A")
+
+	keys := walkConfigFiles(t, repo)
+
+	operatorSurfaceReported := false
+	for _, k := range keys {
+		if strings.HasPrefix(k.schema, readings+"/") {
+			t.Errorf("the configuration walk reported %s key %q: a run record is the output contract's "+
+				"durable half, written by the verb from the position's definition, and no operator sets "+
+				"a regime by editing one — the readings record family is not an operator surface",
+				k.schema, k.path)
+		}
+		if k.schema == ".abcd/config/x.json" && strings.Contains(strings.ToLower(k.path), regimeToken) {
+			operatorSurfaceReported = true
+		}
+	}
+	if !operatorSurfaceReported {
+		t.Fatal("the configuration walk did not report the regime key in .abcd/config/x.json; skipping a " +
+			"record family must never narrow the walk over configuration, which is the surface it exists to read")
 	}
 }
