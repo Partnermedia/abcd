@@ -1,0 +1,657 @@
+{
+  "_type": "abcd.reading.manifest",
+  "schema_version": 9,
+  "run_id": "rdg-2609022226242271",
+  "position": "comparative",
+  "target_commit": "2dd7d32d0d25c292c6f7112180e5bc1b90e63874",
+  "assembler_version": "1.7.0+b7cc427449a3395570d542ee5423b55adf84521cb49e8bda0f695e96962b2f24",
+  "preset": {
+    "selectors": [
+      {
+        "record": "itd-191"
+      },
+      {
+        "kind": "discipline"
+      }
+    ]
+  },
+  "preset_hash": "5e8a6eefbf36ccf19c12bb8c868e1667d7c25dedbde6235b431b3cde314307df",
+  "candidate_run": "rdg-2609022155461185",
+  "candidate_run_target": "435b775f386c380d26616150456844b3ac49472b",
+  "candidates": 23,
+  "exercised": true,
+  "candidate_fields": [
+    "configuration",
+    "what_admits_it"
+  ],
+  "criteria": [
+    "Plausibility",
+    "Generativity",
+    "Cost",
+    "Risk",
+    "Learning value",
+    "Practical importance"
+  ],
+  "items": [
+    {
+      "item_key": "itm-0001",
+      "path": ".abcd/development/intents/disciplines/itd-191-the-selection-criteria-are-a-declared-recorded-discipline-a.md",
+      "kind": "discipline",
+      "scan": "parsed",
+      "bytes": 2671,
+      "sha256": "42d7e59f5132c3dc539d7831cb7d4c438d75c044e552dab434e5f4c04cdd9e1f"
+    },
+    {
+      "item_key": "itm-0002",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207120387.md",
+      "field": "configuration",
+      "candidate": "rdi-2609022207120387",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 161,
+      "sha256": "7326732ad06c4d3f5a38683de65de7bc1109967cb28f0a239d73a3ef315f68f3"
+    },
+    {
+      "item_key": "itm-0003",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207120387.md",
+      "field": "what_admits_it",
+      "candidate": "rdi-2609022207120387",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 326,
+      "sha256": "b2737735693f0de4a14e697f6e79b5f73114d5273ee050eb194b847840ebff7d"
+    },
+    {
+      "item_key": "itm-0004",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207120399.md",
+      "field": "configuration",
+      "candidate": "rdi-2609022207120399",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 176,
+      "sha256": "e2a760bcfb3e1fa18b7fb31054b30e1e03d4c2ad18d91effd9142368df2bb447"
+    },
+    {
+      "item_key": "itm-0005",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207120399.md",
+      "field": "what_admits_it",
+      "candidate": "rdi-2609022207120399",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 288,
+      "sha256": "c0945969ed172621bdd26c4cba6d64003284c0fe003e553e143808b894063614"
+    },
+    {
+      "item_key": "itm-0006",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207120521.md",
+      "field": "configuration",
+      "candidate": "rdi-2609022207120521",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 177,
+      "sha256": "c11bb6cff632f2ea7e88ff5c9890c5559cbd6f1c07b15fdaeec04fe8f4b15773"
+    },
+    {
+      "item_key": "itm-0007",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207120521.md",
+      "field": "what_admits_it",
+      "candidate": "rdi-2609022207120521",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 277,
+      "sha256": "5cff710d0e17ed52e40050c0860b3c6a0981e0e190061d850a519eddfabbb933"
+    },
+    {
+      "item_key": "itm-0008",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207120641.md",
+      "field": "configuration",
+      "candidate": "rdi-2609022207120641",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 164,
+      "sha256": "2c184b9cc69b1b5bcec69aa2cc7a979b80fa45a0b23f3e2701d640e3b0128802"
+    },
+    {
+      "item_key": "itm-0009",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207120641.md",
+      "field": "what_admits_it",
+      "candidate": "rdi-2609022207120641",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 191,
+      "sha256": "2c1ec601dc794833fa12ee89d12ddeac1b5c954778cb10deaea7dcf0aa70716b"
+    },
+    {
+      "item_key": "itm-0010",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207120768.md",
+      "field": "configuration",
+      "candidate": "rdi-2609022207120768",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 140,
+      "sha256": "e733411e80c1bdc5528129500b00692a0ca10e029bd33c3f95303a0c71046a02"
+    },
+    {
+      "item_key": "itm-0011",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207120768.md",
+      "field": "what_admits_it",
+      "candidate": "rdi-2609022207120768",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 309,
+      "sha256": "5350124d43f5bd9873203ea020d81d49b77397b3e577d1aaeccb7f740e5705d1"
+    },
+    {
+      "item_key": "itm-0012",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207120933.md",
+      "field": "configuration",
+      "candidate": "rdi-2609022207120933",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 141,
+      "sha256": "33d49c5d221eed9705683d00dc3d9fe61184b2ce89250a9684ab18cb24e9a873"
+    },
+    {
+      "item_key": "itm-0013",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207120933.md",
+      "field": "what_admits_it",
+      "candidate": "rdi-2609022207120933",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 375,
+      "sha256": "2ae7bf5e01a5f85fa1514182b79a6e98dca86bf482950c529006104f83e561cc"
+    },
+    {
+      "item_key": "itm-0014",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207121078.md",
+      "field": "configuration",
+      "candidate": "rdi-2609022207121078",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 168,
+      "sha256": "7e1223e2007827f286471f4c9129d3c9973c0ac37ec07af70eaef7f75708def8"
+    },
+    {
+      "item_key": "itm-0015",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207121078.md",
+      "field": "what_admits_it",
+      "candidate": "rdi-2609022207121078",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 306,
+      "sha256": "db844ce057e7bbe5af939d73380c14d8ee49ffeb2be4b6bf99f15baea12a1cdd"
+    },
+    {
+      "item_key": "itm-0016",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207121446.md",
+      "field": "configuration",
+      "candidate": "rdi-2609022207121446",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 169,
+      "sha256": "5b8c832f96a64f5928bfd9850b490521ed654c586f407f598ff2ff16a9bf912f"
+    },
+    {
+      "item_key": "itm-0017",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207121446.md",
+      "field": "what_admits_it",
+      "candidate": "rdi-2609022207121446",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 266,
+      "sha256": "97ea601333e8fb38ea15ad670359ca80a200820f8b476a0ec6034560cfaa9fe7"
+    },
+    {
+      "item_key": "itm-0018",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207121754.md",
+      "field": "configuration",
+      "candidate": "rdi-2609022207121754",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 163,
+      "sha256": "84bd7f298481c8bac0538700c342637075190631e4b871041696e35a838ffe9d"
+    },
+    {
+      "item_key": "itm-0019",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207121754.md",
+      "field": "what_admits_it",
+      "candidate": "rdi-2609022207121754",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 289,
+      "sha256": "3ac01697cf1b9d8c64be171ab2d1888d8a0f941ef9f4e5b78682a1335b138c96"
+    },
+    {
+      "item_key": "itm-0020",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207122580.md",
+      "field": "configuration",
+      "candidate": "rdi-2609022207122580",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 220,
+      "sha256": "81dbda7374bfa5d94e584bb9722e1f90e8cf99d4f0d6e92daeddb365a473366d"
+    },
+    {
+      "item_key": "itm-0021",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207122580.md",
+      "field": "what_admits_it",
+      "candidate": "rdi-2609022207122580",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 269,
+      "sha256": "c6f0f6f1b99b1274927aa0331e0071133439a1b7c4681bb97ccf9ad6d56f0cb7"
+    },
+    {
+      "item_key": "itm-0022",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207124378.md",
+      "field": "configuration",
+      "candidate": "rdi-2609022207124378",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 236,
+      "sha256": "00ae96992c0ed4e2de98c9f36d7242359d0af2c174754c8923f50cb1e8695ad9"
+    },
+    {
+      "item_key": "itm-0023",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207124378.md",
+      "field": "what_admits_it",
+      "candidate": "rdi-2609022207124378",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 278,
+      "sha256": "0fe0c6216272130663e9300a1284c1f1caf5edcee23b73b77c78ab7281d55a5a"
+    },
+    {
+      "item_key": "itm-0024",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207124438.md",
+      "field": "configuration",
+      "candidate": "rdi-2609022207124438",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 166,
+      "sha256": "1ed6874db8a3bbdbe7832076eb79959768ddcb8656ce05fa50fa8f97e81d76ce"
+    },
+    {
+      "item_key": "itm-0025",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207124438.md",
+      "field": "what_admits_it",
+      "candidate": "rdi-2609022207124438",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 223,
+      "sha256": "dc6c07b2acdf0e07be16ef7ec0cf7b3cc77d0325ad4a1a856aacc84a0dc3a18e"
+    },
+    {
+      "item_key": "itm-0026",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207124968.md",
+      "field": "configuration",
+      "candidate": "rdi-2609022207124968",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 226,
+      "sha256": "5d4801fad8761fdb6dafb33ece9acd56fcee2ab0454485b4304936794d7238a9"
+    },
+    {
+      "item_key": "itm-0027",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207124968.md",
+      "field": "what_admits_it",
+      "candidate": "rdi-2609022207124968",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 294,
+      "sha256": "0359de12698d0cc10fa6b6f3949e3086695e94d68f8328be009daae075d3f20e"
+    },
+    {
+      "item_key": "itm-0028",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207125832.md",
+      "field": "configuration",
+      "candidate": "rdi-2609022207125832",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 186,
+      "sha256": "ae2404c1e1258b22041253330619d3a144ea16c2a68c0c0fcaef7a5c49792348"
+    },
+    {
+      "item_key": "itm-0029",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207125832.md",
+      "field": "what_admits_it",
+      "candidate": "rdi-2609022207125832",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 266,
+      "sha256": "e16ae35e4ca527fcdb34fc2dd0dfd1105509cb8bcba66dfcfe781389b17a2071"
+    },
+    {
+      "item_key": "itm-0030",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207125921.md",
+      "field": "configuration",
+      "candidate": "rdi-2609022207125921",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 186,
+      "sha256": "80f349e5525e9e2ac0fd458d1c906c0776f3873f1336ef6feaa8f57edb1f2386"
+    },
+    {
+      "item_key": "itm-0031",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207125921.md",
+      "field": "what_admits_it",
+      "candidate": "rdi-2609022207125921",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 200,
+      "sha256": "eebd36866736cba3992510f477d3f33b10c0af27d8866f7fccd4f59e78b2ce3d"
+    },
+    {
+      "item_key": "itm-0032",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207126285.md",
+      "field": "configuration",
+      "candidate": "rdi-2609022207126285",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 146,
+      "sha256": "f8ceedebf2b326241ac293f4d15ced3b1ed86f47bc6023afc257fbd70825fbe4"
+    },
+    {
+      "item_key": "itm-0033",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207126285.md",
+      "field": "what_admits_it",
+      "candidate": "rdi-2609022207126285",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 266,
+      "sha256": "f86e9f2850eee1b51683e5cbfd7eba641c3dc1b7e8b70aad71f7755d2225ca39"
+    },
+    {
+      "item_key": "itm-0034",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207126330.md",
+      "field": "configuration",
+      "candidate": "rdi-2609022207126330",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 215,
+      "sha256": "6aded25e11a756c64bcaadb6222de7ebd1841601b0dd160f9f17317b5b7d959c"
+    },
+    {
+      "item_key": "itm-0035",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207126330.md",
+      "field": "what_admits_it",
+      "candidate": "rdi-2609022207126330",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 240,
+      "sha256": "e682d43904fbc9c4edc02ca89eadb28d404567d17591319a8a59f139aec35fa5"
+    },
+    {
+      "item_key": "itm-0036",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207126427.md",
+      "field": "configuration",
+      "candidate": "rdi-2609022207126427",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 155,
+      "sha256": "50092ec6a5a37db5565b944acd03b0a77a321a8440bbccb2edd02b24db081d41"
+    },
+    {
+      "item_key": "itm-0037",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207126427.md",
+      "field": "what_admits_it",
+      "candidate": "rdi-2609022207126427",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 264,
+      "sha256": "3f4381fd63ed1670b185b57b9f017e4e85a85f2984de51539a136920fe0cb2da"
+    },
+    {
+      "item_key": "itm-0038",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207126460.md",
+      "field": "configuration",
+      "candidate": "rdi-2609022207126460",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 133,
+      "sha256": "40506c847b15948ecf25e8bee2f116a66f530d7b7e12007d9d7b51ea77314510"
+    },
+    {
+      "item_key": "itm-0039",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207126460.md",
+      "field": "what_admits_it",
+      "candidate": "rdi-2609022207126460",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 314,
+      "sha256": "ce7a9f4ab83907a5f5d7e9901bde114e2e25cfd1c8dc7cc4c34c1d672a4d4e1a"
+    },
+    {
+      "item_key": "itm-0040",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207128020.md",
+      "field": "configuration",
+      "candidate": "rdi-2609022207128020",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 173,
+      "sha256": "aa98057b5c25b804d300373f4b0ca4e5758de69fa15c9643e711118bd7ea0fd1"
+    },
+    {
+      "item_key": "itm-0041",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207128020.md",
+      "field": "what_admits_it",
+      "candidate": "rdi-2609022207128020",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 186,
+      "sha256": "bb8eec574f97cdda1b073d2c194f26792fa89939a596e44f08a88d54568a2de1"
+    },
+    {
+      "item_key": "itm-0042",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207128711.md",
+      "field": "configuration",
+      "candidate": "rdi-2609022207128711",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 178,
+      "sha256": "0416184844a09c03fa0f88313e2611b2ae67ac337413e452ca1ac7b1ef226f69"
+    },
+    {
+      "item_key": "itm-0043",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207128711.md",
+      "field": "what_admits_it",
+      "candidate": "rdi-2609022207128711",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 280,
+      "sha256": "4868d3af001cd8a79e228af2738da00e77f80b27efe1155458da39678690200e"
+    },
+    {
+      "item_key": "itm-0044",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207129380.md",
+      "field": "configuration",
+      "candidate": "rdi-2609022207129380",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 215,
+      "sha256": "834e56f14f7ce9ed0b473d03c556b8e299d75514a320f0a4f270987244508cc1"
+    },
+    {
+      "item_key": "itm-0045",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207129380.md",
+      "field": "what_admits_it",
+      "candidate": "rdi-2609022207129380",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 314,
+      "sha256": "a90a147a412bc66eb3d1e19834d53f453c0bc6c4046da120582ee9369ad84e37"
+    },
+    {
+      "item_key": "itm-0046",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207129496.md",
+      "field": "configuration",
+      "candidate": "rdi-2609022207129496",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 223,
+      "sha256": "9c830a3df99f3e4fc2702518af7757587c128877494280550fe2969c311000d3"
+    },
+    {
+      "item_key": "itm-0047",
+      "path": ".abcd/work/issues/readings/rdg-2609022155461185/rdi-2609022207129496.md",
+      "field": "what_admits_it",
+      "candidate": "rdi-2609022207129496",
+      "kind": "candidate",
+      "scan": "parsed",
+      "bytes": 222,
+      "sha256": "2e8c7ea823e3939ee9f4e4b4e9b4910f290f16aa80a7e3ea462cf637822aec92"
+    }
+  ],
+  "exclusions": [
+    {
+      "rule": "field projection",
+      "signal": "frontmatter key",
+      "detail": "origin"
+    },
+    {
+      "rule": "field projection",
+      "signal": "frontmatter key",
+      "detail": "production_mode"
+    },
+    {
+      "rule": "field projection",
+      "signal": "heading",
+      "detail": "Audit Notes"
+    },
+    {
+      "rule": "field projection",
+      "signal": "heading",
+      "detail": "Open Questions"
+    },
+    {
+      "rule": "field projection",
+      "signal": "heading",
+      "detail": "Why This Matters"
+    },
+    {
+      "rule": "a reading's object excludes what it exists to change",
+      "signal": "heading",
+      "detail": "Scope Condition Dispositions"
+    },
+    {
+      "rule": "verdict material: a prior verdict is revision history, the ground the Audit Notes exclusion rests on",
+      "signal": "directory",
+      "detail": ".abcd/development/brief/03-evidence"
+    },
+    {
+      "rule": "absent from the positive walk",
+      "signal": "directory",
+      "detail": ".abcd/development/decisions"
+    },
+    {
+      "rule": "absent from the positive walk",
+      "signal": "directory",
+      "detail": ".abcd/development/roadmap/rfcs"
+    },
+    {
+      "rule": "absent from the positive walk",
+      "signal": "directory",
+      "detail": ".abcd/development/intents/superseded"
+    },
+    {
+      "rule": "absent from the positive walk",
+      "signal": "directory",
+      "detail": ".abcd/development/plans"
+    },
+    {
+      "rule": "absent from the positive walk",
+      "signal": "directory",
+      "detail": ".abcd/development/research/notes"
+    },
+    {
+      "rule": "absent from the positive walk",
+      "signal": "file",
+      "detail": ".abcd/work/DECISIONS.md"
+    },
+    {
+      "rule": "no reading consumes the local ledger side, unconditionally and under no flag (brief invariant 14)",
+      "signal": "directory",
+      "detail": ".abcd/.work.local"
+    },
+    {
+      "rule": "absent from the positive walk",
+      "signal": "record type in a denied path",
+      "detail": "the lapse log"
+    },
+    {
+      "rule": "absent from the positive walk",
+      "signal": "record type in a denied path",
+      "detail": "admission and selection grounds"
+    },
+    {
+      "rule": "the instrument's own output is never its input",
+      "signal": "directory",
+      "detail": ".abcd/development/readings"
+    },
+    {
+      "rule": "the instrument's own output is never its input",
+      "signal": "directory",
+      "detail": "agents"
+    },
+    {
+      "rule": "the instrument's own output is never its input",
+      "signal": "directory",
+      "detail": "evals"
+    },
+    {
+      "rule": "the instrument's own output is never its input",
+      "signal": "directory",
+      "detail": "internal/core/reading"
+    },
+    {
+      "rule": "the store sits outside the repository tree",
+      "signal": "unreachable path",
+      "detail": "the session-transcript store"
+    },
+    {
+      "rule": "a reading's object excludes what it exists to change",
+      "signal": "directory",
+      "detail": ".abcd/development/intents/drafts"
+    },
+    {
+      "rule": "a reading's object excludes what it exists to change",
+      "signal": "directory",
+      "detail": ".abcd/development/intents/planned"
+    },
+    {
+      "rule": "the comparative reading receives candidates and never their fate: the ledger's other families are excluded family by family, derived from the ledger's own directory list",
+      "signal": "directory",
+      "detail": ".abcd/work/issues/open"
+    },
+    {
+      "rule": "the comparative reading receives candidates and never their fate: the ledger's other families are excluded family by family, derived from the ledger's own directory list",
+      "signal": "directory",
+      "detail": ".abcd/work/issues/resolved"
+    },
+    {
+      "rule": "the comparative reading receives candidates and never their fate: the ledger's other families are excluded family by family, derived from the ledger's own directory list",
+      "signal": "directory",
+      "detail": ".abcd/work/issues/wontfix"
+    },
+    {
+      "rule": "the instrument's own output is never its input, but for the one derived widening run adr-2609021016272867 admits",
+      "signal": "readings store",
+      "detail": "every run other than the candidate run, and every field of the named run's items other than configuration and what_admits_it"
+    },
+    {
+      "rule": "the comparative reading receives candidates and never their fate: the ledger's other families are excluded family by family, derived from the ledger's own directory list",
+      "signal": "directory",
+      "detail": ".abcd/work/issues/dispositions"
+    },
+    {
+      "rule": "the comparative reading receives candidates and never their fate: the ledger's other families are excluded family by family, derived from the ledger's own directory list",
+      "signal": "directory",
+      "detail": ".abcd/work/issues/admissions"
+    },
+    {
+      "rule": "the comparative reading receives candidates and never their fate: the ledger's other families are excluded family by family, derived from the ledger's own directory list",
+      "signal": "directory",
+      "detail": ".abcd/work/issues/surprises"
+    }
+  ]
+}

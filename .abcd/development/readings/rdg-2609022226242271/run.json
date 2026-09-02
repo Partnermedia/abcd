@@ -1,0 +1,574 @@
+{
+  "_type": "abcd.reading.run/1",
+  "schema_version": 9,
+  "run_id": "rdg-2609022226242271",
+  "position": "comparative",
+  "regime": "evaluative",
+  "target_commit": "2dd7d32d0d25c292c6f7112180e5bc1b90e63874",
+  "manifest_sha256": "43b29d64fe3ee6d9e69152f8a90bf2cbcf1a104957971af406abca963e4b48c0",
+  "instrument": {
+    "model": "claude-opus-5",
+    "definition_sha256": "bc9b7e7c58b8369fb6855cd37789851100e26faf81623c3482aa9a07ab9ce7be",
+    "assembler_version": "1.7.0+b7cc427449a3395570d542ee5423b55adf84521cb49e8bda0f695e96962b2f24"
+  },
+  "records": [
+    {
+      "id": "rdi-2609022232030227",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232030227.md"
+    },
+    {
+      "id": "rdi-2609022232039790",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232039790.md"
+    },
+    {
+      "id": "rdi-2609022232039881",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232039881.md"
+    },
+    {
+      "id": "rdi-2609022232032540",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232032540.md"
+    },
+    {
+      "id": "rdi-2609022232038727",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232038727.md"
+    },
+    {
+      "id": "rdi-2609022232035545",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232035545.md"
+    },
+    {
+      "id": "rdi-2609022232032187",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232032187.md"
+    },
+    {
+      "id": "rdi-2609022232031598",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232031598.md"
+    },
+    {
+      "id": "rdi-2609022232038232",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232038232.md"
+    },
+    {
+      "id": "rdi-2609022232036911",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232036911.md"
+    },
+    {
+      "id": "rdi-2609022232034389",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232034389.md"
+    },
+    {
+      "id": "rdi-2609022232036021",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232036021.md"
+    },
+    {
+      "id": "rdi-2609022232034205",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232034205.md"
+    },
+    {
+      "id": "rdi-2609022232030474",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232030474.md"
+    },
+    {
+      "id": "rdi-2609022232032488",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232032488.md"
+    },
+    {
+      "id": "rdi-2609022232033352",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232033352.md"
+    },
+    {
+      "id": "rdi-2609022232035985",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232035985.md"
+    },
+    {
+      "id": "rdi-2609022232034449",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232034449.md"
+    },
+    {
+      "id": "rdi-2609022232037046",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232037046.md"
+    },
+    {
+      "id": "rdi-2609022232037268",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232037268.md"
+    },
+    {
+      "id": "rdi-2609022232036895",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232036895.md"
+    },
+    {
+      "id": "rdi-2609022232038286",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232038286.md"
+    },
+    {
+      "id": "rdi-2609022232036634",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232036634.md"
+    },
+    {
+      "id": "rdi-2609022232031061",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232031061.md"
+    },
+    {
+      "id": "rdi-2609022232031069",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232031069.md"
+    },
+    {
+      "id": "rdi-2609022232039873",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232039873.md"
+    },
+    {
+      "id": "rdi-2609022232030769",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232030769.md"
+    },
+    {
+      "id": "rdi-2609022232032719",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232032719.md"
+    },
+    {
+      "id": "rdi-2609022232035978",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232035978.md"
+    },
+    {
+      "id": "rdi-2609022232032266",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232032266.md"
+    },
+    {
+      "id": "rdi-2609022232038957",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232038957.md"
+    },
+    {
+      "id": "rdi-2609022232034674",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232034674.md"
+    },
+    {
+      "id": "rdi-2609022232038061",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232038061.md"
+    },
+    {
+      "id": "rdi-2609022232033952",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232033952.md"
+    },
+    {
+      "id": "rdi-2609022232034980",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232034980.md"
+    },
+    {
+      "id": "rdi-2609022232038387",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232038387.md"
+    },
+    {
+      "id": "rdi-2609022232034165",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232034165.md"
+    },
+    {
+      "id": "rdi-2609022232035860",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232035860.md"
+    },
+    {
+      "id": "rdi-2609022232039362",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232039362.md"
+    },
+    {
+      "id": "rdi-2609022232039507",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232039507.md"
+    },
+    {
+      "id": "rdi-2609022232038523",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232038523.md"
+    },
+    {
+      "id": "rdi-2609022232033096",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232033096.md"
+    },
+    {
+      "id": "rdi-2609022232038933",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232038933.md"
+    },
+    {
+      "id": "rdi-2609022232038750",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232038750.md"
+    },
+    {
+      "id": "rdi-2609022232033055",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232033055.md"
+    },
+    {
+      "id": "rdi-2609022232031925",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232031925.md"
+    },
+    {
+      "id": "rdi-2609022232035106",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232035106.md"
+    },
+    {
+      "id": "rdi-2609022232032500",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232032500.md"
+    },
+    {
+      "id": "rdi-2609022232039908",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232039908.md"
+    },
+    {
+      "id": "rdi-2609022232033559",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232033559.md"
+    },
+    {
+      "id": "rdi-2609022232035298",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232035298.md"
+    },
+    {
+      "id": "rdi-2609022232030908",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232030908.md"
+    },
+    {
+      "id": "rdi-2609022232034848",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232034848.md"
+    },
+    {
+      "id": "rdi-2609022232035735",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232035735.md"
+    },
+    {
+      "id": "rdi-2609022232034882",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232034882.md"
+    },
+    {
+      "id": "rdi-2609022232039913",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232039913.md"
+    },
+    {
+      "id": "rdi-2609022232037985",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232037985.md"
+    },
+    {
+      "id": "rdi-2609022232030060",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232030060.md"
+    },
+    {
+      "id": "rdi-2609022232034577",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232034577.md"
+    },
+    {
+      "id": "rdi-2609022232035575",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232035575.md"
+    },
+    {
+      "id": "rdi-2609022232034073",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232034073.md"
+    },
+    {
+      "id": "rdi-2609022232036416",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232036416.md"
+    },
+    {
+      "id": "rdi-2609022232031268",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232031268.md"
+    },
+    {
+      "id": "rdi-2609022232037838",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232037838.md"
+    },
+    {
+      "id": "rdi-2609022232036636",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232036636.md"
+    },
+    {
+      "id": "rdi-2609022232035515",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232035515.md"
+    },
+    {
+      "id": "rdi-2609022232035626",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232035626.md"
+    },
+    {
+      "id": "rdi-2609022232031818",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232031818.md"
+    },
+    {
+      "id": "rdi-2609022232039311",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232039311.md"
+    },
+    {
+      "id": "rdi-2609022232031329",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232031329.md"
+    },
+    {
+      "id": "rdi-2609022232033884",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232033884.md"
+    },
+    {
+      "id": "rdi-2609022232034290",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232034290.md"
+    },
+    {
+      "id": "rdi-2609022232031882",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232031882.md"
+    },
+    {
+      "id": "rdi-2609022232035370",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232035370.md"
+    },
+    {
+      "id": "rdi-2609022232039948",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232039948.md"
+    },
+    {
+      "id": "rdi-2609022232031836",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232031836.md"
+    },
+    {
+      "id": "rdi-2609022232033885",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232033885.md"
+    },
+    {
+      "id": "rdi-2609022232035183",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232035183.md"
+    },
+    {
+      "id": "rdi-2609022232039367",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232039367.md"
+    },
+    {
+      "id": "rdi-2609022232036274",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232036274.md"
+    },
+    {
+      "id": "rdi-2609022232035366",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232035366.md"
+    },
+    {
+      "id": "rdi-2609022232034219",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232034219.md"
+    },
+    {
+      "id": "rdi-2609022232037592",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232037592.md"
+    },
+    {
+      "id": "rdi-2609022232032387",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232032387.md"
+    },
+    {
+      "id": "rdi-2609022232039026",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232039026.md"
+    },
+    {
+      "id": "rdi-2609022232038021",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232038021.md"
+    },
+    {
+      "id": "rdi-2609022232032631",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232032631.md"
+    },
+    {
+      "id": "rdi-2609022232034065",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232034065.md"
+    },
+    {
+      "id": "rdi-2609022232032044",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232032044.md"
+    },
+    {
+      "id": "rdi-2609022232035454",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232035454.md"
+    },
+    {
+      "id": "rdi-2609022232036628",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232036628.md"
+    },
+    {
+      "id": "rdi-2609022232031030",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232031030.md"
+    },
+    {
+      "id": "rdi-2609022232030301",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232030301.md"
+    },
+    {
+      "id": "rdi-2609022232035525",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232035525.md"
+    },
+    {
+      "id": "rdi-2609022232036054",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232036054.md"
+    },
+    {
+      "id": "rdi-2609022232031845",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232031845.md"
+    },
+    {
+      "id": "rdi-2609022232037258",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232037258.md"
+    },
+    {
+      "id": "rdi-2609022232037191",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232037191.md"
+    },
+    {
+      "id": "rdi-2609022232031214",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232031214.md"
+    },
+    {
+      "id": "rdi-2609022232033219",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232033219.md"
+    },
+    {
+      "id": "rdi-2609022232037856",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232037856.md"
+    },
+    {
+      "id": "rdi-2609022232038927",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232038927.md"
+    },
+    {
+      "id": "rdi-2609022232030925",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232030925.md"
+    },
+    {
+      "id": "rdi-2609022232034314",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232034314.md"
+    },
+    {
+      "id": "rdi-2609022232031154",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232031154.md"
+    },
+    {
+      "id": "rdi-2609022232030967",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232030967.md"
+    },
+    {
+      "id": "rdi-2609022232033940",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232033940.md"
+    },
+    {
+      "id": "rdi-2609022232031800",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232031800.md"
+    },
+    {
+      "id": "rdi-2609022232035045",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232035045.md"
+    },
+    {
+      "id": "rdi-2609022232036974",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232036974.md"
+    },
+    {
+      "id": "rdi-2609022232037644",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232037644.md"
+    },
+    {
+      "id": "rdi-2609022232031773",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232031773.md"
+    },
+    {
+      "id": "rdi-2609022232038703",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232038703.md"
+    },
+    {
+      "id": "rdi-2609022232034225",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232034225.md"
+    },
+    {
+      "id": "rdi-2609022232039265",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232039265.md"
+    },
+    {
+      "id": "rdi-2609022232038155",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232038155.md"
+    },
+    {
+      "id": "rdi-2609022232039897",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232039897.md"
+    },
+    {
+      "id": "rdi-2609022232030455",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232030455.md"
+    },
+    {
+      "id": "rdi-2609022232034478",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232034478.md"
+    },
+    {
+      "id": "rdi-2609022232034382",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232034382.md"
+    },
+    {
+      "id": "rdi-2609022232039351",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232039351.md"
+    },
+    {
+      "id": "rdi-2609022232032357",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232032357.md"
+    },
+    {
+      "id": "rdi-2609022232039560",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232039560.md"
+    },
+    {
+      "id": "rdi-2609022232038295",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232038295.md"
+    },
+    {
+      "id": "rdi-2609022232033771",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232033771.md"
+    },
+    {
+      "id": "rdi-2609022232035102",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232035102.md"
+    },
+    {
+      "id": "rdi-2609022232033092",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232033092.md"
+    },
+    {
+      "id": "rdi-2609022232039341",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232039341.md"
+    },
+    {
+      "id": "rdi-2609022232031281",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232031281.md"
+    },
+    {
+      "id": "rdi-2609022232039758",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232039758.md"
+    },
+    {
+      "id": "rdi-2609022232033971",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232033971.md"
+    },
+    {
+      "id": "rdi-2609022232036344",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232036344.md"
+    },
+    {
+      "id": "rdi-2609022232031276",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232031276.md"
+    },
+    {
+      "id": "rdi-2609022232036201",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232036201.md"
+    },
+    {
+      "id": "rdi-2609022232031259",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232031259.md"
+    },
+    {
+      "id": "rdi-2609022232039504",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232039504.md"
+    },
+    {
+      "id": "rdi-2609022232030421",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232030421.md"
+    },
+    {
+      "id": "rdi-2609022232034256",
+      "path": ".abcd/work/issues/readings/rdg-2609022226242271/rdi-2609022232034256.md"
+    }
+  ],
+  "refused_items": [],
+  "refused_count": 0,
+  "candidate_run": "rdg-2609022155461185",
+  "candidates": 23,
+  "exercised": true,
+  "bounds": []
+}
