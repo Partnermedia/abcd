@@ -195,8 +195,8 @@ because there is none to state,
 carrying the run metadata and the named reason and no items, and the refusal
 message and the JSON render both name it. A refusal reached BEFORE that point —
 a wrong `_type`, a run id that resolves to nothing, a manifest hash that
-disagrees — writes nothing anywhere, because there is no proven run to record
-against.
+disagrees — writes nothing durable anywhere, because there is no proven run to
+record against.
 
 **A rerun is a new run with a new run id, never an amendment.** Once a run id
 has an outcome — a commit marker or a refusal record — ingesting it again is
@@ -208,8 +208,9 @@ Each position's definition states the regime the reading reads under, and the
 verb reads it from there. An output whose self-declared regime disagrees is
 refused. No operand and no configuration key sets a regime, by design.
 
-Per regime, the reserved names — a field naming one is refused with the licence
-stated:
+Per regime, the reserved names — an item carrying one as a field of its own is
+refused with the licence stated. The table is read at the run's own regime, one
+row per regime:
 
 - `evaluative`: `order`, `rank`, `recommended`, `score`. Arrangement order is
   never refused; items arrive in document order by mandate.
@@ -235,10 +236,11 @@ softened.
 
 ### Where the records land
 
-Nothing durable is written or deleted until the whole payload validates; a
-refusal after the run is proven leaves its refusal record and nothing else, and
-before its identity is proven a run writes nothing anywhere. Once the payload
-validates the reading records land in the reading-record family as one batch,
+No OTHER run's durable state is written to or deleted from until the whole
+payload validates; a refusal after the run is proven writes its refusal record
+and nothing else, and before its identity is proven a run writes nothing durable
+anywhere. Once the payload validates the reading records land in the
+reading-record family as one batch,
 the run's manifest is promoted beside its run metadata, and the run metadata is
 written **last** as the commit marker — a run without one never happened.
 

@@ -2505,3 +2505,25 @@ func TestRecordProvenanceIsArmedInThisRepo(t *testing.T) {
 		t.Error("the rule has no stores to walk from either its own config or record_schema's")
 	}
 }
+
+// TestRecordSchemaAdmitsBothADRVintages is the 2026-09-01 ruling at the gate:
+// the ADR store holds the hand-numbered ordinals and the minted timestamp form
+// in one flat directory, they cite each other, and the rule reports nothing. A
+// gate that admitted only the zero-padded ordinal would refuse every decision
+// minted from here on, and a lint-red record is a record nobody can commit.
+func TestRecordSchemaAdmitsBothADRVintages(t *testing.T) {
+	root := t.TempDir()
+	adrs := "rec/decisions/adrs"
+	writeFile(t, root, adrs+"/0058-a-reading-is-commissioned.md",
+		"---\nid: adr-58\nslug: a-reading-is-commissioned\nstatus: accepted\nsupersedes: null\nsuperseded_by: null\nrelated_adrs: [adr-2609012206053814]\n---\n# ADR-58\n")
+	writeFile(t, root, adrs+"/2609012206053814-decisions-mint-through-the-seam.md",
+		"---\nid: adr-2609012206053814\nslug: decisions-mint-through-the-seam\nstatus: proposed\nsupersedes: null\nsuperseded_by: null\nrelated_adrs: [adr-58]\n---\n# ADR-2609012206053814\n")
+
+	fs, err := Lint(schemaConfig(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleRecordSchema); n != 0 {
+		t.Fatalf("expected no record_schema findings over the two ADR vintages, got %d: %+v", n, fs)
+	}
+}
