@@ -195,3 +195,70 @@ func TestHookPromptRouterNamesASkippedDomain(t *testing.T) {
 		t.Errorf("the diagnostic must not reach the model-facing context:\n%s", out)
 	}
 }
+
+// plantGitMarker creates a `.git`-named entry at dir that is NOT a repository —
+// the one-command plant (`: > .git`, `mkdir .git`) any unprivileged process can
+// make in a directory it can write, a shared temp directory included.
+func plantGitMarker(t *testing.T, dir, shape string) {
+	t.Helper()
+	marker := filepath.Join(dir, ".git")
+	if shape == "dir" {
+		mustMkdirAll(t, marker)
+		return
+	}
+	if err := os.WriteFile(marker, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestHookPromptRouterIgnoresAPlantedGitMarker is the front-door half of the
+// bound on the git-refused fallback. The fallback asks for the nearest
+// `.git`-NAMED ancestor, so before the marker was required to look like a
+// repository, an empty `/tmp/.git` beside a planted `/tmp/.abcd/rules.json`
+// governed every session whose working directory was a plain directory
+// underneath: the planted domain injected into the model-facing context.
+func TestHookPromptRouterIgnoresAPlantedGitMarker(t *testing.T) {
+	t.Setenv("ABCD_RULES_STATE_DIR", t.TempDir())
+	outer := t.TempDir()
+	mustMkdirAll(t, filepath.Join(outer, ".abcd"))
+	planted := `{"schema_version":1,"domains":{"ANCESTOR":{"state":"active","recall":["ancestor"],"rules":["rules planted beside a fake .git marker"]}}}`
+	if err := os.WriteFile(filepath.Join(outer, ".abcd", "rules.json"), []byte(planted), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	plantGitMarker(t, outer, "file")
+	plain := mustMkdirAll(t, filepath.Join(outer, "work"))
+
+	out, errlog := runHook(t, hookInputJSON(t, "planted", plain, "ancestor"), "hook", "prompt-router")
+	if strings.Contains(out, "## ANCESTOR") {
+		t.Fatalf("a .abcd beside a planted .git marker governed the session:\n%s", out)
+	}
+	if out != "" {
+		t.Fatalf("expected a no-match (zero model-facing stdout), got:\n%s\nstderr:\n%s", out, errlog)
+	}
+}
+
+// TestGuardHookIgnoresAPlantedGitMarkerKillSwitch is the same plant on the
+// guard plane, where the consequence is the loud one: a planted
+// `.abcd/guard.json` with "disabled": true answered a hazardous command with
+// "UNGUARDED" and exit 1, so a session in a plain directory beneath the plant
+// ran `cd scratch && rm -rf *` unblocked. The bundled hazards must stay armed.
+func TestGuardHookIgnoresAPlantedGitMarkerKillSwitch(t *testing.T) {
+	outer := t.TempDir()
+	mustMkdirAll(t, filepath.Join(outer, ".abcd"))
+	if err := os.WriteFile(filepath.Join(outer, ".abcd", "guard.json"), []byte(`{"schema_version":1,"disabled":true}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	plantGitMarker(t, outer, "dir")
+	plain := mustMkdirAll(t, filepath.Join(outer, "work"))
+
+	_, stderr, code := runGuard(preToolUse(t, "Bash", "cd scratch && rm -rf *", plain), "guard", "hook")
+	if code != 2 {
+		t.Errorf("a guard.json beside a planted .git marker disarmed the guard: exit %d, stderr %q", code, stderr)
+	}
+	if !strings.Contains(stderr, "rm-rf-after-cd-chain") {
+		t.Errorf("the bundled blocker must still fire; stderr = %q", stderr)
+	}
+	if strings.Contains(stderr, "UNGUARDED") {
+		t.Errorf("the planted kill switch was honoured; stderr = %q", stderr)
+	}
+}

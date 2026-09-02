@@ -167,3 +167,96 @@ func TestResolveRootFallsBackToTheGitMarkerWhenGitIsAbsent(t *testing.T) {
 		t.Errorf("ResolveRoot(%q) with git absent = %q, want cwd (a non-repo directory must not walk)", plain, got)
 	}
 }
+
+// plantMarker creates a `.git`-NAMED entry of the given shape at dir — the
+// three shapes an unprivileged process can create anywhere it can write, none
+// of which is a repository: an empty file (`: > .git`), an empty directory
+// (`mkdir .git`), and a dangling symlink.
+func plantMarker(t *testing.T, dir, shape string) {
+	t.Helper()
+	marker := filepath.Join(dir, ".git")
+	switch shape {
+	case "empty file":
+		if err := os.WriteFile(marker, nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	case "empty directory":
+		mustDir(t, marker)
+	case "dangling symlink":
+		if err := os.Symlink(filepath.Join(dir, "nowhere"), marker); err != nil {
+			t.Fatal(err)
+		}
+	default:
+		t.Fatalf("unknown marker shape %q", shape)
+	}
+}
+
+// TestResolveRootRejectsAnImplausibleGitMarker is the bound on the git-refused
+// fallback itself. gitutil.RepoShapedRoot is a NAME check — any `.git`-named
+// entry, walked to the filesystem root — so on its own it hands the resolution
+// to whoever can write a name into a shared ancestor: `: > /tmp/.git` beside a
+// planted /tmp/.abcd would govern the rules and the guard of every session
+// whose cwd is a plain directory under /tmp, on any host where git cannot
+// answer for that directory (which it cannot, because it is not a repository).
+//
+// The fallback therefore accepts a marker only when it is a PLAUSIBLE
+// repository — a .git directory carrying HEAD, or a .git file whose content
+// begins "gitdir: " — which is what git itself reads before it will call a
+// directory a repository. Anything else is the non-repo case: cwd, no walk,
+// nothing above it consulted. This does not make the fallback a trust boundary
+// against a writer who takes the trouble to lay out a real repository
+// (iss-2609020259564193); it stops the one-command plant, and it stops a stray
+// leftover `.git` from silently governing a session.
+func TestResolveRootRejectsAnImplausibleGitMarker(t *testing.T) {
+	for _, shape := range []string{"empty file", "empty directory", "dangling symlink"} {
+		t.Run(shape, func(t *testing.T) {
+			outer := mustDir(t, t.TempDir())
+			mustDir(t, filepath.Join(outer, ".abcd"))
+			plantMarker(t, outer, shape)
+			plain := mustDir(t, filepath.Join(outer, "work"))
+
+			if got, err := gitutil.Run(plain, "rev-parse", "--show-toplevel"); err == nil {
+				t.Fatalf("git answered %q for a planted marker; the fixture did not stage the git-refused path", got)
+			}
+			if got := ResolveRoot(plain); got != plain {
+				t.Errorf("ResolveRoot(%q) with a %s .git planted above = %q; a plant that is not a repository must not govern the session", plain, shape, got)
+			}
+		})
+	}
+}
+
+// TestResolveRootAcceptsAPlausibleGitMarker pins the other side: the plausible
+// shapes a real checkout has must still bound the resolution when git will not
+// answer, or the fix would close the plant by reopening GHSA-vvqc-3mv2-5p49.
+// A .git directory carrying HEAD is the ordinary checkout; a .git FILE reading
+// "gitdir: …" is a linked worktree or a submodule, whose working-tree root is
+// exactly the directory that file sits in.
+func TestResolveRootAcceptsAPlausibleGitMarker(t *testing.T) {
+	t.Run("directory with HEAD", func(t *testing.T) {
+		outer := mustDir(t, t.TempDir())
+		mustDir(t, filepath.Join(outer, ".abcd"))
+		repo := mustDir(t, filepath.Join(outer, "checkout"))
+		mustDir(t, filepath.Join(repo, ".git"))
+		if err := os.WriteFile(filepath.Join(repo, ".git", "HEAD"), []byte("ref: refs/heads/main\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		sub := mustDir(t, filepath.Join(repo, "internal", "deep"))
+
+		if got, want := realPath(t, ResolveRoot(sub)), realPath(t, repo); got != want {
+			t.Errorf("ResolveRoot(%q) = %q, want the checkout root %q", sub, got, want)
+		}
+	})
+	t.Run("gitdir file", func(t *testing.T) {
+		outer := mustDir(t, t.TempDir())
+		mustDir(t, filepath.Join(outer, ".abcd"))
+		wt := mustDir(t, filepath.Join(outer, "linked-worktree"))
+		if err := os.WriteFile(filepath.Join(wt, ".git"), []byte("gitdir: "+filepath.Join(outer, "main", ".git", "worktrees", "wt")+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		sub := mustDir(t, filepath.Join(wt, "pkg"))
+
+		if got, want := realPath(t, ResolveRoot(sub)), realPath(t, wt); got != want {
+			t.Errorf("ResolveRoot(%q) = %q, want the linked worktree's root %q", sub, got, want)
+		}
+	})
+}

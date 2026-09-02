@@ -1,6 +1,7 @@
 package rules
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,14 +26,24 @@ import (
 // chapter and itd-3 both reject a global rules.json), so the bound is the
 // documented contract, not a new policy.
 //
-// The exact scope of what that closes: a plant in a shared temp directory, and
-// any ancestor a session's own working tree sits inside. It does NOT close the
-// user-scope ~/.abcd when the home directory is ITSELF a git working tree
-// (dotfiles-in-home) — the toplevel for a session in a non-repo directory
-// beneath such a home is the home, so ~/.abcd governs it. That residual is
-// iss-2609020219198779: closing it needs a decision on whether a home-directory
-// toplevel is a legitimate configuration scope (spc-23 plans a user layer that
-// would make it one), so it is recorded rather than silently assumed shut.
+// The exact scope of what that closes: any ancestor a session's own working
+// tree sits inside, and a plant in a shared directory that is not a repository
+// — the one-command `: > /tmp/.git` or `mkdir /tmp/.git` beside a planted
+// /tmp/.abcd, which the fallback below refuses because a marker must look like
+// a repository. Two residuals stay open, both recorded rather than silently
+// assumed shut:
+//
+//   - iss-2609020219198779 — the user-scope ~/.abcd when the home directory is
+//     ITSELF a git working tree (dotfiles-in-home). The toplevel for a session
+//     in a non-repo directory beneath such a home is the home, so ~/.abcd
+//     governs it. Closing it needs a decision on whether a home-directory
+//     toplevel is a legitimate configuration scope (spc-23 plans a user layer
+//     that would make it one).
+//   - iss-2609020259564193 — a REAL repository planted in a shared ancestor by
+//     another uid (`git init /tmp`). It passes every check here, because git's
+//     refusal on ownership is the same signal in the attack as in the case the
+//     fallback exists for: a legitimate checkout owned by another uid, or a
+//     container bind mount. Closing it needs an ownership policy first.
 //
 // "Not a repository" and "a repository git will not answer for" are DIFFERENT
 // outcomes and only the first resolves to cwd with no walk. abcd runs git under
@@ -44,9 +55,21 @@ import (
 // subdirectory the root became the subdirectory, so guard.json's hazards
 // became allows, the rules kill switch stopped applying, and the private
 // banlist store went missing. A repo-shaped tree therefore falls back to the
-// .git marker (gitutil.RepoShapedRoot) and is bounded there, and only a
-// genuinely non-repo directory keeps the no-walk cwd: outside a working tree
-// there is no boundary to stop at, and a walk that stops nowhere is the defect.
+// .git marker (gitutil.RepoShapedRoot), and only a directory with no repository
+// above it keeps the no-walk cwd: outside a working tree there is no boundary
+// to stop at, and a walk that stops nowhere is the defect.
+//
+// The marker walk is a NAME check that runs to the filesystem root, so it is
+// not by itself a bound: an unprivileged `: > /tmp/.git` would otherwise hand
+// every session in a plain directory beneath /tmp to a planted /tmp/.abcd, git
+// having refused to answer for a directory that is not a repository. The
+// fallback root is accepted only when its .git is a PLAUSIBLE repository — a
+// directory carrying HEAD, or a regular file beginning "gitdir: "
+// (plausibleRepository below, which states the shapes exactly) — and anything
+// else takes the non-repo route: cwd, no walk, nothing above it consulted. That
+// discriminator is what git reads, not a trust boundary: laying out a real
+// repository still passes it, which is residual iss-2609020259564193 above.
+//
 // A nested repository or submodule resolves its own toplevel either way and
 // does not inherit the superproject's .abcd — correct scoping, visible to
 // submodule workflows.
@@ -61,10 +84,11 @@ func ResolveRoot(cwd string) string {
 	if err != nil || top == "" {
 		// The marker walk runs on the symlink-resolved path, so the bound it
 		// returns is already on the same chain the walk below climbs.
-		top = gitutil.RepoShapedRoot(dir)
-		if top == "" {
-			return cwd // genuinely not a repository: no boundary, no walk.
+		marker := gitutil.RepoShapedRoot(dir)
+		if marker == "" || !plausibleRepository(marker) {
+			return cwd // no repository to bound at: no boundary, no walk.
 		}
+		top = marker
 	}
 	if real, err := filepath.EvalSymlinks(top); err == nil {
 		top = real
@@ -95,4 +119,46 @@ func inside(dir, top string) bool {
 		prefix += string(filepath.Separator)
 	}
 	return strings.HasPrefix(dir, prefix)
+}
+
+// plausibleRepository reports whether root's .git entry has the shape of a
+// repository rather than merely carrying the name. It is the discriminator
+// ResolveRoot applies to gitutil.RepoShapedRoot's answer; the check lives here
+// and not there because RepoShapedRoot's other callers want the crude marker
+// (they ask "could anything here be committed?", where a name is enough).
+//
+// Two shapes pass, the two git itself reads: a .git DIRECTORY carrying HEAD (an
+// ordinary checkout — HEAD is the first file git looks for, and no repository
+// lacks it), and a regular .git FILE beginning "gitdir: " (a linked worktree or
+// a submodule, whose working-tree root is the directory that file sits in).
+// Everything else is not a repository for this purpose: an empty file, an empty
+// or HEAD-less directory, a dangling symlink, a socket or a device. The .git
+// path is stat'd, not lstat'd, so a symlink to a real repository still passes
+// and a dangling one does not.
+//
+// Only the first eight bytes of a .git file are read, so a large file planted
+// under the name cannot make the resolver buffer it.
+func plausibleRepository(root string) bool {
+	marker := filepath.Join(root, ".git")
+	fi, err := os.Stat(marker)
+	if err != nil {
+		return false
+	}
+	if fi.IsDir() {
+		_, err := os.Stat(filepath.Join(marker, "HEAD"))
+		return err == nil
+	}
+	if !fi.Mode().IsRegular() {
+		return false
+	}
+	f, err := os.Open(marker)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	var head [len("gitdir: ")]byte
+	if _, err := io.ReadFull(f, head[:]); err != nil {
+		return false
+	}
+	return string(head[:]) == "gitdir: "
 }
