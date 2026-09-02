@@ -518,7 +518,7 @@ func detectPathSymlink(cwd, pluginRoot string, pluginOK bool) []Gap {
 			// garbage-collects (spc-35). Heal-able only while a verified cache
 			// artefact exists to copy from — without one there is nothing
 			// better to offer than the symlink that works.
-			if ownedCopySourceReady(cwd) {
+			if ownedCopySourceReady(cwd, pluginRoot) {
 				gaps = append(gaps, Gap{
 					ID: "symlink.legacy", Category: ConfigChange, Scope: "machine",
 					Title:    "PATH entry is a symlink into the plugin root",

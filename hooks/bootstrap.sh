@@ -533,6 +533,7 @@ meta_note=''
 cache_note=''
 path_note=''
 from_note=''
+stamp_note=''
 
 if [ -n "$use_cache" ]; then
 	release_tag="$cached_tag"
@@ -730,6 +731,26 @@ if [ -n "$cache_mode" ] && { [ -n "$use_cache" ] || [ "$expected_sha" != unknown
 		refuse "the verified binary cannot be made executable"
 	mv -f "$root_tmp/abcd" "$binary" 2>/dev/null ||
 		refuse "the verified binary cannot be installed at $binary"
+
+	# Record, beside the binary, the data dir this root was provisioned from.
+	# CLAUDE_PLUGIN_DATA reaches hook processes only, and the one-time `ahoy
+	# install` the notice below asks for runs from a terminal, where it is
+	# unset: without this stamp that run finds no cache and degrades to a
+	# symlink into this root, which dies at the next plugin update — the
+	# very shape the cache replaced (iss-2609012111168716). The stamp is a
+	# route, never a trust claim: the reader follows it only to an existing
+	# absolute directory and re-hashes the artefact against the cache's
+	# recorded binary_sha256 before any copy, like every promotion. Written
+	# into the same temp dir as the binary and renamed in; a directory at the
+	# stamp path would swallow the rename, so it is reported instead.
+	stamp_path="$plugin_root/.data-dir"
+	if [ -e "$stamp_path" ] && [ ! -f "$stamp_path" ]; then
+		stamp_note=' (the .data-dir record could not be written because that path exists and is not a regular file, so `ahoy install` run from a terminal will not find the plugin cache)'
+	else
+		printf 'data_dir=%s\n' "$data_dir" > "$root_tmp/data-dir" 2>/dev/null &&
+			mv -f "$root_tmp/data-dir" "$stamp_path" 2>/dev/null ||
+			stamp_note=' (the .data-dir record could not be written, so `ahoy install` run from a terminal will not find the plugin cache)'
+	fi
 	rm -rf "$root_tmp"
 	root_tmp=''
 else
@@ -740,6 +761,11 @@ else
 		refuse "the downloaded $asset cannot be made executable"
 	mv -f "$tmp/$asset" "$binary" 2>/dev/null ||
 		refuse "the verified $asset cannot be installed at $binary"
+
+	# No data dir provisioned this root, so no stamp may say one did: a stale
+	# record from an earlier cache-mode provision of the same root would route
+	# a terminal `ahoy install` to a cache this binary did not come from.
+	rm -f "$plugin_root/.data-dir" 2>/dev/null
 
 	# The root-local provenance record, written only on this path: cache-mode
 	# roots read the cache meta instead, and the skew notice compares the LIVE
@@ -814,5 +840,5 @@ fi
 #
 # The path is wrapped in SINGLE quotes (binary_quoted, defined at the top) for
 # the reason given there: this string is printed to be pasted into a shell.
-notice "$(printf 'abcd bootstrap: installed the checksum-verified abcd binary (release %s) into the plugin root, so the abcd hooks are live for this session.%s%s%s%s%s%s For the abcd command in your own terminal, run this once — the path is absolute because abcd is not on your PATH yet, which is exactly what the command fixes: %s ahoy install' \
-	"$release_tag" "$from_note" "$stale_note" "$path_note" "$meta_note" "$cache_note" "$degrade_note" "$binary_quoted")"
+notice "$(printf 'abcd bootstrap: installed the checksum-verified abcd binary (release %s) into the plugin root, so the abcd hooks are live for this session.%s%s%s%s%s%s%s For the abcd command in your own terminal, run this once — the path is absolute because abcd is not on your PATH yet, which is exactly what the command fixes: %s ahoy install' \
+	"$release_tag" "$from_note" "$stale_note" "$path_note" "$meta_note" "$cache_note" "$stamp_note" "$degrade_note" "$binary_quoted")"
