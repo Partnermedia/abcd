@@ -26,7 +26,11 @@ ADRs are *not* used for:
 
 ## ADR IDs
 
-ADR IDs follow the pattern `adr-N` (unpadded, mirrors `itd-N` / `rfc-N`) as the prose handle. Filenames are the zero-padded four-digit sequential form `NNNN-<slug>.md` (`adr-7` lives in `0007-<slug>.md`), a stable cross-reference handle per [ADR-30](0030-record-information-architecture.md).
+ADR IDs follow the pattern `adr-N` (unpadded, mirrors `itd-N` / `rfc-N`) as the prose handle, and the filename is `<N>-<slug>.md` — the number the handle carries, then the slug ([ADR-30](0030-record-information-architecture.md)).
+
+**An ADR is minted by the binary, not numbered by hand:** `abcd decide "<title>"` draws `adr-<yymmddHHMMSS><rrrr>` through the same record-id seam captures, intents and specs mint through ([ADR-45](0045-record-ids-are-timestamp-numeric-and-capture-stable.md), and the ruling of 2026-09-01 in [`.abcd/work/DECISIONS.md`](../../../work/DECISIONS.md) that this is the family ADR-45's rollout note 3 deferred). The mint reads no maximum anywhere, which is the property being bought: a hand-allocated ordinal is read off the directory, so two branches deciding on the same day allocate the same number — `0055` and `0056` were each minted twice, for different decisions, on the day the ruling was taken.
+
+**`0001`–`0058` keep their IDs and their filenames.** Nothing is renumbered. Those records carry the zero-padded four-digit ordinal (`adr-7` lives in `0007-<slug>.md`); a minted record carries the sixteen-digit stamp (`adr-2609012206053814` lives in `2609012206053814-<slug>.md`). Every reader of an ADR ID admits both vintages through one derivation — the citation resolver, the `abcd <record-id>` dispatch, the `record_schema` and citation-currency gates, the website's decisions index, and the lifeboat packer. Every ordinal is shorter and numerically smaller than every stamp, so the hand-numbered records sort first in both the directory listing and the derived index order.
 
 IDs are capture-stable. Once assigned, an ADR's ID never changes — superseding ADRs use new IDs and link backwards.
 
@@ -47,7 +51,7 @@ Transitions are deliberate. Accepted ADRs are retained in the record. A supersed
 
 ## Format
 
-Every ADR has frontmatter (machine-readable) plus a Markdown body following this structure:
+`abcd decide "<title>"` writes this shape — the frontmatter, the H1, and the four sections, each carrying the question it answers. Every ADR has frontmatter (machine-readable) plus a Markdown body following this structure:
 
 ```markdown
 ---
@@ -91,9 +95,9 @@ What's now easier; what's now harder; what new obligations the decision creates
 
 | File | Frontmatter field |
 |---|---|
-| `adrs/NNNN-<slug>.md` | `related_intents: [itd-N, ...]` (intents whose framework this ADR justifies) |
-| `adrs/NNNN-<slug>.md` | `related_rfcs: [rfc-N, ...]` (RFCs that informed this decision) |
-| `adrs/NNNN-<slug>.md` | `supersedes: <handle>` / `superseded_by: <handle>` (chain) — **both directions are required**: if A declares `superseded_by: B`, B declares `supersedes: A`. A supersession may cross stores (an ADR that redecides the question an intent rested on retires that intent), so a handle here is `adr-N` or `itd-N`. `record_schema` enforces the pair. |
+| `adrs/<N>-<slug>.md` | `related_intents: [itd-N, ...]` (intents whose framework this ADR justifies) |
+| `adrs/<N>-<slug>.md` | `related_rfcs: [rfc-N, ...]` (RFCs that informed this decision) |
+| `adrs/<N>-<slug>.md` | `supersedes: <handle>` / `superseded_by: <handle>` (chain) — **both directions are required**: if A declares `superseded_by: B`, B declares `supersedes: A`. A supersession may cross stores (an ADR that redecides the question an intent rested on retires that intent), so a handle here is `adr-N` or `itd-N`. `record_schema` enforces the pair. |
 | `intents/{drafts,planned,shipped,disciplines}/itd-N-<slug>.md` | `related_adrs: [adr-N, ...]` (when an intent references an ADR) |
 | `rfcs/rfc-N-<slug>.md` | `related_adrs: [adr-N, ...]` (when an RFC references an ADR or its resolution becomes one) |
 
@@ -103,9 +107,9 @@ The intent lint (a Go implementation) extends to verify these reciprocally.
 
 ## Index
 
-> **Index maintenance:** allocating the next `adr-N` and materialising the ADR
-> file is race-safe, but appending the row to this index table is a manual edit;
-> add the row by hand when an ADR is captured.
+> **Index maintenance:** `abcd decide` mints the ID and materialises the ADR
+> file, but appending the row to this index table is a manual edit; add the row
+> by hand when an ADR is captured.
 
 | ID | Title | Status | Date |
 |---|---|---|---|

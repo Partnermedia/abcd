@@ -335,6 +335,7 @@ func NewRootCommand() *cobra.Command {
 	root.AddCommand(newDocsCommand(&asJSON))
 	root.AddCommand(newIntentCommand(&asJSON))
 	root.AddCommand(newIdeateCommand(&asJSON))
+	root.AddCommand(newDecideCommand(&asJSON))
 	root.AddCommand(newSpecCommand(&asJSON))
 	root.AddCommand(newDisembarkCommand(&asJSON))
 	root.AddCommand(newEmbarkCommand(&asJSON))
