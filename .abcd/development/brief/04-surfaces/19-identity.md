@@ -32,7 +32,7 @@ the block lives:
 ## Identity (canonical)
 
 - **Title:** abcd — Agent-Based Configuration for Development
-- **Tagline:** A host-agnostic configuration layer for intent-driven development.
+- **Tagline:** For people who know what they want to build and need help shipping it.
 - **Pitch:** A single Go binary that carries the why from idea to shipped
   reality, usable as a plugin in compatible agent harnesses.
 ```

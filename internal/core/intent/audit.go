@@ -15,6 +15,7 @@ import (
 	"github.com/intentdriven/abcd/internal/core/recordid"
 	"github.com/intentdriven/abcd/internal/core/spec"
 	"github.com/intentdriven/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/termsafe"
 )
 
 // audit.go — the intent-audit outbox+inbox (itd-80 phase 4; renamed from
@@ -79,8 +80,18 @@ var (
 	rcpIDRe = regexp.MustCompile(`^rcp-[0-9a-f]{12}$`)
 	// auditHeadingRe matches the `## Audit Notes` heading (any heading depth).
 	auditHeadingRe = regexp.MustCompile(`^#{1,6}\s+Audit Notes\s*$`)
-	// markerRe matches a parked review marker line inside the Audit Notes.
-	markerRe = regexp.MustCompile(`<!-- abcd-review: (OWED|INGESTED|DEAD_LETTER) receipt=(rcp-[0-9a-f]+) -->`)
+	// markerRe matches a parked review marker LINE inside the Audit Notes. It is
+	// line-anchored and whole-line on purpose: the marker is the ledger's own
+	// review state, and an unanchored pattern would find one anywhere in the
+	// record's bytes — mid-sentence inside a rendered verdict field, for instance,
+	// where an untrusted payload put it. termsafe's cleaner is the primary defence
+	// (it breaks `<!` and `-->` in every field it writes, code span or not); this
+	// is the second, so a marker has to occupy a line of its own to count.
+	//
+	// It is still a byte pattern rather than a grammar: it does not know a fenced
+	// block from prose, so a marker-shaped line inside a fence still matches
+	// (iss-2609020529185438). Both defences are needed; neither is sufficient.
+	markerRe = regexp.MustCompile(`(?m)^<!-- abcd-review: (OWED|INGESTED|DEAD_LETTER) receipt=(rcp-[0-9a-f]+) -->\r?$`)
 	// auditPlaceholderRe matches an intent template's Audit Notes placeholder,
 	// dropped when the first real review block lands so a populated audit carries no
 	// stale "Empty" claim. It tolerates both delimiter styles the templates have
@@ -874,10 +885,19 @@ func renderBucket(b *strings.Builder, name string, entries []verdictGapEntry) {
 	}
 }
 
+// renderEvidence writes one evidence pointer. The quote is delimited with plain
+// quotation marks rather than %q, and that is not a style choice: %q REWRITES the
+// cleaned bytes — it doubles every backslash — and the cleaner's guarantees are
+// stated over the exact string it returned (see the invariant note in
+// internal/termsafe/prose.go). The backslash the cleaner writes to escape a stray
+// backtick came back through %q doubled — an escaped backslash followed by a LIVE
+// backtick — putting an unpaired run into a committed record and reopening the
+// re-pairing hole this file's other embeddings close. Both fields are already
+// newline-free and control-rune-free, which is all %q was buying here.
 func renderEvidence(e verdictEvidence) string {
 	ref := oneLine(e.Ref)
 	if q := oneLine(e.Quote); q != "" {
-		return fmt.Sprintf("%s — %q", ref, q)
+		return fmt.Sprintf(`%s — "%s"`, ref, q)
 	}
 	return ref
 }
@@ -939,18 +959,28 @@ func hasCitedEvidence(ev []verdictEvidence) bool {
 	return false
 }
 
+// maxNoteFieldBytes caps one untrusted verdict field rendered into the committed
+// Audit Notes. It matches the release ingest's per-entry cap: a rationale, a
+// claim or a quoted line is a sentence or a few, and an unbounded field is the
+// one a hostile verdict uses to bury the record.
+const maxNoteFieldBytes = 4096
+
 // oneLine sanitises an untrusted verdict string before it is rendered into the
-// committed Audit Notes. It collapses newlines (so injected content cannot break
-// out of its line) AND neutralises HTML-comment delimiters, so untrusted content
-// can never forge an `<!-- abcd-review: <STATE> receipt=<rcp> -->` marker to spoof
-// review state, misroute a future ingest, or poison idempotency into a false
-// no-op. Every untrusted field rendered into the record passes through here.
+// committed Audit Notes. It is termsafe.CleanProseLine under this package's cap,
+// NOT a second sanitiser: that package is the canonical home for the
+// untrusted-prose cleaner every host-delegated ingest boundary needs, and routing
+// through it is what gives this record the same guarantees the others have —
+// newlines collapse (so injected content cannot break out of its line), HTML
+// comment delimiters are broken apart (so untrusted content can never forge an
+// `<!-- abcd-review: <STATE> receipt=<rcp> -->` marker to spoof review state,
+// misroute a future ingest, or poison idempotency into a false no-op), raw HTML
+// cannot open, terminal-display attack runes are masked, and markdown link
+// syntax is neutralised so a faithful quotation of code such as
+// `items[0](itm-0001)` cannot trip the links_resolve gate on the record this
+// ingest just wrote (iss-2608311504353427). Every untrusted field rendered into
+// the record passes through here.
 func oneLine(s string) string {
-	s = strings.ReplaceAll(s, "\r", " ")
-	s = strings.ReplaceAll(s, "\n", " ")
-	s = strings.ReplaceAll(s, "<!--", "< !--")
-	s = strings.ReplaceAll(s, "-->", "-- >")
-	return strings.TrimSpace(s)
+	return termsafe.CleanProseLine(s, maxNoteFieldBytes)
 }
 
 func orDash(s string) string {

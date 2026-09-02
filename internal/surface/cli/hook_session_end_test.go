@@ -557,3 +557,36 @@ func TestHookSessionStartDrainNoticeRedactsHomeInError(t *testing.T) {
 		t.Errorf("the notice must show the home-redacted path, got: %s", errlog)
 	}
 }
+
+// TestHookSessionEndReStageKeepsNewerBytes is GHSA-xq36-hcgf-9wrj on the hook
+// path: a second SessionEnd for the same session id carrying different bytes
+// must replace the staged copy, so the next SessionStart stores the newer
+// transcript, and the hook must say it re-staged rather than report a no-op.
+// TestHookSessionEndIsIdempotent covers the identical-bytes case.
+func TestHookSessionEndReStageKeepsNewerBytes(t *testing.T) {
+	repo, rootSHA := sessionEndRepo(t)
+	first := filepath.Join(t.TempDir(), "first.jsonl")
+	second := filepath.Join(t.TempDir(), "second.jsonl")
+	if err := os.WriteFile(first, []byte(`{"role":"user","text":"older snapshot"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(second, []byte(`{"role":"user","text":"older snapshot"}`+"\n"+
+		`{"role":"assistant","text":"NEWER-MARKER"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	runHook(t, endPayload(t, "sess-restage", repo, first), "hook", "session-end")
+	_, errlog := runHook(t, endPayload(t, "sess-restage", repo, second), "hook", "session-end")
+	if strings.Contains(errlog, "no-op") || !strings.Contains(errlog, "re-staged") {
+		t.Errorf("a re-stage with different bytes must say it replaced the staged copy, got: %q", errlog)
+	}
+	_, startLog, _ := runSessionStart(startPayload("sess-restage-next", repo), "hook", "session-start")
+
+	_, stored, err := history.Read(rootSHA, "sess-restage")
+	if err != nil {
+		t.Fatalf("history.Read: %v (session-start stderr: %s)", err, startLog)
+	}
+	if !strings.Contains(string(stored), "NEWER-MARKER") {
+		t.Errorf("the store holds the older snapshot; the newer transcript is gone:\n%s", stored)
+	}
+}

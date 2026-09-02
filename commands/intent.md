@@ -239,6 +239,17 @@ The interview turns a draft into an intent the maintainer has signed off. Run
 it only in a live session with the human; deferral of any question is a valid
 answer, but silence is not consent.
 
+**How every question is asked (the GRILL rule domain).** One question at a
+time, through the harness's interactive question tool, never as a numbered
+list inside prose. Each question carries one sentence of context, one concrete
+example of what each answer means in practice, and options that widen rather
+than recommend: no starred default, no recommended label, the null answer
+always offered. A recommendation the human asks for is given in prose apart
+from the question. The next question waits for the last answer. The register follows
+the addressee: a product thinker gets outcomes in product terms with no
+record ids or internals; a technical facilitator gets the mechanism and the
+ids. Where the hat is unknown, that is the first question.
+
 **Prerequisite — two adversarial reviews.** Before the interview, the draft
 has been through two independent adversarial reviewers with different lenses
 (design/feasibility and record-discipline are the proven pair), and their
@@ -293,6 +304,29 @@ gate that will refuse the move mechanically is a recorded seed until built.
     the real design record — scope, approach, and how it satisfies each
     acceptance criterion.
 12. Re-run `abcd intent ready <itd-N>` and report READY to the user.
+
+## Ship: close the spec in the change that lands the work
+
+The loop has a last step, and nothing runs it for you. `abcd intent plan` moves
+a draft to `planned/`; the only verb that moves a planned intent to `shipped/`
+is the spec store's close, which ships the linked intent as its close-hook:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/abcd" spec close <spc-N> --json    # open/ -> closed/, and planned/ -> shipped/
+```
+
+Run it in the **same change** that lands the intent's work — the commit or
+pull request that makes the acceptance criteria true — the way a captured
+issue is resolved in the change that fixes it. The reason is the release cut:
+`abcd launch ship` composes the changelog from the records in terminal
+folders, and a planned intent is not a refusal, it is simply not seen. An
+intent whose code is on `main` but whose spec is still open ships with no
+changelog line and exits 0 doing so; two intents delivering a breaking CLI
+change were caught that way only by a reviewer. The close needs the intent's
+`impact` set (the `intent_impact_valid` gate refuses a move to `shipped/`
+without one), and `spec close` is CLI-only — there is no `/abcd:spec` page.
+Report the returned pair (the spec's new path, the intent's new path), then
+queue the audit below.
 
 ## Autonomous runs
 

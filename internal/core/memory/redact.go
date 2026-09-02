@@ -1,6 +1,8 @@
 package memory
 
 import (
+	"fmt"
+	"reflect"
 	"strings"
 	"unicode/utf8"
 
@@ -27,8 +29,14 @@ import (
 // inside WritePages, the one primitive every verb (ingest, ask --file-back)
 // writes through, so no body lands unscanned whichever verb built it; the
 // --keep-original copy in Ingest; and, transitively, since they are derived
-// from the redacted bodies, index.md and log.md. Page frontmatter is the one
-// acquired text this does not yet cover (iss-2608291941064448).
+// from the redacted bodies, index.md and log.md. Page FRONTMATTER and the
+// registry leaves a write introduces go through the same detector by way of
+// redactLeaves / redactRegistryLeaves (GHSA-x46m-mw9h-5jwj,
+// iss-2608291941064448): a host-supplied
+// citation title or recall entry, the licence the core lifts from an SPDX line
+// or a License: header, and a redirect-controlled origin are acquired text as
+// much as a body is, and the one place every verb writes through is where they
+// are judged. contradictions.md is derived from the redacted frontmatter.
 
 // storeRedactor holds a per-repo scanner plus the caller's resolved $HOME for
 // the deterministic literal backstop. Construct it with newStoreRedactor, which
@@ -38,21 +46,67 @@ type storeRedactor struct {
 	home string
 }
 
-// newStoreRedactor builds the shared scanner for repoRoot and refuses when it is
-// degraded. ScanText/Redact cannot signal the unavailable state in-band (only
-// ScanBundle does), so a caller that skipped this check would sanitise with a
-// silently weakened pattern set — the exact fail-open this closes. Refusing the
-// whole ingest on a broken per-repo pii.json matches history's posture: a
-// committed store must never be written with a detector known to be weakened.
-func newStoreRedactor(repoRoot string) (*storeRedactor, error) {
+// openStoreRedactor builds the shared scanner for repoRoot and says, as a plain
+// error, why it cannot be trusted: init failed, or the per-repo pii.json left
+// it degraded. ScanText/Redact cannot signal the unavailable state in-band
+// (only ScanBundle does), so a caller that skipped this check would sanitise
+// with a silently weakened pattern set — the exact fail-open this closes. The
+// write side (newStoreRedactor) turns that error into a refusal; the lint
+// (GHSA-xj89-cc2c-wgwr) turns it into a blocker finding, because its contract
+// is to always crawl and write its report.
+func openStoreRedactor(repoRoot string) (*storeRedactor, error) {
 	sc, err := scanner.New(repoRoot)
 	if err != nil {
-		return nil, newIngestError("refusing to ingest: scanner init failed: %v", err)
+		return nil, fmt.Errorf("scanner init failed: %v", err)
 	}
 	if unavail, reason := sc.Unavailable(); unavail {
-		return nil, newIngestError("refusing to ingest with a degraded scanner: %s", reason)
+		return nil, fmt.Errorf("degraded scanner: %s", reason)
 	}
 	return &storeRedactor{sc: sc, home: scanner.CallerHome()}, nil
+}
+
+// newStoreRedactor is the write side of openStoreRedactor: it refuses the whole
+// ingest on a broken per-repo pii.json, matching history's posture — a
+// committed store must never be written with a detector known to be weakened.
+func newStoreRedactor(repoRoot string) (*storeRedactor, error) {
+	r, err := openStoreRedactor(repoRoot)
+	if err != nil {
+		return nil, newIngestError("refusing to ingest: %v", err)
+	}
+	return r, nil
+}
+
+// residueHomeKind labels the literal-home backstop's finding. It mirrors the
+// scanner's own kind for the caller's home, so a report reads the same
+// whichever detector saw the path.
+const residueHomeKind = "home_path_self"
+
+// residue is the read side of redactText, for text ALREADY in the store: the
+// spans the write side would refuse or rewrite — every blocking finding of the
+// canonical scanner (a hard_fail secret, any identity or network span whatever
+// its severity) plus the deterministic literal-home backstop, reported per
+// line and deduplicated against a scanner finding of the same kind on that
+// line. It rewrites nothing: the lint reports and the operator repairs
+// (GHSA-xj89-cc2c-wgwr). A finding carries the kind and the line; the caller
+// must never put its Matched span into free text.
+func (r *storeRedactor) residue(text, label string) []scanner.Finding {
+	out := scanner.BlockingResidual(r.sc.ScanText(text, label))
+	if r.home == "" {
+		return out
+	}
+	seen := map[int]bool{}
+	for _, f := range out {
+		if f.Kind == residueHomeKind {
+			seen[f.Line] = true
+		}
+	}
+	for i, line := range strings.Split(text, "\n") {
+		if seen[i+1] || scanner.SweepCallerHome(line, r.home) == line {
+			continue
+		}
+		out = append(out, scanner.Finding{File: label, Line: i + 1, Kind: residueHomeKind, Matched: "~"})
+	}
+	return out
 }
 
 // redactText sanitises one free-text blob bound for the store. label is the
@@ -86,6 +140,165 @@ func (r *storeRedactor) redactText(text, label string) (string, int, error) {
 		return "", 0, newIngestError("refusing to write: redaction left %d blocking span(s) unresolved [%s]", len(resid), strings.Join(kinds, ", "))
 	}
 	return redacted, len(findings), nil
+}
+
+// redactLeaves is the PAGE-FRONTMATTER entry to the leaf walk: nothing in a
+// page's frontmatter is an identifier the store resolves, so every string leaf
+// it introduces is judged. `contradicts:` is deliberately included even though
+// it lists page ids — the entries are host-supplied and validated only for
+// non-emptiness (parseDistilledPage strips a trailing ".md" and checks nothing
+// else), they are copied verbatim into contradictions.md, and NOTHING resolves
+// them against the store, so a rewritten target is a dangling cross-reference
+// rather than a deleted page. The registry's back-links are the opposite case
+// on both counts — see redactRegistryLeaves.
+func (r *storeRedactor) redactLeaves(current, target any, label string) error {
+	return r.walkLeaves(nil, current, target, label, nil)
+}
+
+// redactRegistryLeaves is the REGISTRY entry to the same walk, with the store's
+// page back-links excluded from it. `<content-hash>.consumers.<consumer>.pages`
+// holds filenames the store RESOLVES: pruneOrphans deletes any page on disk
+// that no back-link names, so rewriting one is not a redaction — it unlinks a
+// file that keeps its real name and the next write silently deletes it. An
+// ordinary slug is enough to trigger it, because a page name is prose-shaped:
+// `topic_home_migrating-off-the-nas.md` carries `off-the-nas`, which the
+// canonical scanner matches as a device hostname on the hyphen boundary.
+// Excluding the leaf costs nothing: a back-link's charset is bounded by
+// pageNameRe through validatePageFilename, so it is an identifier, not the
+// acquired text this walk exists to judge.
+func (r *storeRedactor) redactRegistryLeaves(current, target any, label string) error {
+	return r.walkLeaves(nil, current, target, label, registryBackLinkPath)
+}
+
+// registryBackLinkPath reports whether path names the registry's page back-link
+// list, `<content-hash>.consumers.<consumer>.pages`. The consumer is matched by
+// position rather than by the literal "memory" so a later consumer's back-links
+// carry the same protection by construction.
+func registryBackLinkPath(path []string) bool {
+	return len(path) == 4 && path[1] == "consumers" && path[3] == "pages"
+}
+
+// walkLeaves walks target — the nested map[string]any / []any / string shape
+// the frontmatter dumper and the JSON registry share — IN PLACE, and sanitises
+// through redactText every string leaf the write is INTRODUCING. A leaf is
+// introduced when current holds no equal string, or none at all; a leaf present
+// and equal in current is the store's already, not this write's to judge, and
+// stays byte-identical — so a legacy registry carrying a dirty cached citation
+// is neither refused on re-ingest (the one verb that repairs it) nor rewritten
+// behind the operator's back; reporting it is the lint's job. A nil current
+// introduces every leaf. An introduced KEY is judged too, by judgeKey — keys
+// are NOT schema-fixed, and a key carrying a secret is refused rather than
+// rewritten; non-string scalars pass through untouched. A subtree structural
+// reports at its map path is skipped whole: it holds identifiers the store
+// resolves, and rewriting one breaks the thing it names.
+//
+// Mutating in place is the contract, not a shortcut: the map a RegistryMerge
+// returned IS what the store then writes, so a caller that kept hold of it —
+// the registry-only fast path reads its result licence and citation off the
+// merged map — sees the written bytes rather than a pre-redaction copy.
+func (r *storeRedactor) walkLeaves(path []string, current, target any, label string, structural func([]string) bool) error {
+	switch v := target.(type) {
+	case map[string]any:
+		cm, _ := current.(map[string]any)
+		for k, item := range v {
+			var cv any
+			known := false
+			if cm != nil {
+				cv, known = cm[k]
+			}
+			// A key the store does not already hold is this write's, exactly as
+			// a leaf is, and is judged before its value: the key is the one part
+			// of the shape a host controls that no value-side pass can see.
+			if !known {
+				if err := r.judgeKey(k, label); err != nil {
+					return err
+				}
+			}
+			at := append(append([]string(nil), path...), k)
+			if structural != nil && structural(at) {
+				continue
+			}
+			if s, ok := item.(string); ok {
+				red, err := r.judgeLeaf(cv, s, label)
+				if err != nil {
+					return err
+				}
+				v[k] = red
+				continue
+			}
+			if err := r.walkLeaves(at, cv, item, label, structural); err != nil {
+				return err
+			}
+		}
+	case []any:
+		cl, _ := current.([]any)
+		for i, item := range v {
+			cv := storedListElement(cl, item, i)
+			if s, ok := item.(string); ok {
+				red, err := r.judgeLeaf(cv, s, label)
+				if err != nil {
+					return err
+				}
+				v[i] = red
+				continue
+			}
+			if err := r.walkLeaves(path, cv, item, label, structural); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// storedListElement pairs one element of a list the write is about to store
+// with its counterpart in the baseline list BY VALUE, falling back to the same
+// index when the baseline holds nothing equal. Index pairing alone contradicts
+// the walk's own contract: a list that gains a front element shifts every later
+// element, so a leaf the store already held is re-judged — and a legacy store's
+// dirty recall entry is then rewritten, or the whole write refused, on a
+// re-ingest that introduced nothing. A list is an unordered set of leaves as
+// far as "did this write introduce it" is concerned; the index says nothing.
+func storedListElement(baseline []any, item any, i int) any {
+	for _, c := range baseline {
+		if reflect.DeepEqual(c, item) {
+			return c
+		}
+	}
+	if i < len(baseline) {
+		return baseline[i]
+	}
+	return nil
+}
+
+// judgeKey is redactLeaves' one KEY rule. Keys are not schema-fixed:
+// validateSourceBlock rejects no unknown key in a page's source: block and the
+// frontmatter dumper admits any identifier-shaped key, a `ghp_`-prefixed token
+// among them, so a host distiller's page JSON can carry a credential as a YAML
+// key. It is refused, never rewritten — renaming a key renames the field the
+// reader looks up, and dropping it discards the value it names, so neither is a
+// redaction. The refusal names the label and the kinds and NEVER the key
+// itself: here the key IS the secret, and an error is the one artefact that
+// reaches the terminal and the run log unredacted.
+func (r *storeRedactor) judgeKey(key, label string) error {
+	resid := r.residue(key, label)
+	if len(resid) == 0 {
+		return nil
+	}
+	kinds := make([]string, 0, len(resid))
+	for _, f := range resid {
+		kinds = append(kinds, f.Kind)
+	}
+	return newIngestError("refusing to write: a map key in %s carries %d blocking span(s) [%s]; a key cannot be redacted without renaming the field it names, so repair the source", label, len(resid), strings.Join(kinds, ", "))
+}
+
+// judgeLeaf is redactLeaves' one leaf rule: unchanged from current, keep it;
+// otherwise it is this write's and goes through redactText.
+func (r *storeRedactor) judgeLeaf(current any, leaf, label string) (string, error) {
+	if c, ok := current.(string); ok && c == leaf {
+		return leaf, nil
+	}
+	red, _, err := r.redactText(leaf, label)
+	return red, err
 }
 
 // redactOriginalBytes sanitises the --keep-original source copy. A text source's

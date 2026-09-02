@@ -341,7 +341,7 @@ func TestIngestRedactsTheManifestReference(t *testing.T) {
 func TestReadingPathsRefuseASymlinkedTree(t *testing.T) {
 	t.Run("the readings root", func(t *testing.T) {
 		repo, ir := ledger(t)
-		if err := ensureLedgerDirs(ir); err != nil {
+		if err := ensureLedgerDirs(repo, ir); err != nil {
 			t.Fatal(err)
 		}
 		outside := t.TempDir()

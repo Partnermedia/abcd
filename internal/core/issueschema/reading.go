@@ -59,7 +59,9 @@ const (
 //
 // A reading record and a disposition are single-screen documents. The cap is not
 // there to bound legitimate content; it is there so a device, or a file swapped
-// for a huge one, cannot make a read unbounded.
+// for a huge one, cannot make a read unbounded. The issue family applies the same
+// cap for the same reason (GHSA-fh9j-8xmg-m33f): an issue record is a page, and
+// the largest one this repository has ever carried is under one sixtieth of it.
 const RecordReadLimit = 1 << 20
 
 // ReadingPosition binds one reading position to the supply regime it implies and

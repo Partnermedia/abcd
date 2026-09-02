@@ -93,10 +93,10 @@ func TestPlanHappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Spec.ID != "spc-1" || res.Spec.Intent != "itd-10" {
+	if !nativeSpecIDRe.MatchString(res.Spec.ID) || res.Spec.Intent != "itd-10" {
 		t.Fatalf("Plan spec = %+v", res.Spec)
 	}
-	if res.Intent.Bucket != "planned" || res.Intent.SpecID != "spc-1" || res.Intent.Kind != "standalone" {
+	if res.Intent.Bucket != "planned" || res.Intent.SpecID != res.Spec.ID || res.Intent.Kind != "standalone" {
 		t.Fatalf("Plan intent = %+v", res.Intent)
 	}
 
@@ -109,14 +109,14 @@ func TestPlanHappyPath(t *testing.T) {
 		t.Fatalf("planned file should exist: %v", err)
 	}
 	f := frontmatter.Fields(strings.Split(string(body), "\n"))
-	if f["spec_id"].Value != "spc-1" {
-		t.Fatalf("planned intent spec_id = %q, want spc-1\n%s", f["spec_id"].Value, body)
+	if f["spec_id"].Value != res.Spec.ID {
+		t.Fatalf("planned intent spec_id = %q, want %s\n%s", f["spec_id"].Value, res.Spec.ID, body)
 	}
 	if f["kind"].Value != "standalone" {
 		t.Fatalf("planned intent kind = %q, want standalone\n%s", f["kind"].Value, body)
 	}
 	// The spec file carries the reciprocal intent link.
-	sbody, err := os.ReadFile(filepath.Join(root, specsOpen, "spc-1-alpha.md"))
+	sbody, err := os.ReadFile(filepath.Join(root, specsOpen, res.Spec.ID+"-alpha.md"))
 	if err != nil {
 		t.Fatalf("spec file should exist: %v", err)
 	}
@@ -220,7 +220,7 @@ func TestPlanReusesExistingSpecForIntent(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, draftsDir+"/itd-10-alpha.md", draftWithAC("itd-10", "alpha"))
 	// Pre-create the spec for this intent; the draft is still an unlinked draft.
-	sp, _, err := spec.Create(root, "itd-10", "alpha", "")
+	sp, err := spec.Create(root, "itd-10", "alpha", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -553,7 +553,7 @@ func TestFullCycle(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, shippedDir, "itd-10-alpha.md")); err != nil {
 		t.Fatalf("intent must be shipped: %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(root, specsClosed, "spc-1-alpha.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(root, specsClosed, pr.Spec.ID+"-alpha.md")); err != nil {
 		t.Fatalf("spec must be closed: %v", err)
 	}
 

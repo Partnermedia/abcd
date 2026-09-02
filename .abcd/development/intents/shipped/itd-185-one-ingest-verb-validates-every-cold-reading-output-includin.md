@@ -123,8 +123,10 @@ None stated.
   (`resolution`, `fix`, `remedy`), **when** it is ingested, **then** ingest
   refuses and names the item's ordinal, the field, and the licence breached.
 - **Given** a `registrative` output whose item body matches a registered
-  fix-proposal signature, **when** it is ingested, **then** ingest refuses and
-  names the item and the signature id.
+  fix-proposal signature, **when** it is ingested, **then** ingest raises a
+  review flag naming the item and the signature id, carries that flag on the run
+  record, and lands the item. The four semantic signatures are observed rather
+  than enforcing (decision log, 2026-08-31).
 - **Given** an `evaluative` output carrying a `rank`, `score`, `order` or
   `recommended` field, **when** it is ingested, **then** ingest refuses and
   names the field.
@@ -136,8 +138,10 @@ None stated.
   explicative body schema — **when** it is ingested, **then** ingest refuses and
   names the field.
 - **Given** an `explicative` output whose claim body matches a registered
-  disposition signature, **when** it is ingested, **then** ingest refuses and
-  names the item and the signature id.
+  disposition signature, **when** it is ingested, **then** ingest raises a
+  review flag naming the item and the signature id, carries that flag on the run
+  record, and lands the item. The four semantic signatures are observed rather
+  than enforcing (decision log, 2026-08-31).
 - **Given** a run refused at list level, **when** the refusal completes, **then**
   a refusal record exists carrying the run metadata and the named reason, and no
   reading records exist for that run.
@@ -151,30 +155,57 @@ None stated.
   every item carries an identifier the verb minted, and a payload supplying its
   own item identifier is refused as an unknown field.
 
-**Disclosed residue (ac-5 and ac-9).** The two semantic criteria are enforced
+**Disclosed residue (ac-5 and ac-9).** The two semantic criteria are observed
 over the signature registry, not over the space of things a sentence can do, and
-the residue has two parts.
+the residue runs in BOTH directions. Naming only one of them would read as a
+completeness this gate does not have.
 
-The first is the one this intent has always disclosed: a fix proposal or a
-disposition **phrased** outside the registry's signatures is not caught. The
-registry sits in the calibration band, and whether the signatures lint cleanly
-in practice is this intent's recorded open question.
+**Under-catching** is the direction this intent has always disclosed: a fix
+proposal or a disposition **phrased** outside the registry's signatures raises
+nothing. Inside it sits a narrower class. The detectors read a folded copy of
+every text value the item carries — its body and the envelope pattern alike — so
+an invisible or compatibility-equivalent rune cannot decide whether a signature
+fires: every Unicode space folds to ASCII, every invisible rune is
+dropped, U+2800 BRAILLE PATTERN BLANK folds to a space — it renders as nothing
+and is caught by no Unicode category the fold consults — and NFKC folds the
+compatibility forms. A script-**confusable**
+substitution is not folded — a Cyrillic that is not the Latin one, and no
+normalisation equates them — so a signature's own phrasing written in a
+confusable script raises nothing. Closing that needs a confusables table, which
+is a new dependency and a maintainer's decision; until it is taken, this class
+is open.
 
-The second is narrower and is named here rather than left to be discovered. The
-detectors read a folded copy of the body, so an invisible or
-compatibility-equivalent rune cannot decide whether a signature fires: every
-Unicode space folds to ASCII, every invisible rune is dropped, and NFKC folds
-the compatibility forms. A script-**confusable** substitution is not folded — a
-Cyrillic that is not the Latin one, and no normalisation equates them — so a
-signature's own phrasing written in a confusable script is not caught. Closing
-that needs a confusables table, which is a new dependency and a maintainer's
-decision; until it is taken, this class is open.
+**Over-catching** is the larger direction, and the reason the signatures are
+observed rather than enforcing. The registry cannot tell a reading that
+PROPOSES from a reading that REPORTS somebody else proposing, and the second is
+most of what a reading legitimately does: the disposition detector fires on any
+explicative claim quoting the token this repository's own records carry
+everywhere, and "section 3 says the fix is already merged while section 8 says
+it is pending" — the canonical shape of a detection finding — fires too.
+Measured against a CONSTRUCTED corpus of thirty-four realistic reading outputs,
+fourteen were caught, every one of them for reporting rather than proposing.
+That corpus is synthetic and the number is evidence about the detectors, not an
+observation of practice: no reading has yet been run through this verb, so the
+signatures have never been calibrated against a real one. The degradation to
+flag mode (decision log, 2026-08-31) is taken on that synthetic evidence, and
+the flags a first real reading raises are the calibration this gate has never
+had.
 
-The distinction between the two parts is the same test throughout: the
-registry's phrasing with a byte substituted is a defect in the gate, and
-phrasing outside the registry is a limit of it. Their structural halves — ac-4,
-ac-6 and ac-8 — carry no residue of either kind, because a field is present or
-it is not.
+The distinction between a defect and the under-catching residue is the same test
+throughout: the registry's phrasing with a byte substituted is a defect in the
+gate, and phrasing outside the registry is a limit of it. Their structural
+halves — ac-4, ac-6 and ac-8 — carry no residue of either kind, because a field
+is present or it is not.
+
+**Two verdicts in the ingested audit describe superseded behaviour.** The
+fidelity review under receipt `rcp-fe3450ca55ff` records ac-5 and ac-9 as MET on
+the strength of a REFUSAL, which is what the verb did when that review ran. The
+four semantic signatures became review flags on 2026-08-31 and ac-5 and ac-9
+above are rewritten to match, so those two verdicts now describe behaviour this
+repository no longer has. The Audit Notes below are left exactly as they were
+ingested — a receipt records what was found, not a document to amend — and the
+two criteria need re-issuing at the next audit. No other verdict in that receipt
+is affected.
 
 
 ## Grounds

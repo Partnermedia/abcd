@@ -2,6 +2,7 @@ package gitleaks
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"os"
 	"path/filepath"
@@ -258,5 +259,93 @@ func TestAugmentReportsEveryOccurrenceOnALine(t *testing.T) {
 	redacted, _ := scanner.Redact(text, findings)
 	if strings.Contains(redacted, secret) {
 		t.Errorf("an occurrence survived redaction:\n%s", redacted)
+	}
+}
+
+// TestAugmentMultiLineFindingIsRedactedPerLine is the GHSA-j7v5-q7x6-v3rp
+// multi-line limb. gitleaks' default private-key rule, and any custom rule, can
+// report a value spanning lines; the adapter must split it into one finding per
+// line so scanner.Redact (which seals by line) masks every line, rather than
+// skip the report and store the whole block verbatim. The fixture is
+// deliberately NOT PEM-shaped: a native PEM-body rule must not be able to mask
+// this regression.
+func TestAugmentMultiLineFindingIsRedactedPerLine(t *testing.T) {
+	l1 := testsecret.Synthetic(98, 40)
+	l2 := testsecret.Synthetic(99, 40)
+	text := "user: key\n" + l1 + "\n" + l2 + "\nassistant: ok\n"
+	report := `[{"RuleID":"custom-multiline","Secret":"` + l1 + `\n` + l2 + `","Match":"` + l1 + `\n` + l2 + `"}]`
+	a := &Adapter{LookPath: foundLookPath(t), Runner: &fakeRunner{report: report}}
+
+	findings, err := a.Augment(context.Background(), t.TempDir(), Config{Enabled: true}, text, "transcript")
+	if err != nil {
+		t.Fatalf("Augment: %v", err)
+	}
+	if len(findings) != 2 {
+		t.Fatalf("want 2 findings (one per line of the multi-line value), got %d: %+v", len(findings), findings)
+	}
+	want := []struct {
+		line    int
+		matched string
+	}{{2, l1}, {3, l2}}
+	for i, w := range want {
+		if findings[i].Line != w.line || findings[i].Column != 1 || findings[i].Matched != w.matched {
+			t.Errorf("finding %d = line %d col %d %q, want line %d col 1 %q",
+				i, findings[i].Line, findings[i].Column, findings[i].Matched, w.line, w.matched)
+		}
+	}
+	redacted, _ := scanner.Redact(text, findings)
+	if strings.Contains(redacted, l1) || strings.Contains(redacted, l2) {
+		t.Errorf("a line of the multi-line secret survived redaction:\n%s", redacted)
+	}
+}
+
+// TestAugmentFallsBackToMatchWhenSecretIsNotVerbatim is the GHSA-j7v5-q7x6-v3rp
+// non-verbatim limb. A rule that reports a decoded credential while the
+// transcript holds the encoded form must fall back to Match — the bytes gitleaks
+// actually saw — instead of locating nothing and dropping the finding.
+func TestAugmentFallsBackToMatchWhenSecretIsNotVerbatim(t *testing.T) {
+	decoded := "svc-user:" + testsecret.Synthetic(100, 24)
+	encoded := base64.StdEncoding.EncodeToString([]byte(decoded))
+	match := "Authorization: Basic " + encoded
+	text := "user: curl -H \"" + match + "\" https://example.invalid/\nassistant: ok\n"
+	report := `[{"RuleID":"basic-auth","Secret":"` + decoded + `","Match":"` + match + `"}]`
+	a := &Adapter{LookPath: foundLookPath(t), Runner: &fakeRunner{report: report}}
+
+	findings, err := a.Augment(context.Background(), t.TempDir(), Config{Enabled: true}, text, "transcript")
+	if err != nil {
+		t.Fatalf("Augment: %v", err)
+	}
+	if len(findings) != 1 {
+		t.Fatalf("want 1 finding positioned on Match, got %d: %+v", len(findings), findings)
+	}
+	f := findings[0]
+	if f.Line != 1 || f.Column != strings.Index(text, match)+1 || f.Matched != match {
+		t.Errorf("finding = line %d col %d %q, want line 1 col %d %q", f.Line, f.Column, f.Matched, strings.Index(text, match)+1, match)
+	}
+	redacted, _ := scanner.Redact(text, findings)
+	if strings.Contains(redacted, encoded) {
+		t.Errorf("the encoded credential survived redaction:\n%s", redacted)
+	}
+}
+
+// TestAugmentUnlocatableReportFailsClosed pins the fail-closed contract for a
+// report the adapter cannot place: neither Secret nor Match occurs in the text.
+// The package header promises "never a silent no-op"; a report that yields zero
+// findings must be an error the store refuses the write on, not a dropped
+// finding with the record asserting cleanliness.
+func TestAugmentUnlocatableReportFailsClosed(t *testing.T) {
+	ghost := testsecret.Synthetic(101, 40)
+	report := `[{"RuleID":"custom","Secret":"` + ghost + `","Match":"` + ghost + `"}]`
+	a := &Adapter{LookPath: foundLookPath(t), Runner: &fakeRunner{report: report}}
+
+	findings, err := a.Augment(context.Background(), t.TempDir(), Config{Enabled: true}, "nothing here\n", "transcript")
+	if err == nil {
+		t.Fatalf("an unlocatable report returned no error (findings=%+v); the adapter dropped it silently", findings)
+	}
+	if !errors.Is(err, ErrFindingNotLocated) {
+		t.Fatalf("error is not ErrFindingNotLocated: %v", err)
+	}
+	if strings.Contains(err.Error(), ghost) {
+		t.Errorf("the error message carries the reported value verbatim: %q", err.Error())
 	}
 }

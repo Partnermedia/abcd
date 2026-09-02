@@ -91,7 +91,7 @@ A table that cannot say what a reading is about cannot distinguish four readings
 
 ## Audit Notes
 
-`<!-- abcd-review: INGESTED receipt=rcp-7a42dfc23828 -->`
+<!-- abcd-review: INGESTED receipt=rcp-7a42dfc23828 -->
 Fidelity review — receipt rcp-7a42dfc23828 (verifier abcd:intent-auditor claude-opus-5[1m]).
 
 Provenance: abcd:intent-auditor@claude-opus-5[1m] · rubric_hash sha256:542ed2cd51ff938717a3f47b2b332e8d47910beec0ca7ecdfd238ae7edf5ced5 · prompt_hash sha256:37eabecc8c8815b4403c8924adec561e0687fafcdd279340cc06ac061c39b983

@@ -282,7 +282,7 @@ func TestCapturePromoteJSONContract(t *testing.T) {
 	if err := json.Unmarshal(out, &r); err != nil {
 		t.Fatalf("promote output not JSON: %v\n%s", err, out)
 	}
-	if r.IssueID != minted.ID || r.IntentID != "itd-1" || r.Linked {
+	if r.IssueID != minted.ID || !cliNativeIntentIDRe.MatchString(r.IntentID) || r.Linked {
 		t.Fatalf("unexpected promote result: %+v", r)
 	}
 	for _, p := range []string{r.IssuePath, r.IntentPath} {
@@ -295,8 +295,8 @@ func TestCapturePromoteJSONContract(t *testing.T) {
 	}
 
 	// Second promote refuses (exit non-zero) and names the existing intent.
-	if _, err := runCLIErr(t, "capture", "promote", minted.ID, "--grounds", cliGrounds); err == nil || !strings.Contains(err.Error(), "itd-1") {
-		t.Fatalf("second promote must refuse naming itd-1, got: %v", err)
+	if _, err := runCLIErr(t, "capture", "promote", minted.ID, "--grounds", cliGrounds); err == nil || !strings.Contains(err.Error(), r.IntentID) {
+		t.Fatalf("second promote must refuse naming %s, got: %v", r.IntentID, err)
 	}
 }
 

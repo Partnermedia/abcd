@@ -419,3 +419,207 @@ func TestTheLedgerLockIsHeldWhileTheSweepUnlinks(t *testing.T) {
 		t.Errorf("the ledger lock was not released after the sweep: %v", err)
 	}
 }
+
+// TestAPayloadRefusedBeforeItValidatesRollsBackNothing is the sweep's safety
+// rule: the rollback is a DESTRUCTIVE act in the committed tier, so it rides
+// with the commit and never with a refusal.
+//
+// The failure this closes was durable and silent. With an orphaned stage
+// present and its record already in the ledger, an ingest whose payload was
+// refused at the `_type` check deleted that committed record and reported the
+// `_type` error alone — an operator saw a validation error and had no way to
+// learn that a record had been destroyed while it was being reported. A run
+// that is being refused for a reason of its own has no business unlinking
+// somebody else's records on the way out.
+func TestAPayloadRefusedBeforeItValidatesRollsBackNothing(t *testing.T) {
+	orphanRecord := ".abcd/work/issues/readings/rdg-2608310000000031/rdi-2608310000000032.md"
+	for _, tc := range []struct {
+		name   string
+		break_ func(doc map[string]any)
+	}{
+		{"a wrong _type", func(doc map[string]any) { doc["_type"] = "abcd.reading.output/99" }},
+		{"a run id that resolves to nothing", func(doc map[string]any) { doc["run_id"] = "rdg-2608310000009999" }},
+		{"a regime the definition does not state", func(doc map[string]any) { doc["regime"] = RegimeEvaluative }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newIngestFixture(t, "detection")
+			orphan := "rdg-2608310000000031"
+			f.write(IngestStageDir+"/"+orphan+"/"+stageFileName,
+				[]byte(`{"_type":"`+StageType+`","run_id":"`+orphan+`","records":["rdi-2608310000000032"]}`))
+			f.write(orphanRecord, []byte("---\nid: rdi-2608310000000032\n---\n"))
+
+			doc := f.payload(1)
+			tc.break_(doc)
+			res, err := f.ingest(doc)
+			if err == nil {
+				t.Fatal("the broken payload was accepted")
+			}
+			if !f.exists(orphanRecord) {
+				t.Error("a refused run deleted a committed reading record on its way out")
+			}
+			if len(res.RolledBack) != 0 || len(res.ClearedStages) != 0 {
+				t.Errorf("a refused run swept: cleared %v, rolled back %v", res.ClearedStages, res.RolledBack)
+			}
+		})
+	}
+}
+
+// TestASweepThatFailsPartWayReportsWhatItAlreadyRemoved is the other half of
+// "whatever the sweep did is reported on every exit path". The sweep walks the
+// orphans in name order, so a fault on a later one leaves earlier deletes
+// already committed — and returning a bare error there loses the only record
+// that they happened.
+func TestASweepThatFailsPartWayReportsWhatItAlreadyRemoved(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("the denial this rests on is a directory permission, which does not bind root")
+	}
+	f := newIngestFixture(t, "detection")
+	swept, stuck := "rdg-2608310000000041", "rdg-2608310000000042"
+	for _, run := range []string{swept, stuck} {
+		f.write(IngestStageDir+"/"+run+"/"+stageFileName,
+			[]byte(`{"_type":"`+StageType+`","run_id":"`+run+`","records":[]}`))
+	}
+	f.write(".abcd/work/issues/readings/"+swept+"/rdi-2608310000000043.md",
+		[]byte("---\nid: rdi-2608310000000043\n---\n"))
+	f.write(".abcd/work/issues/readings/"+stuck+"/rdi-2608310000000044.md",
+		[]byte("---\nid: rdi-2608310000000044\n---\n"))
+
+	// The later orphan's directory refuses an unlink, so the sweep fails after
+	// it has already removed the earlier one's record.
+	stuckDir := filepath.Join(f.root, filepath.FromSlash(".abcd/work/issues/readings/"+stuck))
+	if err := os.Chmod(stuckDir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(stuckDir, 0o755) })
+
+	res, err := f.ingest(f.payload(1))
+	if err == nil {
+		t.Fatal("the sweep reported no fault, so this case proves nothing")
+	}
+	found := false
+	for _, id := range res.RolledBack {
+		if id == "rdi-2608310000000043" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("the sweep removed rdi-2608310000000043 and then failed, reporting %v; a delete in the "+
+			"committed tier is reported whatever happens next", res.RolledBack)
+	}
+}
+
+// TestARefusalRollsBackTheRunsOwnCrashedAttempt is ac-10 on the path holding
+// the sweep back to the commit opened up.
+//
+// The general sweep is deferred because it destroys OTHER runs' records and a
+// run on its way to a refusal has no business doing that. This run's own
+// records are a different case: a previous ingest of this id may have died
+// between the ledger write and its commit marker, refuseARerun has already
+// proven the id has no outcome, and ac-10's words are that a refused run leaves
+// a refusal record and NO reading records. Without this a refusal.json landed
+// beside the earlier attempt's records, asserting a refusal for a run the
+// ledger still carried findings for.
+func TestARefusalRollsBackTheRunsOwnCrashedAttempt(t *testing.T) {
+	f := newIngestFixture(t, "detection")
+
+	// A crashed attempt at this run: its records in the ledger, its stage
+	// standing, and no commit marker.
+	withFault(t, faultAfterLedger)
+	if _, err := f.ingest(f.payload(2)); err == nil {
+		t.Fatal("the injected fault did not stop the first attempt")
+	}
+	ingestFault = nil
+	if got := f.ledgerRecords(f.runID); len(got) != 2 {
+		t.Fatalf("the crashed attempt left %v in the ledger, want its 2 records", got)
+	}
+
+	// The same run again, refused at list level.
+	doc := f.payload(1)
+	doc["regime"] = RegimeEvaluative
+	res, err := f.ingest(doc)
+	if err == nil {
+		t.Fatal("a regime mismatch was accepted")
+	}
+	if res.RefusalPath == "" {
+		t.Fatal("the refusal wrote no record")
+	}
+	f.nothingDurableInTheLedger(f.runID)
+	if len(res.RolledBack) != 2 {
+		t.Errorf("the refusal rolled back %v; it removed the earlier attempt's 2 records from the "+
+			"committed ledger and has to say so", res.RolledBack)
+	}
+}
+
+// TestTheBareRenderNamesAnOrphanedIngestStage.
+//
+// The sweep is held back to the commit path, so an orphan can now outlive the
+// invocation that found it — and nothing named one. `staged_runs` reads the
+// ASSEMBLY parking area, which is a different directory and lists committed
+// runs alongside uncommitted ones, so an operator had no way to see that a
+// crashed ingest had left reading records in the ledger for a run that never
+// happened.
+func TestTheBareRenderNamesAnOrphanedIngestStage(t *testing.T) {
+	f := newIngestFixture(t, "detection")
+	status, err := Describe(f.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(status.OrphanedIngests) != 0 {
+		t.Errorf("a repository with no orphan reports %v", status.OrphanedIngests)
+	}
+
+	withFault(t, faultAfterLedger)
+	if _, err := f.ingest(f.payload(1)); err == nil {
+		t.Fatal("the injected fault did not stop the ingest")
+	}
+	ingestFault = nil
+
+	status, err = Describe(f.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(status.OrphanedIngests) != 1 || status.OrphanedIngests[0] != f.runID {
+		t.Fatalf("the render reports orphaned ingests %v, want [%s]", status.OrphanedIngests, f.runID)
+	}
+	// And it clears once a later ingest sweeps it.
+	f.mustIngest(f.nextRun(f.payload(1)))
+	status, err = Describe(f.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(status.OrphanedIngests) != 0 {
+		t.Errorf("the swept orphan is still reported: %v", status.OrphanedIngests)
+	}
+}
+
+// TestTheBareRenderTellsALeftoverStageFromAnOrphan: a stage directory survives
+// in two different states. An ingest that never reached its commit marker
+// leaves one, and so does a commit path whose RemoveAll failed AFTER run.json
+// landed. The sweep already tells them apart — rollbackRun probes the commit
+// marker and leaves a committed run's records alone — so a render that calls
+// both "an orphan whose records will be rolled back" is stating something the
+// sweep will not do. The render probes the same marker and reports the two
+// cases under different keys.
+func TestTheBareRenderTellsALeftoverStageFromAnOrphan(t *testing.T) {
+	f := newIngestFixture(t, "detection")
+	f.mustIngest(f.payload(1))
+
+	// The shape a failed RemoveAll leaves: the commit marker is down and the
+	// stage is still there.
+	f.write(IngestStageDir+"/"+f.runID+"/"+stageFileName,
+		[]byte(`{"_type":"`+StageType+`","run_id":"`+f.runID+`","records":[]}`))
+	if !f.exists(ReadingsRecordDir + "/" + f.runID + "/" + RunFileName) {
+		t.Fatal("the fixture's run did not commit, so this case proves nothing")
+	}
+
+	status, err := Describe(f.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(status.OrphanedIngests) != 0 {
+		t.Errorf("a committed run's leftover stage is reported as an orphan: %v", status.OrphanedIngests)
+	}
+	if len(status.LeftoverStages) != 1 || status.LeftoverStages[0] != f.runID {
+		t.Errorf("the render reports leftover stages %v, want [%s]", status.LeftoverStages, f.runID)
+	}
+}
