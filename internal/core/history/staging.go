@@ -226,8 +226,11 @@ func stageLocked(sdir, sessionID string, raw []byte) (StageResult, error) {
 			return StageResult{Staged: *prior, Wrote: false}, nil
 		}
 		// 0o600: unredacted. The rename lands at the existing path, so the
-		// listing keeps one entry for the session and StagedAt (its mtime) moves
-		// to the newer end.
+		// listing keeps one entry for the session AND its place in the drain
+		// queue: listStaged orders on the filename, whose stamp is when the
+		// session first ended, so a re-stage never pushes an older session
+		// behind newer ones under a budget. Only StagedAt (the file's mtime)
+		// moves to the newer bytes.
 		if err := fsutil.WriteFileAtomic(prior.Path, raw, 0o600); err != nil {
 			return StageResult{}, fmt.Errorf("history: re-stage transcript: %w", err)
 		}

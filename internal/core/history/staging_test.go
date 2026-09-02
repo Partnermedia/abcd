@@ -166,7 +166,10 @@ func TestStageReplacesStaleCopyOnDifferentContent(t *testing.T) {
 func TestStageConcurrentSameSessionYieldsOneCopy(t *testing.T) {
 	repoRoot, _ := setupStore(t)
 	const writers = 8
-	const rounds = 20
+	// Three rounds, not twenty: the unlocked Stage loses this race on the first
+	// round every time (five runs out of five with the lock removed), and every
+	// round costs ~1 s here and twice that under -race, on every CI leg.
+	const rounds = 3
 	var last string
 	for round := 0; round < rounds; round++ {
 		id := "sess-race-" + strconv.Itoa(round)
