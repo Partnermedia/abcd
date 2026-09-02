@@ -383,9 +383,8 @@ func (a *applyCtx) stepConfigValues() *InstallConfig {
 	// malformed JSON: collecting values and writing them back would rebuild the
 	// file from scratch, DESTROYING whatever the user had. Refuse to touch a file
 	// we cannot parse and report a partial install so the operator repairs it.
-	ic, ok := loadPersistedInstallConfig(a.cwd)
-	if !ok {
-		_, err := readConfig(a.cwd)
+	ic, err := loadPersistedInstallConfig(a.cwd)
+	if err != nil {
 		a.refuseMalformedConfig(err)
 		return nil
 	}
@@ -489,12 +488,17 @@ func (a *applyCtx) resolveValue(key string, choices []string, def string) string
 }
 
 // loadPersistedInstallConfig returns the already-valid persisted config values.
-// A missing or invalid slot is left zero; a malformed config.json yields
-// ok=false so callers refuse to touch a file they cannot parse.
-func loadPersistedInstallConfig(cwd string) (*InstallConfig, bool) {
+// A missing or invalid slot is left zero; a malformed config.json yields the
+// parse error so callers refuse to touch a file they cannot parse.
+//
+// The error is RETURNED, not swallowed into a bool: the refusal note quotes it,
+// and a caller that had to re-open the file to recover it would be reading a
+// file that may have changed underneath — a second read that happens to succeed
+// renders the note as "it could not be parsed ()", naming no cause at all.
+func loadPersistedInstallConfig(cwd string) (*InstallConfig, error) {
 	cfgMap, err := readConfig(cwd)
 	if err != nil {
-		return nil, false
+		return nil, err
 	}
 	ic := &InstallConfig{}
 	if v, ok := stringVal(subMap(cfgMap, "repo"), "visibility"); ok && inSet(v, visibilityChoices) {
@@ -510,7 +514,7 @@ func loadPersistedInstallConfig(cwd string) (*InstallConfig, bool) {
 		vv := v
 		ic.ScanDeep = &vv
 	}
-	return ic, true
+	return ic, nil
 }
 
 // applyOverride force-sets *dst to an explicit, valid override for key when it
@@ -570,8 +574,8 @@ func overridesWouldChange(cwd string, overrides map[string]string) bool {
 	if len(overrides) == 0 {
 		return false
 	}
-	ic, ok := loadPersistedInstallConfig(cwd)
-	if !ok {
+	ic, err := loadPersistedInstallConfig(cwd)
+	if err != nil {
 		return false
 	}
 	differs := func(key string, choices []string, cur string) bool {
