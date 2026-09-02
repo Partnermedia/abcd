@@ -24,8 +24,8 @@ estimated tokens per material kind; the manifest enumerates items by path and
 field; the ingest verb validates what came back. None of them says how many of
 the projected intents carried a `## Mechanism` section, how many carried the
 `None stated.` nullity, and how many carried neither. Today the answer for the
-cold-reading workstream's own fourteen shipped intents is zero, zero and
-fourteen, which is exactly the bound the companion wants stated beside the
+cold-reading workstream's own fifteen shipped intents is zero, zero and
+fifteen, which is exactly the bound the companion wants stated beside the
 findings rather than discovered by a reader afterwards.
 
 The natural home is the assembly result at the entailment position, where the

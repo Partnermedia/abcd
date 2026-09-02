@@ -8,7 +8,6 @@ source: "agent-finding"
 found_during: "iteration-2 conformance audit against the design framework v4 and the readings companion v4, 2026-09-01"
 origin: researcher-authored
 production_mode: dictated-and-formatted
-found_at: "the readings companion design document, held outside the repository"
 ---
 
 The readings companion design document counts five disposition states over a four-row table and still describes a two-operand invocation

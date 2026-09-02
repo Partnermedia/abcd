@@ -21,7 +21,7 @@ property claimed weakens from enforced to observed. The itd-185 fidelity audit
 established that the signatures are noisy: fourteen of thirty-four realistic
 outputs were refused, all by the disposition detector matching a bare token
 followed by a colon or equals sign, which this repository's records carry
-everywhere ([[iss-2608311518056854]]).
+everywhere (iss-2608311518056854).
 
 The code carries the mode. `SignatureFlag` exists beside `SignatureEnforce` in
 `internal/core/reading/ingest_regime.go`, and a flagged signature produces a
@@ -41,6 +41,6 @@ framework's own words are that the property claimed weakens when this path is
 taken, and a weakening that no record states is the shape brief invariant 16
 forbids.
 
-Related: [[iss-2608311517547712]] (the provenance field is a signature-free
-channel) and [[iss-2608311518109233]] (the reserved-name tables are
+Related: iss-2608311517547712 (the provenance field is a signature-free
+channel) and iss-2608311518109233 (the reserved-name tables are
 mutation-vacuous), both of which bear on the same gate.

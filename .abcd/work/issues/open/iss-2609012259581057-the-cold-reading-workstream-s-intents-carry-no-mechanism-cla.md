@@ -18,9 +18,9 @@ least one worked example of each new field, populated by actual use during the
 build rather than by demonstration." The governing framework (v4, section 12)
 says the same under "Populate": by actual use, not by demonstration.
 
-The fourteen shipped intents of the cold-reading workstream (itd-177 to itd-189,
-itd-198 and itd-199) carry no `## Mechanism` section at all. Twelve of the
-fourteen carry `## Scope Conditions` reading `None stated.`; only itd-198 and
+The fifteen shipped intents of the cold-reading workstream (itd-177 to itd-189,
+itd-198 and itd-199) carry no `## Mechanism` section at all. Eleven of the
+fifteen carry `## Scope Conditions` reading `None stated.`; only itd-198 and
 itd-199 carry conditions with stamped identities, and itd-182 and itd-188 carry
 no section. The `contributed-by-reading` origin appears on no record, which is
 expected until a reading runs, but the mechanism and context claims were the
@@ -30,7 +30,7 @@ workstream that built them declined both on nearly every record it filed.
 Two things follow. The entailment reading's object is the claim record, and the
 claim record it would be handed carries no causal claims and almost no context
 claims, so its yield is bounded before it runs (see
-[[iss-2609012259585189]] for reporting that bound). And the exit criterion is
+iss-2609012259585189 for reporting that bound). And the exit criterion is
 unmet for two fields, which the record should say rather than leave a later
 reader to discover.
 
