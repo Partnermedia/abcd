@@ -12,6 +12,23 @@ over the brief's earlier `1.0.0`-at-close expectation). The four M6 synthesis
 agents below entered at `0.1.0`, wired to their `abcd disembark` verbs and
 unmeasured; `lifeboat-oracle` has since become `lifeboat-reviewer` at `0.1.1`.
 
+## 2026-09-02 (iss-2609021833302981 — "at the target", as the derivation reads it)
+
+The comparative derivation admits a widening run whose recorded target is an
+ancestor of the assembly's target when nothing changed between the two outside
+the readings store and the issue ledger's own record families — which is what
+lets a run's records be committed between its ingest and the next reading, the
+act the design sequences there. The object section of the comparative definition
+states the derivation rule, so it states this too. The reading of the ADR's
+phrase is an interpretation and the maintainer's ruling is owed
+(iss-2609021857343626).
+
+### cold-reading-comparative 0.1.3
+
+PATCH: the object's one-sentence statement of the derivation gains the ancestor
+clause, as above. The source list, the question, the item shape, the regime and
+the blindness core are untouched. Unmeasured, as before.
+
 ## 2026-09-02 (itd-194 — the object section states the include table)
 
 The object section's source list is the include table for that position, held

@@ -14,6 +14,41 @@ package reading
 // dispositioning one run's items — is what the design sequences after the
 // comparative reading anyway, and they can only perform it if they are told what
 // there is to disposition.
+//
+// # How "at the target" is read here, and the ruling that is owed
+//
+// The ADR's phrase is "the committed widening run AT THE TARGET", and read as
+// commit equality alone it makes the loop the design sequences unrunnable.
+// `reading ingest` writes a widening run's reading records into the committed
+// ledger, where they are uncommitted by construction; the comparative position's
+// candidate row reaches that store, so the next assembly refuses on the dirty
+// gate naming those very records. Committing them — the act the design places
+// between the ingest and the next reading — moves HEAD, and a run whose recorded
+// target must EQUAL the assembly's target no longer has one
+// (iss-2609021833302981).
+//
+// So the phrase is read as reaching an ancestor whose OBJECT SET has not moved.
+// A committed widening run qualifies when its recorded target equals the target,
+// or when its recorded target is an ancestor of the target and every path
+// changed between the two lies inside the readings store and the issue ledger's
+// own record families. A run whose target is not an ancestor is not a run at
+// this target and is not listed; a run where anything else changed is listed and
+// refused, naming the first such path, because the object set it read is not the
+// object set this assembly names.
+//
+// The ground is the divergence register's entry 27 — "the object set, not the
+// commit, names what the readings are about" — and the companion's section 7.2
+// with ruling R4, which fix the comparative reading's object as the widening
+// run's returned items and the criteria discipline and nothing from the tree.
+// The commit the run names is how the object set is identified, not what the
+// reading was about, so a commit that moved only the instrument's own record
+// leaves the object set where it was.
+//
+// This is an INTERPRETATION and the maintainer's ruling is owed
+// (iss-2609021857343626). The alternative it was chosen over is an assembly
+// whose target may differ from HEAD at this position — legitimate, because the
+// comparative position reads no working tree — and the register gains the entry
+// either way.
 
 import (
 	"encoding/json"
@@ -27,6 +62,7 @@ import (
 	"github.com/intentdriven/abcd/internal/core/issueschema"
 	"github.com/intentdriven/abcd/internal/core/recordid"
 	"github.com/intentdriven/abcd/internal/fsutil"
+	"github.com/intentdriven/abcd/internal/gitutil"
 )
 
 // WideningRun is one widening run at a target, as the derivation sees it: what
@@ -38,6 +74,10 @@ import (
 type WideningRun struct {
 	// ID is the run identifier (rdg-N).
 	ID string `json:"id"`
+	// Target is the commit the run's own record names: the commit its reading
+	// actually read. It is the assembly's target or an ancestor of it, and the
+	// manifest carries both so a reader can diff them.
+	Target string `json:"target"`
 	// Items is how many reading records the run holds in the ledger.
 	Items int `json:"items"`
 	// Dispositioned reports that at least one item carries a standing
@@ -55,12 +95,23 @@ type WideningRun struct {
 	// this answers "which item stopped it", which is what the ordering guard
 	// owes an operator (spc-2609020626039834, "The ordering guard").
 	Fated []string `json:"fated,omitempty"`
+	// Moved names the FIRST path that changed between this run's own target and
+	// the assembly's, outside the readings store and the issue ledger's record
+	// families. It is empty when the two targets are the same commit, and empty
+	// when everything that changed between them was the instrument's own record.
+	//
+	// A run carrying it is LISTED and never selected: its items characterise an
+	// object set this target no longer holds, and the operator needs the path to
+	// see that (the reading of "at the target" this file's head comment states).
+	Moved string `json:"object_set_moved,omitempty"`
 }
 
 // Qualifies reports whether this run is the candidate set the ADR describes: a
-// committed widening run holding items, none of which carries a fate.
+// committed widening run holding items, none of which carries a fate, read over
+// the object set this assembly's target still holds.
 func (r WideningRun) Qualifies() bool {
-	return r.Committed && r.Items > 0 && !r.Dispositioned && !r.Admitted && len(r.Fated) == 0
+	return r.Committed && r.Items > 0 && !r.Dispositioned && !r.Admitted &&
+		len(r.Fated) == 0 && r.Moved == ""
 }
 
 // Line renders one run for the refusal listing: one run per line, saying what it
@@ -81,6 +132,10 @@ func (r WideningRun) Line() string {
 		b.WriteString(", nothing to characterise")
 	case r.Committed:
 		b.WriteString(", no disposition and no admission")
+	}
+	if r.Moved != "" {
+		fmt.Fprintf(&b, "; the object set changed since the run: %s changed between %s, which "+
+			"this run read, and the target", r.Moved, shortTarget(r.Target))
 	}
 	return b.String()
 }
@@ -108,9 +163,11 @@ type NoCandidateRun struct {
 
 func (e *NoCandidateRun) Error() string {
 	return fmt.Sprintf("the %s assembly derives its candidate set from the record, and no committed "+
-		"widening run at %s has every item free of a disposition and an admission, so there is "+
-		"nothing to characterise. The candidate set is defined as PRE-ADMISSION: characterisation "+
-		"precedes admission, and a candidate whose fate is already recorded is not one "+
+		"widening run at %s qualifies, so there is nothing to characterise. A run qualifies when "+
+		"every item it holds is free of a disposition and an admission — the candidate set is "+
+		"defined as PRE-ADMISSION: characterisation precedes admission, and a candidate whose "+
+		"fate is already recorded is not one — and when nothing outside the readings store and "+
+		"the issue ledger changed between the commit the run read and this target "+
 		"(adr-2609021016272867). The widening runs at this target:\n%s",
 		PositionComparative, shortTarget(e.Target), renderRuns(e.Runs))
 }
@@ -191,10 +248,17 @@ func WideningRuns(repoRoot, target string) ([]WideningRun, error) {
 		if err != nil {
 			return nil, err
 		}
-		if head.position != string(PositionWidening) || head.target != target {
+		if head.position != string(PositionWidening) {
 			continue
 		}
-		run := WideningRun{ID: name, Committed: committed}
+		reaches, moved, err := reachesTarget(repoRoot, head.target, target)
+		if err != nil {
+			return nil, err
+		}
+		if !reaches {
+			continue
+		}
+		run := WideningRun{ID: name, Target: head.target, Committed: committed, Moved: moved}
 		items, err := ledgerItemsOf(repoRoot, name)
 		if err != nil {
 			return nil, err
@@ -230,6 +294,90 @@ func WideningRuns(repoRoot, target string) ([]WideningRun, error) {
 		out = append(out, run)
 	}
 	return out, nil
+}
+
+// reachesTarget answers, for one run's recorded target, whether that run is a
+// run AT the assembly's target — and, when the two commits differ, names the
+// first path whose change says the object set moved between them.
+//
+// The three outcomes are kept apart because the operator needs them apart. A run
+// at the target itself, or at an ancestor of it that only the instrument's own
+// record separates from it, REACHES and has moved nothing: it is a candidate.
+// A run at an ancestor across which something else changed REACHES and names
+// what changed: it is listed and refused, so the operator sees why. A run whose
+// target is not an ancestor at all does not reach: it is not a run at this
+// target, no diff between the two says anything, and listing it would name a run
+// this target has nothing to do with.
+//
+// A recorded target that does not resolve in this repository is treated as not
+// reaching rather than as a failure. It is a run record naming a commit this
+// checkout cannot see — carried in from elsewhere, or left by a rewritten
+// history — and the honest thing to say about it is that it is not a run at this
+// target, not to fail every derivation the repository can perform.
+func reachesTarget(repoRoot, runTarget, target string) (bool, string, error) {
+	if runTarget == "" {
+		return false, "", nil
+	}
+	if runTarget == target {
+		return true, "", nil
+	}
+	if _, err := gitutil.Run(repoRoot, "rev-parse", "--verify", "--quiet", runTarget+"^{commit}"); err != nil {
+		return false, "", nil
+	}
+	ancestor, err := gitutil.IsAncestor(repoRoot, runTarget, target)
+	if err != nil {
+		return false, "", fmt.Errorf("reading: comparing the widening run's target %s with %s: %w",
+			shortTarget(runTarget), shortTarget(target), err)
+	}
+	if !ancestor {
+		return false, "", nil
+	}
+	// --no-renames, because rename detection reports only the destination of a
+	// rename: a source file moved INTO the ledger would then read as a ledger-only
+	// change. Both halves must be named for the check to be the check it claims.
+	// -z, because a path is not escaped or quoted in that form, so core.quotepath
+	// cannot change the format under the parser.
+	out, err := gitutil.RunCapped(repoRoot, 8<<20, "diff", "--name-only", "--no-renames", "-z",
+		runTarget, target)
+	if err != nil {
+		return false, "", fmt.Errorf("reading: listing what changed between the widening run's "+
+			"target %s and %s: %w", shortTarget(runTarget), shortTarget(target), err)
+	}
+	var moved []string
+	for _, p := range strings.Split(out, "\x00") {
+		if p == "" || instrumentRecordPath(p) {
+			continue
+		}
+		moved = append(moved, p)
+	}
+	if len(moved) == 0 {
+		return true, "", nil
+	}
+	// Sorted, so the path a refusal names is the same path on every git and every
+	// filesystem: "the first such path" has to be a fact about the diff rather
+	// than about the order this run of git happened to emit it in.
+	sort.Strings(moved)
+	return true, moved[0], nil
+}
+
+// instrumentRecordPath reports whether a path is the instrument's own record
+// rather than an object a reading is about: the durable readings family, and the
+// issue ledger's own record families.
+//
+// The ledger list is issueschema.LedgerDirs() and never a hand-kept copy, for
+// the reason that function states — a family added later must be covered the day
+// its constant is declared, or this check would call a new family's records a
+// moved object set.
+func instrumentRecordPath(rel string) bool {
+	if strings.HasPrefix(rel, issueschema.ReadingsRecordDir+"/") {
+		return true
+	}
+	for _, dir := range issueschema.LedgerDirs() {
+		if strings.HasPrefix(rel, capture.LedgerRelPath+"/"+dir+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 // DeriveCandidateRun applies the ADR's rule over the runs at the target: exactly

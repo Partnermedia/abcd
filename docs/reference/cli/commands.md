@@ -839,7 +839,10 @@ and its hash, so a run is reproducible from the commit it names.
       --position string   the reading position: widening, entailment, comparative, detection
                           (comparative derives its candidate set from the record: the one committed
                           widening run at the target whose items carry no disposition and no
-                          admission. None, or more than one, refuses and lists the runs)
+                          admission — at the target, or at an ancestor of it across which only the
+                          readings store and the issue ledger changed, so a run's own records can be
+                          committed between its ingest and this assembly. None, or more than one,
+                          refuses and lists the runs)
       --target string     the commit the assembly describes: HEAD, or a hexadecimal sha of 7 to 40 digits
 ```
 

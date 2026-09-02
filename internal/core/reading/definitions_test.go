@@ -682,10 +682,16 @@ const retiredFourthConditionSentence = "Items come back unordered and unweighted
 // again with itd-194, which is a change to the object's source list rather than
 // to the blindness core: all four gain the brief's surfaces, internals,
 // delivery and meta chapters, and widening loses the shipped intents.
+//
+// The comparative definition is one PATCH ahead of the other three from
+// iss-2609021833302981, which moved nothing they share: its object section
+// states the derivation rule — the only one of the four that has one to state —
+// and the rule now reaches a widening run at an ancestor of the target. A shared
+// edit still moves all four together; this one was not shared.
 var promptVersions = map[Position]string{
 	PositionWidening:    "0.2.2",
 	PositionEntailment:  "0.1.2",
-	PositionComparative: "0.1.2",
+	PositionComparative: "0.1.3",
 	PositionDetection:   "0.1.2",
 }
 

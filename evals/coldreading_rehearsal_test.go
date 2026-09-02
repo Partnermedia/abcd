@@ -128,16 +128,18 @@ func TestRehearseTheOpeningRunLoop(t *testing.T) {
 	// -------------------------------------------------------------------
 	// Step 1b — the comparative runs, parked BEFORE any ingest.
 	//
-	// This ordering is forced, and the reason is the finding this rehearsal
-	// turned up (iss-2609021833302981). The comparative position's candidate
-	// row reaches the ledger's readings store, so every reading record in the
-	// working tree is an INCLUDED path — and an ingest writes reading records
-	// that are, by construction, uncommitted. So the first ingest of the
-	// session makes every later comparative assembly refuse on the dirty gate,
-	// and committing those records moves HEAD off the target the widening run
-	// names. The deadlock has its own test below; here the runs are simply
-	// parked first, which is the only order in which the position assembles at
-	// all.
+	// The comparative position's candidate row reaches the ledger's readings
+	// store, so every reading record in the working tree is an INCLUDED path —
+	// and an ingest writes reading records that are, by construction,
+	// uncommitted. So once this session's first ingest has run, a comparative
+	// assembly refuses on the dirty gate until those records are committed.
+	// Committing them is the act the design sequences between an ingest and the
+	// next reading, and the assembly that follows it is rehearsed on its own
+	// below (TestTheComparativeAssemblyFollowsTheCommittedWideningIngest,
+	// iss-2609021833302981). This loop parks its four comparative runs before
+	// the first ingest instead, because the three refusal cases below are
+	// mutations of one legal payload and need the run they were composed
+	// against — not because no other order works.
 	//
 	// Companion 7.6 wants a PLURAL candidate set for the comparative to be
 	// exercised, and the fixture's committed widening run carries three items
@@ -340,33 +342,29 @@ func TestEveryRehearsedItemCarriesItsPositionsDeclaredBody(t *testing.T) {
 	}
 }
 
-// TestTheComparativeAssemblyCannotFollowAnIngestedWideningRun is the rehearsal's
-// one finding, held as a test rather than only as prose.
+// TestTheComparativeAssemblyFollowsTheCommittedWideningIngest rehearses the
+// step the loop above cannot take in place: the comparative reading over the
+// widening run this session just ingested.
 //
-// The loop the design describes is: assemble at widening, dispatch, ingest, then
-// assemble at comparative over the run just ingested. That sequence cannot be
-// run. The ingest writes the widening run's reading records into the committed
-// ledger, where they are uncommitted by construction; the comparative position's
-// candidate row reaches that store, so the dirty gate refuses the assembly
-// naming those very records. Committing them is the obvious remedy and closes
-// the other end: it moves HEAD, and the derivation selects a widening run whose
-// own target commit equals the target, which the run no longer has.
-//
-// Which of the two gates gives is a design decision the record has not made —
-// commands/reading.md fixes both ("Assembly reads the working tree, so it
-// refuses unless HEAD resolves to the target and no included path is
-// uncommitted"; "the assembler selects the one committed widening run at the
-// target"), and adr-2609021016272867 fixes the derivation rule — so this test is
-// skipped rather than adjusted, and the issue names the sections.
-func TestTheComparativeAssemblyCannotFollowAnIngestedWideningRun(t *testing.T) {
-	t.Skip("iss-2609021833302981: the comparative assembly cannot follow the widening ingest that " +
-		"supplies its candidates — the ingest's own records dirty the position's candidate row, and " +
-		"committing them moves HEAD off the target the run names. Which gate gives is a design " +
-		"decision commands/reading.md and adr-2609021016272867 have not made")
+// The sequence is the design's own — assemble at widening, ingest, COMMIT what
+// the ingest wrote, assemble at comparative, ingest that — and each half of the
+// middle step is load-bearing. `reading ingest` leaves the run's reading records
+// in the committed ledger uncommitted, and the comparative position's candidate
+// row reaches that store, so the assembly refuses on the dirty gate until they
+// are committed. Committing them moves HEAD off the commit the widening run's
+// own record names, and the derivation reads "the one committed widening run at
+// the target" (adr-2609021016272867) as reaching an ancestor whose object set
+// has not moved — which a commit confined to the readings store and the issue
+// ledger has not. That reading is an interpretation and the maintainer's ruling
+// is owed (iss-2609021833302981, iss-2609021857343626); the register's entry 27
+// is its ground, "the object set, not the commit, names what the readings are
+// about", and companion 7.2 fixes the comparative object as the widening run's
+// returned items and the criteria discipline, neither of which the tree supplies.
+func TestTheComparativeAssemblyFollowsTheCommittedWideningIngest(t *testing.T) {
+	f := rehearsalFixtureWithoutPlantedRuns(t)
 
-	f := rehearsalFixture(t)
-	run := assembleParked(t, f, posWidening)
-	ingestAccepted(t, f, run, []map[string]any{
+	widening := assembleParked(t, f, posWidening)
+	ingested := ingestAccepted(t, f, widening, []map[string]any{
 		{
 			"pattern":        "the stated invariant",
 			"configuration":  "a first configuration the construal admits",
@@ -378,14 +376,131 @@ func TestTheComparativeAssemblyCannotFollowAnIngestedWideningRun(t *testing.T) {
 			"what_admits_it": "the constraint the delivery chapter already states",
 		},
 	})
-
-	// The operator's next command, exactly as the loop has it.
-	out, code := runIn(t, f.Root, []string{"HOME=" + f.Home},
-		"reading", "assemble", "--position", posComparative, "--target", "HEAD")
-	if code != 0 {
-		t.Fatalf("`abcd reading assemble --position comparative` refused after the widening ingest "+
-			"that supplied its candidates:\n%s", out)
+	if len(ingested.Records) != 2 {
+		t.Fatalf("the widening ingest recorded %d item(s), want 2; companion 7.6 needs a plural "+
+			"set for the comparative position to be exercised", len(ingested.Records))
 	}
+	requireCommittedRun(t, f, widening.RunID, ingested)
+
+	// The first half of the middle step, asserted rather than assumed: with the
+	// ingest's records still uncommitted the assembly refuses, so the commit
+	// below is load-bearing and this test cannot pass by the gate never firing.
+	refused, code := runIn(t, f.Root, []string{"HOME=" + f.Home},
+		"reading", "assemble", "--position", posComparative, "--target", "HEAD")
+	if code == 0 {
+		t.Fatalf("the comparative assembly succeeded with the widening run's reading records "+
+			"uncommitted; the candidate row reaches that store, so a dirty record there is a "+
+			"dirty included path:\n%s", refused)
+	}
+	if !strings.Contains(refused, "uncommitted") {
+		t.Errorf("the assembly refused on something other than the dirty gate:\n%s", refused)
+	}
+
+	// The operator's own next act: commit what the ingest wrote, and nothing
+	// else. The two paths are the reading records in the committed ledger and
+	// the run's own durable artefacts — the whole of what an ingest writes.
+	read := gitFixture(t, f.Root, "rev-parse", "HEAD")
+	commitFixturePaths(t, f.Root, "the widening run's records, committed",
+		rehearsalReadingsLedger, rehearsalRunRecords)
+	target := gitFixture(t, f.Root, "rev-parse", "HEAD")
+	if target == read {
+		t.Fatal("committing the run's records did not move HEAD, so this rehearsal is not the " +
+			"sequence it claims to be")
+	}
+
+	comparative := assembleParked(t, f, posComparative)
+	requireArtefacts(t, f, comparative)
+	requireDerivedCandidates(t, f, comparative)
+
+	var m struct {
+		CandidateRun       string `json:"candidate_run"`
+		CandidateRunTarget string `json:"candidate_run_target"`
+		TargetCommit       string `json:"target_commit"`
+	}
+	raw, err := os.ReadFile(filepath.Join(f.Root, filepath.FromSlash(comparative.OutDir), manifestFile))
+	if err != nil {
+		t.Fatalf("reading the comparative manifest: %v", err)
+	}
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatalf("decoding the comparative manifest: %v", err)
+	}
+	if m.CandidateRun != widening.RunID {
+		t.Fatalf("the comparative assembly derived %q; the run whose records this session just "+
+			"committed is %q, and no other widening run is in the corpus",
+			m.CandidateRun, widening.RunID)
+	}
+	if m.CandidateRunTarget != read || m.TargetCommit != target {
+		t.Errorf("the comparative manifest records candidate_run_target %q and target_commit %q; "+
+			"the widening run read %s and this assembly names %s, and a reader needs both "+
+			"commits to diff them", m.CandidateRunTarget, m.TargetCommit, read, target)
+	}
+
+	// And the step the loop above had to take out of order: the comparative
+	// output ingests over the run just assembled (companion 7.6 — one item per
+	// candidate-criterion pair).
+	items := make([]map[string]any, 0, len(rehearsalCriteria))
+	for _, criterion := range rehearsalCriteria {
+		items = append(items, map[string]any{
+			"pattern":          "how options of this shape ordinarily behave",
+			"candidate_id":     ingested.Records[0].ID,
+			"criterion":        criterion,
+			"characterisation": "how a configuration of this shape ordinarily behaves against " + criterion,
+		})
+	}
+	res := ingestAccepted(t, f, comparative, items)
+	if len(res.Records) != len(rehearsalCriteria) {
+		t.Fatalf("the comparative ingest recorded %d item(s), want one per declared criterion (%d)",
+			len(res.Records), len(rehearsalCriteria))
+	}
+	requireCommittedRun(t, f, comparative.RunID, res)
+}
+
+// rehearsalFixtureWithoutPlantedRuns is the rehearsal fixture with the corpus's
+// two planted widening runs removed, so the only widening run in the repository
+// is the one the session itself ingests.
+//
+// The corpus plants two on purpose — one derivable, one already dispositioned —
+// so the unit and window evals have something to select and something to reject.
+// Here they would make the derivation AMBIGUOUS the moment the session's own run
+// is committed, and the refusal that names two qualifying runs is a different
+// property from the one this test holds.
+func rehearsalFixtureWithoutPlantedRuns(t *testing.T) fixture {
+	t.Helper()
+	f := materialise(t, variantBaseline, withOperatingDefinitions, withOutstandingReport,
+		withoutPlantedWideningRuns)
+	// The durable run markers are stamped AFTER the commit, so removing them is
+	// this side of materialisation rather than a tree edit.
+	for _, run := range []string{derivedCandidateRun, dispositionedWideningRun} {
+		if err := os.RemoveAll(filepath.Join(f.Root, filepath.FromSlash(rehearsalRunRecords), run)); err != nil {
+			t.Fatalf("removing the planted run %s: %v", run, err)
+		}
+	}
+	return f
+}
+
+// withoutPlantedWideningRuns drops the corpus's two planted widening runs from
+// the ledger before the fixture is committed. The readings family itself stays —
+// the corpus carries a loose prior reading record directly under it, and a walk
+// row whose source directory is missing refuses the run.
+func withoutPlantedWideningRuns(t *testing.T, root string) {
+	t.Helper()
+	for _, run := range []string{derivedCandidateRun, dispositionedWideningRun} {
+		if err := os.RemoveAll(filepath.Join(root, filepath.FromSlash(rehearsalReadingsLedger), run)); err != nil {
+			t.Fatalf("removing the planted run %s: %v", run, err)
+		}
+	}
+}
+
+// commitFixturePaths commits exactly the named paths under the fixture identity,
+// leaving everything else in the working tree where it is. The operator's commit
+// after an ingest is confined to what the ingest wrote, and a rehearsal that
+// committed the whole tree would not be rehearsing that commit.
+func commitFixturePaths(t *testing.T, root, message string, paths ...string) {
+	t.Helper()
+	ident := []string{"-c", "user.name=abcd cold-reading fixture", "-c", "user.email=fixture@example.invalid"}
+	add := append(append([]string{}, ident...), "add", "--")
+	gitFixture(t, root, append(add, paths...)...)
+	gitFixture(t, root, append(append([]string{}, ident...), "commit", "-q", "-m", message)...)
 }
 
 // ---------------------------------------------------------------------------

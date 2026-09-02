@@ -52,7 +52,15 @@ import (
 // one position, a vocabulary member, refusals a reader can now check — which is
 // MINOR by this constant's own rule (adr-2609021016272867,
 // spc-2609020626039834).
-const AssemblerVersionCore = "1.6.0"
+// It goes 1.6.0 to 1.7.0 with the reading of "at the target" DeriveCandidateRun
+// states: a committed widening run at an ancestor of the target qualifies when
+// only the readings store and the issue ledger changed between the two, the
+// refusal listing gains the run whose object set moved and the path that moved
+// it, and the manifest gains `candidate_run_target`. The selection rule and the
+// manifest shape are both what a reader and an auditor are PROMISED, which is
+// MINOR by this constant's own rule (adr-2609021016272867 as read there;
+// iss-2609021833302981, iss-2609021857343626).
+const AssemblerVersionCore = "1.7.0"
 
 // AssemblerVersion is the core semver with the rendered include table's digest
 // as semver build metadata. The digest is computed, not declared, so a table

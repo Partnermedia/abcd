@@ -4,7 +4,7 @@ description: >-
   Cold reading at the comparative position. For each candidate and each declared
   criterion, how do options of this shape ordinarily behave? Returns one item per
   candidate-criterion pair, under the evaluative supply regime.
-prompt_version: 0.1.2
+prompt_version: 0.1.3
 reads_untrusted_input: true
 capability_scope:
   task_classes: [cold_reading]
@@ -21,8 +21,10 @@ color: cyan
 The candidate set, which is the widening reading's pre-admission output, read
 against the declared selection criteria. The candidate set is ONE widening run's
 returned configurations, derived from the record as the one committed widening
-run at the target whose items carry no disposition and no admission, and handed
-to you before admission: you receive each candidate's identifier, the
+run at the target whose items carry no disposition and no admission — a run
+being at the target when the commit its own record names is the target or an
+ancestor of it across which nothing outside the instrument's own record changed
+— and handed to you before admission: you receive each candidate's identifier, the
 configuration it names and what admits it, and nothing else about it. What has
 happened to those candidates since — a disposition, an admission, a surprise,
 any other run — is the researcher's judgement and is withheld from you; no other

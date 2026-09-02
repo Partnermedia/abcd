@@ -722,3 +722,178 @@ func TestDeclaredCriteriaRefusesAnEmptySlate(t *testing.T) {
 		}
 	}
 }
+
+// ---------------------------------------------------------------------------
+// "At the target": a run whose own records were committed since it read
+// ---------------------------------------------------------------------------
+//
+// The loop the design sequences is: assemble at widening, dispatch, ingest,
+// commit what the ingest wrote, assemble at comparative over the run just
+// ingested. The middle step is what these cases are about. `reading ingest`
+// leaves a run's reading records in the committed ledger UNCOMMITTED, and the
+// comparative position's candidate row reaches that store — so the assembly that
+// follows refuses on the dirty gate until they are committed, and committing
+// them moves HEAD off the commit the run's own record names.
+//
+// So "the one committed widening run AT THE TARGET" (adr-2609021016272867) is
+// read as reaching an ancestor whose object set has not moved: the run's target
+// equals the target, or is an ancestor of it with every path changed between the
+// two inside the readings store and the issue ledger's own families. Divergence
+// register 27 is the ground — "the object set, not the commit, names what the
+// readings are about" — and companion 7.2 fixes the comparative object as the
+// widening run's returned items and the criteria discipline, neither of which
+// the tree supplies. The ruling is owed (iss-2609021857343626).
+
+// ingestedWideningRun is the run these cases plant: one widening run whose
+// records are written as an ingest leaves them and committed afterwards.
+const ingestedWideningRun = "rdg-2608301200000021"
+
+// plantIngestedRunAtHead rehearses the ingest inside the unit fixture. The
+// fixture's own planted run is removed first, so the run planted here is the
+// only widening run and the derivation is unambiguous; its records are left
+// UNCOMMITTED, exactly as an ingest leaves them, and its commit marker names the
+// commit its reading actually read. It returns that commit.
+func plantIngestedRunAtHead(t *testing.T, root string) string {
+	t.Helper()
+	removeFixtureRun(t, root)
+	plantWideningItems(t, root, ingestedWideningRun, 2)
+	runTarget := headOf(t, root)
+	commitRunRecord(t, root, ingestedWideningRun, string(PositionWidening), runTarget)
+	return runTarget
+}
+
+// commitWithoutRestamping commits the whole tree and leaves every run record
+// naming the commit it already named. gitCommitAll re-points the fixture's run
+// at the new HEAD, which is what makes most cases readable; these cases are
+// about the run that does NOT move, so they commit for themselves.
+func commitWithoutRestamping(t *testing.T, root string) {
+	t.Helper()
+	gitRun(t, root, "add", "-A")
+	gitRun(t, root, "commit", "-q", "-m", "the run's own records, committed")
+}
+
+// TestAWideningRunAtTheTargetItselfStillQualifies: the unmoved case, unchanged.
+// The fixture's run names HEAD, and the manifest records that commit as both the
+// candidate run's target and the assembly's own (adr-2609021016272867).
+func TestAWideningRunAtTheTargetItselfStillQualifies(t *testing.T) {
+	root := fixtureRepo(t)
+	head := headOf(t, root)
+
+	res, err := assembleComparative(t, root)
+	if err != nil {
+		t.Fatalf("the comparative assembly refused over a run at the target itself: %v", err)
+	}
+	if res.CandidateRun != fixtureCandidateRun {
+		t.Fatalf("the assembly derived %q, want %q", res.CandidateRun, fixtureCandidateRun)
+	}
+	if res.Manifest.CandidateRunTarget != head || res.Manifest.TargetCommit != head {
+		t.Errorf("the manifest records candidate_run_target %q and target_commit %q; at the "+
+			"unmoved case both are HEAD (%s)",
+			res.Manifest.CandidateRunTarget, res.Manifest.TargetCommit, head)
+	}
+}
+
+// TestAWideningRunWhoseRecordsWereCommittedSinceItsTargetQualifies: the
+// deadlock's release. The run read at C, its records were committed at C+1, and
+// nothing else moved — so the object set the run is about is the object set at
+// the assembly's target, and the run is still the one this target's comparative
+// reading characterises (adr-2609021016272867 "at the target", as read here;
+// divergence register 27; companion 7.2).
+func TestAWideningRunWhoseRecordsWereCommittedSinceItsTargetQualifies(t *testing.T) {
+	root := fixtureRepo(t)
+	runTarget := plantIngestedRunAtHead(t, root)
+	commitWithoutRestamping(t, root)
+	head := headOf(t, root)
+	if head == runTarget {
+		t.Fatal("committing the run's records did not move HEAD, so this case rehearses nothing")
+	}
+
+	res, err := assembleComparative(t, root)
+	if err != nil {
+		t.Fatalf("the comparative assembly refused after the widening run's own records were "+
+			"committed, which is the act the design sequences between the ingest and this "+
+			"assembly: %v", err)
+	}
+	if res.CandidateRun != ingestedWideningRun {
+		t.Fatalf("the assembly derived %q, want the run whose records were just committed (%q)",
+			res.CandidateRun, ingestedWideningRun)
+	}
+	if res.Manifest.CandidateRun != ingestedWideningRun {
+		t.Errorf("the manifest names the candidate run %q, want %q",
+			res.Manifest.CandidateRun, ingestedWideningRun)
+	}
+	if res.Manifest.CandidateRunTarget != runTarget {
+		t.Errorf("the manifest records candidate_run_target %q, want the commit the widening run "+
+			"actually read (%s); a reader has to be able to diff the two",
+			res.Manifest.CandidateRunTarget, runTarget)
+	}
+	if res.Manifest.TargetCommit != head {
+		t.Errorf("the manifest records target_commit %q, want this assembly's own target (%s)",
+			res.Manifest.TargetCommit, head)
+	}
+}
+
+// TestAWideningRunWhoseObjectSetMovedSinceItsTargetDoesNotQualify: a source file
+// changed between the run's target and this one, so the object set moved and the
+// run is not about this target's state. It is LISTED rather than hidden, and the
+// refusal names the first path that moved (divergence register 27).
+func TestAWideningRunWhoseObjectSetMovedSinceItsTargetDoesNotQualify(t *testing.T) {
+	root := fixtureRepo(t)
+	plantIngestedRunAtHead(t, root)
+	writeFile(t, root, "main.go", "package main\n\nfunc main() { _ = 1 }\n")
+	commitWithoutRestamping(t, root)
+
+	_, err := assembleComparative(t, root)
+	if err == nil {
+		t.Fatal("the comparative assembly selected a widening run read over a different object " +
+			"set; the run's items characterise a state this target no longer holds")
+	}
+	var none *NoCandidateRun
+	if !errors.As(err, &none) {
+		t.Fatalf("the refusal is not NoCandidateRun: %v", err)
+	}
+	if len(none.Runs) != 1 {
+		t.Fatalf("the refusal lists %d run(s), want the one that did not qualify: a run hidden "+
+			"from the listing leaves the operator with no way to see why", len(none.Runs))
+	}
+	msg := err.Error()
+	for _, want := range []string{
+		ingestedWideningRun, "main.go", "the object set changed since the run",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("the refusal does not carry %q: %s", want, msg)
+		}
+	}
+}
+
+// TestAWideningRunOnADifferentHistoryDoesNotQualify: the run's target is not an
+// ancestor of this target at all, so no diff between the two says anything about
+// what moved. It is not a run at this target and is not selected.
+func TestAWideningRunOnADifferentHistoryDoesNotQualify(t *testing.T) {
+	root := fixtureRepo(t)
+	removeFixtureRun(t, root)
+	plantWideningItems(t, root, ingestedWideningRun, 2)
+	commitWithoutRestamping(t, root)
+
+	// A commit on a branch this target never saw.
+	gitRun(t, root, "checkout", "-q", "-b", "aside")
+	writeFile(t, root, "docs/reference/aside.md", "# Aside\n\nProse on another history.\n")
+	commitWithoutRestamping(t, root)
+	aside := headOf(t, root)
+	gitRun(t, root, "checkout", "-q", "main")
+	commitRunRecord(t, root, ingestedWideningRun, string(PositionWidening), aside)
+
+	_, err := assembleComparative(t, root)
+	if err == nil {
+		t.Fatal("the comparative assembly selected a widening run read on a history this target " +
+			"is not descended from")
+	}
+	var none *NoCandidateRun
+	if !errors.As(err, &none) {
+		t.Fatalf("the refusal is not NoCandidateRun: %v", err)
+	}
+	if len(none.Runs) != 0 {
+		t.Errorf("the refusal lists %d run(s); a run on another history is not a run at this "+
+			"target and the listing is of the runs at this target", len(none.Runs))
+	}
+}

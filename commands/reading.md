@@ -102,7 +102,20 @@ declares it (ruled 2026-09-02).
 object is the widening reading's pre-admission output, and the run that supplied
 it is not named by any operand: the assembler selects **the one committed
 widening run at the target whose items carry no disposition and no admission**
-(adr-2609021016272867). That run's items travel projected to two body fields —
+(adr-2609021016272867). A run is **at the target** when the commit its own record
+names *is* the target, or is an **ancestor** of it across which nothing changed
+outside the readings store and the issue ledger's own record families. That is
+what lets the loop run: `reading ingest` leaves a widening run's reading records
+uncommitted, the candidate row below reaches them, so the next assembly refuses
+until they are committed — and committing them moves HEAD off the commit the run
+read. A commit that moved only the instrument's own record leaves the object set
+where it was, which is what the run was about. A run whose target is not an
+ancestor is not a run at this target and is not listed; a run across which
+anything else changed is listed and refused, naming the first path that moved.
+The manifest records both commits — `candidate_run_target` beside
+`target_commit` — so a reader can diff them. *This reading of "at the target" is
+an interpretation, and the maintainer's ruling is owed* (iss-2609021857343626).
+That run's items travel projected to two body fields —
 the configuration and what admits it — keyed by the item identifier the
 comparative body cites, and nothing else from the readings store travels with
 them: no disposition, no admission, no surprise, no other run, no manifest. The
@@ -115,8 +128,9 @@ disposition:
 
 - **None qualifies.** No committed widening run at the target has every item
   free of a disposition and an admission — because there is none at all, because
-  one never reached its commit marker, or because one is already answered. The
-  candidate set is defined as pre-admission, and a candidate whose fate is
+  one never reached its commit marker, because one is already answered, or
+  because the object set moved between the commit a run read and this target.
+  The candidate set is defined as pre-admission, and a candidate whose fate is
   recorded is not one.
 - **More than one qualifies.** Nothing names which, and the remedy is the act
   the design places after the comparative reading in any case: disposition one
@@ -134,6 +148,13 @@ shape either way.
 
 Report from the JSON at this position: `candidate_run`, `candidates`,
 `not_exercised`, and — on either derivation refusal — `widening_runs`.
+
+**The loop, at this position.** Assemble at widening, dispatch, ingest, then
+**commit what the ingest wrote** — the reading records under
+`.abcd/work/issues/readings/<run>/` and the run's own artefacts under
+`.abcd/development/readings/<run>/` — and then assemble at comparative. The
+commit is the step between the two readings, and without it the assembly refuses
+on the dirty gate naming the ingest's own records.
 
 Assembly reads the working tree, so it refuses unless HEAD resolves to the
 target **and** no included path is uncommitted. The preset configuration is in

@@ -555,6 +555,7 @@ func Assemble(req AssembleRequest) (AssembleResult, error) {
 	if position == PositionComparative {
 		exercised := !notExercised
 		manifest.CandidateRun = candidateRun.ID
+		manifest.CandidateRunTarget = candidateRun.Target
 		manifest.Candidates = candidateRun.Items
 		manifest.Exercised = &exercised
 		manifest.CandidateFields = append([]string{}, CandidateFields...)

@@ -43,7 +43,13 @@ for the position supplies what the reading is handed.
 invocation gains nothing for it
 ([adr-2609021016272867](../../decisions/adrs/2609021016272867-the-comparative-reading-receives-one-widening-run-s-candidat.md)).
 The assembler selects the one committed widening run at the target whose items
-carry no disposition and no admission, and hands the reading that run's items
+carry no disposition and no admission — where a run is at the target when the
+commit its own record names is the target, or is an ancestor of it across which
+nothing changed outside the readings store and the issue ledger's own record
+families, which is what lets the run's records be committed between its ingest
+and the next reading (iss-2609021833302981; the maintainer's ruling on that
+reading of the ADR's phrase is owed, iss-2609021857343626) — and hands the
+reading that run's items
 projected to two body fields — the configuration and what admits it — keyed by
 the item identifier the comparative body cites. Everything else in the readings
 store stays excluded there as at every other position, and the manifest asserts

@@ -35,8 +35,13 @@ import (
 // refuses when it does not know it, the bundle item gains `candidate` and
 // `field`, and the manifest gains `candidate_run`, `candidates`, `exercised`,
 // `candidate_fields` and `criteria` with its item gaining `candidate`
-// (adr-2609021016272867, spc-2609020626039834).
-const SchemaVersion = 8
+// (adr-2609021016272867, spc-2609020626039834). At version 9 the MANIFEST gains
+// `candidate_run_target`, the commit the derived widening run itself read: the
+// derivation now admits a run whose own records were committed since it read, so
+// the run's target and the assembly's can differ and a reader needs both to
+// check the selection (iss-2609021833302981). The bundle is untouched and is
+// restamped by the shared constant once more.
+const SchemaVersion = 9
 
 // The two artefact type tags. They are carried in the documents themselves so a
 // reader of a loose file can tell the two apart without its filename.
@@ -212,6 +217,15 @@ type Manifest struct {
 	// carried no disposition and no admission when the assembly ran
 	// (adr-2609021016272867).
 	CandidateRun string `json:"candidate_run,omitempty"`
+	// CandidateRunTarget is the commit THE DERIVED RUN ITSELF read, which is this
+	// manifest's own TargetCommit or an ancestor of it. The two are recorded
+	// separately, and both are recorded even when they are equal, because the
+	// derivation admits a run whose records were committed since it read: a
+	// reader with both commits can diff them and see for themselves that nothing
+	// but the readings store and the issue ledger moved between the two
+	// (adr-2609021016272867, as read in DeriveCandidateRun; divergence register
+	// 27; iss-2609021857343626).
+	CandidateRunTarget string `json:"candidate_run_target,omitempty"`
 	// Candidates is the count of items THE DERIVED RUN HOLDS — the count of
 	// candidates the bundle carries when the position is exercised, and still the
 	// run's own count when it is not. It is never written as zero for a run that
