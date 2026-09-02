@@ -22,7 +22,16 @@ A prompt that matches no domain injects nothing (zero added tokens).
   `{"schema_version": 1, "disabled": false, "domains": {}}` — add a domain key to
   override a default per-field (e.g. `{"ROADMAP": {"state": "dormant"}}` silences
   it while keeping its rules) or to declare a custom domain
-  (`{"recall": [...], "rules": [...]}`).
+  (`{"recall": [...], "rules": [...]}`). A domain left with no rules at all
+  (`{"rules": []}`, or a custom domain declared without any) is SKIPPED with a
+  diagnostic on stderr naming it — it would otherwise inject a heading-only
+  block, which reads as a domain that says nothing. The rest of the file still
+  loads; `{"state": "dormant"}` is the way to silence a domain deliberately.
+- Provenance: a domain the override names (rules replaced, state changed, or a
+  custom domain) renders as `## NAME (repo override)` wherever it appears: the
+  injected block, `abcd rules`, and the hook's diagnostic; `abcd rules --json`
+  carries `"source": "repo"` for it and `"source": "bundled"` for an untouched
+  default.
 - Kill switch: set `"disabled": true` at the top of `.abcd/rules.json`.
 - Explicit activation: start a prompt with `*<DOMAIN>` (e.g. `*COMMITTING`,
   `*PII`) to inject that domain unconditionally — overrides a `dormant` state,
@@ -75,6 +84,24 @@ go test ./...       # unit tests
 go test ./internal/core/                 # a single package
 go test -run TestStatus ./internal/core/ # a single test
 ```
+
+**In a source checkout of abcd, every abcd invocation is `go run ./cmd/abcd
+<verb>` from the repo root** — never the plugin-root binary and never an `abcd`
+on PATH. Both are whatever version was last published, and in this repository
+that is the thing being developed, so they are stale by construction and fall
+further behind with every commit: a verb, flag, schema field or refusal added
+since the last release is unknown to them. The failure is not always a
+refusal. `launch ship` refuses on its surface guard, loudly and correctly, but
+`changelog --json` returned an empty cut against a tree holding 181 shipped
+records, and `capture` would have written records through a schema the record
+gates no longer accept — a plausible wrong answer, not an error. The plugin
+command pages document a resolution ladder that reaches the plugin-root binary
+first and falls through to `go run` only when nothing earlier resolves; in this
+checkout the first rung exists and answers, so the fallback written for exactly
+this case is never reached by following the ladder literally
+(iss-2608230943088357 holds the surface half). The loader's `DOGFOODING` domain
+in `.abcd/rules.json` injects this rule on a prompt that names `abcd` or any of
+its top-level verbs (the `Available Commands` list of `go run ./cmd/abcd --help`).
 
 CI (`.github/workflows/ci.yml`) runs its `check` job on macOS + Linux — build,
 vet, test and the race-enabled internal tests on both, with the `gofmt -l .`
@@ -166,15 +193,13 @@ irreversible; guessing downward costs nothing.**
   mutation from real work. Correspondingly, a merge, commit, push or gate run
   proves the tree clean **immediately before the act**, never inheriting an
   emptiness check from earlier in the sequence (itd-193).
-- **Isolation protects the tree, not the sequential record ids.** Intents and
-  specs still mint `max+1` under a lock that is advisory and scoped to one
-  checkout, so it cannot see a sibling worktree: Two current checkouts
-  minting in the same window allocate the same id by construction, and being
-  up to date does not help. Say which family you are about to mint into, or
-  mint from one checkout. The durable fix is the timestamp mint that captures
-  already use (iss-2608210737260468, with the collision paths recorded as
-  iss-2608220150157512 and iss-2608221126066632); this note is a caveat, not
-  a remedy.
+- **Record ids need no coordination between checkouts.** Captures, intents
+  and specs mint timestamp-numeric ids through one allocator that reads no
+  maximum (adr-45), so two current checkouts minting in the same window
+  allocate distinct ids by construction; the per-checkout mint lock only
+  serialises minters inside one checkout. ADRs keep their hand-numbered
+  filename ordinal, so an ADR is the one record family where minting from two
+  checkouts still needs a word first.
 
 ## Definition of done
 

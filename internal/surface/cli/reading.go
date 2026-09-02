@@ -164,12 +164,24 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 		Long: "Validate the JSON a cold reading returned and write its reading records.\n\n" +
 			"The verb checks what the reading was LICENSED to produce, not only what it saw: the\n" +
 			"supply regime is read from the position's definition and compared with the output's own\n" +
-			"claim, each regime's reserved names are refused with the licence stated, and a registry\n" +
-			"of named signatures catches prose that ranks, settles or proposes without the field.\n\n" +
+			"claim, and the reserved names a regime declares are refused with the licence stated (the\n" +
+			"generative position declares none). A registry of named signatures watches for prose that\n" +
+			"ranks, settles or proposes without the field; those signatures are observed rather than\n" +
+			"enforcing, at every position, so a hit raises a review flag on the run record and the item\n" +
+			"lands.\n\n" +
 			"Item identifiers are minted here. The payload carries none, so a supplied one is refused\n" +
-			"as an unknown field. Nothing durable is written until the whole payload validates, and\n" +
-			"the run metadata is written last as the commit marker: a run without one never happened,\n" +
-			"and an orphaned stage is named and cleared by the next invocation.",
+			"as an unknown field. A refusal becomes DURABLE once the run's identity is proven — the run\n" +
+			"id resolving to a parked manifest whose content hash matches — and from there a list-level\n" +
+			"refusal writes refusal.json under the run's directory; before that point nothing is written\n" +
+			"anywhere. Nothing durable is written or DELETED until the whole payload validates: a refusal\n" +
+			"after the run is proven leaves its refusal record and nothing else. The reading records land\n" +
+			"as one batch and the run metadata is written last as the commit marker: a run without one\n" +
+			"never happened.\n\n" +
+			"An ingest interrupted before that marker leaves an orphaned stage, and every invocation names\n" +
+			"it. Only the next one whose payload validates sweeps it: it ROLLS THAT RUN'S READING RECORDS\n" +
+			"OUT OF THE COMMITTED LEDGER because the run never happened, and clears the stage. A refused\n" +
+			"run reports the orphans it left in place, and the ids a sweep removed are reported as\n" +
+			"rolled_back_records on every exit, including a failing one.",
 		Example: "  abcd reading ingest --reading-json ./reading-output.json --json",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) > 0 {
@@ -201,9 +213,17 @@ func newReadingCommand(asJSON *bool) *cobra.Command {
 				// exits. The record path is the operator's handle on the event,
 				// and the plugin page tells a host to report `refusal_record` —
 				// which it could never find if the render only ran on success.
-				// A refusal reached before the run's identity is proven writes
-				// no record and renders none, because there is no run to name.
-				if res.RefusalPath != "" {
+				//
+				// The same goes for everything else the result discloses about
+				// the committed tier: an orphaned stage seen and left in place,
+				// a stage cleared, a record rolled back. The core owns the
+				// predicate, so a refusal reached before the run's identity is
+				// proven — which writes no record — still renders when it has
+				// something to say. Keying the render on the refusal record
+				// alone once left a delete in the ledger reported as a bare
+				// type error (iss-2608311517509690). A refusal with nothing to
+				// disclose renders nothing, because there is no run to name.
+				if res.HasDisclosure() {
 					_ = render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 						renderIngestResult(w, res)
 					})
@@ -259,6 +279,25 @@ func renderReadingStatus(w io.Writer, s reading.Status) {
 		fmt.Fprintln(w, "  staged runs:    none")
 	} else {
 		fmt.Fprintf(w, "  staged runs:    %s\n", strings.Join(s.StagedRuns, ", "))
+	}
+	// Printed only when there is one. An orphan is an abnormal state — an ingest
+	// that reached the ledger and never reached its commit marker, whose reading
+	// records are sitting in the committed ledger for a run that never happened
+	// — so it earns a line, and a "none" every other run would train a reader
+	// past it.
+	if len(s.OrphanedIngests) > 0 {
+		fmt.Fprintf(w, "  interrupted:    %s; their reading records are in the ledger for a run with no "+
+			"commit marker, and the next ingest that validates sweeps them\n",
+			strings.Join(s.OrphanedIngests, ", "))
+	}
+	// A leftover stage is the other state a stage survives in, and it is NOT an
+	// orphan: the run committed and only its stage failed to clear. It gets a
+	// line of its own so it is never listed beside a run whose records are
+	// about to be rolled back (iss-2609012043437282).
+	if len(s.LeftoverStages) > 0 {
+		fmt.Fprintf(w, "  leftover stage: %s; the run committed and its records stay, and the next ingest "+
+			"that validates clears the stage alone\n",
+			strings.Join(s.LeftoverStages, ", "))
 	}
 }
 
@@ -380,13 +419,34 @@ func trimCorePrefix(msg string) string {
 // which the record writer redacts on the way in, and a refusal quoting a
 // reading's prose back to a terminal would leave that redaction behind.
 func renderIngestResult(w io.Writer, res reading.IngestResult) {
-	fmt.Fprintf(w, "%s: %d record(s) at the %s position under the %s regime\n",
-		res.RunID, len(res.Records), res.Position, res.Regime)
+	// Two headings this render cannot write. A refusal before the run's
+	// identity is proven has no run to head the render with; what follows is
+	// then the disclosure alone. And a run whose DEFINITION did not resolve is
+	// proven but carries no regime — the record leaves that field empty on
+	// purpose, because the regime is the definition's — so the render says so
+	// rather than interpolating the emptiness, which read as "under the  regime":
+	// a doubled space asserting a regime that is not there.
+	switch {
+	case res.RunID == "":
+		fmt.Fprintln(w, "no run: the output was refused before the run it names was proven")
+	case res.Regime == "":
+		fmt.Fprintf(w, "%s: %d record(s) at the %s position; the regime did not resolve\n",
+			res.RunID, len(res.Records), res.Position)
+	default:
+		fmt.Fprintf(w, "%s: %d record(s) at the %s position under the %s regime\n",
+			res.RunID, len(res.Records), res.Position, res.Regime)
+	}
 	if res.RunRecordPath != "" {
 		fmt.Fprintf(w, "  run metadata:  %s\n", res.RunRecordPath)
 	}
 	if res.RefusalPath != "" {
 		fmt.Fprintf(w, "  refused:       the run; recorded at %s\n", res.RefusalPath)
+	}
+	// Neither marker means the run did not finish: the records above may have
+	// reached the ledger, and without this the header's record count reads as an
+	// outcome for a run that never committed.
+	if res.RunRecordPath == "" && res.RefusalPath == "" {
+		fmt.Fprintln(w, "  committed:     no; the run has no commit marker, so it never happened")
 	}
 	if res.RefusedCount > 0 {
 		fmt.Fprintf(w, "  refused items: %d\n", res.RefusedCount)
@@ -409,6 +469,11 @@ func renderIngestResult(w io.Writer, res reading.IngestResult) {
 	if len(res.RolledBack) > 0 {
 		fmt.Fprintf(w, "  rolled back:   %s removed from the ledger (their run never committed)\n",
 			strings.Join(res.RolledBack, ", "))
+	}
+	if len(res.PendingStages) > 0 {
+		fmt.Fprintf(w, "  left in place: orphaned stage(s) of %s; the sweep runs only under a payload that "+
+			"validates, and the next ingest that does rolls them back and clears them\n",
+			strings.Join(res.PendingStages, ", "))
 	}
 	if res.Degraded != "" {
 		fmt.Fprintf(w, "  redaction:     %s\n", res.Degraded)

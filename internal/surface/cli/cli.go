@@ -1107,6 +1107,12 @@ func newHookCommand() *cobra.Command {
 				fmt.Fprintf(cmd.ErrOrStderr(), "abcd %v; injecting nothing\n", err)
 				return nil
 			}
+			// A domain Load dropped (no rules of its own) is skipped, not
+			// fatal — but silently missing is the shape the drop exists to
+			// prevent, so each one is named here, out of band.
+			for _, note := range rs.Notes() {
+				fmt.Fprintf(cmd.ErrOrStderr(), "abcd %s\n", note)
+			}
 			session := hookSession(in)
 			// The fixed-N backstop comes from the repo's config (default 15 when
 			// unset); event-driven reset is the primary refresh (D1).
@@ -1114,8 +1120,11 @@ func newHookCommand() *cobra.Command {
 			if err := rules.SaveState(session, res.State); err != nil {
 				fmt.Fprintf(cmd.ErrOrStderr(), "abcd rules: state save failed (%v)\n", err)
 			}
+			// The names carry their layer ("PII (repo override)"), the same
+			// label the injected heading bears, so the out-of-band log says
+			// whose words went into the context (GHSA-22f8-qf5r-gjgq).
 			fmt.Fprintf(cmd.ErrOrStderr(), "abcd rules: turn %d, injected %d domain(s) %v, %d bytes\n",
-				res.State.Count, len(res.Injected), res.Injected, len(res.Text))
+				res.State.Count, len(res.Injected), res.Labels(), len(res.Text))
 			if res.Text != "" {
 				fmt.Fprint(cmd.OutOrStdout(), res.Text)
 			}
@@ -1212,7 +1221,15 @@ func newHookCommand() *cobra.Command {
 				return warn("staging failed (%v); this session was not captured", err)
 			}
 			if !res.Wrote {
-				return warn("session %s already staged (no-op)", res.Staged.SessionID)
+				return warn("session %s already staged with identical bytes (no-op)", res.Staged.SessionID)
+			}
+			if res.Replaced {
+				// Different bytes for an already-staged session: the later
+				// snapshot replaced the earlier one, and this says so rather
+				// than reporting a no-op that would hide a replaced transcript.
+				fmt.Fprintf(cmd.ErrOrStderr(), "abcd history: re-staged %s (%d bytes), replacing %d stale bytes; the next session redacts and stores it\n",
+					res.Staged.SessionID, res.Staged.Bytes, res.ReplacedBytes)
+				return nil
 			}
 			fmt.Fprintf(cmd.ErrOrStderr(), "abcd history: staged %s (%d bytes); the next session redacts and stores it\n",
 				res.Staged.SessionID, res.Staged.Bytes)
@@ -1422,7 +1439,17 @@ func newRulesCommand(asJSON *bool) *cobra.Command {
 	return &cobra.Command{
 		Use:   "rules [domain]",
 		Short: "Render the active rule set; a positional DOMAIN scopes to one (read-only)",
-		Args:  cobra.MaximumNArgs(1),
+		Long: `Render the rule set the modular-rules loader injects: the bundled default
+domains merged with this repo's .abcd/rules.json. Bare, it renders every active
+domain; a positional DOMAIN (case-insensitive) renders that one domain regardless
+of its state or the kill switch, so a dormant domain is still inspectable.
+
+Every domain says which layer it came from. A domain the repo override names —
+its rules replaced, its state changed, or a custom domain declared — renders as
+"## NAME (repo override)" here, in the injected block and in the hook's
+diagnostic, and carries "source": "repo" in --json; an untouched bundled domain
+renders bare and carries "source": "bundled". Read-only.`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
 			if err != nil {
@@ -1431,6 +1458,11 @@ func newRulesCommand(asJSON *bool) *cobra.Command {
 			rs, err := rules.Load(rulesRoot(cwd))
 			if err != nil {
 				return err
+			}
+			// Stderr, never stdout: --json renders one document, and a
+			// diagnostic mixed into it would break every parser reading it.
+			for _, note := range rs.Notes() {
+				fmt.Fprintf(cmd.ErrOrStderr(), "abcd %s\n", note)
 			}
 			// Scoped: inspect one domain's configured content regardless of its
 			// state OR the kill switch — this diagnostic shows what a domain holds,
@@ -1574,7 +1606,6 @@ func newIntentCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return &exitError{Code: 2, Msg: "abcd intent plan: " + err.Error()}
 			}
-			emitMintWarning(cmd, res.MintWarning)
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				if res.StampOnly {
 					// The identity step alone, over a record already planned: say what
@@ -1773,25 +1804,13 @@ func createIntentFromText(cmd *cobra.Command, cwd, text, impact, productionMode 
 	if err != nil {
 		return err
 	}
-	it, mintWarning, err := intent.CreateFromText(cwd, text, impact, mode)
+	it, err := intent.CreateFromText(cwd, text, impact, mode)
 	if err != nil {
 		return &exitError{Code: 2, Msg: "abcd intent: " + err.Error()}
 	}
-	emitMintWarning(cmd, mintWarning)
 	return render(cmd.OutOrStdout(), asJSON, it, func(w io.Writer) {
 		fmt.Fprintf(w, "created %s (%s) — %s\n", it.ID, it.Bucket, termsafe.Sanitize(it.Path))
 	})
-}
-
-// emitMintWarning prints a record-id mint degrade note to stderr (loud-staging:
-// a stage that degraded to working-tree-only minting must say so, never silently
-// fall back). The note is engine-produced and path-free; it is sanitised anyway
-// before it touches the terminal. Empty warnings emit nothing.
-func emitMintWarning(cmd *cobra.Command, warning string) {
-	if warning == "" {
-		return
-	}
-	fmt.Fprintln(cmd.ErrOrStderr(), "warning: "+termsafe.Sanitize(warning))
 }
 
 // newIntentAuditCommand builds `abcd intent audit`: `ingest --verdict-json`
@@ -2750,7 +2769,6 @@ func newCaptureCommand(asJSON *bool) *cobra.Command {
 			if err != nil {
 				return groundsUsageError("promote", err)
 			}
-			emitMintWarning(cmd, res.MintWarning)
 			return render(cmd.OutOrStdout(), *asJSON, res, func(w io.Writer) {
 				verb := "minted"
 				if res.Linked {
@@ -3273,12 +3291,12 @@ func newMemoryCommand(asJSON *bool) *cobra.Command {
 		},
 	}
 
-	// ingest <path-or-url> [--keep-original] [--pages-json <file|->]
+	// ingest <path-or-https-url> [--keep-original] [--pages-json <file|->]
 	var pagesJSON string
 	var keepOriginalFlag bool
 	ingestCmd := &cobra.Command{
-		Use:   "ingest <path-or-url>",
-		Short: "Distil an external source into cited memory pages",
+		Use:   "ingest <path-or-https-url>",
+		Short: "Distil an external source into cited memory pages (https URLs only)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cwd, err := os.Getwd()
@@ -3746,26 +3764,17 @@ func captureRoot(cwd string) string {
 	return cwd
 }
 
-// rulesRoot resolves the repo root the modular-rules loader must read: the
-// nearest ancestor of cwd (cwd itself included) that holds a .abcd directory.
-// rules.Load/LoadBackstop join ".abcd/rules.json" onto the path they are given,
-// so handing them a subdirectory silently ignored the per-repo overrides AND the
-// kill switch — a repo that had disabled a domain (or the whole loader) would
-// still inject it whenever abcd ran from any nested directory. Falls back to the
-// git working-tree root, then cwd, so a repo without a .abcd dir still resolves.
+// rulesRoot resolves the repo root the modular-rules loader (and the shell
+// guard, which shares it) must read: the nearest directory holding a .abcd,
+// searched from cwd upward but never past the git working tree, and cwd itself
+// outside git. rules.Load/LoadBackstop join ".abcd/rules.json" onto the path
+// they are given, so handing them a subdirectory silently ignored the per-repo
+// overrides AND the kill switch; an unbounded walk instead let a .abcd planted
+// above the working tree govern the session (GHSA-vvqc-3mv2-5p49). The
+// resolution lives in core (rules.ResolveRoot) because it is behaviour, not
+// formatting; this front door only hands it cwd.
 func rulesRoot(cwd string) string {
-	dir := cwd
-	for {
-		if fi, err := os.Stat(filepath.Join(dir, ".abcd")); err == nil && fi.IsDir() {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
-	}
-	return captureRoot(cwd)
+	return rules.ResolveRoot(cwd)
 }
 
 func repoRootSHA() (string, error) {

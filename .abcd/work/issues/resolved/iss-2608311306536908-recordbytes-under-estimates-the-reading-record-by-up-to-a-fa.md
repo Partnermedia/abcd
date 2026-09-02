@@ -8,7 +8,7 @@ source: "agent-finding"
 found_during: "manual-capture"
 origin: researcher-authored
 production_mode: hand-written
-resolution: "recordBytes counts every value double, an exact bound rather than a guess: the record's scalar writer escapes two characters at one byte each and the hidden-rune encoder emits neither. The envelope allowance is widened for the redactor, and the residue is stated."
+resolution: "recordBytes doubles every value, which covers the record writer's escaper exactly, but it is a cheap early FILTER and not the decision: the ledger redactor replaces a short span with a longer placeholder and its growth scales with the body rather than with any envelope allowance, and the estimate was measured slipping by 191,059 bytes on that path. Calling it an exact bound was wrong and the next commit repudiated it. The decision is taken in capture.IngestReading on the assembled bytes, where the exact count exists; an item this filter lets through is caught there, and one it refuses would have been refused there too."
 impact: fix
 resolved_by:
   intent: "itd-185"

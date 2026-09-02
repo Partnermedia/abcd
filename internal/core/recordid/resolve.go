@@ -3,11 +3,11 @@ package recordid
 // resolve.go is the READ side of this package: given a repository, which record
 // ids actually exist?
 //
-// MaxAcrossRefs answers "what is the next free id"; a resolver answers "does the
-// id this payload cites name a real record". Both questions are about the same
-// id space and the same filename grammar, so they share a home — a second
-// resolver living next to a consumer (an ingest seam, a lint rule) would drift
-// from the minting side the first time a family moved.
+// The mint answers "what is a fresh id"; a resolver answers "does the id this
+// payload cites name a real record". Both questions are about the same id space
+// and the same filename grammar, so they share a home — a second resolver living
+// next to a consumer (an ingest seam, a lint rule) would drift from the minting
+// side the first time a family moved.
 //
 // Only the four ID-BEARING families are resolvable. The brief and the principles
 // carry no per-entry id, so a citation of one cannot be validated by id at all;

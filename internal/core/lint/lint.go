@@ -2087,12 +2087,12 @@ func checkSpecLifecycle(repoRoot, rootAbs string, cfg RuleConfig, top Config) ([
 }
 
 // checkSpecIDUnique flags any spc-N id claimed by two or more spec-store files
-// across specs/{open,closed}/. The spec mint allocator now folds every git ref
-// into its max (recordid.MaxAcrossRefs), which closes the common
-// commit-then-branch collision, but two branches that both mint before either
-// commits still race (iss-115, iss-120) — and a hand-added spec file bypasses the
-// allocator entirely. This is the record-lint backstop that CI runs on the merged
-// PR's union, mirroring issue_id_unique/intent_lifecycle and sharing the one
+// across specs/{open,closed}/. The spec mint is timestamp-numeric and consults
+// no maximum (adr-45), so two branches minting in the same window differ by
+// entropy; what remains is the accepted same-second, same-suffix residue and a
+// hand-added spec file, which bypasses the mint entirely. This is the armed
+// scheme assertion (adr-45 ruling 5) that CI runs on the merged PR's union,
+// mirroring issue_id_unique/intent_lifecycle and sharing the one
 // validateIDUnique primitive. A malformed or absent id is spec_lifecycle's
 // concern, not this rule's, so only well-formed spc-N ids are compared; a
 // content-exempt spec is skipped exactly as spec_lifecycle skips it.

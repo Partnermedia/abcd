@@ -21,7 +21,12 @@ through the same fail-closed `capture` path, where there is a real time budget.
 
 Staging is the one place abcd holds unredacted transcript text on purpose: mode
 `0o700`, files `0o600`, and each file lives only until the next session drains
-it. It is also the **outcome record the store never had** — before it, an absent
+it. The stage handshake is locked and keyed on content: a re-fired SessionEnd
+carrying identical bytes is a no-op, one carrying different bytes replaces the
+staged copy (last-writer-wins — the later snapshot of a session is the one worth
+keeping), and a drain removes a staged file only while it still holds the bytes
+it captured, so one session has one staged copy and a fresher copy is never lost
+(GHSA-xq36-hcgf-9wrj). It is also the **outcome record the store never had** — before it, an absent
 record spanned "never ended", "ended before the store existed" and "ended and
 lost" alike, and nothing could tell them apart, which is why a week of losses
 went unnoticed.

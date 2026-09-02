@@ -155,11 +155,13 @@ Two enforcement layers sit behind that:
   is refused with the field named and the licence stated. Arrangement order is
   never refused: items arrive in document order by mandate.
 - **Semantic signatures.** Prose that ranks, settles or proposes without the
-  field is checked too, through a registry of named detectors over body text
+  field is checked too, through a registry of named detectors over item text
   (`RG-EVAL-ORDERING`, `RG-EVAL-RECOMMENDATION`, `RG-REG-FIXPROPOSAL`,
-  `RG-EXPL-DISPOSITION`). `generative` carries no regime-specific refusal; the
-  widening prohibitions raise review flags on the run record instead, because
-  the generative licence is the widest and the constraint falls at admission.
+  `RG-EXPL-DISPOSITION`). All four are OBSERVED: a hit raises a review flag
+  naming the item and the signature id, the flag is carried on the run record,
+  and the item lands. `generative` carries no regime-specific refusal either,
+  and runs the whole registry as flags, because its licence is the widest and
+  the constraint falls at admission.
 
 **Matching runs over a folded copy, and so does the provenance rule.** Go's
 regexp is RE2, whose whitespace and word-boundary classes are ASCII-only, and
@@ -172,7 +174,9 @@ four regimes and the record then asserted a provenance it does not carry.
 `foldForMatching` closes three classes and the stored text is untouched: every
 Unicode space folds to ASCII; every invisible rune is dropped, across all three
 categories that hold one — `Cf`, `Other_Default_Ignorable_Code_Point` (U+034F is
-a MARK, so guarding `Cf` alone left it open) and `Variation_Selector`; and NFKC
+a MARK, so guarding `Cf` alone left it open) and `Variation_Selector`; U+2800
+BRAILLE PATTERN BLANK folds to a space, being the one rune found that renders as
+nothing and is a GRAPHIC character, so no category above reports it; and NFKC
 folds the compatibility forms (the `fi` ligature, the fullwidth letters). Both
 the signature registry and the blankness rules read through it.
 
@@ -181,7 +185,10 @@ closure:** a script-CONFUSABLE substitution. A Cyrillic that is not the Latin
 one, and no normalisation equates them, so a signature's phrasing written in a
 confusable script is not caught. Closing it needs a confusables table, a new
 dependency and a maintainer's decision. itd-185's disclosed residue names this
-class alongside the phrased-outside-the-registry one.
+class alongside the phrased-outside-the-registry one, and names the OTHER
+direction with it: the registry cannot tell a reading that proposes from one
+reporting somebody else proposing, so it over-catches as well as under-catches,
+and over-catching is the larger risk on the evidence there is.
 
 The line between defect and residue is one test: the registry's phrasing with a
 byte substituted is an evasion of the gate, and phrasing outside the registry is
@@ -190,13 +197,21 @@ and are closed (iss-2608311306535485, iss-2608311351290623); the confusable
 class falls on the defect side too and is open, which is why it is disclosed
 rather than filed under the calibration residue.
 
-**Every signature ships enforced.** Each registry entry carries a literal mode
-(`enforce` or `flag`) in Go, with no configuration seam: degrading a signature
-on observed noise is a code change plus a decision-log entry, which is what
-makes it a recorded weakening of the claimed property from enforced to
-observed rather than a quiet runtime toggle. Whether the signatures lint
-cleanly in practice is the recorded open question, and the degradation path
-exists precisely because of it.
+**Every signature ships in a recorded mode, and all four ship observed.** Each
+registry entry carries a literal mode (`enforce` or `flag`) in Go, with no
+configuration seam, and a test pins each entry's mode by name so a move in
+either direction fails: changing one is a code change plus a decision-log entry,
+which is what makes the property's standing between enforced and observed a
+recorded act rather than a quiet runtime toggle. The four semantic signatures
+took the degradation path on 2026-08-31. The evidence was synthetic — fourteen
+of thirty-four constructed realistic reading outputs were caught, every one for
+REPORTING what the read document said rather than for proposing anything — and
+the ruled condition was noise observed in practice, which this is not. It was
+taken anyway because the alternative is enforcement over a calibration that has
+never been taken and cannot be taken while the assembled input is too large to
+hand to a reading (iss-2608311501186646); of the two departures, this is the one
+that cannot refuse a real reading. The enforcing branch stays live and tested,
+and the first real reading is the revisit point.
 
 ### Manifest reference
 
@@ -215,9 +230,19 @@ the payload's claim; the assembler version is compared with the manifest's.
 
 ### Staged writes, run metadata last
 
-Nothing durable is written until the whole payload validates.
+The only durable thing a run writes before its payload validates is its own
+`refusal.json`, and only once its identity is proven.
 
-1. Validate: schema, regime, provenance, manifest reference, instrument.
+1. Validate: schema, regime, provenance, manifest reference, instrument. A
+   list-level refusal from the point the identity is proven writes
+   `refusal.json` and stops.
+1b. Sweep any orphaned stage, rolling its reading records out of the committed
+   ledger. This rides with the COMMIT and not with a refusal: the rollback is a
+   destructive act in the committed tier, and a run on its way to a refusal must
+   not destroy another run's records (iss-2608311517509690). A refusal does roll
+   back its OWN run's earlier crashed attempt, because a refused run leaves no
+   reading records. An orphan of another run therefore outlives an invocation
+   that does not validate, and the bare verb reports it as `orphaned_ingests`.
 2. Stage a write-aside marker into
    `.abcd/.work.local/scratch/reading-ingest/<run-id>/stage.json`.
 3. Write the reading records into the reading-record family (spc-58's

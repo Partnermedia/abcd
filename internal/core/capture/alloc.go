@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -33,21 +34,86 @@ var lockTimeout = 5 * time.Second
 var beforeOrphanRemoveHook func(cand string)
 
 // ensureLedgerDirs provisions issuesRoot and its status sub-directories, refusing
-// symlinked leaves. The list is issueschema.StatusDirs — the same value the
-// readers scan and the deterministic gates scope to, so a folder can never be
-// provisioned that one of them does not look in. Idempotent.
-func ensureLedgerDirs(issuesRoot string) error {
+// symlinked leaves AND symlinked ancestors. The list is issueschema.StatusDirs —
+// the same value the readers scan and the deterministic gates scope to, so a
+// folder can never be provisioned that one of them does not look in. Idempotent.
+//
+// It is ledgerDirs with create, and nothing besides: one list of directories,
+// judged by the same rule whether a verb is about to write the ledger or only
+// read it.
+func ensureLedgerDirs(repoRoot, issuesRoot string) error {
 	if !filepath.IsAbs(issuesRoot) {
 		return fmt.Errorf("issuesRoot must be absolute, got %q", issuesRoot)
 	}
-	if err := os.MkdirAll(filepath.Dir(issuesRoot), 0o755); err != nil {
-		return err
+	return ledgerDirs(repoRoot, issuesRoot, true)
+}
+
+// ledgerDirs judges every directory the ledger is reached through and every
+// directory the ledger IS, refusing any that exists as something other than a
+// real directory. Exactly three groups, in this order:
+//
+//  1. each path segment between repoRoot and the ledger's parent — for the
+//     default ledger, `.abcd` then `.abcd/work`;
+//  2. issuesRoot itself;
+//  3. every issueschema.StatusDirs entry under it — open, resolved, wontfix.
+//
+// All three, because a symlink at ANY of them redirects the store: a committed
+// `.abcd` or `.abcd/work` sent the whole store — the lock, the status
+// directories and the record — outside the checkout while the result still
+// reported a repo-relative path (GHSA-865x-5m7q-qm79), and a committed `issues`
+// or `open` did the same to a read, because os.ReadDir follows a symlinked
+// directory and the guarded record reader's O_NOFOLLOW covers only the final
+// component. Guarding the first group alone left `capture list --json` and the
+// bare status render serializing a sibling checkout's records from a fresh
+// clone, under repo-relative paths.
+//
+// With create, each is provisioned one level at a time with os.Mkdir
+// (safeMkdirLeaf) — never MkdirAll, which follows whatever is already there.
+// Without create — the form every verb runs through resolveRoots, so the READ
+// paths are covered — an absent directory is not a fault: an unprovisioned
+// ledger is a state the readers already tolerate, and nothing can hide behind a
+// directory that is not there.
+//
+// The walk is modelled on memory.memoryDir (the GHSA-72rp fix) and carries the
+// same residue: the window between one segment's Lstat and its Mkdir is a
+// local-racer TOCTOU, closed only by opening the store as an os.Root, which is
+// the package-wide follow-up iss-2609012037143368 records.
+//
+// An issuesRoot outside repoRoot is an operator-typed operand with no boundary
+// to walk from: group 1 is skipped (with create, its parent is provisioned with
+// MkdirAll as before), and groups 2 and 3 are judged as they are inside.
+func ledgerDirs(repoRoot, issuesRoot string, create bool) error {
+	var dirs []string
+	parent := filepath.Dir(issuesRoot)
+	if fsutil.PathWithin(parent, repoRoot, false) {
+		rel, err := filepath.Rel(repoRoot, parent)
+		if err != nil {
+			return err
+		}
+		if rel != "." {
+			current := repoRoot
+			for _, segment := range strings.Split(rel, string(filepath.Separator)) {
+				current = filepath.Join(current, segment)
+				dirs = append(dirs, current)
+			}
+		}
+	} else if create {
+		if err := os.MkdirAll(parent, 0o755); err != nil {
+			return err
+		}
 	}
-	if err := safeMkdirLeaf(issuesRoot); err != nil {
-		return err
-	}
+	dirs = append(dirs, issuesRoot)
 	for _, sub := range issueschema.StatusDirs {
-		if err := safeMkdirLeaf(filepath.Join(issuesRoot, sub)); err != nil {
+		dirs = append(dirs, filepath.Join(issuesRoot, sub))
+	}
+	for _, dir := range dirs {
+		if create {
+			if err := safeMkdirLeaf(dir); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := refuseSymlinkedDir(dir); err != nil {
 			return err
 		}
 	}
@@ -81,8 +147,8 @@ func safeMkdirLeaf(target string) error {
 // the shared fsutil.WithFileLock primitive (the one-canonical inter-process
 // load-modify-write lock), mapping its sentinels back to the capture-facing
 // ErrAllocatorContention / ErrPathUnsafe the ledger callers already test.
-func withLedgerLock(issuesRoot string, fn func() error) error {
-	if err := ensureLedgerDirs(issuesRoot); err != nil {
+func withLedgerLock(repoRoot, issuesRoot string, fn func() error) error {
+	if err := ensureLedgerDirs(repoRoot, issuesRoot); err != nil {
 		return err
 	}
 	lockPath := filepath.Join(issuesRoot, lockFilename)
@@ -109,11 +175,11 @@ func withLedgerLock(issuesRoot string, fn func() error) error {
 // — so a caller must not hold it across any exported verb of this package, every
 // one of which takes it internally.
 func WithLedgerLock(repoRoot string, fn func() error) error {
-	_, issuesRoot, err := resolveRoots(repoRoot, "")
+	rr, issuesRoot, err := resolveRoots(repoRoot, "")
 	if err != nil {
 		return err
 	}
-	return withLedgerLock(issuesRoot, fn)
+	return withLedgerLock(rr, issuesRoot, fn)
 }
 
 // minter is the capture family's mint seam (adr-45; mechanics per spc-33). The
@@ -133,7 +199,7 @@ var minter recordid.Minter
 // ids and entropy separates same-second minters on other branches. The
 // presence check runs first because the O_EXCL create guards open/ alone; a
 // clash with a resolved or wontfixed id also redraws.
-func reservePath(issuesRoot, slug, forceID string) (string, string, error) {
+func reservePath(repoRoot, issuesRoot, slug, forceID string) (string, string, error) {
 	// Validate a caller-supplied ForceID against the iss-N shape BEFORE it is used
 	// to build a path or create a placeholder — a traversal id (../../evil) must
 	// never touch the filesystem outside the ledger, even transiently.
@@ -141,7 +207,7 @@ func reservePath(issuesRoot, slug, forceID string) (string, string, error) {
 		return "", "", fmt.Errorf("%w: ForceID %q must match ^iss-[0-9]+$", ErrPathUnsafe, forceID)
 	}
 	var resID, resTarget string
-	err := withLedgerLock(issuesRoot, func() error {
+	err := withLedgerLock(repoRoot, issuesRoot, func() error {
 		if forceID != "" {
 			if issPresent(issuesRoot, forceID) {
 				return fmt.Errorf("%w: %s already exists in the ledger", ErrDuplicateIssueID, forceID)

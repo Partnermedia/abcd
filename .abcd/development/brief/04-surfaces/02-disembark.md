@@ -31,6 +31,7 @@ Bare `/abcd:disembark` prints the sub-verb list and flags only — never mutates
 - **`/abcd:disembark probe [source-repo]`** — read-only inspection of the source (the repo argument is optional and defaults to the current directory): which brief sections it can ground, which come back blank, and what was searched. Renders the coverage report to stdout and writes nothing into `<source-repo>`; `coverage.{json,md}` are written only by `pack` (adr-35). It is the coverage experiment's readout (itd-88).
 - **`/abcd:disembark plan [source-repo]`** — the dry-run (the repo argument is optional and defaults to the current directory): the full lifeboat file set a pack would write, without writing anything.
 - **`/abcd:disembark coverage <report.json>…`** — aggregate probe reports into the cross-repo section×repo coverage table.
+- **`--include-ignored`** on `pack`, `probe`, and `plan` — also read files git ignores. It widens the scan, and the report says so.
 - **Synthesis sub-verbs over a packed lifeboat** — `graveyard` (validate host-produced lesson JSON and write the survivors, cite-or-be-dropped), `review` (assess a packed lifeboat against its source repo — a registered verdict + cited findings), `press-release` (compose the lifeboat's press release), and `principles` (distil principles from the ADRs). Each is deterministic-or-validate-host-JSON.
 - **Later phase: `to-spec-kit <path>`** — export shipped intents to GitHub Spec Kit format alongside the lifeboat (per itd-23); not yet shipped.
 

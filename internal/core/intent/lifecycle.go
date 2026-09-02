@@ -162,15 +162,15 @@ func Plan(repoRoot, intentID, productionMode string) (PlanResult, error) {
 	// write, MOVE to planned, and only then fail the spec_id write, leaving a
 	// half-planned record neither Plan nor Link repairs; and it left a freshly
 	// minted spec behind with nothing pointing at it (iss-2608300335369473). The
-	// check runs first, before the spec is minted, over the id that mint WOULD
-	// produce — and again below with the id it actually produced, because NextID
-	// is predicted outside the mint lock and a concurrent create can push the id
-	// to a wider number. Both run before the first write, so neither refusal
-	// leaves a half-planned record; a spec minted and then refused is reusable,
-	// since the next run finds it through ByIntent.
+	// check runs first, before the spec is minted. A reused spec is judged by its
+	// own id; a spec still to be minted is judged by a probe id of the mint's
+	// width — every native id is the same width (adr-45), so the probe measures
+	// exactly what the mint will write, and no second judgement is owed once the
+	// real id is known. The check runs before the first write, so a refusal
+	// leaves no half-planned record.
 	specID := sp.ID
 	if !ok {
-		if specID, _, err = spec.NextID(repoRoot); err != nil {
+		if specID, err = probeMinter().Mint(specFamily); err != nil {
 			return PlanResult{}, err
 		}
 	}
@@ -178,14 +178,9 @@ func Plan(repoRoot, intentID, productionMode string) (PlanResult, error) {
 		return PlanResult{}, err
 	}
 
-	var mintWarning string
 	if !ok {
-		sp, mintWarning, err = spec.Create(repoRoot, intentID, it.Slug, productionMode)
+		sp, err = spec.Create(repoRoot, intentID, it.Slug, productionMode)
 		if err != nil {
-			return PlanResult{}, err
-		}
-		// Re-judge against the id the mint actually chose, still before any write.
-		if err := checkDraftFaceSize(content, it, sp.ID, draftRel); err != nil {
 			return PlanResult{}, err
 		}
 	}
@@ -237,24 +232,18 @@ func Plan(repoRoot, intentID, productionMode string) (PlanResult, error) {
 	it.SpecID = sp.ID
 	it.Bucket = BucketPlanned
 	it.Path = plannedRel
-	return PlanResult{Intent: it, Spec: sp, MintWarning: mintWarning, ConditionsStamped: conditionsStamped}, nil
+	return PlanResult{Intent: it, Spec: sp, ConditionsStamped: conditionsStamped}, nil
 }
 
 // checkDraftFaceSize refuses a draft whose planned form would not fit under the
 // cap its own reader enforces, BEFORE the first write and before the bucket
 // move. It reproduces the three growth steps in order and judges the largest.
 func checkDraftFaceSize(content string, it Intent, specID, rel string) error {
-	// Every native id is the same width, so a fixed clock and an ADVANCING suffix
-	// measure exactly what the real mint will write. The entropy has to advance:
-	// a constant source hands the second bullet the id the first already used, the
-	// redraw loop exhausts, and the whole judgement is lost behind a mint error on
-	// every record with more than one condition (iss-2608300352403199). The source
-	// is per-call, so two concurrent plans never share a counter.
-	probe := recordid.Minter{
-		Now:     func() time.Time { return time.Unix(0, 0).UTC() },
-		Entropy: &probeEntropy{},
-	}
-	stamped, _, err := stampScopeConditions(content, probe)
+	// The probe's entropy has to advance: a constant source hands the second
+	// bullet the id the first already used, the redraw loop exhausts, and the
+	// whole judgement is lost behind a mint error on every record with more than
+	// one condition (iss-2608300352403199).
+	stamped, _, err := stampScopeConditions(content, probeMinter())
 	if err != nil {
 		// Including a structural refusal: reporting it here, before the spec is
 		// minted, is strictly better than letting the real stamp reach it later.
@@ -282,6 +271,21 @@ func checkDraftFaceSize(content string, it Intent, specID, rel string) error {
 		return fmt.Errorf("intent: planning %s would produce %d bytes, past the %d-byte cap its own reader enforces; refusing before any write", rel, largest, maxIntentFileBytes)
 	}
 	return nil
+}
+
+// specFamily is the spec store's id prefix, named here so the size probe mints
+// an id of exactly the width spec.Create will write.
+const specFamily = "spc"
+
+// probeMinter is the size probe's mint: a fixed clock and an advancing
+// counter for entropy, so every id it draws is distinct and sixteen digits
+// wide. Nothing it produces is ever stored. The source is per-call, so two
+// concurrent plans never share a counter.
+func probeMinter() recordid.Minter {
+	return recordid.Minter{
+		Now:     func() time.Time { return time.Unix(0, 0).UTC() },
+		Entropy: &probeEntropy{},
+	}
 }
 
 // probeSuffixSpan keeps every probe draw below the mint's rejection band, so no
