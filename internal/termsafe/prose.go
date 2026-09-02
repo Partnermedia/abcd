@@ -180,7 +180,10 @@ func cleanProse(s string, capBytes int, normalise func(string) string) string {
 	// than emitting replacement bytes.
 	for len(s) > capBytes {
 		s = strings.TrimSpace(strings.ToValidUTF8(s[:capBytes], ""))
-		s = trimDanglingEscape(s)
+		// Dropping the escape can expose the whitespace that preceded it, so the
+		// end is trimmed again: the loop's contract is that a cut leaves no
+		// dangling space, and the package's idempotence rests on it.
+		s = strings.TrimSpace(trimDanglingEscape(s))
 		s = neutraliseSpanAware(s)
 	}
 	return s
