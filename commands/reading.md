@@ -30,9 +30,22 @@ To render the assembler's state:
 
 Summarise the JSON for the user: `assembler_version`, `include_rows` and
 `exclusion_rows` (what the table admits and what it refuses), `definitions`
-(the reading definitions present under `agents/`), `staged_runs` (runs an
+(the reading definitions the locator RESOLVED), `staged_runs` (runs an
 assembly has parked in the local tier), `orphaned_ingests`, and
 `leftover_stages`. Zero writes.
+
+**`definitions` is what resolved, not what is present.** A definition is
+resolved by the position its filename holds, and it must state that same
+position and the regime that position carries — the regime is the definition's
+property, which is why nothing an operator types can set one. So a
+`cold-reading-<name>.md` naming no closed position is not an instrument and is
+invisible here. A definition that IS at a position and is silent about its
+position or its regime, states a position its filename does not hold, or states
+another position's regime, is worse than an absent one: it reports an instrument
+that is not there. That refuses **the whole verb with exit 2**, naming the file
+and what it got wrong, rather than being listed or quietly skipped — so a short
+list is a repository with fewer definitions, and a malformed one renders no
+status at all.
 
 **`orphaned_ingests` is not routine.** Each name is a run whose ingest reached
 the ledger and never reached its commit marker, so its reading records are

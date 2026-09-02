@@ -48,8 +48,8 @@ reservation on the reading envelope; the per-run summary in the outstanding
 report and on the capture board; the plugin page and the brief chapter.
 
 Out: The scanner fix for absence as a class
-([iss-2608301808198621](../../../work/issues/open/iss-2608301808198621-isabsentvalue-decides-on-literal-strings-rather-than-the-yam.md),
-[iss-2608301744268001](../../../work/issues/open/iss-2608301744268001-a-trailing-comment-on-a-frontmatter-key-defeats-every-blank.md));
+([iss-2608301808198621](../../../work/issues/resolved/iss-2608301808198621-isabsentvalue-decides-on-literal-strings-rather-than-the-yam.md),
+[iss-2608301744268001](../../../work/issues/resolved/iss-2608301744268001-a-trailing-comment-on-a-frontmatter-key-defeats-every-blank.md));
 the disposition vocabulary; the comparative channel and the committed
 comparative run it produces, which
 [spc-2609020626039834](spc-2609020626039834-a-comparative-reading-receives-the-widening-run-s-items-as-i.md)

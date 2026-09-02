@@ -135,6 +135,7 @@ disclosed as residue.
 | `.abcd/development/research/notes` | directory | absent from the positive walk | every position |
 | `.abcd/work/issues` | directory | no include names a directory containing a record family | every position |
 | `.abcd/work/DECISIONS.md` | file | absent from the positive walk | every position |
+| `.abcd/.work.local` | directory | no reading consumes the local ledger side, unconditionally and under no flag (brief invariant 14) | every position |
 | `the lapse log` | record type in a denied path | absent from the positive walk | every position |
 | `admission and selection grounds` | record type in a denied path | absent from the positive walk | every position |
 | `.abcd/development/readings` | directory | the instrument's own output is never its input | every position |

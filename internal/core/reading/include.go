@@ -24,7 +24,12 @@ import (
 // a rewritten rule text moves the rendering without changing what the
 // assembler promises, and a projection change alters the promise without
 // touching the table (spc-61, ruling (12); spc-68).
-const AssemblerVersionCore = "1.2.0"
+// It goes 1.2.0 to 1.3.0 with the local ledger tier's entry in the exclusion
+// floor: the floor is asserted into every manifest and enforced by
+// assertExclusions, so an added entry is an added PROMISE — a refusal a reader
+// can now check and previously could not — rather than a rewording of an
+// existing one (iss-2608311238236490).
+const AssemblerVersionCore = "1.3.0"
 
 // AssemblerVersion is the core semver with the rendered include table's digest
 // as semver build metadata. The digest is computed, not declared, so a table
@@ -360,6 +365,16 @@ var Exclusions = []Exclusion{
 	{Rule: "absent from the positive walk", Signal: "directory", Detail: ".abcd/development/research/notes"},
 	{Rule: "no include names a directory containing a record family", Signal: "directory", Detail: ".abcd/work/issues"},
 	{Rule: "absent from the positive walk", Signal: "file", Detail: ".abcd/work/DECISIONS.md"},
+	// The local ledger tier. It was excluded from the first day and asserted by
+	// nothing: absent from the positive walk, denied by the `.abcd` segment, and
+	// named in no row here — so every manifest was silent about the one tier
+	// brief invariant 14 exists to keep out, and assertExclusions had nothing to
+	// enforce there. A reader checking the asserted exclusions could not tell
+	// that the framing traces and declined construals had been refused, which is
+	// brief invariant 16 in its less-than direction: an attestation never states
+	// less than the examination behind it establishes (iss-2608311238236490).
+	{Rule: "no reading consumes the local ledger side, unconditionally and under no flag (brief invariant 14)",
+		Signal: "directory", Detail: ".abcd/.work.local"},
 	{Rule: "absent from the positive walk", Signal: "record type in a denied path", Detail: "the lapse log"},
 	{Rule: "absent from the positive walk", Signal: "record type in a denied path", Detail: "admission and selection grounds"},
 	{Rule: "the instrument's own output is never its input", Signal: "directory", Detail: ".abcd/development/readings"},

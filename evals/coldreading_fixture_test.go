@@ -551,6 +551,14 @@ var carriers = []carrier{
 		Markers: []string{"module example.invalid/coldreadingfixture"},
 		Why:     "the shipped tree's configuration, which carries no plant; the carrier is what makes its row falsifiable",
 	},
+	{
+		Path:    "main_test.go",
+		Markers: []string{"the fixture's own test file is corpus for the assembler and is never built"},
+		Why: "the shipped tree's tests, admitted by the include table's basename-SUFFIX row " +
+			"rather than by an extension; it carries no plant, and it is what makes that row " +
+			"falsifiable at all — deleting the suffix row leaves the file admitted by the `.go` " +
+			"row and changes nothing but the material class the manifest attests",
+	},
 }
 
 // stake says what a missing carrier costs: the assertions it would have

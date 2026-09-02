@@ -620,7 +620,40 @@ var (
 	assemblerVersionPattern = regexp.MustCompile(`^\d+\.\d+\.\d+\+[0-9a-f]{64}$`)
 	runIDPattern            = regexp.MustCompile(`^rdg-\d{16}$`)
 	epochPattern            = regexp.MustCompile(`^\d{10,}$`)
+	// recordIDPattern is a minted record identifier wherever it appears inside a
+	// scalar: one of the family tags below, a hyphen, and the timestamp-numeric
+	// ordinal the one allocator mints (adr-45).
+	//
+	// It is the FOURTH declared exemption from the packed-digit rule, and it is
+	// the one the manifest's own contents force. spc-65 confines this scan to the
+	// manifest because the manifest carries paths, field names and hashes only —
+	// but a path names a record, and `<family>-<yymmddHHMMSS><4 random digits>` is
+	// sixteen packed digits, so the premise was false for paths from the moment
+	// the mint moved to timestamp-numeric ids (iss-2608311502474022). A scan that
+	// reports the way this repository NAMES a record is a scan producing a false
+	// finding on correct output, which is how an eval stops being read.
+	//
+	// Narrow in three ways, deliberately. The family list is CLOSED and
+	// hand-transcribed from recordid's own grammar, so `run-20260831131824` — a
+	// directory named after a moment — is not exempted by looking id-shaped. The
+	// elision is TOKEN-LOCAL: only the identifier is removed, so a packed moment
+	// sitting beside a record id in the same path is still reported. And it
+	// exempts from the packed-digit rule alone, so an id that grew an ISO date or
+	// a clock time still fails.
+	//
+	// It is matched by SHAPE rather than under a key name, like
+	// assemblerVersionPattern and unlike runIDKey: the manifest carries record
+	// ids in more than one field — an item's path, and a scope selector naming
+	// the record a reading is about — and an exemption keyed on `path` would be
+	// silently absent from the second.
+	recordIDPattern = regexp.MustCompile(`(^|[^0-9A-Za-z])(?:adm|adr|dsp|iss|itd|rdg|rdi|spc|srp)-\d+`)
 )
+
+// elideRecordIDs removes every minted record identifier from a scalar, leaving
+// the rest of it — including any other run of digits — to be scanned.
+func elideRecordIDs(s string) string {
+	return recordIDPattern.ReplaceAllString(s, "$1")
+}
 
 // runIDKey is the one key whose value is exempt from the packed-digit rule.
 //
@@ -689,7 +722,7 @@ func scanManifestForTimestamps(raw []byte) ([]timestampFinding, map[string]bool,
 				findings = append(findings, timestampFinding{Where: where, Detail: fmt.Sprintf("the value %q carries a calendar date", n)})
 			case clockPattern.MatchString(n):
 				findings = append(findings, timestampFinding{Where: where, Detail: fmt.Sprintf("the value %q carries a clock time", n)})
-			case packedDigitPattern.MatchString(n) && key != runIDKey &&
+			case packedDigitPattern.MatchString(elideRecordIDs(n)) && key != runIDKey &&
 				!hexValuePattern.MatchString(n) && !assemblerVersionPattern.MatchString(n):
 				findings = append(findings, timestampFinding{Where: where, Detail: fmt.Sprintf("the value %q carries a packed run of digits, which is how a moment travels without punctuation", n)})
 			}
@@ -791,6 +824,25 @@ func TestManifestCarriesNoTimestamp(t *testing.T) {
 				want:     "manifest.note",
 			},
 			{
+				// The other side of the record-id exemption below. The elision is
+				// token-local, so a path that carries a packed moment BESIDE a
+				// record id still reports it: what the exemption removes is the
+				// identifier, never the run of digits next to it.
+				name: "a packed moment in a path carrying a record id",
+				manifest: `{"_type":"abcd.reading.manifest","items":[{"item_key":"itm-0001",` +
+					`"path":".abcd/development/specs/open/spc-2609020626048722-20260831131824.md"}]}`,
+				want: "manifest.items[0].path",
+			},
+			{
+				// A family tag the mint does not use is not a record id, however
+				// id-shaped it looks: `run-20260831131824` is a directory named
+				// after a moment, which is exactly how a moment travels.
+				name: "a packed moment behind a tag no record family mints",
+				manifest: `{"_type":"abcd.reading.manifest","items":[{"item_key":"itm-0001",` +
+					`"path":".abcd/.work.local/scratch/run-20260831131824/bundle.json"}]}`,
+				want: "manifest.items[0].path",
+			},
+			{
 				name:     "an epoch in a number",
 				manifest: `{"_type":"abcd.reading.manifest","note":1756645104,"items":[]}`,
 				want:     "manifest.note",
@@ -812,6 +864,44 @@ func TestManifestCarriesNoTimestamp(t *testing.T) {
 				if !contains(wheres, c.want) {
 					t.Fatalf("the scan reported %v over a manifest carrying %s, and none of them "+
 						"names %s", wheres, c.name, c.want)
+				}
+			})
+		}
+	})
+
+	// The premise the scoping decision rests on, held rather than assumed
+	// (iss-2608311502474022). spc-65 confines this scan to the manifest because
+	// the manifest carries paths, field names and hashes only, so a
+	// timestamp-shaped token there is unambiguously a defect. A PATH, though,
+	// carries record ids, and every minting family in this repository allocates
+	// `<family>-<yymmddHHMMSS><4 random digits>` (adr-45) — sixteen digits, which
+	// is a packed run of digits by any reading of the rule. The premise was
+	// therefore already false: fed a real id, the unamended scan fired, and it
+	// stayed quiet only because the fixture corpus names its records shortly
+	// while the live specs directory does not.
+	//
+	// The ids below are real, taken from this repository's own record.
+	t.Run("passes-a-record-id-in-a-path", func(t *testing.T) {
+		for _, c := range []struct {
+			name string
+			path string
+		}{
+			{"an admitted spec", ".abcd/development/specs/open/spc-2609020626048722-a-committed-preset.md"},
+			{"an admitted intent", ".abcd/development/intents/planned/itd-2608311051046981-a-required-check.md"},
+			{"a capture, in a path an exclusion names", ".abcd/work/issues/open/iss-2608311502474022-the-amnesia-eval.md"},
+		} {
+			t.Run(c.name, func(t *testing.T) {
+				manifest := `{"_type":"abcd.reading.manifest","items":[{"item_key":"itm-0001","path":"` +
+					c.path + `"}]}`
+				findings, _, err := scanManifestForTimestamps([]byte(manifest))
+				if err != nil {
+					t.Fatalf("decoding the synthetic manifest: %v", err)
+				}
+				if len(findings) > 0 {
+					t.Fatalf("the scan reported %v over a manifest naming %s; a minted record id is "+
+						"how this repository NAMES a record, not how a moment travels, and a scan "+
+						"that calls one a leaked moment produces a false finding the first time "+
+						"such a family is admitted", findings, c.path)
 				}
 			})
 		}

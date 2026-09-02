@@ -255,17 +255,17 @@ declined proposal is not a third record: it is the disposition above in its
 `declined` state. Neither shape has a sub-verb — this surface writes no `adm-N`
 and no `srp-N`, and the command-side refusal is the next iteration's. What holds
 today is the committed-tree gate: `record_schema` refuses an admission whose
-`grounds` carries no value on the key's own line in one of the spellings it
-tests — empty, whitespace, quoted-empty, quoted-whitespace, an empty flow
-collection (`[]`, `{}`), a YAML null (`~`, `null`, `!!null`) or a block scalar
-holding nothing — an admission with no `proposal`, a surprise whose
-`occasioned_by` names a record the corpus does not hold, and either record filed
-in the other's store.
-That list is the set the gate reads, not every way YAML can carry nothing. A
-trailing comment on the value defeats all of it (iss-2608301744268001), and
-spellings built from a tag, an anchor or an alias — `!!null null`,
-`!<tag:yaml.org,2002:null>`, `!!str ''`, `&anchor`, `!!seq []` — carry nothing
-and pass green (iss-2608301808198621).
+`grounds` carries no value on the key's own line, an admission with no
+`proposal`, a surprise whose `occasioned_by` names a record the corpus does not
+hold, and either record filed in the other's store.
+Carrying no value is judged by the kind of YAML node the value is, not by the
+literal it is spelled with, so there is no list to fall outside of: empty,
+whitespace, quoted-empty, quoted-whitespace, an empty flow collection (`[]`,
+`{}`), a YAML null however it is written (`~`, `null`, `!!null`, `!!null null`,
+`!<tag:yaml.org,2002:null>`), a node that is nothing but a tag, an anchor or an
+alias (`!!str ''`, `!!seq []`, `&anchor`, `*alias`), and a block scalar holding
+nothing all carry nothing alike. A trailing comment is stripped before the value
+is judged, so it hides none of them.
 `abcd lint` reports a widening proposal carrying neither an admission nor a
 decline, at `info`.
 

@@ -77,6 +77,9 @@ const (
 	caughtCarrier = "the carrier floor names the disarmed assertion"
 	// caughtControl: the negative control stops reporting one of its two classes.
 	caughtControl = "the holed control reports the wrong class set"
+	// caughtKind: the manifest attests an item's material class, and the
+	// hand-transcribed kind oracle disagrees with it.
+	caughtKind = "the kind oracle names the item whose material class is mis-attested"
 	// caughtRefusal: the assembler refuses the run and the verb exits non-zero,
 	// which the eval reports as a failed assembly rather than as a leak.
 	caughtRefusal = "the assembly is refused and the verb exits non-zero"
@@ -213,6 +216,33 @@ var coverage = []coverageRow{
 		// through three review rounds.
 	},
 
+	{
+		Rule: "the shipped tree's TESTS are labelled apart from its source, by a basename " +
+			"SUFFIX rather than by an extension, and the suffix row is ordered above the " +
+			"source row so it owns the paths it reaches",
+		Falsifier: "delete the `_test.go` MatchSuffix row from Table (or order it below the `.go` row)",
+		Caught:    caughtKind,
+		// Neither a leak nor a carrier can reach this rule, which is why it went
+		// unnamed: `path.Ext("main_test.go")` is ".go", so the source row admits
+		// the file either way. The mutation changes no path in any fixture
+		// manifest and no byte of any bundle item's text — only the class the
+		// manifest attests for it — so the only thing that can catch it is
+		// something that READS that attestation.
+	},
+	{
+		Rule: "a manifest item's `kind` names the material class the record gives its path, " +
+			"and the bundle item beside it carries the same class",
+		Falsifier: "emit a fixed Kind for every ManifestItem (or swap two rows' Kind in Table)",
+		Caught:    caughtKind,
+		// itd-198 added the per-item kind so a size report is checkable against
+		// the manifest rather than asserted beside it. Nothing read it: brief
+		// invariant 16 says an attestation states no more than its examination
+		// establishes, and until this row an unexamined class was exactly that.
+		// The bundle half is separate because the two artefacts travel apart —
+		// the manifest to the auditor, the bundle to the reader — so a class
+		// correct in one and wrong in the other is a reading told its material
+		// is something the auditor's copy denies.
+	},
 	{
 		Rule: "the intent projection is the FIVE contracted fields: press release, " +
 			"acceptance criteria, scope conditions, mechanism and spec_id",

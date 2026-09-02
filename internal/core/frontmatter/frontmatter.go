@@ -96,7 +96,7 @@ func Fields(lines []string) map[string]Field {
 		}
 		key := m[1]
 		if _, exists := fields[key]; !exists {
-			fields[key] = Field{Value: strings.TrimSpace(m[2]), Line: i + 1}
+			fields[key] = Field{Value: strings.TrimSpace(StripComment(m[2])), Line: i + 1}
 		}
 	}
 	// Contract: the block is delimited by the first TWO `---` lines. Without a
@@ -107,6 +107,69 @@ func Fields(lines []string) map[string]Field {
 		return map[string]Field{}
 	}
 	return fields
+}
+
+// StripComment removes a trailing YAML comment from the text that follows a
+// key's colon, returning the value alone.
+//
+// This is the ONE place a comment is separated from a value, and it belongs in
+// the scanner rather than in any predicate downstream. Every gate reads its
+// value through Fields, and each of record-lint's emptiness tests anchors on the
+// value's LAST byte, so an unstripped `grounds: {}  # todo` defeated all of them
+// at once — the closing brace was no longer last — while `severity: minor # todo`
+// reached the enum leg as the value `minor # todo`. Stripping in one predicate
+// would have left the same escape open for every gate that reads a value some
+// other way (iss-2608301744268001).
+//
+// It is exported because the strict ledger parser (internal/core/capture) is a
+// SECOND reader of the same bytes and calls it too. A gate exists to refuse
+// exactly what the reader refuses, and a strip on one side alone would put the
+// permissive verdict on the gate: `severity: minor # todo` lint-green and
+// capture-refused, which is the split this repository closes wherever it finds
+// one. Two callers, one rule.
+//
+// The rule is YAML's, not a split on the first hash. A comment starts at a `#`
+// that is preceded by whitespace and is outside a quoted scalar; a `#` inside
+// quotes, or with no whitespace in front of it, is part of the value — which is
+// why `slug: a#b` and a URL fragment survive intact. Inside a double-quoted
+// scalar a backslash escapes the next byte, and inside a single-quoted one a
+// doubled apostrophe is a literal apostrophe rather than the close, so neither
+// hides a live quote from the scan.
+//
+// The byte before the text handed here is the key's colon, never whitespace, so
+// a leading `#` is content: `slug:#x` is not a comment. (It is not a mapping
+// entry to a YAML parser either — a block key needs a space after its colon —
+// but that leniency is the key pattern's, and widening it here would only turn
+// one divergence into a second.)
+func StripComment(v string) string {
+	inSingle, inDouble := false, false
+	for i := 0; i < len(v); i++ {
+		switch c := v[i]; {
+		case inDouble:
+			if c == '\\' {
+				i++ // the escaped byte cannot close the scalar
+			} else if c == '"' {
+				inDouble = false
+			}
+		case inSingle:
+			if c == '\'' {
+				if i+1 < len(v) && v[i+1] == '\'' {
+					i++ // a doubled apostrophe is a literal one
+				} else {
+					inSingle = false
+				}
+			}
+		case c == '"':
+			inDouble = true
+		case c == '\'':
+			inSingle = true
+		case c == '#':
+			if i > 0 && (v[i-1] == ' ' || v[i-1] == '\t') {
+				return v[:i]
+			}
+		}
+	}
+	return v
 }
 
 // Dup is a duplicated top-level key and the 1-based line of its SECOND (the

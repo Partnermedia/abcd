@@ -102,6 +102,93 @@ func TestShippedIntentProjectsFiveFieldsOnly(t *testing.T) {
 	}
 }
 
+// TestProjectedFieldsFollowTheDeclaredOrderWithinAPath holds the ordering
+// degree of freedom the path-level order assertion leaves open
+// (iss-2608311418202794).
+//
+// Five items can share one path when a record is projected field by field, so
+// the order of those fields INSIDE a path decides the assembled bundle's bytes
+// as surely as the path order does. Nothing held it. The determinism eval's
+// order oracle compares paths only (framework 8.7), and its byte comparison
+// sees two runs agree — a map-iterated field order is caught there because it
+// differs between processes, but a deterministic reversal is not: both runs
+// agree, in the wrong order. Framework 8.3 asks the manifest to map an item by
+// path AND field, and this is the field half of that made checkable.
+//
+// The expectation is derived from the owning row's declared Fields, never from
+// what the assembler emitted, so a reversal fails rather than confirming
+// itself. A field the file does not carry contributes no item, so the emitted
+// sequence is a SUBSEQUENCE of the declaration rather than equal to it.
+func TestProjectedFieldsFollowTheDeclaredOrderWithinAPath(t *testing.T) {
+	root := fixtureRepo(t)
+	projected := 0
+	for _, position := range AssemblingPositions() {
+		res := assembleFixture(t, root, position)
+
+		byPath := map[string][]string{}
+		var order []string
+		for _, it := range res.Manifest.Items {
+			if it.Field == "" {
+				continue
+			}
+			if _, seen := byPath[it.Path]; !seen {
+				order = append(order, it.Path)
+			}
+			byPath[it.Path] = append(byPath[it.Path], it.Field)
+		}
+
+		for _, rel := range order {
+			got := byPath[rel]
+			if len(got) < 2 {
+				continue
+			}
+			projected++
+			row, ok := owningRow(position, rel)
+			if !ok {
+				t.Errorf("the manifest at %s projects fields out of %s, which no admitted row reaches",
+					position, rel)
+				continue
+			}
+			// The declaration, filtered to the fields that actually travelled: a
+			// subsequence check stated as an equality, so the failure message can
+			// show both sequences whole.
+			carried := map[string]bool{}
+			for _, f := range got {
+				carried[f] = true
+			}
+			var want []string
+			for _, f := range row.Fields {
+				if carried[f] {
+					want = append(want, f)
+				}
+			}
+			if strings.Join(got, "|") == strings.Join(want, "|") {
+				continue
+			}
+			t.Errorf("at %s the projection of %s emits its fields as %v, and the row that owns "+
+				"it declares %v.\n\nThe field order inside a path is part of the assembled "+
+				"bundle's bytes, and a stable but wrong one is invisible to a byte comparison "+
+				"across two runs — both runs agree.", position, rel, got, want)
+		}
+	}
+	if projected == 0 {
+		t.Fatal("no assembled path carried more than one projected field, so this assertion " +
+			"held nothing; the fixture's shipped intent is what puts five fields under one path")
+	}
+}
+
+// owningRow returns the row that owns a path's projection at a position: the
+// FIRST row of the table that reaches it, which is the same tie-break collect
+// applies.
+func owningRow(p Position, rel string) (Row, bool) {
+	for _, row := range Table {
+		if row.AdmittedAt(p) && row.Reaches(rel) {
+			return row, true
+		}
+	}
+	return Row{}, false
+}
+
 // TestBundleCarriesNoRepositoryPath is itd-183's fifth criterion. Item text is
 // necessarily prose and source that may quote paths of its own, so the claim is
 // made where it is a claim: the bundle's own structure carries no location.

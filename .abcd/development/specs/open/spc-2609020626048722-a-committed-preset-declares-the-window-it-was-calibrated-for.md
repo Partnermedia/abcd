@@ -84,8 +84,8 @@ run rather than by the tree, and whose entry that spec adds in the shape this
 spec fixes; the invocation itself and the loader's `PresetFor(position)`,
 which the two-operand spec (spc-2609021004075744) lands first;
 the eval lane becoming a required check
-([iss-2608311632382737](../../../work/issues/open/iss-2608311632382737-the-pre-push-gate-is-blind-to-both-eval-lanes-so-the-read-bl.md),
-[iss-2608311051046981](../../../work/issues/open/iss-2608311051046981-the-new-cold-reading-evals-ci-job-is-not-a-required-status-c.md)),
+([iss-2608311632382737](../../../work/issues/resolved/iss-2608311632382737-the-pre-push-gate-is-blind-to-both-eval-lanes-so-the-read-bl.md),
+[iss-2608311051046981](../../../work/issues/resolved/iss-2608311051046981-the-new-cold-reading-evals-ci-job-is-not-a-required-status-c.md)),
 which is the gate work the enforcement claim below depends on.
 
 ## Approach

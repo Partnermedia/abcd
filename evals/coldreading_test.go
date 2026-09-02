@@ -93,6 +93,89 @@ func TestReadBlockCatchesAHoledFirewall(t *testing.T) {
 	}
 }
 
+// TestManifestNamesEveryExcludedFamily holds the disclosure half of the
+// exclusion floor (iss-2608311238236490).
+//
+// The floor is a DECLARATION a reader checks rather than a disclosure a reader
+// trusts, so a family refused by construction and named nowhere in the manifest
+// is a refusal no reader can verify. That is brief invariant 16 exactly — an
+// attestation never states LESS than the examination behind it establishes —
+// and the local ledger tier of brief invariant 14 was the family it was short
+// of: excluded by absence from the positive walk and by the `.abcd` deny
+// segment, asserted by nothing, so a reader could not tell that the framing
+// traces and declined construals had been refused.
+//
+// The oracle's own family list is the standard, transcribed from the record, so
+// this fails whenever the assembler's asserted floor falls behind it — in
+// either direction of drift.
+func TestManifestNamesEveryExcludedFamily(t *testing.T) {
+	requireOracleTables(t)
+	f := materialise(t, variantBaseline)
+	for _, position := range assemblingPositions {
+		t.Run(position, func(t *testing.T) {
+			a := assemble(t, f, position)
+			if len(a.Exclusions) == 0 {
+				t.Fatalf("the manifest at %s asserts no exclusions at all; the floor is what a "+
+					"reader checks instead of trusting a disclosure", position)
+			}
+			asserted := make(map[string]bool, len(a.Exclusions))
+			for _, e := range a.Exclusions {
+				asserted[e.Detail] = true
+			}
+			for _, fam := range excludedFamilies {
+				if !fam.bindsAt(position) || asserted[fam.Path] {
+					continue
+				}
+				t.Errorf("the manifest at %s asserts no exclusion for %s, which the record refuses "+
+					"(%s).\n\nThe tier IS excluded, by absence from the positive walk — so this is a "+
+					"disclosure gap rather than a leak, and brief invariant 16 is what makes a "+
+					"disclosure gap a defect: an attestation never states less than the examination "+
+					"behind it establishes.", position, fam.Path, fam.Source)
+			}
+		})
+	}
+}
+
+// TestManifestAttestsTheMaterialClassOfEveryItem holds the per-item kind
+// attestation itd-198 added and nothing read (iss-2608312019547974).
+//
+// Framework 8.3 has the manifest map an item to its path AND its class; brief
+// invariant 16 has an attestation state no more than its examination
+// establishes. A kind nothing checks satisfies neither: a manifest naming every
+// item `doc` was green, and so was one that stopped labelling the shipped
+// tree's tests apart from its source — the include table's only basename-SUFFIX
+// row, whose deletion changes no path in any fixture manifest.
+//
+// The oracle is the hand-transcribed materialClasses table, so it can disagree
+// with the assembler; every class in the closed vocabulary must be attested
+// somewhere in the corpus, or a rule of the table would go untested by a corpus
+// that stopped carrying its material.
+func TestManifestAttestsTheMaterialClassOfEveryItem(t *testing.T) {
+	requireOracleTables(t)
+	f := materialise(t, variantBaseline)
+	attested := map[string]bool{}
+	for _, position := range assemblingPositions {
+		t.Run(position, func(t *testing.T) {
+			a := assemble(t, f, position)
+			for _, it := range a.ManifestItems {
+				attested[it.Kind] = true
+			}
+			if vs := checkMaterialClass(a); len(vs) > 0 {
+				t.Fatalf("the manifest mis-states the material class of %d item(s) at the %s position:\n%s",
+					len(vs), position, reportViolations(vs))
+			}
+		})
+	}
+	for _, m := range materialClasses {
+		if attested[m.Kind] {
+			continue
+		}
+		t.Errorf("no item in the corpus is attested as %q, so that row of the kind oracle "+
+			"judged nothing; the class is in the closed vocabulary and the corpus is what "+
+			"makes its rule falsifiable (%s)", m.Kind, m.Source)
+	}
+}
+
 // TestReadBlockCatchesWarmFieldsOnIncludedTypes is ac-3: a warm field on a
 // record type already on the include list fails.
 //

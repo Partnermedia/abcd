@@ -30,8 +30,8 @@ test:
 # Every eval in evals/: the self-discovering smoke harness (build the binary, walk
 # the Cobra tree, run every command's --help + the read-only verbs) and the
 # cold-reading evals below. Behind the `smoke` build tag so they stay out of the
-# unit-test lane; run explicitly here, in CI's smoke job, and in the release
-# verify gate.
+# unit-test lane; run explicitly here, under `make preflight`, in CI's smoke job,
+# and in the release verify gate.
 smoke:
 	go test -tags smoke ./evals/...
 
@@ -39,6 +39,10 @@ smoke:
 # that falsifies the assembler's blindfold by planting sentinel warm content in a
 # fixture repository state and asserting its absence from what the assembler
 # passes.
+#
+# Both this target and `smoke` are `preflight` prerequisites, so the push gate
+# sees what CI sees for the eval lanes rather than trusting a job that cannot
+# block a merge (iss-2608311632382737).
 #
 # It has its own target, and CI its own always-run job, because the diff
 # classifier stands the `smoke` job down on a change confined to docs/,
@@ -189,13 +193,29 @@ scaffold-sync-check:
 	@go run ./cmd/scaffold-sync -check
 
 # Pre-push gate (invoked by .githooks/pre-push): the five lint gates
-# (lint-reviews, lint-issues, lint-decisions, record-lint, docs-lint) plus the
-# site-render gate as prerequisites, then build, vet, test,
+# (lint-reviews, lint-issues, lint-decisions, record-lint, docs-lint), the
+# site-render gate and both tagged eval lanes (smoke, evals-cold-reading) as
+# prerequisites, then build, vet, test,
 # and race-enabled internal tests natively. CI's check job runs those same four
 # Go steps plus a `gofmt -l .` format gate this target does not, so run gofmt
 # separately before pushing. Host-native `go build` (not the cross-compiling
 # build target) because it mirrors CI.
-preflight: lint-reviews lint-issues lint-decisions record-lint docs-lint site-render
+#
+# The eval lanes are prerequisites because the untagged `go test ./...` step
+# below cannot reach them: every eval file carries a build tag, so a defect in
+# the read-block eval — the only component capable of falsifying the assembler's
+# firewall — used to pass every local gate and surface only in CI, if at all
+# (iss-2608311632382737). That was not hypothetical: a path-elision defect in
+# the amnesia eval's own guard was unsatisfiable wherever the process temp
+# directory is the Linux one, so it landed green here and was found by an
+# adversarial review rather than by a gate.
+#
+# Both lanes are named even though `smoke` compiles a superset of
+# `evals-cold-reading`'s files: they are separate tag sets, so a cold-reading
+# file reaching for a smoke-only helper compiles under one and not the other,
+# which is the split CI's two jobs cover. About five seconds each on a warm
+# cache, against roughly a minute for the gates already here.
+preflight: lint-reviews lint-issues lint-decisions record-lint docs-lint site-render smoke evals-cold-reading
 	go build ./...
 	go vet ./...
 	go test ./...

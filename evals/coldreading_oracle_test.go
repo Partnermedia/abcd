@@ -178,6 +178,144 @@ func (a admittedRecordPath) admitsAt(p string) bool {
 	return false
 }
 
+// materialClass is one member of the closed material-class vocabulary and the
+// paths that carry it: the directories it lives under (empty for the whole
+// tree), the basename extensions or exact names that select it, and the
+// basename suffixes that do.
+//
+// It is the KIND column of itd-183's include list, transcribed by hand like the
+// exclusion table above and for the same reason: a mapping read out of the
+// assembler's own table would agree with it by construction. Resolution is
+// first-match in this order, which is the tie-break the include list itself
+// declares — the first row that reaches a path owns it, and that is why the
+// suffix row sits above the source row rather than beside it.
+type materialClass struct {
+	// Kind is the class the manifest must attest for a path this row reaches.
+	Kind string
+	// Under are the repo-relative directories the row reaches. Empty reaches the
+	// whole tree, as the three root rows do.
+	Under []string
+	// Match are basename extensions (".md") or exact basenames ("Makefile").
+	Match []string
+	// Suffix are basename suffixes, matched case-sensitively.
+	Suffix []string
+	// Source is what the row was transcribed from.
+	Source string
+}
+
+// materialClasses is the kind oracle: one row per member of the closed
+// vocabulary, in resolution order.
+//
+// The manifest attests a material class PER ITEM, and until this table existed
+// nothing read that attestation: the per-item kind added by itd-198 had no
+// falsifier behind it, so a manifest naming every item `doc` was green
+// (iss-2608312019547974). Brief invariant 16 is what makes that more than a
+// tidiness point — an attestation states no more than its examination
+// establishes, and a kind nobody checks is an assertion the artefact makes and
+// the eval does not test.
+var materialClasses = []materialClass{
+	{
+		Kind:   "brief-section",
+		Under:  []string{".abcd/development/brief/01-product", ".abcd/development/brief/02-constraints"},
+		Match:  []string{".md"},
+		Source: "itd-183 include list: the product and constraints chapters, admitted whole",
+	},
+	{
+		Kind:   "glossary-term",
+		Under:  []string{".abcd/development/brief/glossary"},
+		Match:  []string{".md"},
+		Source: "itd-183 include list; adr-55: the glossary's committed terms",
+	},
+	{
+		Kind:   "discipline",
+		Under:  []string{".abcd/development/intents/disciplines"},
+		Match:  []string{".md"},
+		Source: "itd-183 include list: a discipline is a standing commitment, named individually",
+	},
+	{
+		Kind: "intent-projection",
+		Under: []string{
+			".abcd/development/intents/shipped",
+			".abcd/development/intents/drafts",
+			".abcd/development/intents/planned",
+		},
+		Match:  []string{".md"},
+		Source: "itd-183 assembler rule 2: an intent travels as its claim record, field by field",
+	},
+	{
+		Kind:   "spec",
+		Under:  []string{".abcd/development/specs"},
+		Match:  []string{".md"},
+		Source: "itd-183 include list: the design record a capability was built against",
+	},
+	{
+		Kind:   "test",
+		Suffix: []string{"_test.go"},
+		Source: "itd-183 assembler rule 1: source and tests, counted apart because tests are the " +
+			"largest single class and admitted identically; spc-68 selects them by basename suffix",
+	},
+	{
+		Kind:   "source",
+		Match:  []string{".go"},
+		Source: "itd-183 assembler rule 1: the shipped tree is source and tests",
+	},
+	{
+		Kind:   "doc",
+		Match:  []string{".md"},
+		Source: "itd-183 assembler rule 1: the shipped tree is the delivered documentation and root prose",
+	},
+	{
+		Kind:   "config",
+		Match:  []string{".json", ".yml", ".yaml", ".toml", ".mod", ".sum", "Makefile"},
+		Source: "itd-183 assembler rule 1: the shipped tree is the delivered configuration and build files",
+	},
+}
+
+// reaches reports whether the row claims rel.
+func (m materialClass) reaches(rel string) bool {
+	if len(m.Under) > 0 {
+		inside := false
+		for _, dir := range m.Under {
+			if strings.HasPrefix(rel, dir+"/") {
+				inside = true
+				break
+			}
+		}
+		if !inside {
+			return false
+		}
+	}
+	base := path.Base(rel)
+	for _, s := range m.Suffix {
+		if strings.HasSuffix(base, s) {
+			return true
+		}
+	}
+	for _, m := range m.Match {
+		if strings.HasPrefix(m, ".") {
+			if strings.EqualFold(path.Ext(base), m) {
+				return true
+			}
+			continue
+		}
+		if base == m {
+			return true
+		}
+	}
+	return false
+}
+
+// classOf returns the material class the record says a path carries, and the
+// row it was decided by. The first row that reaches the path owns it.
+func classOf(rel string) (materialClass, bool) {
+	for _, m := range materialClasses {
+		if m.reaches(rel) {
+			return m, true
+		}
+	}
+	return materialClass{}, false
+}
+
 // violation is one finding: what rule was broken, at which position, and by
 // what. Assertions RETURN violations rather than failing the test, so the
 // negative control can demand exactly the two it expects.
@@ -209,6 +347,7 @@ const (
 	ruleExcludedHeader = "field absence (excluded heading)"
 	ruleFamily         = "family absence"
 	ruleUnnamedRecord  = "family absence (record path no include names)"
+	ruleMaterialClass  = "material-class attestation"
 )
 
 // bundleItem and manifestItem are the two artefacts' item shapes, read as this
@@ -223,7 +362,18 @@ type manifestItem struct {
 	ItemKey string `json:"item_key"`
 	Path    string `json:"path"`
 	Field   string `json:"field"`
-	SHA256  string `json:"sha256"`
+	// Kind is the material class the manifest attests for this item. It is read
+	// here so the attestation is checked rather than trusted; see
+	// checkMaterialClass.
+	Kind   string `json:"kind"`
+	SHA256 string `json:"sha256"`
+}
+
+// manifestExclusion is one entry of the exclusion floor the manifest asserts.
+type manifestExclusion struct {
+	Rule   string `json:"rule"`
+	Signal string `json:"signal"`
+	Detail string `json:"detail"`
 }
 
 // assembled is one run's output as this eval reads it.
@@ -233,6 +383,10 @@ type assembled struct {
 	ManifestRaw   []byte
 	Items         []bundleItem
 	ManifestItems []manifestItem
+	// Exclusions is what the manifest CLAIMS it refused. A reader checks the
+	// exclusions rather than trusting a disclosure, so what the claim omits is
+	// as much this eval's business as what it asserts.
+	Exclusions []manifestExclusion
 }
 
 // assemble runs the assembler over a materialised fixture at one position and
@@ -264,12 +418,13 @@ func assemble(t *testing.T, f fixture, position string) assembled {
 		t.Fatalf("decoding the assembled input at %s: %v", position, err)
 	}
 	var manifest struct {
-		Items []manifestItem `json:"items"`
+		Items      []manifestItem      `json:"items"`
+		Exclusions []manifestExclusion `json:"exclusions"`
 	}
 	if err := json.Unmarshal(a.ManifestRaw, &manifest); err != nil {
 		t.Fatalf("decoding the manifest at %s: %v", position, err)
 	}
-	a.Items, a.ManifestItems = bundle.Items, manifest.Items
+	a.Items, a.ManifestItems, a.Exclusions = bundle.Items, manifest.Items, manifest.Exclusions
 	requireCarriers(t, a)
 	return a
 }
@@ -357,14 +512,15 @@ func requireOracleTables(t *testing.T) {
 		want int
 	}{
 		{"sentinelClasses", len(sentinelClasses), 18},
-		{"carriers", len(carriers), 11},
+		{"carriers", len(carriers), 12},
+		{"materialClasses", len(materialClasses), 9},
 		{"holes", len(holes), 2},
 		{"refusals", len(refusals), 2},
 		{"excludedKeys", len(excludedKeys), 2},
 		{"excludedHeadings", len(excludedHeadings), 4},
 		{"excludedFamilies", len(excludedFamilies), 15},
 		{"admittedRecordPaths", len(admittedRecordPaths), 8},
-		{"coverage", len(coverage), 56},
+		{"coverage", len(coverage), 58},
 	} {
 		if tbl.got != tbl.want {
 			t.Fatalf("the %s table holds %d row(s), and this eval is written against %d; "+
@@ -725,6 +881,61 @@ func checkFamilyAbsence(a assembled) []violation {
 					it.ItemKey, rel),
 				Source: "itd-183 assembler rule 1: .abcd/ is excluded wholesale and the record paths a " +
 					"reading needs are named individually, so a family added later is excluded by construction",
+			})
+		}
+	}
+	return out
+}
+
+// checkMaterialClass is the kind attestation: every manifest item's `kind`
+// names the material class the record says its path carries, and the bundle
+// item beside it carries the same class.
+//
+// The bundle half matters because the two artefacts travel apart. The manifest
+// stays with the auditor and the bundle goes to the reader, so a kind correct
+// in the manifest and wrong in the bundle is a reading told its material is
+// something it is not, with the auditor's copy attesting otherwise.
+//
+// It is deliberately NOT part of checkReadBlock: the three read-block
+// assertions are about what was selected, and this is about how the artefact
+// describes what was selected. Keeping it out also keeps the negative control's
+// exact-two expectation about leaks alone.
+func checkMaterialClass(a assembled) []violation {
+	var out []violation
+	kindByKey := make(map[string]string, len(a.Items))
+	for _, it := range a.Items {
+		kindByKey[it.ItemKey] = it.Kind
+	}
+	for _, it := range a.ManifestItems {
+		want, ok := classOf(it.Path)
+		if !ok {
+			out = append(out, violation{
+				Position: a.Position,
+				Rule:     ruleMaterialClass,
+				Detail: fmt.Sprintf("item %s comes from %s, which no material class in the record's "+
+					"vocabulary reaches", it.ItemKey, it.Path),
+				Source: "itd-183: the include list decides both what is admitted and the class it " +
+					"is admitted as, so a path with no class is a path no include names",
+			})
+			continue
+		}
+		if it.Kind != want.Kind {
+			out = append(out, violation{
+				Position: a.Position,
+				Rule:     ruleMaterialClass,
+				Detail: fmt.Sprintf("the manifest attests item %s (%s) as %q, and the record makes it %q",
+					it.ItemKey, it.Path, it.Kind, want.Kind),
+				Source: want.Source,
+			})
+		}
+		if got := kindByKey[it.ItemKey]; got != it.Kind {
+			out = append(out, violation{
+				Position: a.Position,
+				Rule:     ruleMaterialClass,
+				Detail: fmt.Sprintf("item %s travels to the reading as %q and is attested to the "+
+					"auditor as %q", it.ItemKey, got, it.Kind),
+				Source: "brief invariant 16: an attestation never states more than the examination " +
+					"behind it establishes, and the two artefacts describe one selection",
 			})
 		}
 	}

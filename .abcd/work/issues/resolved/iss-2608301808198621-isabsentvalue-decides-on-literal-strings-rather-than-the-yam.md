@@ -7,6 +7,8 @@ category: "bug"
 source: "user-observation"
 found_during: "itd-189-delta-security"
 found_at: "internal/core/lint/schema.go"
+resolution: "isAbsentValue now consults internal/core/frontmatter.IsEmptyValue, which decides emptiness by the class of YAML node a value spells (null, empty flow collection, empty string) after reading off its tag, anchor and alias properties. The shared reader answers once for every field and every gate; no YAML dependency was added."
+impact: fix
 ---
 
 isAbsentValue decides on literal strings rather than the yaml null and empty class so chasing spellings cannot close it
@@ -41,3 +43,7 @@ reader the tag, anchor and alias productions so emptiness is decided once for
 every field; or narrow what the gate claims to what a string comparison can
 honestly establish, and say so where the operator reads it. The first is
 adr-56's branch-2 analogue applied to this surface; the second is its branch-3.
+
+## Grounds
+
+- pursued: we expect deciding on the node's class rather than on its spelling to close the spellings nobody enumerated at the same time as the ones that were, so no future round has to add an eleventh literal; a YAML null, empty collection or empty string that the shared reader still calls populated, or a populated value it calls empty, would show it wrong.

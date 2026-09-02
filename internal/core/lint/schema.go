@@ -1640,88 +1640,43 @@ func undeclaredSubdirMessage(store recordStore, bucket, name string) string {
 		"' is undeclared; records inside it are read by no rule"
 }
 
-// explicitNullTag is YAML's tag shorthand for a null. It is judged HERE rather
-// than in the shared isNull, which is the YAML 1.2 core schema's null set exactly
-// and is read by capture's own normalisation: a tag is not a member of that set,
-// and widening the shared predicate would change what capture DECODES as well as
-// what this rule reports. The comparison is exact for isNull's own reason — YAML
-// folds no case here either.
-const explicitNullTag = "!!null"
-
-// isEmptyFlowCollection reports whether v is a flow collection holding nothing:
-// `[]`, `[ ]`, `{}` or `{ }`. BOTH collections are asked from the one place,
-// because one of them having been asked and the other not is exactly what let
-// `grounds: {}` through a gate that refused `grounds: []` (iss-2608301649337965).
+// isAbsentValue reports whether a frontmatter value says "nothing here".
 //
-// A collection that HOLDS something is a value — the wrong shape for a scalar
-// field, which is a different question — so only an empty interior answers yes.
-func isEmptyFlowCollection(v string, open, close byte) bool {
-	if len(v) < 2 || v[0] != open || v[len(v)-1] != close {
-		return false
-	}
-	return strings.TrimSpace(v[1:len(v)-1]) == ""
-}
-
-// isAbsentValue reports whether a frontmatter value says "nothing here". It is
-// isNull widened by the two empty flow collections and by YAML's explicit null
-// tag. The empty flow sequence is this record's house spelling for an empty list
-// (`related_rfcs: []`) and therefore an absence, not a malformed value; the empty
-// flow MAPPING and `!!null` state nothing in the same way, and a predicate that
-// caught one collection and not the other left `grounds: {}` green on a gate
-// armed for exactly that blank (iss-2608301649337965). It is local rather than
-// folded into the shared isNull because isNull also judges SCALAR fields (kind,
-// impact, slug), where a collection literal is a wrong value rather than an unset
-// one, and should keep saying so.
+// It is frontmatter.IsEmptyValue, and holds no rule of its own. That is the
+// whole point of the indirection: emptiness used to be decided here by comparing
+// against a list of literals, so `!!null` was an absence and `!!null null` —
+// the SAME YAML node — was a value, and each round closed one spelling and left
+// the next one open. Deciding on the node's class rather than on the bytes that
+// spell it closes the spellings nobody enumerated at the same time as the ones
+// that were, which is adr-56's ruling for the exclusion floor applied one
+// workstream over (iss-2608301808198621).
 //
-// Absence is decided on the value the YAML SCALAR carries, never on its raw
-// bytes: `grounds: ""` is five bytes and no value, and a reader that validates
-// before it reads makes nothing out of it either — so the record is skipped and
-// invisible to every surface of its family while the gate armed to catch exactly
-// that stayed green (iss-2608300935218982). The quotes are stripped with the
-// rule's own issueScalar and the result trimmed AFTER, because a quoted
-// all-whitespace value still carries its padding once the quotes are gone (the
-// lesson lapsed_at already learned in iss-2608300212513349).
+// The shared reader is where it belongs rather than beside it, because a gate
+// exists to refuse exactly what a reader refuses, and two emptiness rules that
+// drift are the split-verdict shape: a record the reader skips going lint-green.
+// Every field and every store now asks one question.
 //
-// What it does NOT decide is not a closed list, and three of its gaps are
-// recorded rather than hidden. A trailing comment defeats every test here at
-// once, because the shared same-line scanner strips no comments and each test
-// anchors on the last byte — a scanner question, and iss-2608301744268001's to
-// close. The supersession leg's silence on an empty collection is not shared by
-// record.describeADR, which renders `[]` and `{}` as a successor link
-// (iss-2608301744300631). And every test above is a SPELLING test rather than a
-// null test: `!!null null` and `!<tag:yaml.org,2002:null>` are the same YAML node
-// as the `!!null` this accepts and read as PRESENT here, as do a `!!str`-tagged
-// empty string, a bare `&anchor` and `!!seq []` — measured against this
-// predicate, and pinned by
-// TestIsAbsentValueIsASpellingTestNotANullTest so the enumeration above cannot
-// quietly grow a claim it does not carry. Chasing them one literal at a time
-// leaves the next one open, so the altitude is iss-2608301808198621's to rule on
-// rather than this predicate's to widen.
+// isNull stays separate and is still asked directly by the legs that judge
+// SCALAR enum fields (severity, category, source, slug): there a collection
+// literal is a wrong value rather than an unset one, and should keep saying so.
+//
+// Two things it does not decide, both recorded rather than hidden. A block
+// scalar holding nothing is judged by blockScalarIndicatorRe, because a block
+// scalar's content is not on the key's own line at all. And the supersession
+// leg's silence on an empty collection is not shared by record.describeADR,
+// which renders `[]` and `{}` as a successor link (iss-2608301744300631).
 //
 // It takes the RAW frontmatter value, never one issueScalar has already read:
 // stripping twice empties a value that is two apostrophes inside double quotes,
 // so the legs that pre-stripped read it as absent while the leg that did not read
 // it as present — and every leg stood down on one admission
-// (iss-2608301656192369).
+// (iss-2608301656192369). The shared reader strips ONE level for the same reason.
 //
-// This is deliberately the ONE place the rule decides emptiness, so the fix is
-// store-wide rather than scoped to the store the defect was reported against: the
-// pre-existing issue ledger carried the identical gap (a committed
-// `found_during: ""` was lint-green), and a per-store answer would leave the same
-// bug behind a narrower mouth in three other stores.
+// A trailing comment can no longer hide any of it. The strip lives in the ONE
+// same-line scanner (frontmatter.Fields), so the value reaching here is the
+// value and nothing else (iss-2608301744268001).
 func isAbsentValue(value string) bool {
-	v := strings.TrimSpace(value)
-	if isNull(v) || v == explicitNullTag {
-		return true
-	}
-	if isEmptyFlowCollection(v, '[', ']') || isEmptyFlowCollection(v, '{', '}') {
-		return true
-	}
-	// Trimmed HERE rather than inside issueScalar: emptiness is a question a value
-	// of nothing but padding answers the same way whatever a reader does with it,
-	// while moving the trim into the shared reader would hide a PADDED value that
-	// capture refuses and skips (see issueScalar).
-	return strings.TrimSpace(issueScalar(v)) == ""
+	return frontmatter.IsEmptyValue(value)
 }
 
 // recordRefsOf reads the handles of every cross-reference field once per record.

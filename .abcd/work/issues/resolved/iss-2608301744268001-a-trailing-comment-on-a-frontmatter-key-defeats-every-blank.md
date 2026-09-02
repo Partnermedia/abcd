@@ -7,6 +7,8 @@ category: "bug"
 source: "impl-review"
 found_during: "itd-189-round-5-build"
 found_at: "internal/core/frontmatter/frontmatter.go (Fields)"
+resolution: "frontmatter.Fields strips a trailing comment before it hands a value on: a comment starts at a hash preceded by whitespace and outside single or double quotes, so a hash inside a quoted value or with no whitespace before it stays part of the value. The strip is in the ONE scanner, so every gate and every store inherited it."
+impact: fix
 ---
 
 a trailing comment on a frontmatter key defeats every blank spelling the record_schema gate refuses because the shared same-line scanner strips no comments
@@ -43,3 +45,7 @@ starts a comment only at a `#` preceded by whitespace and outside quotes, so a
 naive split truncates a legitimate value containing a hash. It belongs where the
 scanner lives, not in `isAbsentValue`, or the same escape stays open for every
 gate that reads a value some other way.
+
+## Grounds
+
+- pursued: we expect a comment stripped in the shared scanner to close the escape for every gate at once, rather than for the one predicate the defect was reported against; a value containing a legitimate hash that the scanner truncates, or a commented blank that still reaches a gate as a value, would show it wrong.
