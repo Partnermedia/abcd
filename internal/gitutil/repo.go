@@ -59,10 +59,25 @@ func gitEnv() []string {
 	// shortstat the graveyard's wholesale-rewrite signal parses — silently
 	// killing the signal on a French/German host and breaking the cross-host
 	// determinism of the produced manifest.
+	// No detached background work: a git command abcd runs must not leave a
+	// gc/maintenance process writing under .git after it returns. In production
+	// that is a subprocess outliving a CLI verb inside a user's repository; in a
+	// test it is the documented ".git/objects: directory not empty" cleanup race
+	// (iss-252 for fixture repos, iss-2609020319494139 for every other isolated
+	// call). The keys ride in the environment rather than as -c flags so a caller
+	// that builds its own git command from IsolatedEnv — every test helper that
+	// inits its own repository — inherits them too. The parent's own
+	// GIT_CONFIG_COUNT injection was scrubbed above, so this is the only
+	// environment config in effect.
 	return append(env,
 		"GIT_CONFIG_GLOBAL=/dev/null",
 		"GIT_CONFIG_NOSYSTEM=1",
 		"GIT_OPTIONAL_LOCKS=0",
+		"GIT_CONFIG_COUNT=4",
+		"GIT_CONFIG_KEY_0=gc.auto", "GIT_CONFIG_VALUE_0=0",
+		"GIT_CONFIG_KEY_1=gc.autodetach", "GIT_CONFIG_VALUE_1=false",
+		"GIT_CONFIG_KEY_2=maintenance.auto", "GIT_CONFIG_VALUE_2=false",
+		"GIT_CONFIG_KEY_3=core.fsmonitor", "GIT_CONFIG_VALUE_3=false",
 		"LC_ALL=C",
 		"LANG=C",
 	)
